@@ -541,7 +541,7 @@
 #graphContainer {
     width: 100%;
     height: 100%;
-    /* Prevent browser touch/trackpad handling to avoid conflicts with vis.js */
+    /* Prevent browser touch/trackpad handling to avoid conflicts with Cytoscape */
     touch-action: none;
     /* Prevent focus outline when shift-selecting */
     outline: none;
@@ -677,39 +677,6 @@
     width: 16px;
     text-align: center;
     color: var(--nbe-dark-text-muted);
-}
-
-/* ============================================================================
-   Selection Overlay
-   ============================================================================ */
-
-.selection-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 5;
-    pointer-events: none;
-}
-
-.selection-overlay.active {
-    pointer-events: auto;
-    cursor: crosshair;
-}
-
-/* Selection Box for drag selection */
-.selection-box {
-    display: none;
-    position: absolute;
-    border: 2px dashed var(--nbe-dark-accent-primary);
-    background: var(--nbe-dark-accent-alpha-10);
-    pointer-events: none;
-    z-index: 15;
-}
-
-.selection-box.active {
-    display: block;
 }
 
 /* Hint text */

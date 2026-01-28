@@ -111,8 +111,6 @@
             </div>
         </div>
         <div id="graphContainer"></div>
-        <div id="selectionOverlay" class="selection-overlay"></div>
-        <div id="selectionBox" class="selection-box"></div>
         <!-- Legend overlay (collapsible) -->
         <details class="graph-legend" open>
             <summary class="graph-legend-toggle">
@@ -169,6 +167,8 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<script src="https://unpkg.com/cytoscape@3.31.0/dist/cytoscape.min.js"></script>
+<script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
+<script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
 <script src="{{ url_for('static', filename='js/dependencies.js') }}"></script>
 {% endblock %}

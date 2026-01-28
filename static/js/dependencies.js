@@ -1,7 +1,7 @@
 /**
  * Nagios Bulk Editor - Dependencies Graph Visualization
  *
- * vis.js network graph for exploring Nagios object relationships.
+ * Cytoscape.js network graph for exploring Nagios object relationships.
  */
 
 console.log('dependencies.js loaded');
@@ -9,9 +9,7 @@ console.log('dependencies.js loaded');
 (function() {
     try {
     console.log('dependencies.js IIFE started');
-    let network = null;
-    let nodesDataset = null;
-    let edgesDataset = null;
+    let cy = null;  // Cytoscape instance
     let allNodes = [];
     let allEdges = [];
     let addedNodeIds = new Set();
@@ -19,13 +17,6 @@ console.log('dependencies.js loaded');
     let showEdgeLabels = true;
     let selectedNodeId = null;
     let focusNodeId = null;  // The central node for organized layouts
-
-    // Drag selection state
-    let isDragSelecting = false;
-    let dragStartX = 0;
-    let dragStartY = 0;
-    let selectionBox = null;
-    let graphContainer = null;
 
     const MAX_NODES = Infinity;  // No limit on nodes in graph
 
@@ -256,14 +247,33 @@ console.log('dependencies.js loaded');
         updateGraph();
         updateAddedNodesList();
         saveGraphState();  // Save state so refresh preserves it
-        initDragSelection();
+
+        // Add hint for keyboard shortcuts
+        const graphContainer = document.querySelector('.dep-graph');
+        const hint = document.createElement('div');
+        hint.className = 'graph-hint';
+        hint.innerHTML = '<strong>Right-click</strong> node actions · <strong>Shift+Drag</strong> box select · <strong>Delete</strong> remove selected';
+        graphContainer.appendChild(hint);
+
+        // Keyboard handling
+        document.addEventListener('keydown', (e) => {
+            // Delete key removes selected nodes
+            if ((e.key === 'Delete' || e.key === 'Backspace') && !e.target.closest('input, textarea')) {
+                e.preventDefault();
+                removeSelectedNodes();
+            }
+        });
 
         // If we focused on a node, center on it
         if (focusNode && addedNodeIds.has(focusNode)) {
             setTimeout(() => {
-                if (network) {
-                    network.focus(focusNode, { scale: 1, animation: { duration: 500 } });
-                    network.selectNodes([focusNode]);
+                if (cy) {
+                    const node = cy.$id(focusNode);
+                    if (node.length) {
+                        cy.center(node);
+                        cy.zoom({ level: 1, position: node.position() });
+                        node.select();
+                    }
                 }
             }, 300);
         }
@@ -1430,9 +1440,9 @@ console.log('dependencies.js loaded');
     }
 
     function addConnected() {
-        if (!network) return;
+        if (!cy) return;
 
-        const selected = network.getSelectedNodes();
+        const selected = cy.$(':selected').map(n => n.id());
         if (selected.length === 0) {
             showToast('Please select a node in the graph first', 'warning');
             return;
@@ -1624,6 +1634,105 @@ console.log('dependencies.js loaded');
         renderGraph(displayNodes, displayEdges);
     }
 
+    // ========================================
+    // Cytoscape.js Rendering
+    // ========================================
+
+    function getCytoscapeStyle() {
+        return [
+            // Node styles
+            {
+                selector: 'node',
+                style: {
+                    'background-image': 'data(imageUrl)',
+                    'background-fit': 'contain',
+                    'background-opacity': 0,
+                    'width': 50,
+                    'height': 50,
+                    'label': 'data(label)',
+                    'text-valign': 'bottom',
+                    'text-halign': 'center',
+                    'text-margin-y': 5,
+                    'font-size': 11,
+                    'color': '#fff',
+                    'text-background-color': 'rgba(0,0,0,0.8)',
+                    'text-background-opacity': 1,
+                    'text-background-padding': 3,
+                    'text-background-shape': 'roundrectangle'
+                }
+            },
+            // Focus node - larger
+            {
+                selector: 'node[?isFocus]',
+                style: {
+                    'width': 60,
+                    'height': 60,
+                    'font-size': 13
+                }
+            },
+            // Selected node
+            {
+                selector: 'node:selected',
+                style: {
+                    'border-width': 3,
+                    'border-color': '#4ec9b0',
+                    'border-opacity': 1
+                }
+            },
+            // Edge styles - regular edges
+            {
+                selector: 'edge[!hasBundling]',
+                style: {
+                    'width': 1.5,
+                    'line-color': 'data(color)',
+                    'target-arrow-color': 'data(color)',
+                    'target-arrow-shape': 'triangle',
+                    'arrow-scale': 0.8,
+                    'curve-style': 'bezier',
+                    'label': 'data(displayLabel)',
+                    'font-size': 9,
+                    'color': '#888',
+                    'text-background-color': '#1e1e1e',
+                    'text-background-opacity': 0.9,
+                    'text-background-padding': 2,
+                    'text-rotation': 'autorotate'
+                }
+            },
+            // Bundled edges - route through cluster centroid
+            {
+                selector: 'edge[?hasBundling]',
+                style: {
+                    'width': 1.5,
+                    'line-color': 'data(color)',
+                    'target-arrow-color': 'data(color)',
+                    'target-arrow-shape': 'triangle',
+                    'arrow-scale': 0.8,
+                    'curve-style': 'unbundled-bezier',
+                    'control-point-distances': function(ele) {
+                        return [ele.data('controlDistance')];
+                    },
+                    'control-point-weights': [0.5],
+                    'label': 'data(displayLabel)',
+                    'font-size': 9,
+                    'color': '#888',
+                    'text-background-color': '#1e1e1e',
+                    'text-background-opacity': 0.9,
+                    'text-background-padding': 2,
+                    'text-rotation': 'autorotate'
+                }
+            },
+            // Selected edge
+            {
+                selector: 'edge:selected',
+                style: {
+                    'width': 2.5,
+                    'line-color': '#4ec9b0',
+                    'target-arrow-color': '#4ec9b0'
+                }
+            }
+        ];
+    }
+
     function renderGraph(nodes = [], edges = []) {
         const container = document.getElementById('graphContainer');
         const emptyState = document.getElementById('graphEmptyState');
@@ -1631,6 +1740,11 @@ console.log('dependencies.js loaded');
         // Show/hide empty state
         if (nodes.length === 0) {
             emptyState.style.display = 'block';
+            if (cy) {
+                cy.destroy();
+                cy = null;
+            }
+            return;
         } else {
             emptyState.style.display = 'none';
         }
@@ -1644,10 +1758,11 @@ console.log('dependencies.js loaded');
             organizedPositions = calculateOrganizedPositions(nodes, edges, focusNodeId, layoutType);
         }
 
-        const visNodes = nodes.map((n, idx) => {
+        // Convert nodes to Cytoscape format
+        const cyNodes = nodes.map(n => {
             // Get or create cached image URL for this type/color/template/exists combo
             const isTemplate = n.is_template || false;
-            const exists = n.exists !== false;  // Default to true for backward compatibility
+            const exists = n.exists !== false;
             const cacheKey = `${n.type}:${n.color}:${isTemplate}:${exists}`;
             if (!nodeImageCache[cacheKey]) {
                 nodeImageCache[cacheKey] = getNodeImageUrl(n.type, n.color, isTemplate, exists);
@@ -1660,112 +1775,245 @@ console.log('dependencies.js loaded');
             if (!exists) tooltip += ' (NOT DEFINED - orphan reference)';
             if (isFocusNode) tooltip += ' (layout center)';
 
-            const node = {
-                id: n.id,
-                label: ' ' + n.label + ' \n',
-                shape: 'image',
-                image: nodeImageCache[cacheKey],
-                size: isFocusNode ? 30 : 22,  // Focus node is larger
-                title: tooltip,
-                group: n.type,
-                font: { size: isFocusNode ? 13 : 11, color: '#fff', vadjust: 4, background: 'rgba(0,0,0,0.8)', multi: true }
+            const nodeData = {
+                group: 'nodes',
+                data: {
+                    id: n.id,
+                    label: n.label,
+                    imageUrl: nodeImageCache[cacheKey],
+                    tooltip: tooltip,
+                    nodeType: n.type,
+                    isFocus: isFocusNode
+                }
             };
 
-            // Set initial positions based on layout type
+            // Set position if we have organized layout
             if (organizedPositions[n.id]) {
-                node.x = organizedPositions[n.id].x;
-                node.y = organizedPositions[n.id].y;
+                nodeData.position = {
+                    x: organizedPositions[n.id].x,
+                    y: organizedPositions[n.id].y
+                };
             }
-            return node;
+
+            return nodeData;
         });
 
-        const visEdges = edges.map(e => ({
-            from: e.from,
-            to: e.to,
-            label: showEdgeLabels ? formatEdgeLabel(e.label) : '',
-            title: formatEdgeLabel(e.label),  // Tooltip on hover
-            arrows: { to: { enabled: true, scaleFactor: 0.5 } },
-            color: { color: getEdgeColor(e.label), highlight: '#333', hover: '#555' },
-            font: { size: 9, color: '#666', strokeWidth: 2, strokeColor: '#fff', align: 'middle' },
-            smooth: { type: 'curvedCW', roundness: 0.3 }
-        }));
-
-        nodesDataset = new vis.DataSet(visNodes);
-        edgesDataset = new vis.DataSet(visEdges);
-
-        const data = { nodes: nodesDataset, edges: edgesDataset };
-        const options = getLayoutOptions();
-
-        if (network) network.destroy();
-        network = new vis.Network(container, data, options);
-
-        // ========================================
-        // Clean Event Handling - Using vis.js events only
-        // ========================================
-
-        // Click handler for node selection
-        network.on('click', function(params) {
-            hideContextMenu();
-            if (params.nodes.length > 0) {
-                const nodeId = params.nodes[0];
-                const node = nodesDataset.get(nodeId);
-                selectedNodeId = nodeId;
-                showNodeDetails(node, nodeId);
+        // Build node position lookup for edge bundling
+        const nodePositions = {};
+        cyNodes.forEach(n => {
+            if (n.position) {
+                nodePositions[n.data.id] = n.position;
             }
         });
 
-        // Right-click context menu
-        network.on('oncontext', function(params) {
-            params.event.preventDefault();
-            const nodeId = network.getNodeAt(params.pointer.DOM);
-            if (nodeId) {
-                // Get current selection
-                const currentSelection = network.getSelectedNodes();
+        // Calculate cluster centroids by node type for edge bundling
+        const typeCentroids = {};
+        const typeNodes = {};
+        nodes.forEach(n => {
+            if (!typeNodes[n.type]) typeNodes[n.type] = [];
+            const pos = organizedPositions[n.id] || nodePositions[n.id];
+            if (pos) typeNodes[n.type].push(pos);
+        });
+        for (const type in typeNodes) {
+            const positions = typeNodes[type];
+            if (positions.length > 0) {
+                typeCentroids[type] = {
+                    x: positions.reduce((sum, p) => sum + p.x, 0) / positions.length,
+                    y: positions.reduce((sum, p) => sum + p.y, 0) / positions.length
+                };
+            }
+        }
 
-                // If clicked node is already selected, keep multi-selection
-                // Otherwise, select just the clicked node
-                if (currentSelection.includes(nodeId)) {
-                    // Keep existing selection, use clicked node as primary
-                    selectedNodeId = nodeId;
-                } else {
-                    // New single selection
-                    selectedNodeId = nodeId;
-                    network.selectNodes([nodeId]);
+        // Helper: calculate perpendicular distance from point to line segment
+        function perpendicularDistance(px, py, x1, y1, x2, y2) {
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            if (len === 0) return 0;
+
+            // Perpendicular distance (signed - positive = left of line)
+            return ((py - y1) * dx - (px - x1) * dy) / len;
+        }
+
+        // Convert edges to Cytoscape format with bundling control points
+        const cyEdges = edges.map((e, i) => {
+            const sourceNode = nodes.find(n => n.id === e.from);
+            const targetNode = nodes.find(n => n.id === e.to);
+            const sourcePos = organizedPositions[e.from] || nodePositions[e.from];
+            const targetPos = organizedPositions[e.to] || nodePositions[e.to];
+
+            let controlDistance = 0;
+            let hasBundling = false;
+
+            // Calculate bundling control point distance if we have positions
+            if (sourcePos && targetPos && targetNode && hasOrganizedLayout) {
+                const targetCentroid = typeCentroids[targetNode.type];
+                if (targetCentroid) {
+                    // Midpoint between source and target
+                    const midX = (sourcePos.x + targetPos.x) / 2;
+                    const midY = (sourcePos.y + targetPos.y) / 2;
+
+                    // Pull control point toward target cluster centroid (bundling strength: 0.4)
+                    const bundleStrength = 0.4;
+                    const controlX = midX + (targetCentroid.x - midX) * bundleStrength;
+                    const controlY = midY + (targetCentroid.y - midY) * bundleStrength;
+
+                    // Calculate perpendicular distance from control point to source-target line
+                    controlDistance = perpendicularDistance(
+                        controlX, controlY,
+                        sourcePos.x, sourcePos.y,
+                        targetPos.x, targetPos.y
+                    );
+
+                    // Only apply bundling if the distance is significant
+                    hasBundling = Math.abs(controlDistance) > 10;
                 }
+            }
 
-                const selectedNodes = network.getSelectedNodes();
-                showContextMenu(params.event, selectedNodes);
-            } else {
+            return {
+                group: 'edges',
+                data: {
+                    id: `edge-${i}`,
+                    source: e.from,
+                    target: e.to,
+                    rawLabel: e.label,
+                    displayLabel: showEdgeLabels ? formatEdgeLabel(e.label) : '',
+                    color: getEdgeColor(e.label),
+                    controlDistance: controlDistance,
+                    hasBundling: hasBundling
+                }
+            };
+        });
+
+        // Destroy existing instance
+        if (cy) {
+            cy.destroy();
+        }
+
+        // Create Cytoscape instance
+        cy = cytoscape({
+            container: container,
+            elements: [...cyNodes, ...cyEdges],
+            style: getCytoscapeStyle(),
+            layout: getLayoutConfig(layoutType, hasOrganizedLayout),
+            // Interaction options
+            boxSelectionEnabled: true,
+            selectionType: 'additive',
+            minZoom: 0.1,
+            maxZoom: 3,
+            wheelSensitivity: 0.3
+        });
+
+        // ========================================
+        // Event Handling
+        // ========================================
+
+        // Click on node
+        cy.on('tap', 'node', function(evt) {
+            hideContextMenu();
+            const node = evt.target;
+            selectedNodeId = node.id();
+        });
+
+        // Click on background
+        cy.on('tap', function(evt) {
+            if (evt.target === cy) {
                 hideContextMenu();
             }
         });
 
-        // Explicit drag end handler for better trackpad support
-        // This helps ensure drags are properly released on MacBook trackpads
-        network.on('dragEnd', function(params) {
-            // Release any locked node positions after drag
-            if (params.nodes.length > 0) {
-                // Node drag completed - no additional action needed
-                // vis.js handles the position update internally
+        // Right-click context menu
+        cy.on('cxttap', 'node', function(evt) {
+            evt.originalEvent.preventDefault();
+            const node = evt.target;
+            selectedNodeId = node.id();
+
+            // Get current selection
+            const currentSelection = cy.$(':selected');
+            let selectedNodes;
+
+            // If clicked node is already selected, keep multi-selection
+            if (currentSelection.contains(node)) {
+                selectedNodes = currentSelection.filter('node').map(n => n.id());
+            } else {
+                // New single selection
+                cy.$(':selected').unselect();
+                node.select();
+                selectedNodes = [node.id()];
+            }
+
+            showContextMenu(evt.originalEvent, selectedNodes);
+        });
+
+        // Right-click on background
+        cy.on('cxttap', function(evt) {
+            if (evt.target === cy) {
+                hideContextMenu();
             }
         });
 
-        // Release event - fires when pointer is released from canvas
-        // This is a backup to ensure drag state is cleared on trackpads
-        network.on('release', function(params) {
-            // Canvas pointer release - helps with trackpad gesture completion
+        // Fit to view after layout completes
+        cy.on('layoutstop', function() {
+            setTimeout(() => {
+                cy.fit(50);
+            }, 50);
         });
 
-        // Stabilization complete - disable physics and fit to view
-        network.on('stabilizationIterationsDone', function() {
-            network.setOptions({ physics: { enabled: false } });
-            network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
-        });
-
-        // For hierarchical layouts or organized layouts without physics, fit immediately
-        if (nodes.length > 0 && (layoutType !== 'static' || hasOrganizedLayout)) {
-            setTimeout(() => network.fit({ animation: { duration: 300 } }), 100);
+        // For preset layout (organized positions), fit immediately
+        if (hasOrganizedLayout || nodes.length > 0) {
+            setTimeout(() => {
+                if (cy) cy.fit(50);
+            }, 100);
         }
+    }
+
+    function getLayoutConfig(layoutType, hasOrganizedLayout) {
+        // If we have organized positions, use preset layout
+        if (hasOrganizedLayout) {
+            return { name: 'preset' };
+        }
+
+        // Use dagre for hierarchical layouts
+        if (layoutType === 'hierarchical') {
+            return {
+                name: 'dagre',
+                rankDir: 'TB',
+                nodeSep: 80,
+                rankSep: 150,
+                animate: false
+            };
+        }
+
+        if (layoutType === 'hierarchicalLR') {
+            return {
+                name: 'dagre',
+                rankDir: 'LR',
+                nodeSep: 80,
+                rankSep: 200,
+                animate: false
+            };
+        }
+
+        // Default: use cose for static layout without focus node
+        return {
+            name: 'cose',
+            idealEdgeLength: 150,
+            nodeOverlap: 20,
+            refresh: 20,
+            fit: true,
+            padding: 50,
+            randomize: false,
+            componentSpacing: 100,
+            nodeRepulsion: 8000,
+            edgeElasticity: 100,
+            nestingFactor: 5,
+            gravity: 80,
+            numIter: 500,
+            initialTemp: 200,
+            coolingFactor: 0.95,
+            minTemp: 1.0,
+            animate: false
+        };
     }
 
     // Hide context menu when clicking elsewhere
@@ -1775,102 +2023,9 @@ console.log('dependencies.js loaded');
         }
     });
 
-    // Global pointerup handler as fallback for trackpads
-    // Some trackpads emit pointer events instead of mouse events
-    document.addEventListener('pointerup', function(e) {
-        // This helps ensure drag state is properly released on trackpads
-        // by providing an additional hook point for pointer release events
-    }, { passive: true });
-
-    function getLayoutOptions() {
-        const layoutType = document.getElementById('layoutType').value;
-
-        const baseOptions = {
-            nodes: { borderWidth: 0 },
-            edges: { width: 1 },
-            interaction: {
-                hover: true,
-                tooltipDelay: 300,
-                dragNodes: true,
-                dragView: true,
-                zoomView: true,
-                zoomSpeed: 0.5,  // Slower zoom for smoother trackpad scrolling
-                multiselect: true,
-                hoverConnectedEdges: false,
-                selectConnectedEdges: false,
-                hideEdgesOnDrag: false,
-                hideEdgesOnZoom: false,
-                hideNodesOnDrag: false,
-                keyboard: false,
-                navigationButtons: false
-            },
-            physics: { enabled: false }
-        };
-
-        // Check if we have organized positions (focus node is in the graph)
-        const useOrganizedLayout = focusNodeId && addedNodeIds.has(focusNodeId);
-
-        switch (layoutType) {
-            case 'hierarchical':
-            case 'hierarchicalLR':
-                // When we have organized positions, use them instead of vis.js hierarchical layout
-                if (useOrganizedLayout) {
-                    return {
-                        ...baseOptions,
-                        layout: { randomSeed: 42 },
-                        physics: { enabled: false }
-                    };
-                }
-                // Fallback to vis.js hierarchical for graphs without a focus node
-                return {
-                    ...baseOptions,
-                    layout: {
-                        hierarchical: {
-                            enabled: true,
-                            direction: layoutType === 'hierarchicalLR' ? 'LR' : 'UD',
-                            sortMethod: 'directed',
-                            levelSeparation: layoutType === 'hierarchicalLR' ? 200 : 150,
-                            nodeSpacing: layoutType === 'hierarchicalLR' ? 150 : 180,
-                            treeSpacing: layoutType === 'hierarchicalLR' ? 150 : 200,
-                            blockShifting: true, edgeMinimization: true
-                        }
-                    }
-                };
-            default:
-                return {
-                    ...baseOptions,
-                    layout: { randomSeed: 42, improvedLayout: !useOrganizedLayout },
-                    physics: useOrganizedLayout ? {
-                        enabled: false
-                    } : {
-                        enabled: true,
-                        stabilization: { enabled: true, iterations: 200, updateInterval: 25 },
-                        barnesHut: {
-                            gravitationalConstant: -3000, centralGravity: 0.3,
-                            springLength: 120, springConstant: 0.04, damping: 0.09
-                        }
-                    }
-                };
-        }
-    }
-
     function applyLayout() { updateGraph(); saveGraphState(); }
     function fitGraph() {
-        if (network) network.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
-    }
-
-    function showNodeDetails(node, nodeId) {
-        const incoming = edgesDataset.get().filter(e => e.to === nodeId).length;
-        const outgoing = edgesDataset.get().filter(e => e.from === nodeId).length;
-        const displayLabel = getNodeDisplayLabel(nodeId, node.group, node.label);
-
-        document.getElementById('selectedNode').innerHTML = `
-            <strong>${escapeHtml(displayLabel)}</strong>
-            <div class="dep-meta">
-                Type: ${escapeHtml(node.group)}<br>
-                Incoming: ${incoming} · Outgoing: ${outgoing}
-            </div>
-        `;
+        if (cy) cy.fit(50);
     }
 
     function escapeAttr(text) {
@@ -1888,24 +2043,6 @@ console.log('dependencies.js loaded');
             }
         }
         return nodeLabel;
-    }
-
-    function darkenColor(hex, percent) {
-        const num = parseInt(hex.replace('#', ''), 16);
-        const amt = Math.round(2.55 * percent);
-        const R = Math.max((num >> 16) - amt, 0);
-        const G = Math.max((num >> 8 & 0x00FF) - amt, 0);
-        const B = Math.max((num & 0x0000FF) - amt, 0);
-        return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
-    }
-
-    function lightenColor(hex, percent) {
-        const num = parseInt(hex.replace('#', ''), 16);
-        const amt = Math.round(2.55 * percent);
-        const R = Math.min((num >> 16) + amt, 255);
-        const G = Math.min((num >> 8 & 0x00FF) + amt, 255);
-        const B = Math.min((num & 0x0000FF) + amt, 255);
-        return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
     }
 
     // ========================================
@@ -1939,10 +2076,10 @@ console.log('dependencies.js loaded');
 
         // Set header based on selection count
         if (selectedNodeIds.length === 1) {
-            const node = nodesDataset.get(selectedNodeIds[0]);
+            const node = allNodes.find(n => n.id === selectedNodeIds[0]);
             if (node) {
-                const displayLabel = getNodeDisplayLabel(node.id, node.group, node.label);
-                header.textContent = `${node.group}: ${displayLabel}`;
+                const displayLabel = getNodeDisplayLabel(node.id, node.type, node.label);
+                header.textContent = `${node.type}: ${displayLabel}`;
             } else {
                 header.textContent = 'Node';
             }
@@ -2035,12 +2172,16 @@ console.log('dependencies.js loaded');
 
     function contextCenterOnNode() {
         hideContextMenu();
-        if (!selectedNodeId || !network) return;
+        if (!selectedNodeId || !cy) return;
 
-        network.focus(selectedNodeId, {
-            scale: 1.5,
-            animation: { duration: 500, easingFunction: 'easeInOutQuad' }
-        });
+        const node = cy.$id(selectedNodeId);
+        if (node.length) {
+            cy.animate({
+                center: { eles: node },
+                zoom: 1.5,
+                duration: 500
+            });
+        }
     }
 
     function contextSetAsFocus() {
@@ -2058,11 +2199,15 @@ console.log('dependencies.js loaded');
 
         // Focus on the center node
         setTimeout(() => {
-            if (network) {
-                network.focus(focusNodeId, {
-                    scale: 1,
-                    animation: { duration: 500, easingFunction: 'easeInOutQuad' }
-                });
+            if (cy) {
+                const cyNode = cy.$id(focusNodeId);
+                if (cyNode.length) {
+                    cy.animate({
+                        center: { eles: cyNode },
+                        zoom: 1,
+                        duration: 500
+                    });
+                }
             }
         }, 300);
     }
@@ -2089,10 +2234,10 @@ console.log('dependencies.js loaded');
     }
 
     function removeSelectedNodes() {
-        if (!network) return;
+        if (!cy) return;
 
-        // Get all selected nodes from vis.js
-        const selected = network.getSelectedNodes();
+        // Get all selected nodes from Cytoscape
+        const selected = cy.$(':selected').filter('node').map(n => n.id());
 
         if (selected.length === 0 && selectedNodeId) {
             // Fall back to context menu selected node
@@ -2163,140 +2308,6 @@ console.log('dependencies.js loaded');
 
     function openNodeInExplorer(type, name) {
         window.location.href = `/explorer?search=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}`;
-    }
-
-    // ========================================
-    // Drag Selection (Box Select)
-    // ========================================
-
-    let selectionOverlay = null;
-
-    function initDragSelection() {
-        graphContainer = document.querySelector('.dep-graph');
-        selectionBox = document.getElementById('selectionBox');
-        selectionOverlay = document.getElementById('selectionOverlay');
-
-        // Add hint for keyboard shortcuts
-        const hint = document.createElement('div');
-        hint.className = 'graph-hint';
-        hint.innerHTML = '<strong>Right-click</strong> node actions · <strong>Shift+Drag</strong> box select · <strong>Delete</strong> remove selected';
-        graphContainer.appendChild(hint);
-
-        // Listen for shift key to activate overlay
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Shift' && !isDragSelecting) {
-                selectionOverlay.classList.add('active');
-            }
-            // Delete key removes selected nodes
-            if ((e.key === 'Delete' || e.key === 'Backspace') && !e.target.closest('input, textarea')) {
-                e.preventDefault();
-                removeSelectedNodes();
-            }
-        });
-
-        document.addEventListener('keyup', (e) => {
-            if (e.key === 'Shift' && !isDragSelecting) {
-                selectionOverlay.classList.remove('active');
-            }
-        });
-
-        // Attach mouse events to the overlay - this captures events BEFORE vis.js
-        selectionOverlay.addEventListener('mousedown', onDragStart);
-        document.addEventListener('mousemove', onDragMove);
-        document.addEventListener('mouseup', onDragEnd);
-    }
-
-    function onDragStart(e) {
-        // Get the position relative to graphContainer
-        const canvas = document.getElementById('graphContainer');
-        const canvasRect = canvas.getBoundingClientRect();
-        const x = e.clientX - canvasRect.left;
-        const y = e.clientY - canvasRect.top;
-
-        isDragSelecting = true;
-
-        // Store start position
-        dragStartX = x;
-        dragStartY = y;
-
-        // Position selection box
-        selectionBox.style.left = dragStartX + 'px';
-        selectionBox.style.top = dragStartY + 'px';
-        selectionBox.style.width = '0px';
-        selectionBox.style.height = '0px';
-        selectionBox.classList.add('active');
-
-        // Prevent default behavior
-        e.preventDefault();
-        e.stopPropagation();
-    }
-
-    function onDragMove(e) {
-        if (!isDragSelecting) return;
-
-        const canvas = document.getElementById('graphContainer');
-        const canvasRect = canvas.getBoundingClientRect();
-        const currentX = e.clientX - canvasRect.left;
-        const currentY = e.clientY - canvasRect.top;
-
-        const left = Math.min(dragStartX, currentX);
-        const top = Math.min(dragStartY, currentY);
-        const width = Math.abs(currentX - dragStartX);
-        const height = Math.abs(currentY - dragStartY);
-
-        selectionBox.style.left = left + 'px';
-        selectionBox.style.top = top + 'px';
-        selectionBox.style.width = width + 'px';
-        selectionBox.style.height = height + 'px';
-
-        e.preventDefault();
-    }
-
-    function onDragEnd(e) {
-        if (!isDragSelecting) return;
-
-        isDragSelecting = false;
-        selectionBox.classList.remove('active');
-        selectionOverlay.classList.remove('active');
-
-        if (!network || !nodesDataset) return;
-
-        // Get final position relative to graphContainer
-        const canvas = document.getElementById('graphContainer');
-        const canvasRect = canvas.getBoundingClientRect();
-        const currentX = e.clientX - canvasRect.left;
-        const currentY = e.clientY - canvasRect.top;
-
-        const boxLeft = Math.min(dragStartX, currentX);
-        const boxTop = Math.min(dragStartY, currentY);
-        const boxRight = Math.max(dragStartX, currentX);
-        const boxBottom = Math.max(dragStartY, currentY);
-
-        // Don't select if box is too small (probably just a click)
-        if (boxRight - boxLeft < 10 && boxBottom - boxTop < 10) return;
-
-        // Find nodes within the selection box
-        const selectedNodes = [];
-        const allVisNodes = nodesDataset.get();
-
-        for (const node of allVisNodes) {
-            const position = network.getPositions([node.id])[node.id];
-            if (!position) continue;
-
-            // Convert canvas position to DOM position
-            const domPos = network.canvasToDOM(position);
-
-            if (domPos.x >= boxLeft && domPos.x <= boxRight &&
-                domPos.y >= boxTop && domPos.y <= boxBottom) {
-                selectedNodes.push(node.id);
-            }
-        }
-
-        // Select the nodes in vis.js
-        if (selectedNodes.length > 0) {
-            network.selectNodes(selectedNodes);
-            showToast(`Selected ${selectedNodes.length} node(s)`, 'info');
-        }
     }
 
     // Expose functions to global scope for inline onclick handlers
