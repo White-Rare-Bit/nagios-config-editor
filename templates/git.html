@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Git - Nagios Bulk Editor{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('static', filename='css/git.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="page-container git-container">
+    <!-- Left Sidebar -->
+    <div class="page-sidebar git-sidebar">
+        <div class="panel-header"><span class="panel-header-title">Git</span></div>
+        <div class="sidebar-section git-section">
+            <div class="sidebar-section-title">Repository</div>
+            <div class="sidebar-section-content">
+                <div class="git-branch-display" id="branchDisplay" style="display: none;">
+                    <span class="git-branch-icon"><i class="fa-solid fa-code-branch"></i></span>
+                    <span class="git-branch-name" id="branchName">main</span>
+                </div>
+                <div id="repoStatus">
+                    <p class="sidebar-info-text git-loading-text">Loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-section sidebar-section-info">
+            <div class="sidebar-section-title">Info</div>
+            <div class="sidebar-section-content">
+                <p class="sidebar-info-text">
+                    Git integration lets you track changes to your Nagios configuration files.
+                </p>
+                <p class="sidebar-info-text">
+                    View file diffs, discard unwanted changes, and commit your work with descriptive messages.
+                </p>
+            </div>
+        </div>
+
+        <div class="sidebar-section sidebar-section-bottom">
+            <details class="danger-zone">
+                <summary class="danger-zone-toggle">
+                    <i class="fa-solid fa-triangle-exclamation"></i> Danger Zone
+                </summary>
+                <div class="danger-zone-content">
+                    <p class="danger-zone-warning">These actions cannot be undone.</p>
+                    <button class="nbe-btn nbe-btn--danger nbe-btn--full" data-action="clearGitHistory">
+                        Wipe Git Log
+                    </button>
+                </div>
+            </details>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="page-main git-main">
+        <div class="page-header git-header">
+            <h2 class="page-title">Changes</h2>
+            <div class="page-tabs" role="tablist" aria-label="Git view tabs">
+                <button class="page-tab active" id="tabChanges" data-action="switchGitTab" data-tab="changes"
+                        role="tab" aria-selected="true" aria-controls="gitContent">
+                    Uncommitted <span class="page-tab-badge" id="changesBadge" style="display: none;">0</span>
+                </button>
+                <button class="page-tab" id="tabHistory" data-action="switchGitTab" data-tab="history"
+                        role="tab" aria-selected="false" aria-controls="historyContent">
+                    History
+                </button>
+            </div>
+        </div>
+
+        <div id="gitContent" class="git-content-area" role="tabpanel" aria-labelledby="tabChanges" aria-live="polite">
+            <div class="git-loading">Loading git status...</div>
+        </div>
+
+        <div id="historyContent" class="git-content-area" role="tabpanel" aria-labelledby="tabHistory" aria-live="polite" style="display: none;">
+            <div class="git-loading">Loading history...</div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/git.js') }}"></script>
+{% endblock %}
+

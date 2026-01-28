@@ -1,0 +1,223 @@
+/* Objects page styles (extends shared .page-* classes from base.html) */
+
+/* Container overrides */
+.objects-container {
+    /* Inherits from .page-container */
+}
+
+.objects-sidebar {
+    width: 240px; /* Narrower sidebar for simple list */
+}
+
+.objects-main {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Sidebar type list */
+.type-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.type-item {
+    display: flex;
+    align-items: center;
+    padding: var(--nbe-space-sm) var(--nbe-space-md);
+    color: var(--nbe-text-primary);
+    text-decoration: none;
+    border-radius: var(--nbe-radius-md);
+    margin: 2px var(--nbe-space-sm);
+    transition: background var(--nbe-transition-fast);
+}
+
+.type-item:hover {
+    background: var(--nbe-bg-hover);
+    color: var(--nbe-text-primary);
+    text-decoration: none;
+}
+
+.type-item.active {
+    background: var(--nbe-primary-light);
+    color: var(--nbe-primary);
+    font-weight: 500;
+}
+
+.type-item-count {
+    margin-left: auto;
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-text-muted);
+}
+
+/* Main content area */
+.objects-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--nbe-space-lg);
+}
+
+/* Header with search */
+.objects-header {
+    padding: var(--nbe-space-md) var(--nbe-space-xl);
+    border-bottom: 1px solid var(--nbe-border);
+    background: var(--nbe-bg-surface);
+    display: flex;
+    align-items: center;
+    gap: var(--nbe-space-lg);
+}
+
+.objects-header-title {
+    font-size: var(--nbe-font-size-lg);
+    font-weight: 600;
+    color: var(--nbe-text-primary);
+    margin: 0;
+}
+
+.objects-header .badge {
+    background: var(--nbe-bg-subtle);
+    color: var(--nbe-text-secondary);
+    padding: 2px 8px;
+    border-radius: var(--nbe-radius-md);
+    font-size: var(--nbe-font-size-sm);
+    font-weight: 500;
+}
+
+.objects-search {
+    margin-left: auto;
+    width: 200px;
+}
+
+.objects-search input {
+    width: 100%;
+    padding: var(--nbe-space-xs) var(--nbe-space-md);
+    border: 1px solid var(--nbe-border);
+    border-radius: var(--nbe-radius-md);
+    font-size: var(--nbe-font-size-base);
+    outline: none;
+}
+
+.objects-search input:focus {
+    border-color: var(--nbe-primary);
+}
+
+/* Table styles */
+.objects-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.objects-table thead {
+    position: sticky;
+    top: 0;
+    background: var(--nbe-bg-header);
+    z-index: 1;
+}
+
+.objects-table th {
+    padding: var(--nbe-space-sm) var(--nbe-space-md);
+    text-align: left;
+    font-size: var(--nbe-font-size-sm);
+    font-weight: 600;
+    color: var(--nbe-text-secondary);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--nbe-border);
+}
+
+.objects-table td {
+    padding: var(--nbe-space-sm) var(--nbe-space-md);
+    border-bottom: 1px solid var(--nbe-border-light);
+}
+
+.objects-table tbody tr:hover {
+    background: var(--nbe-bg-hover-row);
+}
+
+/* Type badge in table - consistent with other badge patterns */
+.objects-table .type-badge {
+    background: var(--nbe-info-light);
+    color: var(--nbe-info);
+    padding: 2px var(--nbe-space-sm);
+    border-radius: var(--nbe-radius-md);
+    font-size: var(--nbe-font-size-sm);
+    font-weight: 500;
+}
+
+.objects-table .name-cell {
+    font-weight: 500;
+    color: var(--nbe-text-primary);
+}
+
+.objects-table .file-cell {
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-text-muted);
+}
+
+.objects-table .actions-cell {
+    white-space: nowrap;
+}
+
+/* Action buttons in table */
+.objects-table .page-btn {
+    padding: 4px 10px;
+    font-size: var(--nbe-font-size-sm);
+}
+
+/* Empty state */
+.objects-empty {
+    text-align: center;
+    padding: var(--nbe-space-2xl);
+    color: var(--nbe-text-muted);
+}
+
+/* Syntax highlighting for Nagios config */
+.nagios-config {
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-font-size-sm);
+    background: var(--nbe-code-bg);
+    color: var(--nbe-code-text);
+    padding: var(--nbe-space-lg);
+    border-radius: var(--nbe-radius-md);
+    overflow-x: auto;
+    line-height: 1.5;
+}
+
+.nagios-config .keyword { color: var(--nbe-syntax-keyword); font-weight: bold; }
+.nagios-config .object-type { color: var(--nbe-syntax-object-type); font-weight: bold; }
+.nagios-config .brace { color: var(--nbe-syntax-brace); }
+.nagios-config .attr-name { color: var(--nbe-syntax-attr-name); }
+.nagios-config .attr-value { color: var(--nbe-syntax-attr-value); }
+.nagios-config .comment { color: var(--nbe-syntax-comment); font-style: italic; }
+.nagios-config .file-info { color: var(--nbe-dark-text-muted); margin-bottom: var(--nbe-space-sm); }
+
+/* Editable attribute rows */
+.attr-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: var(--nbe-space-sm);
+    padding: var(--nbe-space-xs);
+    border-radius: var(--nbe-radius-md);
+    background: var(--nbe-bg-subtle);
+}
+
+.attr-row:hover {
+    background: var(--nbe-bg-hover);
+}
+
+.attr-row label {
+    width: 200px;
+    font-weight: 500;
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-font-size-sm);
+    margin-bottom: 0;
+    padding-right: var(--nbe-space-sm);
+}
+
+.attr-row input {
+    flex: 1;
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-font-size-sm);
+}
+
+.attr-row .btn-remove {
+    margin-left: var(--nbe-space-sm);
+}

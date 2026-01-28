@@ -1,0 +1,30 @@
+{
+  "name": "nagios-bulk-editor",
+  "version": "1.0.0",
+  "description": "Frontend JavaScript tests for Nagios Bulk Editor",
+  "scripts": {
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "test:verbose": "jest --verbose"
+  },
+  "devDependencies": {
+    "@jest/globals": "^29.7.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "collectCoverageFrom": [
+      "static/**/*.js",
+      "!static/js/explorer/main.js"
+    ],
+    "coveragePathIgnorePatterns": [
+      "/node_modules/",
+      "/tests/"
+    ],
+    "setupFilesAfterEnv": ["<rootDir>/tests/frontend/setup.js"],
+    "testMatch": [
+      "**/tests/frontend/**/*.test.js"
+    ]
+  }
+}

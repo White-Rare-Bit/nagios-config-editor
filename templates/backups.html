@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Backups - Nagios Bulk Editor{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('static', filename='css/backups.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="page-container backup-container">
+    <!-- Left Sidebar -->
+    <div class="page-sidebar">
+        <div class="panel-header"><span class="panel-header-title">Backups</span></div>
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Create Backup</div>
+            <div class="sidebar-section-content">
+                <div class="form-field">
+                    <label class="form-label" for="backupDescription">Description (optional)</label>
+                    <input type="text" class="form-input" id="backupDescription"
+                           placeholder="e.g., Before major restructure"
+                           aria-describedby="backupDescHint">
+                    <span class="form-hint visually-hidden" id="backupDescHint">Optional description for this backup</span>
+                </div>
+                <button class="nbe-btn nbe-btn--primary nbe-btn--full" id="createBackupBtn" data-action="create-backup">
+                    Create Backup
+                </button>
+            </div>
+        </div>
+
+        <div class="sidebar-section sidebar-section-info">
+            <div class="sidebar-section-title">Info</div>
+            <div class="sidebar-section-content">
+                <p class="sidebar-info-text">
+                    Backups are automatically created before any changes are committed.
+                </p>
+                <p class="sidebar-info-text">
+                    You can restore to any previous backup point or create manual backups before major changes.
+                </p>
+            </div>
+        </div>
+
+        <div class="sidebar-section sidebar-section-bottom">
+            <details class="danger-zone">
+                <summary class="danger-zone-toggle">
+                    <i class="fa-solid fa-triangle-exclamation"></i> Danger Zone
+                </summary>
+                <div class="danger-zone-content">
+                    <p class="danger-zone-warning">This action cannot be undone.</p>
+                    <button class="nbe-btn nbe-btn--danger nbe-btn--full" data-action="delete-all-backups">
+                        Delete All Backups
+                    </button>
+                </div>
+            </details>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="page-main backup-main">
+        <div class="page-header backup-header">
+            <h2 class="page-title">Available Backups</h2>
+            <span class="badge-count">{{ backups|length }} backup{{ 's' if backups|length != 1 else '' }}</span>
+        </div>
+
+        <div class="backup-table-container">
+            {% if backups %}
+            <table class="backup-table" role="grid" aria-label="Available backups">
+                <thead>
+                    <tr>
+                        <th class="backup-col-date sortable" data-sort="date" data-action="sort-backups">
+                            Date/Time <span class="sort-icon"></span>
+                        </th>
+                        <th class="backup-col-desc">Description</th>
+                        <th class="backup-col-files sortable" data-sort="files" data-action="sort-backups">
+                            Files <span class="sort-icon"></span>
+                        </th>
+                        <th class="backup-col-user">User</th>
+                        <th class="backup-col-actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="backupTableBody">
+                    {% for backup in backups %}
+                    <tr class="backup-row" id="backup-{{ loop.index }}" data-name="{{ backup.name }}" data-date="{{ backup.created }}" data-files="{{ backup.file_count }}">
+                        <td class="backup-cell-date">
+                            <span class="backup-date-value">{{ backup.created }}</span>
+                        </td>
+                        <td class="backup-cell-desc">
+                            {% if backup.description %}
+                            <span class="backup-desc-text">{{ backup.description }}</span>
+                            {% else %}
+                            <span class="backup-desc-auto">{{ backup.name }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="backup-cell-files">
+                            <span class="backup-files-badge">{{ backup.file_count }}</span>
+                        </td>
+                        <td class="backup-cell-user">
+                            {% if backup.user_name %}
+                            <span class="backup-user-name">{{ backup.user_name }}</span>
+                            {% if backup.user_email %}<span class="backup-user-email">{{ backup.user_email }}</span>{% endif %}
+                            {% else %}
+                            <span class="backup-user-unknown">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="backup-cell-actions">
+                            <button class="nbe-btn nbe-btn--secondary nbe-btn--sm" data-action="restore-backup" data-name="{{ backup.name }}">
+                                Restore
+                            </button>
+                            <button class="nbe-btn nbe-btn--danger nbe-btn--sm" data-action="delete-backup" data-name="{{ backup.name }}">
+                                Delete
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state backup-empty">
+                <div class="empty-state-icon"><i class="fa-solid fa-box-archive"></i></div>
+                <h3>No backups available</h3>
+                <p>Backups are automatically created before any changes are committed</p>
+                <div class="empty-tips">
+                    <div class="tip"><strong>Automatic:</strong> Created before each commit to protect your config</div>
+                    <div class="tip"><strong>Manual:</strong> Use the form on the left to create backups anytime</div>
+                    <div class="tip"><strong>Restore:</strong> Roll back to any previous backup point</div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/backups.js') }}"></script>
+{% endblock %}

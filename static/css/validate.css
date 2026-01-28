@@ -1,0 +1,236 @@
+/* Validate page - Dark theme */
+
+.validate-container {
+    display: flex;
+    height: calc(100vh - var(--nbe-navbar-height));
+    margin: -1.5rem;
+    background: var(--nbe-dark-bg-primary);
+}
+
+/* Sidebar */
+.validate-container .page-sidebar {
+    padding: 0 0 0 var(--nbe-space-md);
+    background: var(--nbe-dark-bg-primary) !important;
+    border-right: 1px solid var(--nbe-dark-border-primary) !important;
+}
+
+.validate-container .panel-header {
+    background: var(--nbe-dark-bg-secondary) !important;
+    color: var(--nbe-dark-text-primary) !important;
+    border-bottom: 1px solid var(--nbe-dark-border-primary) !important;
+}
+
+.validate-container .sidebar-section {
+    border: none !important;
+    border-radius: 0 !important;
+    border-bottom: 1px solid var(--nbe-dark-border-secondary) !important;
+    margin-bottom: 0 !important;
+    background: transparent !important;
+}
+
+.validate-container .sidebar-section-title {
+    padding: var(--nbe-space-sm) 12px;
+    border-bottom: none;
+    font-size: var(--nbe-font-size-xs-plus);
+    color: var(--nbe-dark-text-secondary) !important;
+    background: transparent !important;
+}
+
+.validate-container .sidebar-section-content {
+    padding: var(--nbe-space-sm) 12px var(--nbe-space-md);
+    background: transparent !important;
+}
+
+.validate-container .sidebar-info-text {
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-dark-text-secondary) !important;
+    margin: 0 0 var(--nbe-space-sm);
+    line-height: 1.5;
+}
+
+.validate-container .sidebar-info-text code {
+    background: var(--nbe-dark-bg-tertiary);
+    padding: 2px 6px;
+    border-radius: var(--nbe-radius-sm);
+    color: var(--nbe-dark-accent-primary);
+}
+
+.validate-container .nbe-btn--primary {
+    background: var(--nbe-dark-accent-primary);
+    border: none;
+    color: var(--nbe-dark-bg-primary);
+}
+
+.validate-container .nbe-btn--primary:hover {
+    background: var(--nbe-dark-accent-primary-hover);
+}
+
+.validate-main {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--nbe-space-lg);
+}
+
+/* Nagios status indicator */
+.nagios-status {
+    padding: var(--nbe-space-md);
+    border-radius: var(--nbe-radius-md);
+    background: var(--nbe-dark-bg-secondary);
+    margin-bottom: var(--nbe-space-md);
+    color: var(--nbe-dark-text-primary);
+    border: 1px solid var(--nbe-dark-border-primary);
+}
+
+.nagios-status.available {
+    background: var(--nbe-dark-validation-success-bg);
+    border-color: var(--nbe-dark-validation-success-border);
+    color: var(--nbe-dark-validation-success-text);
+}
+
+.nagios-status.unavailable {
+    background: var(--nbe-dark-validation-error-bg);
+    border-color: var(--nbe-dark-validation-error-border);
+    color: var(--nbe-dark-validation-error-text);
+}
+
+/* Summary section */
+.validation-summary {
+    padding: var(--nbe-space-md);
+    border-radius: var(--nbe-radius-md);
+    margin-top: var(--nbe-space-md);
+}
+
+.validation-summary.success {
+    background: var(--nbe-dark-validation-success-bg);
+    border: 1px solid var(--nbe-dark-validation-success-border);
+    color: var(--nbe-dark-validation-success-text);
+}
+
+.validation-summary.error {
+    background: var(--nbe-dark-validation-error-bg);
+    border: 1px solid var(--nbe-dark-validation-error-border);
+    color: var(--nbe-dark-validation-error-text);
+}
+
+/* Output section */
+.validate-output-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--nbe-space-md);
+}
+
+.validate-badges {
+    display: flex;
+    gap: var(--nbe-space-sm);
+}
+
+.validate-badge {
+    padding: var(--nbe-space-xs) var(--nbe-space-sm);
+    border-radius: var(--nbe-radius-md);
+    font-size: var(--nbe-font-size-sm);
+    font-weight: 500;
+}
+
+.validate-badge--errors {
+    background: var(--nbe-dark-accent-danger);
+    color: var(--nbe-text-inverse);
+}
+
+.validate-badge--warnings {
+    background: var(--nbe-dark-accent-warning);
+    color: var(--nbe-dark-bg-primary);
+}
+
+/* Issues list */
+.validate-issues {
+    margin-bottom: var(--nbe-space-lg);
+}
+
+.validate-issues-title {
+    font-size: var(--nbe-font-size-md);
+    font-weight: 600;
+    margin-bottom: var(--nbe-space-sm);
+    color: var(--nbe-dark-text-primary);
+}
+
+.validate-issues-title--errors {
+    color: var(--nbe-dark-accent-danger);
+}
+
+.validate-issues-title--warnings {
+    color: var(--nbe-dark-accent-warning);
+}
+
+.validate-issue-item {
+    padding: var(--nbe-space-sm) var(--nbe-space-md);
+    background: var(--nbe-dark-bg-secondary);
+    border: 1px solid var(--nbe-dark-border-secondary);
+    border-radius: var(--nbe-radius-md);
+    margin-bottom: var(--nbe-space-xs);
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-dark-text-primary);
+}
+
+.validate-issue-item--error {
+    border-left: 3px solid var(--nbe-dark-accent-danger);
+}
+
+.validate-issue-item--warning {
+    border-left: 3px solid var(--nbe-dark-accent-warning);
+}
+
+/* Raw output */
+.validate-raw-output {
+    max-height: 400px;
+    overflow-y: auto;
+    background: var(--nbe-dark-bg-tertiary);
+    color: var(--nbe-dark-text-primary);
+    padding: var(--nbe-space-md);
+    border-radius: var(--nbe-radius-md);
+    border: 1px solid var(--nbe-dark-border-primary);
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-font-size-sm);
+    white-space: pre-wrap;
+}
+
+/* Empty state */
+.validate-empty {
+    text-align: center;
+    padding: var(--nbe-space-2xl);
+    color: var(--nbe-dark-text-secondary);
+}
+
+.validate-empty-icon {
+    font-size: var(--nbe-font-size-icon-xl);
+    margin-bottom: var(--nbe-space-md);
+    opacity: 0.5;
+    color: var(--nbe-dark-text-muted);
+}
+
+.validate-empty p {
+    color: var(--nbe-dark-text-secondary);
+}
+
+/* Scrollbar - Dark Theme */
+.validate-main::-webkit-scrollbar,
+.validate-raw-output::-webkit-scrollbar {
+    width: 8px;
+}
+
+.validate-main::-webkit-scrollbar-track,
+.validate-raw-output::-webkit-scrollbar-track {
+    background: var(--nbe-dark-bg-primary);
+}
+
+.validate-main::-webkit-scrollbar-thumb,
+.validate-raw-output::-webkit-scrollbar-thumb {
+    background: var(--nbe-dark-border-primary);
+    border-radius: var(--nbe-radius-md);
+}
+
+.validate-main::-webkit-scrollbar-thumb:hover,
+.validate-raw-output::-webkit-scrollbar-thumb:hover {
+    background: var(--nbe-dark-text-muted);
+}

@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Nagios Bulk Editor{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('static', filename='css/settings.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="page-container settings-container">
+    <!-- Left Sidebar -->
+    <div class="page-sidebar settings-sidebar">
+        <div class="panel-header"><span class="panel-header-title">Settings</span></div>
+        <div class="settings-section">
+            <div class="settings-section-title">Current Status</div>
+            <div class="settings-section-content" id="statusContent">
+                <div class="settings-empty">Loading...</div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <div class="settings-section-title">Information</div>
+            <div class="settings-section-content">
+                <ul class="settings-info-list">
+                    <li>Settings are persisted to <code>config/settings.json</code></li>
+                    <li>Environment variables override file settings</li>
+                    <li>Changing the config path will reload all objects</li>
+                    <li>Git identity is stored per-browser (Your Identity tab)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Settings -->
+    <div class="settings-main">
+        <!-- Tab Navigation -->
+        <div class="nbe-tabs">
+            <button class="nbe-tab active" data-action="switchTab" data-tab="server">
+                <i class="fa-solid fa-server"></i> Server Settings
+            </button>
+            <button class="nbe-tab" data-action="switchTab" data-tab="identity">
+                <i class="fa-solid fa-user"></i> Your Identity
+                <span class="nbe-tab-badge nbe-tab-badge--warning" id="gitIdentityBadge">Not Set</span>
+            </button>
+        </div>
+
+        <!-- Server Settings Tab -->
+        <div class="nbe-tab-content active" id="serverTab">
+            <div class="settings-section">
+                <div class="settings-section-title">Configuration Paths</div>
+                <div class="settings-section-content">
+                    <div class="settings-field">
+                        <label class="settings-label">Nagios Configuration Directory</label>
+                        <div class="form-input-group">
+                            <input type="text" class="form-input" id="nagiosConfigPath"
+                                   value="{{ config.nagios_config_path }}"
+                                   placeholder="./sample-config">
+                            <button class="nbe-btn nbe-btn--secondary nbe-btn--sm" data-action="browseDir" data-target="nagiosConfigPath">Browse</button>
+                        </div>
+                        <span class="form-hint">Directory containing your Nagios .cfg files</span>
+                    </div>
+
+                    <div class="settings-field">
+                        <label class="settings-label">Backup Directory</label>
+                        <div class="form-input-group">
+                            <input type="text" class="form-input" id="backupPath"
+                                   value="{{ config.backup_path or '' }}"
+                                   placeholder="Leave empty for default (config_path/backups)">
+                            <button class="nbe-btn nbe-btn--secondary nbe-btn--sm" data-action="browseDir" data-target="backupPath">Browse</button>
+                        </div>
+                        <span class="form-hint">Where to store configuration backups</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-section-title">Nagios Validation</div>
+                <div class="settings-section-content">
+                    <div class="settings-field">
+                        <label class="settings-label">Nagios Binary Path</label>
+                        <div class="form-input-group">
+                            <input type="text" class="form-input" id="nagiosBin"
+                                   value="{{ config.nagios_bin }}"
+                                   placeholder="/usr/local/nagios/bin/nagios">
+                            <button class="nbe-btn nbe-btn--secondary nbe-btn--sm" data-action="browseFile" data-target="nagiosBin">Browse</button>
+                        </div>
+                        <span class="form-hint">Path to the nagios executable (for validation)</span>
+                    </div>
+
+                    <div class="settings-field">
+                        <label class="settings-label">Main Nagios Config File</label>
+                        <div class="form-input-group">
+                            <input type="text" class="form-input" id="nagiosCfg"
+                                   value="{{ config.nagios_cfg }}"
+                                   placeholder="./sample-config/nagios.cfg">
+                            <button class="nbe-btn nbe-btn--secondary nbe-btn--sm" data-action="browseFile" data-target="nagiosCfg">Browse</button>
+                        </div>
+                        <span class="form-hint">Path to nagios.cfg (for validation)</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section" id="loggingSection">
+                <div class="settings-section-title">Operation Logging</div>
+                <div class="settings-section-content">
+                    <div class="settings-field">
+                        <label class="settings-label">Enabled</label>
+                        <div class="form-input-group">
+                            <input type="checkbox" id="loggingEnabled" checked>
+                            <span class="form-hint form-hint-inline">Enable operation logging to file</span>
+                        </div>
+                    </div>
+
+                    <div class="settings-field">
+                        <label class="settings-label">Log Level</label>
+                        <select class="form-input form-select-narrow" id="loggingLevel">
+                            <option value="DEBUG">DEBUG</option>
+                            <option value="INFO" selected>INFO</option>
+                            <option value="WARNING">WARNING</option>
+                            <option value="ERROR">ERROR</option>
+                        </select>
+                        <span class="form-hint">Minimum level for log entries</span>
+                    </div>
+
+                    <div class="settings-field">
+                        <label class="settings-label">Max File Size (MB)</label>
+                        <input type="number" class="form-input form-input-narrow" id="loggingMaxSize" value="10" min="1" max="100">
+                        <span class="form-hint">Log file rotates when it reaches this size</span>
+                    </div>
+
+                    <div class="settings-field">
+                        <label class="settings-label">Max Backup Files</label>
+                        <input type="number" class="form-input form-input-narrow" id="loggingMaxBackups" value="5" min="1" max="20">
+                        <span class="form-hint">Number of rotated log files to keep</span>
+                    </div>
+
+                    <div class="settings-field">
+                        <label class="settings-label">Log File</label>
+                        <div class="form-input-group">
+                            <input type="text" class="form-input form-input-readonly" id="loggingFilePath" readonly>
+                            <button class="nbe-btn nbe-btn--secondary nbe-btn--sm" data-action="downloadLog">Download</button>
+                        </div>
+                        <span class="form-hint" id="loggingFileSize">File size: --</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-actions" id="serverSettingsActions">
+                <button class="nbe-btn nbe-btn--primary" data-action="saveServerSettings">Save Server Settings</button>
+                <button class="nbe-btn nbe-btn--secondary" data-action="resetToDefaults">Reset to Defaults</button>
+            </div>
+        </div>
+
+        <!-- Identity Tab -->
+        <div class="nbe-tab-content" id="identityTab">
+            <div class="settings-section" id="gitIdentitySection">
+                <div class="settings-section-title">Your Identity</div>
+                <div class="settings-section-content">
+                    <p class="settings-info-text" id="gitIdentityInfo">
+                        Your identity is used to track changes and for git commits. This is stored in your browser only and does not affect other users.
+                    </p>
+                    <div class="settings-field">
+                        <label class="settings-label" for="gitUserName">Name <span class="required-marker" aria-hidden="true">*</span></label>
+                        <input type="text" class="form-input" id="gitUserName"
+                               placeholder="Your Name" required aria-required="true"
+                               aria-describedby="gitUserNameHint">
+                        <span class="form-hint" id="gitUserNameHint">Your name as it will appear in commits and audit logs</span>
+                    </div>
+                    <div class="settings-field">
+                        <label class="settings-label" for="gitUserEmail">Email <span class="required-marker" aria-hidden="true">*</span></label>
+                        <input type="email" class="form-input" id="gitUserEmail"
+                               placeholder="you@example.com" required aria-required="true"
+                               aria-describedby="gitUserEmailHint">
+                        <span class="form-hint" id="gitUserEmailHint">Your email address for git commits</span>
+                    </div>
+                    <div class="settings-actions">
+                        <button class="nbe-btn nbe-btn--primary" data-action="saveIdentity">Save Identity</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Browse Modal -->
+<div class="modal fade" id="browseModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Browse Filesystem</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="browsePath" placeholder="/">
+                        <button class="nbe-btn nbe-btn--secondary" type="button" data-action="navigateTo">Go</button>
+                    </div>
+                </div>
+                <div id="browseContent" class="browse-content-scroll">
+                    <p class="text-muted">Loading...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="nbe-btn nbe-btn--secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="nbe-btn nbe-btn--primary" data-action="selectPath">Select</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+{% endblock %}

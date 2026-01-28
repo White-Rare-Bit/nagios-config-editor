@@ -1,0 +1,283 @@
+/* =============================================================================
+   HEALTH CHECK PAGE STYLES - Dark Theme
+   ============================================================================= */
+
+.health-container {
+    display: flex;
+    height: calc(100vh - var(--nbe-navbar-height));
+    margin: -1.5rem;
+    background: var(--nbe-dark-bg-primary);
+}
+
+/* Sidebar */
+.health-container .page-sidebar {
+    padding: 0 0 0 var(--nbe-space-md);
+    background: var(--nbe-dark-bg-primary) !important;
+    border-right: 1px solid var(--nbe-dark-border-primary) !important;
+}
+
+.health-container .panel-header {
+    background: var(--nbe-dark-bg-secondary) !important;
+    color: var(--nbe-dark-text-primary) !important;
+    border-bottom: 1px solid var(--nbe-dark-border-primary) !important;
+}
+
+.health-container .sidebar-section {
+    border: none !important;
+    border-radius: 0 !important;
+    border-bottom: 1px solid var(--nbe-dark-border-secondary) !important;
+    margin-bottom: 0 !important;
+    background: transparent !important;
+}
+
+.health-container .sidebar-section-title {
+    padding: var(--nbe-space-sm) 12px;
+    border-bottom: none;
+    font-size: var(--nbe-font-size-xs-plus);
+    color: var(--nbe-dark-text-secondary) !important;
+    background: transparent !important;
+}
+
+.health-container .sidebar-section-content {
+    padding: var(--nbe-space-sm) 12px var(--nbe-space-md);
+    background: transparent !important;
+}
+
+.health-container .sidebar-info-text {
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-dark-text-secondary) !important;
+    margin: 0 0 var(--nbe-space-sm);
+    line-height: 1.5;
+}
+
+.health-container .form-select {
+    background: var(--nbe-dark-bg-tertiary) !important;
+    border: 1px solid var(--nbe-dark-border-primary) !important;
+    color: var(--nbe-dark-text-primary) !important;
+}
+
+.health-container .form-select:focus {
+    border-color: var(--nbe-dark-accent-primary) !important;
+    outline: none;
+}
+
+.health-container .nbe-btn--primary {
+    background: var(--nbe-dark-accent-primary);
+    border: none;
+    color: var(--nbe-dark-bg-primary);
+}
+
+.health-container .nbe-btn--primary:hover {
+    background: var(--nbe-dark-accent-primary-hover);
+}
+
+.health-main {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--nbe-space-lg);
+}
+
+/* Summary section */
+.health-summary {
+    padding: var(--nbe-space-md);
+    border-radius: var(--nbe-radius-md);
+    background: var(--nbe-dark-bg-secondary);
+    text-align: center;
+    border: 1px solid var(--nbe-dark-border-primary);
+}
+
+.health-summary-stats {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nbe-space-sm);
+}
+
+.health-summary-stat {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--nbe-space-xs) var(--nbe-space-sm);
+    border-radius: var(--nbe-radius-sm);
+}
+
+.health-summary-stat--errors {
+    background: var(--nbe-dark-validation-error-badge);
+    color: var(--nbe-dark-validation-error-text);
+}
+
+.health-summary-stat--warnings {
+    background: var(--nbe-dark-validation-warning-badge);
+    color: var(--nbe-dark-validation-warning-text);
+}
+
+.health-summary-stat--info {
+    background: var(--nbe-dark-validation-info-badge);
+    color: var(--nbe-dark-validation-info-text);
+}
+
+.health-summary-count {
+    font-weight: 600;
+}
+
+/* Filter controls */
+.health-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nbe-space-sm);
+}
+
+.health-filter-item {
+    display: flex;
+    align-items: center;
+    gap: var(--nbe-space-sm);
+    color: var(--nbe-dark-text-primary);
+}
+
+.health-filter-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--nbe-dark-accent-primary);
+}
+
+.health-filter-badge {
+    padding: var(--nbe-space-xs) var(--nbe-space-sm);
+    border-radius: var(--nbe-radius-md);
+    font-size: var(--nbe-font-size-xs);
+    font-weight: 500;
+}
+
+.health-filter-badge--error {
+    background: var(--nbe-dark-accent-danger);
+    color: var(--nbe-text-inverse);
+}
+
+.health-filter-badge--warning {
+    background: var(--nbe-dark-accent-warning);
+    color: var(--nbe-dark-bg-primary);
+}
+
+.health-filter-badge--info {
+    background: var(--nbe-dark-accent-secondary);
+    color: var(--nbe-text-inverse);
+}
+
+/* Issue list header */
+.health-issues-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--nbe-space-md);
+}
+
+.health-issue-count {
+    padding: var(--nbe-space-xs) var(--nbe-space-sm);
+    background: var(--nbe-dark-bg-tertiary);
+    border-radius: var(--nbe-radius-md);
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-dark-text-secondary);
+}
+
+.health-search {
+    width: 200px;
+    padding: var(--nbe-space-sm);
+    border: 1px solid var(--nbe-dark-border-primary);
+    border-radius: var(--nbe-radius-md);
+    font-size: var(--nbe-font-size-sm);
+    background: var(--nbe-dark-bg-tertiary);
+    color: var(--nbe-dark-text-primary);
+}
+
+.health-search:focus {
+    outline: none;
+    border-color: var(--nbe-dark-accent-primary);
+    background: var(--nbe-dark-bg-secondary);
+}
+
+.health-search::placeholder {
+    color: var(--nbe-dark-text-muted);
+}
+
+/* Issue items */
+.issue-item {
+    border-left: 4px solid var(--nbe-dark-border-primary);
+    padding: var(--nbe-space-md) var(--nbe-space-lg);
+    border-bottom: 1px solid var(--nbe-dark-border-secondary);
+    background: var(--nbe-dark-bg-secondary);
+    color: var(--nbe-dark-text-primary);
+}
+
+.issue-item:last-child {
+    border-bottom: none;
+}
+
+.issue-item.severity-error {
+    border-left-color: var(--nbe-dark-accent-danger);
+    background-color: var(--nbe-dark-validation-error-bg);
+}
+
+.issue-item.severity-warning {
+    border-left-color: var(--nbe-dark-accent-warning);
+    background-color: var(--nbe-dark-validation-warning-bg);
+}
+
+.issue-item.severity-info {
+    border-left-color: var(--nbe-dark-accent-secondary);
+    background-color: var(--nbe-dark-validation-info-bg);
+}
+
+.issue-object {
+    font-weight: 600;
+    color: var(--nbe-dark-text-primary);
+}
+
+.issue-file {
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-dark-text-secondary);
+}
+
+.issue-message {
+    margin-top: var(--nbe-space-xs);
+    color: var(--nbe-dark-text-primary);
+}
+
+/* Empty state */
+.health-empty {
+    text-align: center;
+    padding: var(--nbe-space-2xl);
+    color: var(--nbe-dark-text-secondary);
+}
+
+.health-empty-icon {
+    font-size: var(--nbe-font-size-icon-xl);
+    margin-bottom: var(--nbe-space-md);
+    opacity: 0.5;
+    color: var(--nbe-dark-text-muted);
+}
+
+.health-empty p {
+    color: var(--nbe-dark-text-secondary);
+}
+
+/* Issues list */
+.health-issues-list {
+    border: 1px solid var(--nbe-dark-border-primary);
+    border-radius: var(--nbe-radius-md);
+    overflow: hidden;
+}
+
+/* Scrollbar - Dark Theme */
+.health-main::-webkit-scrollbar {
+    width: 8px;
+}
+
+.health-main::-webkit-scrollbar-track {
+    background: var(--nbe-dark-bg-primary);
+}
+
+.health-main::-webkit-scrollbar-thumb {
+    background: var(--nbe-dark-border-primary);
+    border-radius: var(--nbe-radius-md);
+}
+
+.health-main::-webkit-scrollbar-thumb:hover {
+    background: var(--nbe-dark-text-muted);
+}

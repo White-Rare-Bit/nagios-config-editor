@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Find & Replace - Nagios Bulk Editor{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('static', filename='css/find-replace.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="page-container find-replace-container">
+    <!-- Sidebar: Search Options -->
+    <div class="page-sidebar find-replace-sidebar">
+        <div class="panel-header"><span class="panel-header-title">Find & Replace</span></div>
+
+        <div class="form-section">
+            <div class="form-group">
+                <label for="findText">Find</label>
+                <input type="text" class="form-input" id="findText" required aria-required="true"
+                       placeholder="Start typing to search..." autocomplete="off"
+                       aria-describedby="findTextHint" aria-autocomplete="list" aria-controls="searchSuggestions">
+                <div id="searchSuggestions" class="search-suggestions" style="display: none;" role="listbox" aria-label="Search suggestions"></div>
+                <div class="form-text" id="findTextHint">Live search as you type (min 2 characters)</div>
+            </div>
+            <div class="form-group">
+                <label for="replaceText">Replace With</label>
+                <input type="text" class="form-input" id="replaceText" placeholder="Replacement text">
+            </div>
+        </div>
+
+        <div class="form-section">
+            <div class="form-group">
+                <label for="objectType">Object Type (optional)</label>
+                <select class="form-select" id="objectType">
+                    <option value="">All types</option>
+                    {% for type in object_types %}
+                    <option value="{{ type }}">{{ type }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="fieldName">Field (optional)</label>
+                <input type="text" class="form-input" id="fieldName" placeholder="e.g., check_command"
+                       aria-describedby="fieldNameHint">
+                <div class="form-text" id="fieldNameHint">Leave empty to search all fields</div>
+            </div>
+            <div class="form-check">
+                <input type="checkbox" class="form-check-input" id="useRegex">
+                <label class="form-check-label" for="useRegex">Use Regular Expression</label>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="button" class="nbe-btn nbe-btn--secondary nbe-btn--full" data-action="find-matches">Find All Matches</button>
+            <button type="button" class="nbe-btn nbe-btn--primary nbe-btn--full" id="replaceBtn" data-action="replace-all" disabled>Replace All</button>
+        </div>
+    </div>
+
+    <!-- Main Content: Matches -->
+    <div class="page-main find-replace-main">
+        <div class="find-replace-header">
+            <h2 class="find-replace-header-title" id="matchesHeading">Matches</h2>
+            <span class="badge" id="matchCount">0</span>
+            <span class="status-text" id="searchStatus" aria-live="polite"></span>
+        </div>
+
+        <div class="find-replace-content" role="region" aria-labelledby="matchesHeading">
+            <div id="matchesEmpty" class="matches-empty">
+                Start typing in the search field to see live results, or click "Find All Matches" for a full search.
+            </div>
+            <div id="matchesResults" class="match-list" style="display: none;" aria-live="polite">
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/find-replace.js') }}"></script>
+{% endblock %}

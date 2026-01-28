@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Graph View - Nagios Bulk Editor{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('static', filename='css/dependencies.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="dep-container">
+    <!-- Left Sidebar -->
+    <div class="dep-sidebar page-sidebar">
+        <div class="panel-header"><span class="panel-header-title">Graph View</span></div>
+        <div class="dep-section">
+            <div class="dep-section-title">Find & Add</div>
+            <div class="dep-section-content">
+                <div class="dep-search-wrap search-row">
+                    <i class="fa-solid fa-magnifying-glass search-icon" aria-hidden="true"></i>
+                    <input type="text" class="form-input" id="nodeSearchAdd"
+                           placeholder="Search objects..." autocomplete="off"
+                           data-action="onNodeSearchInput"
+                           aria-label="Search for objects to add to graph"
+                           aria-autocomplete="list" aria-controls="nodeSearchResults">
+                    <div id="nodeSearchResults" class="dep-search-dropdown" role="listbox" aria-label="Search results"></div>
+                </div>
+                <div class="dep-filter-row">
+                    <label class="dep-filter-label" for="objectType">Type</label>
+                    <select class="form-select" id="objectType" data-action="onNodeSearchInput">
+                        <option value="">All Types</option>
+                        {% for type in object_types %}
+                        <option value="{{ type }}">{{ type }}</option>
+                        {% endfor %}
+                    </select>
+                    <label class="dep-filter-label" for="layoutType">Layout</label>
+                    <select class="form-select" id="layoutType" data-action="applyLayout">
+                        <option value="static">Static</option>
+                        <option value="hierarchical">Hierarchical ↓</option>
+                        <option value="hierarchicalLR">Hierarchical →</option>
+                    </select>
+                </div>
+                <button class="nbe-btn nbe-btn--secondary nbe-btn--full" data-action="addConnected">+ Add Connected to Selected</button>
+                <button class="nbe-btn nbe-btn--secondary nbe-btn--full" data-action="fitGraph">Fit to View</button>
+                <button class="nbe-btn nbe-btn--secondary nbe-btn--full dep-btn-toggle" id="toggleLabelsBtn" data-action="toggleEdgeLabels">Hide Connection Labels</button>
+            </div>
+        </div>
+
+        <div class="dep-section">
+            <div class="dep-section-title">Show Connections</div>
+            <div class="dep-section-content">
+                <div class="dep-filter-row dep-filter-row--single">
+                    <label class="dep-filter-label" for="viewMode">View</label>
+                    <select class="form-select" id="viewMode" data-action="onViewModeChange">
+                        <option value="dependencies">Dependencies Only</option>
+                        <option value="overview" selected>Config Overview</option>
+                        <option value="all">All Connections</option>
+                        <option value="custom">Custom...</option>
+                    </select>
+                </div>
+                <div id="edgeCategoryFilters" class="edge-category-filters">
+                    <label class="edge-filter-option" title="Network parents, host/service dependencies">
+                        <input type="checkbox" id="filterDependencies" data-category="dependencies" data-action="onEdgeFilterChange" checked>
+                        <span>Dependencies</span>
+                    </label>
+                    <label class="edge-filter-option" title="Template inheritance (use)">
+                        <input type="checkbox" id="filterTemplates" data-category="templates" data-action="onEdgeFilterChange" checked>
+                        <span>Templates</span>
+                    </label>
+                    <label class="edge-filter-option" title="Host groups, service groups, members">
+                        <input type="checkbox" id="filterGroups" data-category="groups" data-action="onEdgeFilterChange" checked>
+                        <span>Groups</span>
+                    </label>
+                    <label class="edge-filter-option" title="Contacts, contact groups">
+                        <input type="checkbox" id="filterContacts" data-category="contacts" data-action="onEdgeFilterChange">
+                        <span>Contacts</span>
+                    </label>
+                    <label class="edge-filter-option" title="Check commands, event handlers">
+                        <input type="checkbox" id="filterCommands" data-category="commands" data-action="onEdgeFilterChange">
+                        <span>Commands</span>
+                    </label>
+                    <label class="edge-filter-option" title="Time periods (check, notification, escalation)">
+                        <input type="checkbox" id="filterSchedules" data-category="schedules" data-action="onEdgeFilterChange">
+                        <span>Schedules</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="dep-section dep-section-grow">
+            <div class="dep-section-title">
+                <span>Nodes <span class="dep-badge" id="nodeCount">0</span></span>
+                <button class="nbe-btn nbe-btn--danger nbe-btn--xs" id="clearGraphBtn" data-action="clearGraph" style="display: none;">Clear</button>
+            </div>
+            <div class="dep-section-content dep-node-list" id="addedNodesList" role="list" aria-label="Nodes in graph">
+                <div class="dep-empty">No nodes added yet</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Graph Area -->
+    <div class="dep-graph">
+        <div id="graphEmptyState" class="empty-state empty-state--centered">
+            <div class="empty-icon"><i class="fa-solid fa-diagram-project"></i></div>
+            <h3>No nodes in graph</h3>
+            <p>Search for objects on the left and add them to visualize their relationships</p>
+            <div class="empty-tips">
+                <div class="tip"><strong>Search:</strong> Type in the search box to find objects</div>
+                <div class="tip"><strong>Add Connected:</strong> Select a node and click "Add Connected" to expand</div>
+                <div class="tip"><strong>Right-click:</strong> Right-click a node for quick actions</div>
+                <div class="tip"><strong>Shift+Drag:</strong> Draw a box to select multiple nodes</div>
+                <div class="tip"><strong>Delete:</strong> Remove selected nodes from graph</div>
+            </div>
+        </div>
+        <div id="graphContainer"></div>
+        <div id="selectionOverlay" class="selection-overlay"></div>
+        <div id="selectionBox" class="selection-box"></div>
+        <!-- Legend overlay (collapsible) -->
+        <details class="graph-legend" open>
+            <summary class="graph-legend-toggle">
+                <i class="fa-solid fa-list"></i> Legend
+            </summary>
+            <div class="graph-legend-content">
+                <div class="graph-legend-item"><i class="fa-solid fa-desktop legend-icon--host"></i>host</div>
+                <div class="graph-legend-item"><i class="fa-solid fa-cube legend-icon--host-template"></i>host template</div>
+                <div class="graph-legend-item"><i class="fa-solid fa-cog legend-icon--service"></i>service</div>
+                <div class="graph-legend-item"><i class="fa-solid fa-puzzle-piece legend-icon--service-template"></i>service template</div>
+                <div class="graph-legend-item"><i class="fa-solid fa-layer-group legend-icon--hostgroup"></i>hostgroup</div>
+                <div class="graph-legend-item"><i class="fa-solid fa-cogs legend-icon--servicegroup"></i>servicegroup</div>
+                <div class="graph-legend-item"><i class="fa-solid fa-user legend-icon--contact"></i>contact</div>
+                <div class="graph-legend-item"><i class="fa-solid fa-users legend-icon--contactgroup"></i>contactgroup</div>
+                <div class="graph-legend-item"><i class="fa-solid fa-bolt legend-icon--command"></i>command</div>
+                <div class="graph-legend-item"><i class="fa-solid fa-clock legend-icon--timeperiod"></i>timeperiod</div>
+                <div class="graph-legend-item"><i class="fa-solid fa-link legend-icon--servicedependency"></i>svc dependency</div>
+                <div class="graph-legend-item"><i class="fa-solid fa-link legend-icon--hostdependency"></i>host dependency</div>
+                <div class="graph-legend-item"><i class="fa-solid fa-arrow-up legend-icon--serviceescalation"></i>svc escalation</div>
+                <div class="graph-legend-item"><i class="fa-solid fa-arrow-up legend-icon--hostescalation"></i>host escalation</div>
+            </div>
+        </details>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="graphContextMenu" class="graph-context-menu" role="menu" aria-label="Node actions">
+        <div class="context-menu-header" id="contextMenuHeader">Node</div>
+        <div class="context-menu-item" data-action="contextExpandConnections" role="menuitem">
+            <span class="context-icon" aria-hidden="true"><i class="fa-solid fa-share-nodes"></i></span> Expand connections
+        </div>
+        <div class="context-menu-item" data-action="contextShowOnlyConnections" role="menuitem">
+            <span class="context-icon" aria-hidden="true"><i class="fa-solid fa-bullseye"></i></span> Show only connections
+        </div>
+        <div class="context-menu-item" data-action="contextCenterOnNode" role="menuitem">
+            <span class="context-icon" aria-hidden="true"><i class="fa-solid fa-crosshairs"></i></span> Center on node
+        </div>
+        <div class="context-menu-item" data-action="contextSetAsFocus" role="menuitem">
+            <span class="context-icon" aria-hidden="true"><i class="fa-solid fa-location-crosshairs"></i></span> Set as layout center
+        </div>
+        <div class="context-menu-divider" role="separator"></div>
+        <div class="context-menu-item" data-action="contextRemoveNode" role="menuitem">
+            <span class="context-icon" aria-hidden="true"><i class="fa-solid fa-xmark"></i></span> Remove from graph
+        </div>
+        <div class="context-menu-item" data-action="contextRemoveDisconnected" role="menuitem">
+            <span class="context-icon" aria-hidden="true"><i class="fa-solid fa-broom"></i></span> Remove disconnected
+        </div>
+        <div class="context-menu-divider" role="separator"></div>
+        <div class="context-menu-item" data-action="contextOpenInExplorer" role="menuitem">
+            <span class="context-icon" aria-hidden="true"><i class="fa-solid fa-folder-open"></i></span> Open in Explorer
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<script src="{{ url_for('static', filename='js/dependencies.js') }}"></script>
+{% endblock %}

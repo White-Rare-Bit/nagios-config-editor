@@ -1,0 +1,2540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Nagios Bulk Editor{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/tokens.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/forms.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="u-overflow-x-hidden">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('pages.explorer') }}">Nagios Bulk Editor</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'pages.explorer' %}active{% endif %}" href="{{ url_for('pages.explorer') }}">Object Explorer</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'pages.dependencies' %}active{% endif %}" href="{{ url_for('pages.dependencies') }}">Graph View</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'pages.audit_log' %}active{% endif %}" href="{{ url_for('pages.audit_log') }}">Audit Log</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'pages.backups' %}active{% endif %}" href="{{ url_for('pages.backups') }}">Backups</a>
+                    </li>
+                    <li class="nav-item u-relative">
+                        <a class="nav-link {% if request.endpoint == 'pages.git' %}active{% endif %}" href="{{ url_for('pages.git') }}">Git</a>
+                        <span id="gitPendingIndicator" class="pending-indicator u-hidden"></span>
+                    </li>
+                </ul>
+                <ul class="navbar-nav ms-auto align-items-center">
+                    <li class="nav-item me-2" id="undoButtonContainer">
+                        <button class="undo-btn disabled" id="navUndoBtn" data-action="undo" disabled title="Nothing to undo">
+                            <i class="fa-solid fa-rotate-left"></i>
+                            <span class="undo-btn-text">Undo</span>
+                            <kbd class="undo-kbd">Ctrl+Z</kbd>
+                        </button>
+                    </li>
+                    <li class="nav-item" id="commitButtonContainer">
+                        <button class="commit-btn disabled" id="navCommitBtn" data-action="commit" disabled>
+                            <span class="commit-btn-text">Commit</span>
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'pages.settings' %}active{% endif %}" href="{{ url_for('pages.settings') }}">Settings</a>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-btn" id="keyboardShortcutsBtn" data-action="show-shortcuts" title="Keyboard shortcuts (?)"><i class="fa-solid fa-keyboard"></i></button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-btn" id="reloadConfigBtn" data-action="reload-config">Reload</button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Lock Banner - shown when another user has pending changes -->
+    <div id="lockBanner" class="lock-banner u-hidden">
+        <span class="lock-banner-icon"><i class="fa-solid fa-lock"></i></span>
+        <span id="lockBannerText"><strong>Another user has pending changes.</strong> Commit or discard to edit.</span>
+        <button class="lock-break-btn" id="breakLockBtn" data-action="break-lock" title="Admin action: Discard the other user's pending changes and release the lock">Break Lock (Admin)</button>
+    </div>
+
+    <div class="container-fluid mt-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer"></div>
+
+    <!-- Global Commit Dialog (for non-explorer pages) -->
+    <div id="globalCommitOverlay" class="global-dialog-overlay">
+        <div class="global-dialog global-commit-dialog">
+            <div id="globalCommitContent">
+                <div class="dialog-loading">Loading changes...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Dialog -->
+    <div id="confirmDialogOverlay" class="confirm-dialog-overlay">
+        <div class="confirm-dialog">
+            <div class="confirm-dialog-header">
+                <span class="confirm-dialog-icon" id="confirmDialogIcon"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                <h3 id="confirmDialogTitle">Confirm</h3>
+            </div>
+            <p id="confirmDialogMessage" class="confirm-dialog-message"></p>
+            <div class="confirm-dialog-buttons">
+                <button class="nbe-btn nbe-btn--secondary nbe-btn--sm" id="confirmDialogCancel">Cancel</button>
+                <button class="nbe-btn nbe-btn--primary nbe-btn--sm" id="confirmDialogConfirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Git Result Panel -->
+    <div id="gitResultOverlay" class="git-result-overlay">
+        <div class="git-result-panel">
+            <div class="git-result-header">
+                <span id="gitResultTitle">user@nagios: ~/config</span>
+                <button class="git-result-close" id="gitResultClose" data-action="close-git-result">&times;</button>
+            </div>
+            <div class="git-result-body">
+                <span class="git-result-icon u-hidden" id="gitResultIcon"></span>
+                <div class="git-result-line"><span class="prompt">$</span> <span id="gitResultCommand"></span></div>
+                <div class="git-result-output" id="gitResultOutput"></div>
+                <div class="git-result-line"><span class="prompt">$</span> <span class="cursor">█</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Identity Required Dialog -->
+    <div id="identityRequiredOverlay" class="identity-required-overlay">
+        <div class="identity-required-dialog">
+            <div class="identity-required-icon"><i class="fa-solid fa-user"></i></div>
+            <h3 class="identity-required-title">Identity Required</h3>
+            <p class="identity-required-message">
+                Please configure your name and email before using this application.
+                This identity will be used to track your changes and git commits.
+            </p>
+            <a href="{{ url_for('pages.settings') }}" class="identity-required-btn">Go to Settings</a>
+        </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Help Dialog -->
+    <div id="keyboardShortcutsOverlay" class="keyboard-shortcuts-overlay">
+        <div class="keyboard-shortcuts-dialog">
+            <div class="keyboard-shortcuts-header">
+                <h3>Keyboard Shortcuts</h3>
+                <button class="keyboard-shortcuts-close" id="keyboardShortcutsClose" data-action="close-shortcuts">&times;</button>
+            </div>
+            <div class="keyboard-shortcuts-body">
+                <div class="shortcuts-section">
+                    <div class="shortcuts-section-title">General</div>
+                    <div class="shortcut-row">
+                        <span class="shortcut-keys"><kbd class="mod-key">Ctrl</kbd>+<kbd>Z</kbd></span>
+                        <span class="shortcut-desc">Undo last action</span>
+                    </div>
+                    <div class="shortcut-row">
+                        <span class="shortcut-keys"><kbd>Escape</kbd></span>
+                        <span class="shortcut-desc">Close dialog / clear selection</span>
+                    </div>
+                    <div class="shortcut-row">
+                        <span class="shortcut-keys"><kbd>?</kbd></span>
+                        <span class="shortcut-desc">Show this help</span>
+                    </div>
+                </div>
+                <div class="shortcuts-section">
+                    <div class="shortcuts-section-title">Object Explorer</div>
+                    <div class="shortcut-row">
+                        <span class="shortcut-keys"><kbd>Space</kbd></span>
+                        <span class="shortcut-desc">Quick preview selected object as Nagios config</span>
+                    </div>
+                    <div class="shortcut-row">
+                        <span class="shortcut-keys"><kbd>M</kbd></span>
+                        <span class="shortcut-desc">Move selected objects to another file</span>
+                    </div>
+                    <div class="shortcut-row">
+                        <span class="shortcut-keys"><kbd>Delete</kbd></span>
+                        <span class="shortcut-desc">Stage deletion of selected objects</span>
+                    </div>
+                </div>
+                <div class="shortcuts-section">
+                    <div class="shortcuts-section-title">Selection</div>
+                    <div class="shortcut-row">
+                        <span class="shortcut-keys"><kbd class="mod-key">Ctrl</kbd>+Click</span>
+                        <span class="shortcut-desc">Toggle individual item selection</span>
+                    </div>
+                    <div class="shortcut-row">
+                        <span class="shortcut-keys"><kbd>Shift</kbd>+Click</span>
+                        <span class="shortcut-desc">Select range of items</span>
+                    </div>
+                    <div class="shortcut-row">
+                        <span class="shortcut-keys">Right-click</span>
+                        <span class="shortcut-desc">Context menu (rename, clone, delete, move)</span>
+                    </div>
+                </div>
+                <div class="shortcuts-section">
+                    <div class="shortcuts-section-title">Autocomplete</div>
+                    <div class="shortcut-row">
+                        <span class="shortcut-keys"><kbd>&darr;</kbd> <kbd>&uarr;</kbd></span>
+                        <span class="shortcut-desc">Navigate suggestions</span>
+                    </div>
+                    <div class="shortcut-row">
+                        <span class="shortcut-keys"><kbd>Enter</kbd></span>
+                        <span class="shortcut-desc">Accept highlighted suggestion</span>
+                    </div>
+                    <div class="shortcut-row">
+                        <span class="shortcut-keys"><kbd>Escape</kbd></span>
+                        <span class="shortcut-desc">Close suggestions dropdown</span>
+                    </div>
+                </div>
+                <div class="shortcuts-section">
+                    <div class="shortcuts-section-title">Drag & Drop</div>
+                    <div class="shortcut-row">
+                        <span class="shortcut-keys">Drag object</span>
+                        <span class="shortcut-desc">Move object to a different file</span>
+                    </div>
+                    <div class="shortcut-row">
+                        <span class="shortcut-keys">Hover folder 800ms</span>
+                        <span class="shortcut-desc">Auto-expand collapsed folder while dragging</span>
+                    </div>
+                </div>
+            </div>
+            <div class="keyboard-shortcuts-footer">
+                <span class="keyboard-shortcuts-hint">Press <kbd>?</kbd> anytime to show this dialog</span>
+            </div>
+        </div>
+    </div>
+
+    <!--
+    ARCHITECTURE DECISION: Inline Styles
+    =====================================
+    These styles are intentionally inline rather than in an external CSS file for the following reasons:
+
+    1. Single-file deployment: This template serves as the complete base for all pages.
+       Having styles inline ensures they load atomically with the HTML structure.
+
+    2. Avoid FOUC (Flash of Unstyled Content): Critical UI styles like dialogs, toasts,
+       and the commit button render immediately without waiting for external CSS.
+
+    3. Template co-location: Styles for components defined in this file (confirmDialog,
+       gitResultPanel, toastContainer, etc.) are kept adjacent to their HTML.
+
+    4. No Jinja2 variables in styles: These styles are static and don't require server-side
+       templating, but keeping them here maintains consistency with the template structure.
+
+    DO NOT refactor to external CSS without:
+    - Verifying all dialog/overlay styles still work on first render
+    - Testing toast notifications appear correctly on page load
+    - Ensuring commit button transitions work without flash
+    -->
+    <style>
+    /* Legacy variable aliases - mapped to design tokens from tokens.css */
+    :root {
+        --font-mono: var(--nbe-font-mono);
+
+        --code-bg: var(--nbe-code-bg);
+        --code-text: var(--nbe-code-text);
+
+        --bg-subtle: var(--nbe-bg-page);
+        --bg-hover: var(--nbe-bg-hover);
+        --border-light: var(--nbe-border);
+        --border-lighter: var(--nbe-border-lighter);
+
+        --color-create: var(--nbe-success);
+        --color-edit: var(--nbe-primary);
+        --color-move: var(--nbe-warning);
+        --color-delete: var(--nbe-danger);
+
+        --diff-add: var(--nbe-diff-add);
+        --diff-remove: var(--nbe-diff-remove);
+        --diff-header: var(--nbe-diff-header);
+    }
+
+    /* ========== Shared Utility Classes ========== */
+
+    /* Code block - dark themed code display */
+    .code-block {
+        background: var(--code-bg);
+        color: var(--code-text);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        line-height: 1.5;
+        overflow-x: auto;
+        white-space: pre;
+        padding: 0.5rem;
+        border-radius: 4px;
+    }
+
+    /* Diff line styles */
+    .diff-line { padding: 2px 16px; white-space: pre; display: block; }
+    .diff-line.add, .diff-add { color: var(--diff-add); }
+    .diff-line.remove, .diff-remove { color: var(--diff-remove); }
+    .diff-line.header, .diff-header-line { color: var(--diff-header); }
+
+    /* Status badges */
+    .status-create { color: var(--color-create); }
+    .status-edit { color: var(--color-edit); }
+    .status-move { color: var(--color-move); }
+    .status-delete { color: var(--color-delete); }
+
+    .bg-status-create { background-color: var(--nbe-success-light); color: var(--color-create); }
+    .bg-status-edit { background-color: var(--nbe-info-light); color: var(--color-edit); }
+    .bg-status-move { background-color: var(--nbe-warning-light); color: var(--color-move); }
+    .bg-status-delete { background-color: var(--nbe-danger-light); color: var(--color-delete); }
+
+    /* Shadow utilities */
+    .shadow-xs { box-shadow: var(--nbe-shadow-xs); }
+    .shadow-sm { box-shadow: var(--nbe-shadow-sm); }
+    .shadow-md { box-shadow: var(--nbe-shadow-md); }
+    .shadow-lg { box-shadow: var(--nbe-shadow-lg); }
+
+    /* Transition utilities */
+    .transition-fast { transition: all 0.1s ease; }
+    .transition-normal { transition: all 0.15s ease; }
+
+    /* Identity Required Dialog */
+    .identity-required-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--nbe-overlay-darkest);
+        z-index: var(--nbe-z-tooltip);
+        align-items: center;
+        justify-content: center;
+    }
+    .identity-required-overlay.visible {
+        display: flex;
+    }
+    .identity-required-dialog {
+        background: var(--nbe-bg-surface);
+        border-radius: var(--nbe-radius-xl);
+        padding: var(--nbe-space-2xl) var(--nbe-space-2xl);
+        max-width: 420px;
+        width: 90%;
+        text-align: center;
+        box-shadow: var(--nbe-shadow-overlay);
+        animation: identityDialogIn 0.25s ease;
+    }
+    @keyframes identityDialogIn {
+        from { transform: scale(0.9); opacity: 0; }
+        to { transform: scale(1); opacity: 1; }
+    }
+    .identity-required-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+    }
+    .identity-required-title {
+        margin: 0 0 var(--nbe-space-md) 0;
+        font-size: var(--nbe-font-size-2xl);
+        font-weight: 600;
+        color: var(--nbe-text-primary);
+    }
+    .identity-required-message {
+        margin: 0 0 var(--nbe-space-xl) 0;
+        color: var(--nbe-text-secondary);
+        line-height: 1.6;
+        font-size: var(--nbe-font-size-md);
+    }
+    .identity-required-btn {
+        display: inline-block;
+        padding: var(--nbe-space-md) var(--nbe-space-2xl);
+        background: var(--nbe-primary);
+        color: var(--nbe-text-inverse);
+        text-decoration: none;
+        border-radius: var(--nbe-radius-lg);
+        font-weight: 500;
+        font-size: var(--nbe-font-size-md);
+        transition: var(--nbe-transition-normal);
+    }
+    .identity-required-btn:hover {
+        background: var(--nbe-primary-hover);
+        color: var(--nbe-text-inverse);
+        transform: translateY(-1px);
+        box-shadow: var(--nbe-shadow-md);
+    }
+
+    /* Pending Changes Indicator */
+    .pending-indicator {
+        position: absolute;
+        top: 2px;
+        right: -8px;
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        background: var(--nbe-danger);
+        border-radius: var(--nbe-radius-pill);
+        border: 2px solid var(--nbe-bg-dark);
+        font-size: var(--nbe-font-size-xs);
+        font-weight: 600;
+        color: var(--nbe-text-inverse);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+
+    /* Global Dialog Styles */
+    .global-dialog-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--nbe-overlay-dark);
+        z-index: var(--nbe-z-modal);
+        align-items: center;
+        justify-content: center;
+    }
+    .global-dialog-overlay.visible {
+        display: flex;
+    }
+    .global-dialog {
+        background: var(--nbe-dark-bg-primary);
+        border: 1px solid var(--nbe-dark-border-primary);
+        border-radius: var(--nbe-radius-xl);
+        max-width: 90vw;
+        max-height: 85vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: var(--nbe-shadow-overlay);
+    }
+    .global-commit-dialog {
+        width: 1100px;
+        min-width: 800px;
+    }
+
+    /* Commit Dialog - Dark Theme */
+    .commit-external-warning {
+        display: flex;
+        gap: 12px;
+        padding: 12px 16px;
+        background: var(--nbe-dark-validation-warning-bg);
+        border-bottom: 1px solid var(--nbe-warning);
+        border-radius: 6px 6px 0 0;
+    }
+    .commit-external-warning-icon {
+        color: var(--nbe-warning);
+        font-size: 18px;
+        flex-shrink: 0;
+    }
+    .commit-external-warning-content {
+        flex: 1;
+    }
+    .commit-external-warning-content strong {
+        display: block;
+        color: var(--nbe-warning);
+        margin-bottom: 4px;
+    }
+    .commit-external-warning-content p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--nbe-dark-text-primary);
+    }
+    .commit-external-warning details {
+        margin-top: 8px;
+    }
+    .commit-external-warning summary {
+        cursor: pointer;
+        font-size: 12px;
+        color: var(--nbe-dark-text-secondary);
+    }
+    .external-files-list {
+        margin: 8px 0 0 16px;
+        padding: 0;
+        font-size: 12px;
+        font-family: var(--nbe-font-mono);
+        color: var(--nbe-dark-text-primary);
+    }
+    .commit-external-warning + .commit-header {
+        border-radius: 0;
+    }
+    .commit-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        background: var(--nbe-dark-bg-secondary);
+        border-bottom: 1px solid var(--nbe-dark-border-primary);
+        border-radius: 6px 6px 0 0;
+    }
+    .commit-summary {
+        display: flex;
+        gap: 16px;
+    }
+    .commit-stat {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--nbe-dark-text-primary);
+    }
+    .commit-stat-count {
+        font-weight: 600;
+        font-size: 16px;
+    }
+    .commit-stat.creates .commit-stat-count { color: var(--nbe-success); }
+    .commit-stat.edits .commit-stat-count { color: var(--nbe-primary); }
+    .commit-stat.moves .commit-stat-count { color: var(--nbe-warning); }
+    .commit-stat.deletes .commit-stat-count { color: var(--nbe-danger); }
+    .commit-context-control {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--nbe-dark-text-secondary);
+    }
+    .commit-context-control input[type="range"] {
+        width: 80px;
+        accent-color: var(--nbe-dark-accent-primary);
+    }
+    .commit-context-control .context-value {
+        width: 24px;
+        text-align: center;
+        flex-shrink: 0;
+        color: var(--nbe-dark-text-primary);
+    }
+    .commit-changes-list {
+        max-height: 50vh;
+        overflow-y: auto;
+        border: 1px solid var(--nbe-dark-border-primary);
+        border-radius: 0 0 6px 6px;
+        background: var(--nbe-dark-bg-primary);
+    }
+    .commit-section {
+        border-bottom: 1px solid var(--nbe-dark-border-primary);
+    }
+    .commit-section:last-child {
+        border-bottom: none;
+    }
+    .commit-section-title {
+        padding: 10px 16px;
+        background: var(--nbe-dark-bg-tertiary);
+        font-weight: 600;
+        font-size: 12px;
+        text-transform: uppercase;
+        color: var(--nbe-dark-text-secondary);
+        border-bottom: 1px solid var(--nbe-dark-border-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .commit-section-title .badge {
+        background: var(--nbe-dark-bg-elevated);
+        color: var(--nbe-dark-text-secondary);
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 11px;
+    }
+    .commit-item {
+        border-bottom: 1px solid var(--nbe-dark-border-secondary);
+    }
+    .commit-item:last-child {
+        border-bottom: none;
+    }
+    .commit-item-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        background: var(--nbe-dark-bg-primary);
+        cursor: pointer;
+    }
+    .commit-item-header:hover {
+        background: var(--nbe-dark-bg-hover);
+    }
+    .commit-item-expand {
+        color: var(--nbe-dark-text-muted);
+        font-size: 10px;
+        transition: transform 0.2s;
+    }
+    .commit-item.expanded .commit-item-expand {
+        transform: rotate(90deg);
+    }
+    .commit-item-type {
+        background: var(--nbe-dark-validation-info-bg);
+        color: var(--nbe-primary);
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .commit-item-type.move {
+        background: var(--nbe-dark-validation-warning-bg);
+        color: var(--nbe-warning);
+    }
+    .commit-item-type.delete {
+        background: var(--nbe-dark-validation-error-bg);
+        color: var(--nbe-danger);
+    }
+    .commit-item-type.create {
+        background: var(--nbe-dark-validation-success-bg);
+        color: var(--nbe-success);
+    }
+    .commit-item-name {
+        font-weight: 500;
+        color: var(--nbe-dark-text-primary);
+        flex: 1;
+    }
+    .commit-item-file {
+        font-size: 11px;
+        color: var(--nbe-dark-text-muted);
+    }
+    .commit-item-diff {
+        display: none;
+        background: var(--nbe-dark-bg-tertiary);
+        color: var(--nbe-dark-text-primary);
+        font-family: var(--nbe-font-mono);
+        font-size: 12px;
+        line-height: 1.5;
+        overflow-x: auto;
+    }
+    .commit-item.expanded .commit-item-diff {
+        display: block;
+    }
+    .diff-content {
+        display: inline-block;
+        min-width: 100%;
+    }
+    .diff-line {
+        padding: 2px 16px;
+        white-space: pre;
+        display: block;
+    }
+    .diff-line.context {
+        color: var(--nbe-dark-text-secondary);
+    }
+    .diff-line.add {
+        background: rgba(34, 197, 94, 0.15);
+        color: #4ade80;
+    }
+    .diff-line.remove {
+        background: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+    }
+    .diff-line.modify {
+        color: var(--nbe-dark-text-primary);
+    }
+    .diff-line.ellipsis {
+        color: var(--nbe-dark-text-muted);
+        font-style: italic;
+        text-align: center;
+        background: var(--nbe-dark-bg-secondary);
+        padding: 4px 16px;
+        font-size: 11px;
+    }
+    .diff-line.hunk {
+        color: var(--nbe-dark-accent-secondary);
+        background: rgba(86, 156, 214, 0.1);
+        font-style: italic;
+    }
+    .diff-file-header {
+        padding: 8px 16px;
+        background: var(--nbe-dark-bg-secondary);
+        color: var(--nbe-dark-text-primary);
+        font-size: 12px;
+        font-weight: 600;
+        border-bottom: 1px solid var(--nbe-dark-border-primary);
+        border-top: 1px solid var(--nbe-dark-border-primary);
+    }
+    .commit-empty {
+        padding: 40px;
+        text-align: center;
+        color: var(--nbe-dark-text-muted);
+    }
+    .commit-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px;
+        background: var(--nbe-dark-bg-secondary);
+        border-top: 1px solid var(--nbe-dark-border-primary);
+        border-radius: 0 0 6px 6px;
+    }
+    .commit-footer-left {
+        font-size: 12px;
+        color: var(--nbe-dark-text-secondary);
+    }
+    .commit-footer-right {
+        display: flex;
+        gap: 8px;
+    }
+    .btn-discard-all {
+        background: var(--nbe-dark-validation-error-bg);
+        color: var(--nbe-danger);
+        border: 1px solid var(--nbe-danger);
+        padding: var(--nbe-btn-padding-md);
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+    }
+    .btn-discard-all:hover {
+        background: rgba(239, 68, 68, 0.25);
+    }
+    .btn-cancel {
+        padding: var(--nbe-btn-padding-md);
+        border: 1px solid var(--nbe-dark-border-primary);
+        background: var(--nbe-dark-bg-tertiary);
+        color: var(--nbe-dark-text-primary);
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+    }
+    .btn-cancel:hover {
+        background: var(--nbe-dark-bg-hover);
+    }
+    .btn-apply-commit {
+        background: var(--nbe-success);
+        color: white;
+        border: none;
+        padding: var(--nbe-btn-padding-lg);
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+    }
+    .btn-apply-commit:hover {
+        background: #16a34a;
+    }
+    .btn-apply-commit:disabled {
+        background: var(--nbe-dark-bg-elevated);
+        color: var(--nbe-dark-text-muted);
+        cursor: not-allowed;
+    }
+    .deletion-section {
+        border-left: 3px solid var(--color-delete);
+    }
+    .deletion-badge {
+        background: var(--color-delete) !important;
+        color: white !important;
+    }
+
+    /* Reference changes styles */
+    .ref-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .ref-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        background: var(--nbe-bg-surface);
+        border: 1px solid var(--nbe-border);
+        border-radius: 4px;
+        font-size: 12px;
+    }
+    /* Terminal style for center-body context */
+    .center-body .ref-item {
+        background: #252525;
+        border: none;
+        border-bottom: 1px solid #333;
+        border-radius: 0;
+    }
+    .center-body .ref-item:nth-child(even) {
+        background: #2a2a2a;
+    }
+    .center-body .ref-item:hover {
+        background: #333;
+    }
+    .ref-type {
+        background: var(--nbe-success-light);
+        color: var(--color-create);
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-weight: 500;
+        font-size: 10px;
+        text-transform: uppercase;
+    }
+    .ref-name {
+        font-weight: 500;
+        color: var(--nbe-text-primary);
+    }
+    .center-body .ref-name {
+        color: #d4d4d4;
+    }
+    .ref-field {
+        color: var(--nbe-text-muted);
+        font-family: var(--font-mono);
+    }
+    .ref-more {
+        color: var(--nbe-text-secondary);
+        font-style: italic;
+        background: var(--nbe-bg-subtle);
+    }
+    .commit-item-type.rename {
+        background: var(--nbe-dark-validation-info-bg);
+        color: var(--nbe-primary);
+    }
+
+    /* Confirmation Dialog */
+    .confirm-dialog-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--nbe-overlay-darker);
+        z-index: var(--nbe-z-modal);
+        align-items: center;
+        justify-content: center;
+    }
+    .confirm-dialog-overlay.visible {
+        display: flex;
+    }
+    .confirm-dialog {
+        background: var(--nbe-bg-surface);
+        border-radius: var(--nbe-radius-xl);
+        padding: var(--nbe-space-xl);
+        max-width: 500px;
+        width: 90%;
+        box-shadow: var(--nbe-shadow-overlay);
+        animation: confirmSlideIn 0.2s ease;
+    }
+    @keyframes confirmSlideIn {
+        from { transform: scale(0.95); opacity: 0; }
+        to { transform: scale(1); opacity: 1; }
+    }
+    .confirm-dialog-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+    .confirm-dialog-icon {
+        font-size: 24px;
+    }
+    .confirm-dialog-icon.warning { color: var(--color-move); }
+    .confirm-dialog-icon.danger { color: var(--color-delete); }
+    .confirm-dialog-icon.info { color: var(--color-edit); }
+    .confirm-dialog-header h3 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--nbe-text-primary);
+    }
+    .confirm-dialog-message {
+        margin: 0 0 20px 0;
+        color: var(--nbe-text-secondary);
+        font-size: 14px;
+        line-height: 1.5;
+    }
+    .confirm-dialog-buttons {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+    .btn-confirm-cancel {
+        padding: var(--nbe-btn-padding-md);
+        border: 1px solid var(--nbe-border);
+        background: var(--nbe-bg-surface);
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--nbe-text-primary);
+        transition: all 0.15s;
+    }
+    .btn-confirm-cancel:hover {
+        background: var(--nbe-bg-subtle);
+    }
+    .btn-confirm-action {
+        padding: var(--nbe-btn-padding-md);
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+        transition: all 0.15s;
+    }
+    .btn-confirm-action.danger {
+        background: var(--nbe-danger-light);
+        color: var(--color-delete);
+        border: 1px solid var(--nbe-danger-border);
+    }
+    .btn-confirm-action.danger:hover {
+        background: var(--nbe-danger-border);
+    }
+    .btn-confirm-action.primary {
+        background: var(--nbe-success);
+        color: var(--nbe-text-inverse);
+        border: none;
+    }
+    .btn-confirm-action.primary:hover {
+        background: var(--nbe-btn-success-hover);
+    }
+
+    /* Confirm Dialog - Dark Theme (default for dark-themed pages) */
+    .confirm-dialog {
+        background: var(--nbe-dark-bg-secondary);
+        border: 1px solid var(--nbe-dark-border-primary);
+        box-shadow: var(--nbe-shadow-lg);
+    }
+    .confirm-dialog-header h3 {
+        color: var(--nbe-dark-text-primary);
+    }
+    .confirm-dialog-message {
+        color: var(--nbe-dark-text-secondary);
+    }
+    .confirm-dialog-buttons .nbe-btn--secondary {
+        background: var(--nbe-dark-bg-tertiary);
+        border: 1px solid var(--nbe-dark-border-primary);
+        color: var(--nbe-dark-text-primary);
+    }
+    .confirm-dialog-buttons .nbe-btn--secondary:hover {
+        background: var(--nbe-dark-bg-hover);
+        border-color: var(--nbe-dark-border-hover);
+    }
+    .confirm-dialog-buttons .nbe-btn--primary {
+        background: var(--nbe-dark-accent-primary);
+        border: none;
+        color: var(--nbe-dark-bg-primary);
+    }
+    .confirm-dialog-buttons .nbe-btn--primary:hover {
+        background: #5ed4ba;
+    }
+    .confirm-dialog-buttons .nbe-btn--danger {
+        background: var(--nbe-dark-accent-danger);
+        border: none;
+        color: #fff;
+    }
+    .confirm-dialog-buttons .nbe-btn--danger:hover {
+        background: #ff6b6b;
+    }
+
+    /* Git Result Panel Styles - Authentic Terminal */
+    .git-result-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--nbe-overlay-terminal);
+        z-index: var(--nbe-z-modal);
+        align-items: center;
+        justify-content: center;
+    }
+    .git-result-overlay.visible {
+        display: flex;
+    }
+    .git-result-panel {
+        background: var(--nbe-terminal-bg);
+        border: 1px solid var(--nbe-terminal-border);
+        width: 90%;
+        max-width: 700px;
+        box-shadow: var(--nbe-shadow-overlay);
+        overflow: hidden;
+    }
+    .git-result-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 3px 10px;
+        background: var(--nbe-terminal-header-bg);
+        border-bottom: 1px solid var(--nbe-terminal-border);
+    }
+    .git-result-header span {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        font-weight: normal;
+        color: var(--nbe-terminal-text);
+    }
+    .git-result-close {
+        background: none;
+        border: none;
+        color: var(--nbe-terminal-text-muted);
+        font-size: 18px;
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
+        font-family: var(--font-mono);
+    }
+    .git-result-close:hover {
+        color: var(--nbe-terminal-text-bright);
+    }
+    .git-result-body {
+        padding: 10px 12px;
+        background: var(--nbe-terminal-bg);
+        min-height: 100px;
+        font-family: var(--font-mono);
+        font-size: 13px;
+        line-height: 1.4;
+    }
+    .git-result-line {
+        color: var(--nbe-terminal-text);
+        margin-bottom: 2px;
+    }
+    .git-result-line .prompt {
+        color: var(--nbe-terminal-prompt);
+    }
+    #gitResultCommand {
+        color: var(--nbe-terminal-text-bright);
+    }
+    .git-result-output {
+        background: transparent;
+        padding: 4px 0;
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--nbe-terminal-text);
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 350px;
+        overflow-y: auto;
+        line-height: 1.4;
+    }
+    .git-result-output .hash {
+        color: var(--nbe-terminal-hash);
+    }
+    .git-result-output .success-text {
+        color: var(--nbe-terminal-success);
+    }
+    .git-result-output .error-text {
+        color: var(--nbe-terminal-error);
+    }
+    .cursor {
+        color: var(--nbe-terminal-text);
+        animation: blink 1s step-end infinite;
+    }
+    @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+    }
+
+    #toastContainer {
+        position: fixed;
+        bottom: var(--nbe-space-xl);
+        right: var(--nbe-space-xl);
+        z-index: var(--nbe-z-toast);
+    }
+
+    #toastContainer .toast {
+        position: relative;
+        background: var(--nbe-terminal-header-bg);
+        color: var(--nbe-text-inverse);
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: var(--nbe-shadow-lg);
+        font-size: 14px;
+        max-width: 400px;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        animation: toastIn 0.25s ease;
+    }
+
+    .toast.hiding {
+        animation: toastOut 0.2s ease forwards;
+    }
+
+    .toast.success { background: var(--color-create); }
+    .toast.error { background: var(--color-delete); }
+    .toast.warning { background: var(--color-move); }
+    .toast.info { background: var(--color-edit); }
+
+    .toast-icon {
+        font-size: 18px;
+        flex-shrink: 0;
+    }
+
+    .toast-message {
+        flex: 1;
+        line-height: 1.4;
+    }
+
+    .toast-close {
+        background: none;
+        border: none;
+        color: var(--nbe-white-alpha-70);
+        font-size: 18px;
+        cursor: pointer;
+        padding: 0;
+        margin-left: 8px;
+        flex-shrink: 0;
+    }
+
+    .toast-close:hover {
+        color: var(--nbe-text-inverse);
+    }
+
+    @keyframes toastIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+
+    @keyframes toastOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+    }
+
+    /* Undo Button */
+    .undo-btn {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: var(--nbe-btn-padding-sm);
+        border: none;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: not-allowed;
+        background: var(--nbe-disabled-bg);
+        color: var(--nbe-disabled-text);
+        transition: all 0.2s ease;
+    }
+
+    .undo-btn.active {
+        background: var(--nbe-undo-bg);
+        color: var(--nbe-undo-text);
+        cursor: pointer;
+    }
+
+    .undo-btn.active:hover {
+        background: var(--nbe-undo-bg-hover);
+        transform: translateY(-1px);
+    }
+
+    .undo-btn.active:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px var(--nbe-white-alpha-40);
+    }
+
+    .undo-btn i {
+        font-size: 13px;
+    }
+
+    .undo-kbd {
+        font-size: 10px;
+        font-family: var(--nbe-font-mono, monospace);
+        padding: 1px 4px;
+        border-radius: 2px;
+        background: var(--nbe-white-alpha-10);
+        color: inherit;
+        margin-left: 4px;
+        opacity: 0.6;
+    }
+
+    /* Palo Alto style Commit Button */
+    .commit-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: var(--nbe-btn-padding-sm);
+        border: none;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: not-allowed;
+        margin-right: 12px;
+        /* Default to disabled state to prevent flash */
+        background: var(--nbe-disabled-bg);
+        color: var(--nbe-disabled-text);
+    }
+
+    .commit-btn.disabled {
+        background: var(--nbe-disabled-bg);
+        color: var(--nbe-disabled-text);
+        cursor: not-allowed;
+    }
+
+    .commit-btn.active {
+        transition: all 0.2s ease;
+        background: var(--nbe-commit-bg);
+        color: var(--nbe-text-inverse);
+        box-shadow: var(--nbe-commit-shadow);
+        cursor: pointer;
+    }
+
+    .commit-btn.active:hover {
+        background: var(--nbe-commit-bg-hover);
+        box-shadow: var(--nbe-commit-shadow-hover);
+        transform: translateY(-1px);
+    }
+
+    .commit-btn.active:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(245, 78, 0, 0.5);
+    }
+
+    .commit-btn .commit-count {
+        background: rgba(255, 255, 255, 0.25);
+        padding: 1px 6px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    /* ========================================
+       SHARED PAGE LAYOUT COMPONENTS
+       ======================================== */
+
+    /* Two-panel page container */
+    .page-container {
+        display: flex;
+        height: calc(100vh - var(--nbe-navbar-height));
+        margin: -1.5rem;
+        background: var(--nbe-bg-page);
+    }
+
+    /* Sidebar panel */
+    .page-sidebar {
+        width: var(--nbe-panel-width);
+        background: var(--nbe-bg-surface);
+        border-right: 1px solid var(--nbe-border);
+        overflow-y: auto;
+        flex-shrink: 0;
+        padding-left: var(--nbe-space-md);
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* ----------------------------------------
+       Sidebar overrides: match explorer left panel
+       ---------------------------------------- */
+
+    /* Panel header (dark title bar) — matches .panel-header in explorer.css */
+    .page-sidebar .panel-header {
+        display: flex;
+        align-items: center;
+        padding: 0 12px 0 24px;
+        height: 36px;
+        box-sizing: border-box;
+        background: var(--nbe-bg-dark);
+        color: var(--nbe-text-inverse);
+        font-size: var(--nbe-font-size-base);
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        flex-shrink: 0;
+        margin-left: calc(-1 * var(--nbe-space-md));
+    }
+
+    .page-sidebar .panel-header-title {
+        flex: 1;
+    }
+
+    /* Section titles — matches .toolbar-label */
+    .page-sidebar .sidebar-section-title,
+    .page-sidebar .dep-section-title,
+    .page-sidebar .form-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--nbe-text-secondary);
+        text-transform: uppercase;
+    }
+
+    /* Section content — compact padding matching explorer toolbar density */
+    .page-sidebar .sidebar-section-content,
+    .page-sidebar .dep-section-content {
+        padding: var(--nbe-space-sm) 12px var(--nbe-space-md);
+    }
+
+    .page-sidebar .sidebar-section-title,
+    .page-sidebar .dep-section-title {
+        padding: var(--nbe-space-sm) 12px;
+    }
+
+    /* Form inputs — matches .tree-search */
+    .page-sidebar .form-input,
+    .page-sidebar .form-select {
+        padding: 4px 12px;
+        border: 1px solid var(--nbe-border);
+        border-radius: var(--nbe-radius-md);
+        font-size: var(--nbe-font-size-base);
+        outline: none;
+        background: var(--nbe-bg-surface);
+        color: var(--nbe-text-primary);
+    }
+
+    .page-sidebar .form-input::placeholder {
+        color: var(--nbe-text-muted);
+    }
+
+    .page-sidebar .form-input:focus,
+    .page-sidebar .form-select:focus {
+        border-color: var(--nbe-primary);
+        box-shadow: none;
+    }
+
+    /* Buttons — matches .actions-btn */
+    .page-sidebar .page-btn {
+        padding: var(--nbe-btn-padding-xs);
+        background: var(--nbe-bg-surface);
+        border: 1px solid var(--nbe-border);
+        border-radius: var(--nbe-radius-md);
+        font-size: var(--nbe-font-size-base);
+        cursor: pointer;
+        color: var(--nbe-text-primary);
+        white-space: nowrap;
+    }
+
+    .page-sidebar .page-btn:hover {
+        background: var(--nbe-bg-hover);
+    }
+
+    .page-sidebar .page-btn-block {
+        padding: 6px 10px;
+        white-space: normal;
+    }
+
+    .page-sidebar .page-btn-primary {
+        background: var(--nbe-success);
+        border-color: var(--nbe-success);
+        color: var(--nbe-text-inverse);
+        font-weight: 500;
+    }
+
+    .page-sidebar .page-btn-primary:hover {
+        background: var(--nbe-btn-success-hover);
+    }
+
+    .page-sidebar .page-btn-danger {
+        background: var(--nbe-danger-light);
+        color: var(--color-delete);
+        border-color: var(--nbe-danger-border);
+    }
+
+    .page-sidebar .page-btn-danger:hover {
+        background: var(--nbe-danger-border);
+    }
+
+    /* Search with icon — matches .search-row + .search-icon in explorer */
+    .page-sidebar .search-row {
+        position: relative;
+    }
+
+    .page-sidebar .search-icon {
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--nbe-text-muted);
+        font-size: 14px;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    .page-sidebar .search-row .form-input {
+        padding-left: 32px;
+    }
+
+    /* Filter checkboxes — matches .tree-filter-option */
+    .page-sidebar .filter-chip,
+    .page-sidebar .tree-filter-option {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--nbe-text-primary);
+        cursor: pointer;
+        padding: 0;
+        border: none;
+        border-radius: 0;
+        background: none;
+    }
+
+    .page-sidebar .filter-chip input[type="checkbox"],
+    .page-sidebar .tree-filter-option input {
+        display: block;
+        margin: 0;
+        width: 14px;
+        height: 14px;
+        accent-color: var(--nbe-primary);
+    }
+
+    .page-sidebar .filter-chip input:checked ~ span {
+        font-weight: 600;
+        color: var(--nbe-primary);
+    }
+
+    /* Info text — compact */
+    .page-sidebar .sidebar-info-text {
+        font-size: 12px;
+        color: var(--nbe-text-secondary);
+        line-height: 1.4;
+    }
+
+    /* Scrollbar — matches .tree-content scrollbar */
+    .page-sidebar::-webkit-scrollbar {
+        width: 8px;
+    }
+    .page-sidebar::-webkit-scrollbar-track {
+        background: var(--nbe-bg-surface);
+    }
+    .page-sidebar::-webkit-scrollbar-thumb {
+        background: var(--nbe-border);
+        border-radius: var(--nbe-radius-md);
+    }
+    .page-sidebar::-webkit-scrollbar-thumb:hover {
+        background: var(--nbe-text-muted);
+    }
+
+    /* Sidebar sections */
+    .sidebar-section {
+        border-bottom: 1px solid var(--nbe-border-lighter);
+    }
+
+    .sidebar-section-title {
+        font-size: var(--nbe-font-size-xs);
+        font-weight: 600;
+        text-transform: uppercase;
+        color: var(--nbe-text-muted);
+        padding: var(--nbe-space-lg) var(--nbe-space-lg) var(--nbe-space-sm);
+    }
+
+    .sidebar-section-content {
+        padding: 0 16px 16px;
+    }
+
+    .sidebar-section-info {
+        flex: 1;
+    }
+
+    .sidebar-section-bottom {
+        margin-top: auto;
+        border-bottom: none;
+    }
+
+    .sidebar-info-text {
+        font-size: var(--nbe-font-size-sm);
+        color: var(--nbe-text-secondary);
+        line-height: 1.5;
+        margin: 0 0 var(--nbe-space-sm) 0;
+    }
+
+    .sidebar-info-text:last-child {
+        margin-bottom: 0;
+    }
+
+    /* Main content area */
+    .page-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .page-header {
+        display: flex;
+        align-items: center;
+        gap: var(--nbe-space-xl);
+        padding: var(--nbe-space-md) var(--nbe-space-xl);
+        background: var(--nbe-bg-surface);
+        border-bottom: 1px solid var(--nbe-border);
+    }
+
+    .page-title {
+        font-size: var(--nbe-font-size-xl);
+        font-weight: 600;
+        color: var(--nbe-text-primary);
+        margin: 0;
+    }
+
+    /* ========================================
+       SHARED BUTTON STYLES
+       ======================================== */
+
+    .page-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: var(--nbe-btn-padding-md);
+        border: 1px solid var(--nbe-border);
+        border-radius: var(--nbe-radius-md);
+        background: var(--nbe-bg-surface);
+        font-size: var(--nbe-font-size-base);
+        cursor: pointer;
+        transition: all var(--nbe-transition-normal);
+    }
+
+    .page-btn:hover {
+        background: var(--nbe-bg-subtle);
+    }
+
+    .page-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .page-btn:focus-visible {
+        outline: none;
+        box-shadow: var(--nbe-focus-ring);
+    }
+
+    /* Small button */
+    .page-btn-sm {
+        padding: var(--nbe-btn-padding-sm);
+        font-size: var(--nbe-font-size-sm);
+    }
+
+    /* Full width */
+    .page-btn-block {
+        width: 100%;
+    }
+
+    /* Green primary (for main actions like Create, Apply, Restore) */
+    .page-btn-primary {
+        background: var(--nbe-success);
+        border: none;
+        color: var(--nbe-text-inverse);
+        font-weight: 500;
+    }
+    .page-btn-primary:hover {
+        background: var(--nbe-btn-success-hover);
+    }
+
+    /* Red danger (for delete/discard - light background) */
+    .page-btn-danger {
+        background: var(--nbe-danger-light);
+        color: var(--color-delete);
+        border-color: var(--nbe-danger-border);
+    }
+    .page-btn-danger:hover {
+        background: var(--nbe-danger-border);
+    }
+
+    /* Navbar buttons - for dark navbar */
+    .nav-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: var(--nbe-btn-padding-xs);
+        margin-left: var(--nbe-space-sm);
+        border: 1px solid var(--nbe-white-alpha-40);
+        border-radius: var(--nbe-radius-md);
+        background: transparent;
+        color: var(--nbe-white-alpha-90);
+        font-size: var(--nbe-font-size-sm);
+        cursor: pointer;
+        transition: all var(--nbe-transition-normal);
+    }
+
+    .nav-btn:hover {
+        border-color: var(--nbe-white-alpha-70);
+        background: var(--nbe-white-alpha-10);
+        color: white;
+    }
+
+    .nav-btn:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 2px var(--nbe-white-alpha-50);
+    }
+
+    /* ========================================
+       SHARED BADGE/COUNT STYLES
+       ======================================== */
+
+    .badge-count {
+        font-size: var(--nbe-font-size-base);
+        color: var(--nbe-text-secondary);
+        background: var(--nbe-border);
+        padding: var(--nbe-space-xs) 10px;
+        border-radius: var(--nbe-radius-pill);
+    }
+
+    /* ========================================
+       SHARED EMPTY STATE STYLES
+       ======================================== */
+
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 60px 40px;
+        color: var(--nbe-text-secondary);
+    }
+
+    .empty-state-icon {
+        font-size: 48px;
+        margin-bottom: var(--nbe-space-lg);
+        opacity: 0.6;
+    }
+
+    .empty-state h3 {
+        margin: 0 0 var(--nbe-space-sm) 0;
+        font-size: var(--nbe-font-size-xl);
+        font-weight: 600;
+        color: var(--nbe-text-primary);
+    }
+
+    .empty-state p {
+        margin: 0 0 var(--nbe-space-xl) 0;
+        font-size: var(--nbe-font-size-md);
+        color: var(--nbe-text-secondary);
+    }
+
+    .empty-tips {
+        background: var(--nbe-bg-surface);
+        border-radius: var(--nbe-radius-xl);
+        padding: var(--nbe-space-lg);
+        text-align: left;
+        max-width: 400px;
+        box-shadow: var(--nbe-shadow-sm);
+    }
+
+    .tip {
+        font-size: var(--nbe-font-size-base);
+        padding: 6px 0;
+        border-bottom: 1px solid var(--nbe-border-lighter);
+        color: var(--nbe-text-secondary);
+    }
+
+    .tip:last-child {
+        border-bottom: none;
+    }
+
+    .tip strong {
+        color: var(--nbe-text-primary);
+    }
+
+    /* Empty State - Dark Theme */
+    .empty-state,
+    .empty-state--centered {
+        color: var(--nbe-dark-text-secondary);
+    }
+
+    .empty-state .empty-icon,
+    .empty-state .empty-state-icon,
+    .empty-state--centered .empty-icon {
+        color: var(--nbe-dark-text-muted);
+    }
+
+    .empty-state h3,
+    .empty-state--centered h3 {
+        color: var(--nbe-dark-text-primary);
+    }
+
+    .empty-state p,
+    .empty-state--centered p {
+        color: var(--nbe-dark-text-secondary);
+    }
+
+    .empty-tips {
+        background: var(--nbe-dark-bg-secondary);
+        border: 1px solid var(--nbe-dark-border-primary);
+        box-shadow: none;
+        max-width: 500px;
+    }
+
+    .tip {
+        color: var(--nbe-dark-text-primary);
+        border-bottom-color: var(--nbe-dark-border-secondary);
+    }
+
+    .tip strong {
+        color: var(--nbe-dark-accent-primary);
+    }
+
+    /* ========================================
+       SHARED LOADING STATE STYLES
+       ======================================== */
+
+    /* Loading state container - centered spinner with text */
+    .loading-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: var(--nbe-space-2xl);
+        color: var(--nbe-text-secondary);
+        gap: var(--nbe-space-md);
+    }
+
+    .loading-state-spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid var(--nbe-border);
+        border-top-color: var(--nbe-primary);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    .loading-state-text {
+        font-size: var(--nbe-font-size-md);
+        color: var(--nbe-text-muted);
+    }
+
+    /* Loading State - Dark Theme */
+    .loading-state {
+        color: var(--nbe-dark-text-secondary);
+    }
+
+    .loading-state-spinner {
+        border-color: var(--nbe-dark-border-primary);
+        border-top-color: var(--nbe-dark-accent-primary);
+    }
+
+    .loading-state-text {
+        color: var(--nbe-dark-text-muted);
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* Button loading state */
+    .page-btn.loading {
+        position: relative;
+        pointer-events: none;
+        color: transparent !important;
+    }
+
+    .page-btn.loading::after {
+        content: '';
+        position: absolute;
+        width: 16px;
+        height: 16px;
+        top: 50%;
+        left: 50%;
+        margin-left: -8px;
+        margin-top: -8px;
+        border: 2px solid currentColor;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    .page-btn.loading::before {
+        /* Preserve the original text color for the spinner */
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: inherit;
+        border-radius: inherit;
+    }
+
+    .page-btn-primary.loading::after {
+        border-color: rgba(255, 255, 255, 0.3);
+        border-top-color: white;
+    }
+
+    .page-btn-danger.loading::after {
+        border-color: rgba(255, 255, 255, 0.3);
+        border-top-color: white;
+    }
+
+    /* Inline loading spinner (for use in text) */
+    .spinner-inline {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid var(--nbe-border);
+        border-top-color: var(--nbe-primary);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        vertical-align: middle;
+        margin-right: var(--nbe-space-xs);
+    }
+
+    /* ========================================
+       SHARED LIST ITEM STYLES
+       ======================================== */
+
+    .list-item {
+        display: flex;
+        align-items: center;
+        padding: var(--nbe-space-md) var(--nbe-space-lg);
+        border-bottom: 1px solid var(--nbe-border-lighter);
+        background: var(--nbe-bg-surface);
+        transition: background var(--nbe-transition-normal);
+    }
+
+    .list-item:hover {
+        background: var(--nbe-bg-page);
+    }
+
+    .list-item:last-child {
+        border-bottom: none;
+    }
+
+    .list-item-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .list-item-name {
+        font-weight: 500;
+        color: var(--nbe-text-primary);
+        margin-bottom: var(--nbe-space-xs);
+    }
+
+    .list-item-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--nbe-space-md);
+        font-size: var(--nbe-font-size-sm);
+        color: var(--nbe-text-muted);
+    }
+
+    .list-item-actions {
+        display: flex;
+        gap: 8px;
+        margin-left: 16px;
+        flex-shrink: 0;
+    }
+
+    /* ========================================
+       SHARED FORM FIELD STYLES
+       ======================================== */
+
+    .form-field {
+        margin-bottom: var(--nbe-space-md);
+    }
+
+    .form-label {
+        display: block;
+        font-size: var(--nbe-font-size-sm);
+        color: var(--nbe-text-secondary);
+        margin-bottom: 6px;
+    }
+
+    .form-input {
+        width: 100%;
+        padding: var(--nbe-space-sm) 10px;
+        border: 1px solid var(--nbe-border);
+        border-radius: var(--nbe-radius-md);
+        font-size: var(--nbe-font-size-base);
+        background: var(--nbe-bg-surface);
+    }
+
+    .form-input:focus {
+        outline: none;
+        border-color: var(--nbe-primary);
+    }
+
+    .form-input:disabled {
+        background: var(--nbe-bg-subtle);
+        color: var(--nbe-text-muted);
+        cursor: not-allowed;
+    }
+
+    .form-select {
+        width: 100%;
+        padding: var(--nbe-space-sm) 10px;
+        border: 1px solid var(--nbe-border);
+        border-radius: var(--nbe-radius-md);
+        font-size: var(--nbe-font-size-base);
+        background: var(--nbe-bg-surface);
+    }
+
+    .form-select:focus {
+        outline: none;
+        border-color: var(--nbe-primary);
+    }
+
+    .form-select-sm {
+        width: auto;
+        padding: var(--nbe-space-sm) 6px;
+        font-size: var(--nbe-font-size-sm);
+    }
+
+    .form-input-group {
+        display: flex;
+        gap: var(--nbe-space-sm);
+    }
+
+    .form-input-group .form-input {
+        flex: 1;
+    }
+
+    .form-hint {
+        display: block;
+        font-size: 11px;
+        color: var(--nbe-text-muted);
+        margin-top: var(--nbe-space-xs);
+    }
+
+    /* ========================================
+       SHARED TAB STYLES
+       ======================================== */
+
+    .page-tabs {
+        display: flex;
+        background: var(--nbe-bg-subtle);
+        border-radius: var(--nbe-radius-lg);
+        padding: 2px;
+    }
+
+    .page-tab {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--nbe-space-xs);
+        padding: 6px var(--nbe-space-md);
+        border: none;
+        background: none;
+        font-size: var(--nbe-font-size-base);
+        color: var(--nbe-text-secondary);
+        cursor: pointer;
+        border-radius: var(--nbe-radius-md);
+        transition: all var(--nbe-transition-normal);
+    }
+
+    .page-tab:hover {
+        color: var(--nbe-text-primary);
+    }
+
+    .page-tab.active {
+        background: var(--nbe-bg-surface);
+        color: var(--nbe-text-primary);
+        box-shadow: var(--nbe-shadow-xs);
+    }
+
+    .page-tab-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 5px;
+        min-width: 16px;
+        height: 16px;
+        background: var(--nbe-danger);
+        color: var(--nbe-text-inverse);
+        border-radius: 8px;
+        font-size: 10px;
+        font-weight: 600;
+    }
+
+    /* ========================================
+       UTILITY CLASSES
+       ======================================== */
+
+    /* Body utilities */
+    .u-overflow-x-hidden { overflow-x: hidden; }
+
+    /* Visibility utilities */
+    .u-hidden { display: none !important; }
+    .u-visible { display: block; }
+    .u-visible-flex { display: flex; }
+    .u-visible-inline { display: inline; }
+
+    /* Position utilities */
+    .u-relative { position: relative; }
+
+    /* Loading state placeholder */
+    .dialog-loading {
+        text-align: center;
+        padding: 40px;
+        color: var(--nbe-dark-text-muted);
+    }
+
+    /* Lock banner */
+    .lock-banner {
+        background: var(--nbe-lock-banner-bg);
+        color: var(--nbe-text-inverse);
+        padding: var(--nbe-space-md) var(--nbe-space-xl);
+        text-align: center;
+        font-weight: 500;
+        box-shadow: var(--nbe-shadow-xs);
+    }
+
+    .lock-banner.lock-banner-visible {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--nbe-space-sm);
+    }
+
+    .lock-banner-icon {
+        font-size: var(--nbe-font-size-xl);
+        margin-right: var(--nbe-space-sm);
+    }
+
+    .lock-banner .lock-break-btn {
+        border: 1px solid var(--nbe-white-alpha-60);
+        color: var(--nbe-text-inverse);
+        background: transparent;
+        padding: var(--nbe-space-xs) var(--nbe-space-md);
+        border-radius: var(--nbe-radius-md);
+        font-size: var(--nbe-font-size-base);
+        cursor: pointer;
+        transition: all var(--nbe-transition-normal);
+        margin-left: var(--nbe-space-md);
+    }
+
+    .lock-banner .lock-break-btn:hover {
+        background: var(--nbe-white-alpha-20);
+        border-color: var(--nbe-text-inverse);
+    }
+
+    .lock-banner .lock-break-btn:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 2px var(--nbe-white-alpha-50);
+    }
+
+    /* ========================================
+       SHARED ICON BUTTON STYLES
+       ======================================== */
+
+    .page-btn-icon {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--nbe-border);
+        border-radius: var(--nbe-radius-md);
+        background: var(--nbe-bg-surface);
+        font-size: var(--nbe-font-size-md);
+        cursor: pointer;
+        transition: all var(--nbe-transition-normal);
+        flex-shrink: 0;
+    }
+
+    .page-btn-icon:hover {
+        background: var(--nbe-bg-subtle);
+    }
+
+    .page-btn-icon:focus-visible {
+        outline: none;
+        box-shadow: var(--nbe-focus-ring);
+    }
+
+    .page-btn-icon.page-btn-danger {
+        background: var(--nbe-danger-light);
+        color: var(--color-delete);
+        border-color: var(--nbe-danger-border);
+    }
+
+    .page-btn-icon.page-btn-danger:hover {
+        background: var(--nbe-danger-border);
+    }
+
+    /* Keyboard Shortcuts Dialog */
+    .keyboard-shortcuts-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--nbe-overlay-dark);
+        z-index: var(--nbe-z-modal);
+        align-items: center;
+        justify-content: center;
+    }
+    .keyboard-shortcuts-overlay.visible {
+        display: flex;
+    }
+    .keyboard-shortcuts-dialog {
+        background: var(--nbe-bg-surface);
+        border-radius: var(--nbe-radius-xl);
+        width: 560px;
+        max-width: 90%;
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: var(--nbe-shadow-overlay);
+        animation: confirmSlideIn 0.2s ease;
+    }
+    .keyboard-shortcuts-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--nbe-border);
+    }
+    .keyboard-shortcuts-header h3 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--nbe-text-primary);
+    }
+    .keyboard-shortcuts-close {
+        background: none;
+        border: none;
+        font-size: 22px;
+        color: var(--nbe-text-muted);
+        cursor: pointer;
+        padding: 0 4px;
+        line-height: 1;
+    }
+    .keyboard-shortcuts-close:hover {
+        color: var(--nbe-text-primary);
+    }
+    .keyboard-shortcuts-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px 20px;
+    }
+    .shortcuts-section {
+        margin-bottom: 16px;
+    }
+    .shortcuts-section:last-child {
+        margin-bottom: 0;
+    }
+    .shortcuts-section-title {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        color: var(--nbe-text-muted);
+        margin-bottom: 8px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid var(--nbe-border-lighter);
+    }
+    .shortcut-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 5px 0;
+    }
+    .shortcut-keys {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        font-size: 12px;
+        color: var(--nbe-text-secondary);
+    }
+    .shortcut-keys kbd {
+        display: inline-block;
+        padding: 2px 6px;
+        font-size: 11px;
+        font-family: var(--nbe-font-mono, monospace);
+        background: var(--nbe-bg-subtle);
+        border: 1px solid var(--nbe-border-light);
+        border-radius: 3px;
+        box-shadow: 0 1px 0 var(--nbe-border);
+        color: var(--nbe-text-primary);
+    }
+    .shortcut-desc {
+        font-size: 13px;
+        color: var(--nbe-text-primary);
+    }
+    .keyboard-shortcuts-footer {
+        padding: 12px 20px;
+        border-top: 1px solid var(--nbe-border-lighter);
+        text-align: center;
+    }
+    .keyboard-shortcuts-hint {
+        font-size: 12px;
+        color: var(--nbe-text-muted);
+    }
+    .keyboard-shortcuts-hint kbd {
+        display: inline-block;
+        padding: 1px 5px;
+        font-size: 11px;
+        font-family: var(--nbe-font-mono, monospace);
+        background: var(--nbe-bg-subtle);
+        border: 1px solid var(--nbe-border-light);
+        border-radius: 3px;
+        box-shadow: 0 1px 0 var(--nbe-border);
+        color: var(--nbe-text-primary);
+    }
+
+    /* Keyboard Shortcuts Dialog - Dark Theme */
+    .keyboard-shortcuts-dialog {
+        background: var(--nbe-dark-bg-secondary);
+        border: 1px solid var(--nbe-dark-border-primary);
+    }
+    .keyboard-shortcuts-header {
+        border-bottom-color: var(--nbe-dark-border-primary);
+    }
+    .keyboard-shortcuts-header h3 {
+        color: var(--nbe-dark-text-primary);
+    }
+    .keyboard-shortcuts-close {
+        color: var(--nbe-dark-text-muted);
+    }
+    .keyboard-shortcuts-close:hover {
+        color: var(--nbe-dark-text-primary);
+    }
+    .shortcuts-section-title {
+        color: var(--nbe-dark-text-muted);
+        border-bottom-color: var(--nbe-dark-border-secondary);
+    }
+    .shortcut-row {
+        border-bottom-color: var(--nbe-dark-border-secondary);
+    }
+    .shortcut-keys kbd {
+        background: var(--nbe-dark-bg-tertiary);
+        border: 1px solid var(--nbe-dark-border-primary);
+        box-shadow: 0 1px 0 var(--nbe-dark-border-primary);
+        color: var(--nbe-dark-text-primary);
+    }
+    .shortcut-desc {
+        color: var(--nbe-dark-text-primary);
+    }
+    .keyboard-shortcuts-footer {
+        border-top-color: var(--nbe-dark-border-secondary);
+    }
+    .keyboard-shortcuts-hint {
+        color: var(--nbe-dark-text-muted);
+    }
+    .keyboard-shortcuts-hint kbd {
+        background: var(--nbe-dark-bg-tertiary);
+        border: 1px solid var(--nbe-dark-border-primary);
+        box-shadow: 0 1px 0 var(--nbe-dark-border-primary);
+        color: var(--nbe-dark-text-primary);
+    }
+
+    /* ---- JS-generated content utility classes ---- */
+    /* Commit message textarea */
+    .commit-message-textarea {
+        width: 400px;
+        height: 60px;
+        padding: var(--nbe-space-sm);
+        border: 1px solid var(--nbe-dark-border-primary);
+        border-radius: var(--nbe-radius-md);
+        font-family: inherit;
+        font-size: var(--nbe-font-size-sm);
+        resize: vertical;
+        background: var(--nbe-dark-bg-secondary);
+        color: var(--nbe-dark-text-primary);
+    }
+    .commit-message-textarea:focus {
+        outline: none;
+        border-color: var(--nbe-dark-accent-primary);
+    }
+    .commit-message-textarea::placeholder {
+        color: var(--nbe-dark-text-muted);
+    }
+    /* Git config warning banner */
+    .git-config-warning {
+        display: flex;
+        align-items: center;
+        gap: var(--nbe-space-md);
+        padding: var(--nbe-space-md) var(--nbe-space-lg);
+        background: var(--nbe-warning-light);
+        border: 1px solid var(--nbe-warning);
+        border-radius: var(--nbe-radius-lg);
+        color: var(--nbe-warning-text);
+    }
+    .git-config-warning-icon {
+        font-size: var(--nbe-font-size-lg);
+    }
+    .git-config-warning-text {
+        font-size: var(--nbe-font-size-sm);
+    }
+    .git-config-warning a {
+        color: var(--nbe-primary);
+        text-decoration: underline;
+    }
+    /* Dialog inline select */
+    .dialog-select {
+        width: 100%;
+        padding: var(--nbe-space-sm);
+        border: 1px solid var(--nbe-border);
+        border-radius: var(--nbe-radius-lg);
+        font-size: var(--nbe-font-size-sm);
+    }
+    /* Dialog content boxes - dark theme */
+    .dialog-warning-box {
+        margin-bottom: var(--nbe-space-lg);
+        padding: var(--nbe-space-md);
+        background: var(--nbe-dark-validation-warning-bg);
+        border: 1px solid var(--nbe-warning);
+        border-radius: var(--nbe-radius-md);
+        color: var(--nbe-dark-text-primary);
+    }
+    .dialog-warning-box strong {
+        color: var(--nbe-warning);
+    }
+    .dialog-warning-box p {
+        margin-top: var(--nbe-space-sm);
+    }
+    .dialog-danger-box {
+        margin-bottom: var(--nbe-space-lg);
+        padding: var(--nbe-space-md);
+        background: var(--nbe-dark-validation-error-bg);
+        border: 1px solid var(--nbe-danger);
+        border-radius: var(--nbe-radius-md);
+        color: var(--nbe-dark-text-primary);
+    }
+    .dialog-danger-box strong {
+        color: var(--nbe-danger);
+        display: block;
+        margin-bottom: var(--nbe-space-sm);
+    }
+    .dialog-danger-box p {
+        margin: var(--nbe-space-sm) 0;
+        font-size: var(--nbe-font-size-sm);
+        color: var(--nbe-dark-text-secondary);
+    }
+    .dialog-danger-box ul {
+        margin: var(--nbe-space-sm) 0 0 var(--nbe-space-lg);
+        font-size: var(--nbe-font-size-sm);
+        color: var(--nbe-dark-text-secondary);
+    }
+    .dialog-info-text {
+        color: var(--nbe-dark-text-muted);
+        font-size: var(--nbe-font-size-sm);
+    }
+    /* Dialog scrollable lists - dark theme for explorer dialogs */
+    .dialog-scrollable-list {
+        max-height: 300px;
+        overflow-y: auto;
+        border: 1px solid var(--nbe-dark-border-primary);
+        border-radius: var(--nbe-radius-md);
+        padding: var(--nbe-space-sm);
+        background: var(--nbe-dark-bg-secondary);
+        font-family: var(--nbe-font-mono);
+        font-size: var(--nbe-font-size-xs);
+        color: var(--nbe-dark-text-primary);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .dialog-scrollable-list--short {
+        max-height: 120px;
+        display: block;
+        line-height: 1.5;
+    }
+    .dialog-scrollable-list--medium {
+        max-height: 200px;
+    }
+    .dialog-scrollable-list .suggestion-member {
+        background: var(--nbe-dark-bg-tertiary);
+        border: 1px solid var(--nbe-dark-border-primary);
+        border-radius: var(--nbe-radius-sm);
+        padding: 3px 8px;
+        font-size: var(--nbe-font-size-xs);
+        color: var(--nbe-dark-text-primary);
+    }
+    /* Dialog detail items - dark theme */
+    .dialog-detail-item {
+        margin-bottom: var(--nbe-space-md);
+        color: var(--nbe-dark-text-primary);
+    }
+    .dialog-detail-item ul {
+        margin: var(--nbe-space-xs) 0 0 0;
+        padding-left: var(--nbe-space-xl);
+        color: var(--nbe-dark-text-secondary);
+    }
+    .dialog-detail-more {
+        color: var(--nbe-dark-text-muted);
+        font-style: italic;
+    }
+    /* Batch create list items */
+    .batch-create-list {
+        font-family: var(--nbe-font-sans);
+    }
+    .batch-create-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--nbe-space-xs) var(--nbe-space-sm);
+        border-bottom: 1px solid var(--nbe-border-lighter);
+    }
+    .batch-create-item:last-child {
+        border-bottom: none;
+    }
+    .batch-create-name {
+        font-weight: 500;
+        color: var(--nbe-text-primary);
+    }
+    .batch-create-refs {
+        font-size: var(--nbe-font-size-xs);
+        color: var(--nbe-text-muted);
+    }
+    /* Alert boxes for dialogs - dark theme */
+    .dialog-alert {
+        padding: var(--nbe-space-md);
+        margin-bottom: var(--nbe-space-md);
+        border-radius: var(--nbe-radius-md);
+        color: var(--nbe-dark-text-primary);
+    }
+    .dialog-alert strong {
+        color: var(--nbe-dark-accent-primary);
+    }
+    .dialog-alert ol,
+    .dialog-alert ul {
+        margin: var(--nbe-space-sm) 0 0 0;
+        padding-left: var(--nbe-space-xl);
+        color: var(--nbe-dark-text-secondary);
+    }
+    .dialog-alert li {
+        margin-bottom: var(--nbe-space-xs);
+    }
+    .dialog-alert--warning {
+        background: var(--nbe-dark-validation-warning-bg);
+        border: 1px solid var(--nbe-warning);
+    }
+    .dialog-alert--warning strong {
+        color: var(--nbe-warning);
+    }
+    .dialog-alert--info {
+        background: var(--nbe-dark-accent-alpha-10);
+        border: 1px solid var(--nbe-dark-accent-primary);
+    }
+    /* Clickable reference items */
+    .ref-item-clickable {
+        cursor: pointer;
+    }
+    .ref-item-clickable:hover {
+        background: var(--nbe-bg-hover-row);
+    }
+    /* Inline code preview - dark theme */
+    .code-preview {
+        background: var(--nbe-dark-bg-tertiary);
+        padding: var(--nbe-space-sm);
+        border-radius: var(--nbe-radius-md);
+        font-family: var(--nbe-font-mono);
+        font-size: var(--nbe-font-size-xs);
+        color: var(--nbe-dark-text-primary);
+    }
+    /* Attribute display row - base styles, overridden by explorer.css */
+    .attr-display-row {
+        display: flex;
+        margin-bottom: var(--nbe-space-xs);
+    }
+    .attr-display-key {
+        color: var(--nbe-dark-text-secondary);
+        min-width: 150px;
+    }
+    .attr-display-value {
+        font-family: var(--nbe-font-mono);
+        color: var(--nbe-dark-text-primary);
+    }
+    /* Suggestion not valid */
+    .suggestion-invalid {
+        color: var(--nbe-danger);
+    }
+    .suggestion-separator {
+        border-top: 1px solid var(--nbe-border-lighter);
+        margin-top: var(--nbe-space-xs);
+        padding-top: var(--nbe-space-sm);
+    }
+    /* Spacing utilities */
+    .u-mt-sm { margin-top: var(--nbe-space-sm); }
+    .u-mt-md { margin-top: var(--nbe-space-md); }
+    .u-mt-lg { margin-top: var(--nbe-space-lg); }
+    .u-mb-sm { margin-bottom: var(--nbe-space-sm); }
+    .u-mb-md { margin-bottom: var(--nbe-space-md); }
+    .u-mb-lg { margin-bottom: var(--nbe-space-lg); }
+    .u-pl-lg { padding-left: var(--nbe-space-lg); }
+    /* Button disabled state */
+    .btn-disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    /* Reference changes section */
+    .ref-changes-section {
+        margin-top: var(--nbe-space-sm);
+        border-top: 2px solid var(--nbe-info);
+    }
+    .ref-changes-title {
+        background: var(--nbe-info-light);
+        color: var(--nbe-info);
+    }
+    .ref-changes-badge {
+        background: var(--nbe-info);
+        color: var(--nbe-text-inverse);
+    }
+    .ref-changes-diff {
+        background: var(--nbe-bg-subtle);
+        color: var(--nbe-text-primary);
+    }
+    .ref-changes-content {
+        padding: var(--nbe-space-md);
+    }
+    .ref-changes-hint {
+        font-size: var(--nbe-font-size-xs);
+        color: var(--nbe-text-secondary);
+        margin-bottom: var(--nbe-space-sm);
+    }
+    /* Terminal output styling */
+    .terminal-command {
+        color: var(--nbe-success);
+    }
+    .terminal-command-success {
+        color: var(--nbe-success);
+    }
+    .terminal-command-error {
+        color: var(--nbe-danger);
+    }
+    .terminal-hint {
+        color: var(--nbe-text-muted);
+    }
+    /* Diff skipped objects indicator */
+    .diff-skipped {
+        color: var(--nbe-text-muted);
+        font-style: italic;
+    }
+    /* Commit reference checkbox label */
+    .commit-reference-label {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--nbe-space-sm);
+        cursor: pointer;
+        color: var(--nbe-dark-text-primary);
+    }
+    .commit-reference-label input {
+        margin-top: 3px;
+        accent-color: var(--nbe-dark-accent-primary);
+    }
+    /* Error text in commit dialog */
+    .commit-error-text {
+        color: var(--nbe-danger);
+    }
+    /* Dynamic toast container (Explorer.showToast) */
+    .toast-container {
+        position: fixed;
+        top: var(--nbe-space-xl);
+        right: var(--nbe-space-xl);
+        z-index: var(--nbe-z-overlay);
+    }
+    .toast-container .toast {
+        padding: var(--nbe-space-md) var(--nbe-space-xl);
+        margin-bottom: var(--nbe-space-md);
+        border-radius: var(--nbe-radius-md);
+        color: var(--nbe-text-inverse);
+    }
+    .toast-error { background: var(--nbe-danger); }
+    .toast-success { background: var(--nbe-success); }
+    .toast-info { background: var(--nbe-info); }
+    /* Cleanup detail items */
+    .cleanup-detail-item--vertical {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .cleanup-detail-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .cleanup-detail-header > div {
+        flex: 1;
+    }
+    </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/api-client.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/base.js') }}"></script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

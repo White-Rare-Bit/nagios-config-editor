@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+
+{% block title %}Object Explorer - Nagios Bulk Editor{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('static', filename='css/explorer.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="explorer" id="explorerContainer" role="application" aria-label="Nagios Object Explorer">
+    <!-- Left: Tree View -->
+    <div class="tree-panel" role="region" aria-label="Objects panel">
+        <div class="panel-header">
+            <span class="panel-header-title" id="objectsPanelTitle">Objects</span>
+        </div>
+        <!-- View Tabs (same style as right panel) -->
+        <div class="right-pane-header">
+            <div class="nbe-tabs nbe-tabs--stretched" role="tablist" aria-label="View mode">
+                <button class="nbe-tab active" data-view="file" data-action="setView" title="Group objects by their .cfg file location" role="tab" aria-selected="true">
+                    <i class="fa-solid fa-folder"></i> By File
+                </button>
+                <button class="nbe-tab" data-view="type" data-action="setView" title="Group objects by Nagios type (host, service, contact, etc.)" role="tab" aria-selected="false">
+                    <i class="fa-solid fa-layer-group"></i> By Type
+                </button>
+            </div>
+        </div>
+        <div class="tree-header" role="toolbar" aria-label="Object filters">
+            <div class="toolbar-row search-row">
+                <span class="search-icon" aria-hidden="true"><i class="fa-solid fa-magnifying-glass"></i></span>
+                <input type="text" class="tree-search" id="treeSearch" placeholder="Search objects..." data-action="filterTree" aria-label="Search objects" role="searchbox">
+            </div>
+            <div class="toolbar-row" role="group" aria-label="Filter options">
+                <span class="toolbar-label" id="showLabel">Show:</span>
+                <label class="tree-filter-option" title="Show only objects not referenced by any other object (orphaned definitions)">
+                    <input type="checkbox" id="showOrphansOnly" data-action="filterTree" aria-describedby="orphansDesc">
+                    <span id="orphansDesc">Orphans</span>
+                </label>
+                <label class="tree-filter-option" title="Show only objects with configuration errors or missing required fields">
+                    <input type="checkbox" id="showIssuesOnly" data-action="filterTree" aria-describedby="issuesDesc">
+                    <span id="issuesDesc">Issues</span>
+                </label>
+                <div class="actions-dropdown">
+                    <button class="actions-btn" data-action="toggleActionsMenu" aria-haspopup="true" aria-expanded="false" aria-controls="actionsMenu"><i class="fa-solid fa-check-square" aria-hidden="true"></i> Select <i class="fa-solid fa-caret-down actions-caret" aria-hidden="true"></i></button>
+                    <div class="actions-menu" id="actionsMenu" role="menu" aria-label="Selection actions">
+                        <button data-action="selectAllVisible" role="menuitem">Select all visible</button>
+                        <button data-action="selectByType" role="menuitem">Select by type...</button>
+                        <button data-action="selectByPattern" role="menuitem">Select by pattern...</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="tree-content" id="treeContent" role="tree" aria-label="Object tree" tabindex="0"></div>
+    </div>
+
+    <!-- Center: Object Detail/Editor -->
+    <div class="center-pane" id="centerPane">
+        <!-- Hidden initially to prevent flash when restoring selection -->
+        <div class="center-empty-state u-hidden" id="centerEmptyState">
+            <div class="empty-icon"><i class="fa-solid fa-clipboard-list"></i></div>
+            <h3>No object selected</h3>
+            <p>Select an object from the tree to view and edit its details</p>
+            <div class="empty-tips">
+                <div class="tip"><strong>Click:</strong> Select an object from the tree on the left</div>
+                <div class="tip"><strong>Right-click:</strong> Access actions like clone, rename, or delete</div>
+                <div class="tip"><strong>Drag:</strong> Move objects between files in the right panel</div>
+            </div>
+        </div>
+        <div class="center-content u-hidden" id="centerContent">
+            <div class="center-header">
+                <div class="center-header-info">
+                    <div class="center-header-breadcrumb" id="centerBreadcrumb">
+                        <span class="breadcrumb-file" id="centerCardFile"></span>
+                        <span class="breadcrumb-separator"><i class="fa-solid fa-chevron-right"></i></span>
+                        <span class="breadcrumb-name" id="centerCardName"></span>
+                        <span class="card-type" id="centerCardType"></span>
+                        <button class="card-issue-btn u-hidden" id="centerCardIssue" data-action="navigateToObjectIssue"></button>
+                    </div>
+                </div>
+                <div class="center-header-actions">
+                    <button class="center-graph-btn" id="centerGraphBtn" data-action="openInGraphView" title="View in Graph">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="5" cy="12" r="3"/><circle cx="19" cy="5" r="3"/><circle cx="19" cy="19" r="3"/>
+                            <line x1="7.5" y1="10.5" x2="16.5" y2="6.5"/><line x1="7.5" y1="13.5" x2="16.5" y2="17.5"/>
+                        </svg>
+                        Graph
+                    </button>
+                    <button class="center-close-btn u-hidden" id="centerCloseBtn" data-action="discardNewObject" title="Discard new object">&times;</button>
+                </div>
+            </div>
+            <!-- Template scope warning banner -->
+            <div class="template-scope-warning u-hidden" id="templateScopeWarning">
+                <span class="template-scope-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                <span class="template-scope-text" id="templateScopeText">This template is used by X objects - changes will cascade</span>
+            </div>
+            <div class="center-body">
+                <div class="card-section">
+                    <div id="centerCardAttributes"></div>
+                    <button class="add-attr-btn" data-action="showAddAttribute">+ Add attribute</button>
+                </div>
+                <div class="card-section" id="impactSection">
+                    <div class="section-title collapsible collapsed" data-action="toggleSection" data-section="impact"
+                         title="Click to expand - shows object relationships and impact analysis">
+                        <span>Impact & Relationships</span>
+                        <span class="section-toggle"><i class="fa-solid fa-chevron-right"></i></span>
+                    </div>
+                    <div class="section-content collapsed" id="impactContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Workspace Panel -->
+    <div class="right-pane" id="rightPane" role="region" aria-label="Workspace panel">
+        <!-- Panel Header -->
+        <div class="panel-header">
+            <span class="panel-header-title" id="workspacePanelTitle">Workspace</span>
+        </div>
+
+        <!-- Main Tabs -->
+        <div class="right-pane-header">
+            <div class="nbe-tabs nbe-tabs--stretched" role="tablist" aria-label="Workspace tabs">
+                <button class="nbe-tab active" data-tab="files" data-action="switchRightTab" role="tab" aria-selected="true" aria-controls="filesTab">
+                    <i class="fa-solid fa-folder-tree"></i> Files
+                </button>
+                <button class="nbe-tab" data-tab="suggestions" data-action="switchRightTab" role="tab" aria-selected="false" aria-controls="suggestionsTab">
+                    <i class="fa-solid fa-lightbulb"></i> Suggestions <span class="nbe-tab-badge nbe-tab-badge--warning u-hidden" id="suggestionsBadge" aria-label="suggestions count">0</span>
+                </button>
+                <button class="nbe-tab" data-tab="validation" data-action="switchRightTab" role="tab" aria-selected="false" aria-controls="validationTab">
+                    <i class="fa-solid fa-circle-check"></i> Validation <span class="nbe-tab-badge u-hidden" id="validationBadge" aria-label="validation issues">!</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Files Tab -->
+        <div class="right-tab-content active" id="filesTab" role="tabpanel" aria-labelledby="filesTab">
+            <!-- Workspace Header Toolbar -->
+            <div class="workspace-header-toolbar" role="toolbar" aria-label="Workspace actions">
+                <div class="workspace-root-info">
+                    <span class="workspace-root-name">
+                        <span class="workspace-icon" id="workspaceRootIcon" aria-hidden="true"></span>
+                        <span id="workspaceRootName">config</span>
+                    </span>
+                    <span class="workspace-root-meta" id="workspaceRootMeta" aria-live="polite">0 objects</span>
+                </div>
+                <div class="workspace-toolbar-actions">
+                    <button class="workspace-toolbar-btn workspace-toolbar-btn--icon"
+                            data-action="createInlineFile"
+                            title="Create new file"
+                            aria-label="Create new file"
+                            id="createFileBtn">
+                        <span class="btn-icon-wrapper" id="newFileIcon" aria-hidden="true"></span>
+                    </button>
+                    <button class="workspace-toolbar-btn workspace-toolbar-btn--icon"
+                            data-action="createInlineFolder"
+                            title="Create new folder"
+                            aria-label="Create new folder"
+                            id="createFolderBtn">
+                        <span class="btn-icon-wrapper" id="newFolderIcon" aria-hidden="true"></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Workspace Tree Container -->
+            <div class="workspace-tree-container" id="targetPaneContent"></div>
+        </div>
+
+        <!-- Suggestions Tab -->
+        <div class="right-tab-content" id="suggestionsTab">
+            <!-- Summary bar with counts -->
+            <div class="suggestions-summary" id="suggestionsSummary">
+                <button class="summary-filter active" data-filter="all" data-action="filterSuggestions">
+                    All <span class="summary-count" id="summaryCountAll">0</span>
+                </button>
+                <button class="summary-filter" data-filter="error" data-action="filterSuggestions">
+                    <span class="severity-dot severity-error"></span>
+                    Errors <span class="summary-count" id="summaryCountErrors">0</span>
+                </button>
+                <button class="summary-filter" data-filter="warning" data-action="filterSuggestions">
+                    <span class="severity-dot severity-warning"></span>
+                    Warnings <span class="summary-count" id="summaryCountWarnings">0</span>
+                </button>
+                <button class="summary-filter" data-filter="info" data-action="filterSuggestions">
+                    <span class="severity-dot severity-info"></span>
+                    Suggestions <span class="summary-count" id="summaryCountInfo">0</span>
+                </button>
+            </div>
+
+            <!-- Flat prioritized list -->
+            <div class="suggestions-list" id="suggestionsList">
+                <!-- Populated by JS -->
+            </div>
+
+            <!-- Bulk actions footer -->
+            <div class="suggestions-actions u-hidden" id="suggestionsActions">
+                <button class="suggestions-bulk-btn" id="bulkDeleteUnused" data-action="bulkDeleteUnused">
+                    <i class="fa-solid fa-trash"></i> Delete Unused
+                </button>
+                <button class="suggestions-bulk-btn" id="bulkCreateMissing" data-action="bulkCreateMissing">
+                    <i class="fa-solid fa-plus"></i> Create Missing
+                </button>
+            </div>
+        </div>
+
+        <!-- Validation Tab -->
+        <div class="right-tab-content" id="validationTab">
+            <div class="tab-header">
+                <span class="tab-header-title">Nagios Syntax Validation</span>
+                <button class="btn-refresh" data-action="runValidationFull">Run Validation</button>
+            </div>
+            <div class="tab-body" id="validationContent">
+                <div class="empty-state">
+                    <span class="empty-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
+                    <div class="empty-title">Validation not run</div>
+                    <div class="empty-desc">Click "Run Validation" to check configuration syntax</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Object Detail Modal -->
+<div id="objectDetailModal" class="object-detail-modal" role="dialog" aria-modal="true" aria-labelledby="modalCardName">
+    <div class="object-detail-content">
+        <div class="object-detail-header">
+            <div>
+                <span class="card-type" id="modalCardType"></span>
+                <h2 class="card-name" id="modalCardName"></h2>
+                <span class="card-file" id="modalCardFile"></span>
+            </div>
+            <button class="modal-close" data-action="closeObjectDetail" aria-label="Close modal">&times;</button>
+        </div>
+        <div class="object-detail-body">
+            <div class="card-section">
+                <div class="section-title">Attributes</div>
+                <div id="modalCardAttributes" role="list" aria-label="Object attributes"></div>
+                <button class="add-attr-btn" data-action="showAddAttribute">+ Add attribute</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Context Menu -->
+<div id="contextMenu" class="context-menu" role="menu" aria-label="Object actions">
+    <!-- Single object options -->
+    <div class="menu-item single-only same-type-only" data-action="contextAction" data-context-action="rename" role="menuitem">Rename...</div>
+    <div class="menu-item single-only same-type-only" data-action="contextAction" data-context-action="clone" role="menuitem">Clone...</div>
+    <div class="menu-divider single-only same-type-only" role="separator"></div>
+    <!-- Multi-object options -->
+    <div class="menu-item multi-only same-type-only" data-action="showBulkRenameDialog" role="menuitem">Bulk rename...</div>
+    <div class="menu-item multi-only" data-action="showEditAttributesDialog" role="menuitem">Edit attributes...</div>
+    <div class="menu-divider multi-only same-type-only" role="separator"></div>
+    <!-- Common options -->
+    <div class="menu-item" data-action="showBulkAction" data-bulk-action="move" role="menuitem"><i class="fa-solid fa-file-export" aria-hidden="true"></i> Move to file...</div>
+    <div class="menu-item same-type-only" id="addToGroupMenuItem" data-action="showAddToGroupDialog" role="menuitem">Add to group...</div>
+    <div class="menu-item single-only" data-action="viewInGraph" role="menuitem"><i class="fa-solid fa-diagram-project" aria-hidden="true"></i> View in Graph</div>
+    <div class="menu-divider same-type-only" role="separator"></div>
+    <div class="menu-item danger same-type-only" data-action="contextAction" data-context-action="delete" role="menuitem">Delete</div>
+</div>
+
+<!-- Quick Preview Modal (Spacebar) -->
+<div id="previewModal" class="preview-modal" data-action="closePreview" role="dialog" aria-modal="true" aria-labelledby="previewTitle">
+    <div class="preview-panel" data-stop-propagation="true">
+        <div class="preview-header">
+            <span id="previewTitle">Object Preview</span>
+            <button class="preview-close" data-action="closePreview" aria-label="Close preview">&times;</button>
+        </div>
+        <div class="preview-body">
+            <pre id="previewCode" aria-label="Object configuration"></pre>
+        </div>
+    </div>
+</div>
+
+<!-- Simple Dialog -->
+<div id="dialogOverlay" class="dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="dialogTitle">
+    <div class="dialog" id="dialog">
+        <div class="dialog-title" id="dialogTitle"></div>
+        <div class="dialog-body" id="dialogBody"></div>
+        <div class="dialog-footer">
+            <button class="btn-cancel" data-action="closeDialog">Cancel</button>
+            <button class="btn-save" id="dialogConfirm">Confirm</button>
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}
+
+{% block scripts %}
+<!-- Explorer Modules (load order matters: namespace first, then utilities, then core, then features) -->
+<script src="{{ url_for('static', filename='js/explorer/main.js') }}"></script>
+<script src="{{ url_for('static', filename='js/explorer/state-management.js') }}"></script>
+<script src="{{ url_for('static', filename='js/explorer/ui-utils.js') }}"></script>
+<script src="{{ url_for('static', filename='js/explorer/data-loading.js') }}"></script>
+<script src="{{ url_for('static', filename='js/explorer/drag-drop.js') }}"></script>
+<script src="{{ url_for('static', filename='js/explorer/context-menu.js') }}"></script>
+<script src="{{ url_for('static', filename='js/explorer/file-operations.js') }}"></script>
+<script src="{{ url_for('static', filename='js/explorer/analysis.js') }}"></script>
+<script src="{{ url_for('static', filename='js/explorer/app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/explorer/object-editor.js') }}"></script>
+<script src="{{ url_for('static', filename='js/explorer/dialogs.js') }}"></script>
+
+<script>
+// Initialize Explorer with config path
+Explorer.init('{{ config_path }}');
+</script>
+{% endblock %}

@@ -1,0 +1,124 @@
+/* Find & Replace page styles (extends shared .page-* classes from base.html) */
+
+/* Container overrides */
+.find-replace-container {
+    /* Inherits from .page-container */
+}
+
+.find-replace-sidebar {
+    width: 360px; /* Wider sidebar for form */
+}
+
+.find-replace-main {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Form sections, groups, inputs, actions, and search suggestions are in shared forms.css */
+
+/* Main content area */
+.find-replace-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--nbe-space-lg);
+}
+
+/* Header */
+.find-replace-header {
+    padding: var(--nbe-space-md) var(--nbe-space-xl);
+    border-bottom: 1px solid var(--nbe-border);
+    background: var(--nbe-bg-surface);
+    display: flex;
+    align-items: center;
+    gap: var(--nbe-space-md);
+}
+
+.find-replace-header-title {
+    font-size: var(--nbe-font-size-lg);
+    font-weight: 600;
+    color: var(--nbe-text-primary);
+    margin: 0;
+}
+
+.find-replace-header .badge {
+    background: var(--nbe-bg-subtle);
+    color: var(--nbe-text-secondary);
+    padding: 2px 8px;
+    border-radius: var(--nbe-radius-md);
+    font-size: var(--nbe-font-size-sm);
+    font-weight: 500;
+}
+
+.find-replace-header .status-text {
+    margin-left: auto;
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-text-muted);
+}
+
+/* Match results list */
+.match-list {
+    background: var(--nbe-bg-surface);
+    border: 1px solid var(--nbe-border);
+    border-radius: var(--nbe-radius-lg);
+    overflow: hidden;
+}
+
+.match-item {
+    padding: var(--nbe-space-md) var(--nbe-space-lg);
+    border-bottom: 1px solid var(--nbe-border-light);
+}
+
+.match-item:last-child {
+    border-bottom: none;
+}
+
+.match-item:hover {
+    background: var(--nbe-bg-hover-row);
+}
+
+.match-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--nbe-space-sm);
+}
+
+.match-item-name {
+    font-weight: 500;
+    color: var(--nbe-text-primary);
+}
+
+.match-item-file {
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-text-muted);
+}
+
+.match-item-type {
+    background: var(--nbe-info-light);
+    color: var(--nbe-info);
+    padding: 2px 8px;
+    border-radius: var(--nbe-radius-md);
+    font-size: var(--nbe-font-size-sm);
+    font-weight: 500;
+}
+
+.match-item-detail {
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-font-size-sm);
+    background: var(--nbe-bg-subtle);
+    padding: var(--nbe-space-sm) var(--nbe-space-md);
+    border-radius: var(--nbe-radius-md);
+}
+
+.match-field {
+    color: var(--nbe-text-secondary);
+}
+
+.match-highlight {
+    background: var(--nbe-warning-light);
+    color: var(--nbe-warning);
+    padding: 1px 4px;
+    border-radius: var(--nbe-radius-sm);
+}
+
+/* Empty state: .matches-empty is in shared forms.css */

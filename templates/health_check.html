@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Config Health Check - Nagios Bulk Editor{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('static', filename='css/health-check.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="page-container health-container">
+    <!-- Left Sidebar -->
+    <div class="page-sidebar">
+        <div class="panel-header"><span class="panel-header-title">Health Check</span></div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Summary</div>
+            <div class="sidebar-section-content">
+                <div id="summaryCard" class="health-summary">
+                    <p class="dialog-info-text">Click "Run Health Check" to analyze your configuration.</p>
+                </div>
+                <button class="nbe-btn nbe-btn--primary nbe-btn--full u-mt-md" data-action="runHealthCheck" id="runBtn">
+                    Run Health Check
+                </button>
+            </div>
+        </div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Filter by Severity</div>
+            <div class="sidebar-section-content">
+                <div class="health-filter-group">
+                    <label class="health-filter-item">
+                        <input type="checkbox" id="showErrors" checked data-action="filterIssues">
+                        <span class="health-filter-badge health-filter-badge--error">Errors</span>
+                    </label>
+                    <label class="health-filter-item">
+                        <input type="checkbox" id="showWarnings" checked data-action="filterIssues">
+                        <span class="health-filter-badge health-filter-badge--warning">Warnings</span>
+                    </label>
+                    <label class="health-filter-item">
+                        <input type="checkbox" id="showInfo" checked data-action="filterIssues">
+                        <span class="health-filter-badge health-filter-badge--info">Info</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Filter by Type</div>
+            <div class="sidebar-section-content">
+                <select class="form-select" id="filterType" data-action="filterIssues">
+                    <option value="">All issue types</option>
+                    <option value="orphan_service">Orphan Services</option>
+                    <option value="missing_template">Undefined Template References</option>
+                    <option value="missing_command">Missing Commands</option>
+                    <option value="missing_timeperiod">Missing Timeperiods</option>
+                    <option value="missing_contact">Missing Contacts</option>
+                    <option value="missing_contactgroup">Missing Contact Groups</option>
+                    <option value="missing_hostgroup">Missing Hostgroups</option>
+                    <option value="missing_servicegroup">Missing Servicegroups</option>
+                    <option value="no_contacts">No Contacts Defined</option>
+                    <option value="empty_group">Empty Groups</option>
+                    <option value="unused_template">Unused Templates</option>
+                    <option value="duplicate_name">Duplicate Names</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="sidebar-section sidebar-section-info">
+            <div class="sidebar-section-title">Info</div>
+            <div class="sidebar-section-content">
+                <p class="sidebar-info-text">
+                    Analyze your Nagios configuration for potential issues and best practice violations.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="page-main health-main">
+        <div class="health-issues-header">
+            <h2 class="page-title">Issues <span class="health-issue-count" id="issueCount">0</span></h2>
+            <input type="text" class="health-search" id="searchIssues"
+                   placeholder="Search..." data-action="filterIssues"
+                   aria-label="Search issues">
+        </div>
+
+        <div id="issuesContainer" class="health-issues-list" role="region" aria-labelledby="issuesHeading" aria-live="polite">
+            <div class="health-empty">
+                <div class="health-empty-icon"><i class="fa-solid fa-stethoscope"></i></div>
+                <p>No issues to display. Run a health check to analyze your configuration.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/health-check.js') }}"></script>
+{% endblock %}

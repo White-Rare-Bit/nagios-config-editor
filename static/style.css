@@ -1,0 +1,163 @@
+/* Nagios Bulk Editor - Custom Styles */
+
+body {
+    background-color: var(--nbe-bg-page);
+}
+
+.navbar-brand {
+    font-weight: bold;
+}
+
+.card {
+    box-shadow: var(--nbe-shadow-xs);
+}
+
+.card-header {
+    background-color: var(--nbe-bg-surface);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+}
+
+.card-header h5,
+.card-header h6 {
+    margin-bottom: 0;
+}
+
+/* Object browser styles */
+.object-row {
+    cursor: pointer;
+}
+
+.object-row:hover {
+    background-color: var(--nbe-bg-page);
+}
+
+/* Code/pre styling */
+pre {
+    background-color: var(--nbe-bg-page);
+    border: 1px solid var(--nbe-border);
+    border-radius: 0.25rem;
+    padding: 1rem;
+    font-size: 0.875rem;
+    overflow-x: auto;
+}
+
+code {
+    background-color: var(--nbe-bg-subtle);
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
+    font-size: 0.875em;
+}
+
+/* Preview/diff styles */
+.text-success code {
+    background-color: var(--nbe-success-light);
+    color: var(--nbe-success);
+}
+
+.text-danger code {
+    background-color: var(--nbe-danger-light);
+    color: var(--nbe-danger);
+}
+
+/* Match highlighting */
+mark {
+    background-color: var(--nbe-warning-light);
+    padding: 0;
+}
+
+/* Object list for reorganize */
+.object-item {
+    transition: background-color 0.15s ease;
+}
+
+.object-item:hover {
+    background-color: var(--nbe-bg-page);
+}
+
+.object-item .form-check-label {
+    cursor: pointer;
+}
+
+/* Table improvements */
+.table th {
+    font-weight: 600;
+    background-color: var(--nbe-bg-page);
+}
+
+.table-sm td,
+.table-sm th {
+    padding: 0.5rem;
+}
+
+/* Badges */
+.badge {
+    font-weight: 500;
+}
+
+/* Button group spacing */
+.btn + .btn {
+    margin-left: 0.25rem;
+}
+
+/* Form improvements */
+.form-label {
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+/* Alert improvements */
+.alert {
+    border-radius: 0.25rem;
+}
+
+/* Scrollable containers */
+.table-responsive {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+/* Loading state */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* Empty state styling */
+.text-muted {
+    font-style: italic;
+}
+
+/* Modal improvements */
+.modal-lg {
+    max-width: 800px;
+}
+
+.modal pre {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .btn-group-vertical {
+        width: 100%;
+    }
+
+    .table-responsive {
+        max-height: 400px;
+    }
+}
+
+/* Dark mode support (optional) */
+@media (prefers-color-scheme: dark) {
+    /* Uncomment to enable dark mode
+    body {
+        background-color: #1a1a1a;
+        color: #e0e0e0;
+    }
+    .card {
+        background-color: #2d2d2d;
+        border-color: #444;
+    }
+    */
+}

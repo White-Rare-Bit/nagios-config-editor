@@ -1,0 +1,150 @@
+"""Backup management routes."""
+
+import os
+from datetime import datetime
+from flask import Blueprint, request, jsonify
+
+from .helpers import (
+    get_backup_manager,
+    get_service,
+    get_op_logger,
+    get_staging_manager,
+    get_audit_user_identity
+)
+from staging_manager import StagingStatus
+from audit_service import write_audit_log
+
+bp = Blueprint('backups', __name__)
+
+
+@bp.route('/api/backups', methods=['GET'])
+def api_list_backups():
+    """List all backups."""
+    bm = get_backup_manager()
+    return jsonify(bm.list_backups())
+
+
+@bp.route('/api/backups', methods=['POST'])
+def api_create_backup():
+    """Create a new backup."""
+    op_log = get_op_logger()
+    bm = get_backup_manager()
+    data = request.get_json() or {}
+    description = data.get('description', 'Manual backup')
+    if op_log:
+        op_log.info('app', 'create_backup', params={'description': description})
+
+    # Get user identity from request
+    identity = get_audit_user_identity()
+    user_name = identity.get('userName', '')
+    user_email = identity.get('userEmail', '')
+
+    backup_path = bm.create_backup(description, user_name=user_name, user_email=user_email)
+
+    # Write audit log entry
+    write_audit_log({
+        'timestamp': datetime.now().isoformat(),
+        'action': 'backup_created',
+        'description': description,
+        'backup_path': os.path.basename(backup_path) if backup_path else None,
+        **identity
+    })
+
+    return jsonify({'success': True, 'path': backup_path})
+
+
+@bp.route('/api/backups/<backup_name>/restore', methods=['POST'])
+def api_restore_backup(backup_name):
+    """Restore from a backup."""
+    op_log = get_op_logger()
+    if op_log:
+        op_log.info('app', 'restore_backup', params={'backup_name': backup_name})
+    # Check staging lock - restore requires lock ownership or no lock
+    session_id = request.headers.get('X-Session-Id')
+    data = request.get_json() or {}
+    if session_id:
+        staging_mgr = get_staging_manager()
+        lock_owner = staging_mgr.get_lock_owner()
+        if lock_owner and lock_owner != session_id:
+            return jsonify({
+                'error': 'Another user has pending changes. Wait for them to commit or discard.',
+                'locked': True
+            }), 423
+
+    bm = get_backup_manager()
+    try:
+        # Get user identity from request body for the safety backup
+        user_name = data.get('userName', '')
+        user_email = data.get('userEmail', '')
+
+        result = bm.restore_backup(backup_name, user_name=user_name, user_email=user_email)
+        get_service().reload()
+
+        # Get user identity for audit log
+        identity = get_audit_user_identity()
+
+        # Create staging lock so other sessions see the pending restore changes
+        if session_id:
+            staging_mgr = get_staging_manager()
+            staging_mgr.save_staging({
+                'sessionId': session_id,
+                'userName': identity.get('userName', ''),
+                'userEmail': identity.get('userEmail', ''),
+                'status': StagingStatus.RESTORE_PENDING.value,
+                'restoreType': 'backup',
+                'restoreFrom': backup_name
+            })
+
+        # Write audit log entry
+        write_audit_log({
+            'timestamp': datetime.now().isoformat(),
+            'action': 'backup_restored',
+            'backup_name': backup_name,
+            **identity
+        })
+
+        return jsonify({'success': True, **result})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 404
+
+
+@bp.route('/api/backups/all', methods=['DELETE'])
+def api_delete_all_backups():
+    """Delete all backups."""
+    bm = get_backup_manager()
+    backups = bm.list_backups()
+    deleted_count = 0
+
+    for backup in backups:
+        if bm.delete_backup(backup['name']):
+            deleted_count += 1
+
+    if deleted_count > 0:
+        # Write audit log entry
+        write_audit_log({
+            'timestamp': datetime.now().isoformat(),
+            'action': 'backups_deleted',
+            'deleted_count': deleted_count,
+            **get_audit_user_identity()
+        })
+
+    return jsonify({'success': True, 'deleted_count': deleted_count})
+
+
+@bp.route('/api/backups/<backup_name>', methods=['DELETE'])
+def api_delete_backup(backup_name):
+    """Delete a backup."""
+    op_log = get_op_logger()
+    if op_log:
+        op_log.info('app', 'delete_backup', params={'backup_name': backup_name})
+    bm = get_backup_manager()
+    if bm.delete_backup(backup_name):
+        # Write audit log entry
+        write_audit_log({
+            'timestamp': datetime.now().isoformat(),
+            'action': 'backup_deleted',
+            'backup_name': backup_name,
+            **get_audit_user_identity()
+        })
+        return jsonify({'success': True})
+    return jsonify({'error': 'Backup not found'}), 404

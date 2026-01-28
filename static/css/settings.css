@@ -1,0 +1,407 @@
+/* Settings page - Dark theme */
+
+/* Override page container for dark theme */
+.page-container.settings-container {
+    background: var(--nbe-dark-bg-primary) !important;
+}
+
+.page-sidebar.settings-sidebar {
+    padding: 0 0 0 var(--nbe-space-md);
+    background: var(--nbe-dark-bg-primary) !important;
+    border-right: 1px solid var(--nbe-dark-border-primary) !important;
+}
+
+/* Panel header in sidebar - dark theme */
+.page-sidebar.settings-sidebar .panel-header {
+    background: var(--nbe-dark-bg-secondary) !important;
+    color: var(--nbe-dark-text-primary) !important;
+    border-bottom: 1px solid var(--nbe-dark-border-primary);
+}
+
+/* Sidebar sections — flat separators matching explorer */
+.page-sidebar.settings-sidebar .settings-section {
+    border: none;
+    border-radius: 0;
+    border-bottom: 1px solid var(--nbe-dark-border-secondary);
+    margin-bottom: 0;
+    background: transparent !important;
+}
+
+.page-sidebar.settings-sidebar .settings-section-title {
+    padding: var(--nbe-space-sm) 12px;
+    border-bottom: none;
+    font-size: var(--nbe-font-size-xs-plus);
+    color: var(--nbe-dark-text-secondary) !important;
+}
+
+.page-sidebar.settings-sidebar .settings-section-content {
+    padding: var(--nbe-space-sm) 12px var(--nbe-space-md);
+}
+
+.page-sidebar.settings-sidebar .settings-section-footer {
+    padding: var(--nbe-space-sm) 12px var(--nbe-space-md);
+    border-top: none;
+}
+
+.settings-main {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--nbe-space-xl);
+    background: var(--nbe-dark-bg-primary);
+}
+
+/* Settings page uses shared .nbe-tabs from tokens.css */
+/* Override tabs to use dark theme */
+.settings-main .nbe-tabs {
+    margin-bottom: var(--nbe-space-lg);
+    background: var(--nbe-dark-bg-secondary);
+    border: 1px solid var(--nbe-dark-border-primary);
+}
+
+.settings-main .nbe-tab {
+    background: transparent;
+    color: var(--nbe-dark-text-secondary);
+    border: none;
+}
+
+.settings-main .nbe-tab:hover {
+    background: var(--nbe-dark-bg-hover);
+    color: var(--nbe-dark-text-primary);
+}
+
+.settings-main .nbe-tab.active {
+    background: var(--nbe-dark-bg-tertiary);
+    color: var(--nbe-dark-text-primary);
+    border-bottom: 2px solid var(--nbe-dark-accent-primary);
+}
+
+.settings-section {
+    background: var(--nbe-dark-bg-secondary);
+    border: 1px solid var(--nbe-dark-border-primary);
+    border-radius: var(--nbe-radius-lg);
+    margin-bottom: var(--nbe-space-lg);
+}
+
+/* Settings section title - extends shared sidebar-section-title pattern with border */
+.settings-section-title {
+    font-size: var(--nbe-font-size-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--nbe-dark-text-muted);
+    padding: var(--nbe-space-md) var(--nbe-space-lg);
+    border-bottom: 1px solid var(--nbe-dark-border-secondary);
+    display: flex;
+    align-items: center;
+}
+
+.settings-section-content {
+    padding: var(--nbe-space-lg);
+}
+
+.settings-section-footer {
+    padding: var(--nbe-space-md) var(--nbe-space-lg);
+    border-top: 1px solid var(--nbe-dark-border-secondary);
+}
+
+.settings-field {
+    margin-bottom: 20px;
+}
+
+.settings-field:last-child {
+    margin-bottom: 0;
+}
+
+.settings-label {
+    display: block;
+    font-size: var(--nbe-font-size-base);
+    font-weight: 500;
+    color: var(--nbe-dark-text-primary);
+    margin-bottom: 6px;
+}
+
+.settings-field .form-input {
+    font-family: var(--nbe-font-mono);
+    background: var(--nbe-dark-bg-tertiary);
+    border: 1px solid var(--nbe-dark-border-primary);
+    color: var(--nbe-dark-text-primary);
+    padding: var(--nbe-space-sm) var(--nbe-space-md);
+    border-radius: var(--nbe-radius-md);
+}
+
+.settings-field .form-input:focus {
+    outline: none;
+    border-color: var(--nbe-dark-accent-primary);
+    background: var(--nbe-dark-bg-secondary);
+}
+
+.settings-field .form-input::placeholder {
+    color: var(--nbe-dark-text-muted);
+}
+
+/* Select elements */
+.settings-field select.form-input {
+    background: var(--nbe-dark-bg-tertiary);
+    color: var(--nbe-dark-text-primary);
+    cursor: pointer;
+}
+
+.settings-field select.form-input option {
+    background: var(--nbe-dark-bg-secondary);
+    color: var(--nbe-dark-text-primary);
+}
+
+/* Checkbox styling */
+.settings-field input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--nbe-dark-accent-primary);
+    cursor: pointer;
+}
+
+.settings-actions {
+    display: flex;
+    gap: var(--nbe-space-sm);
+    padding-top: var(--nbe-space-sm);
+}
+
+.settings-empty {
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-dark-text-muted) !important;
+}
+
+.settings-status-table {
+    width: 100%;
+    font-size: var(--nbe-font-size-sm);
+}
+
+.settings-status-table td {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--nbe-dark-border-secondary) !important;
+    color: var(--nbe-dark-text-primary);
+}
+
+.settings-status-table td:first-child {
+    color: var(--nbe-dark-text-secondary) !important;
+    width: 100px;
+}
+
+.settings-status-table td:last-child {
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-font-size-xs-plus);
+    color: var(--nbe-dark-text-primary) !important;
+    word-break: break-all;
+}
+
+.settings-status-table tr:last-child td {
+    border-bottom: none !important;
+}
+
+.settings-info-list {
+    margin: 0;
+    padding: 0 0 0 var(--nbe-space-lg);
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-dark-text-secondary) !important;
+    line-height: 1.6;
+}
+
+.settings-info-list li {
+    margin-bottom: var(--nbe-space-xs);
+    color: var(--nbe-dark-text-secondary);
+}
+
+.settings-info-list li:last-child {
+    margin-bottom: 0;
+}
+
+.settings-info-list code {
+    background: var(--nbe-dark-bg-tertiary) !important;
+    padding: 2px 6px;
+    border-radius: var(--nbe-radius-sm);
+    font-size: var(--nbe-font-size-xs);
+    color: var(--nbe-dark-accent-primary) !important;
+    border: 1px solid var(--nbe-dark-border-primary);
+}
+
+.settings-badge {
+    font-size: var(--nbe-font-size-xs);
+    font-weight: 500;
+    padding: 2px var(--nbe-space-sm);
+    border-radius: var(--nbe-radius-2xl);
+    margin-left: var(--nbe-space-sm);
+    text-transform: none;
+}
+
+.settings-badge-warning {
+    background: var(--nbe-dark-validation-warning-bg);
+    color: var(--nbe-warning);
+}
+
+.settings-badge-success {
+    background: var(--nbe-dark-validation-success-bg);
+    color: var(--nbe-success);
+}
+
+.settings-info-text {
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-dark-text-secondary);
+    margin-bottom: var(--nbe-space-lg);
+    line-height: 1.5;
+}
+
+/* Locked state - disable server settings tab but allow identity tab */
+body.editing-locked .settings-container #serverTab {
+    opacity: 0.4;
+    pointer-events: none;
+    filter: grayscale(50%);
+    user-select: none;
+}
+
+/* Server settings tab button shows locked indicator */
+body.editing-locked .settings-container .nbe-tab[data-tab="server"]::after {
+    content: '\f023'; /* lock icon */
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    margin-left: var(--nbe-space-sm);
+    font-size: var(--nbe-font-size-xs);
+    color: var(--nbe-warning);
+}
+
+/* Identity tab remains fully interactive when locked */
+body.editing-locked .settings-container #identityTab {
+    opacity: 1;
+    pointer-events: auto;
+    filter: none;
+    user-select: auto;
+}
+
+/* Utility classes */
+.required-marker {
+    color: var(--nbe-danger);
+}
+
+.form-hint {
+    display: block;
+    margin-top: var(--nbe-space-xs);
+    font-size: var(--nbe-font-size-xs);
+    color: var(--nbe-dark-text-muted);
+}
+
+.form-hint-inline {
+    display: inline;
+    margin-left: var(--nbe-space-sm);
+    color: var(--nbe-dark-text-secondary);
+}
+
+.form-select-narrow {
+    max-width: 200px;
+}
+
+.form-input-narrow {
+    max-width: 120px;
+}
+
+.form-input-readonly {
+    background: var(--nbe-dark-bg-tertiary) !important;
+    color: var(--nbe-dark-text-muted) !important;
+    cursor: not-allowed;
+}
+
+.form-input-group {
+    display: flex;
+    gap: var(--nbe-space-sm);
+    align-items: center;
+}
+
+.form-input-group .form-input {
+    flex: 1;
+}
+
+/* Browse modal - dark theme */
+.browse-content-scroll {
+    max-height: 400px;
+    overflow-y: auto;
+    background: var(--nbe-dark-bg-primary);
+    border: 1px solid var(--nbe-dark-border-primary);
+    border-radius: var(--nbe-radius-md);
+    padding: var(--nbe-space-sm);
+}
+
+/* Tab content */
+.nbe-tab-content {
+    display: none;
+}
+
+.nbe-tab-content.active {
+    display: block;
+}
+
+/* Override button styles for settings page */
+.settings-main .nbe-btn--secondary {
+    background: var(--nbe-dark-bg-tertiary);
+    border: 1px solid var(--nbe-dark-border-primary);
+    color: var(--nbe-dark-text-primary);
+}
+
+.settings-main .nbe-btn--secondary:hover {
+    background: var(--nbe-dark-bg-hover);
+    border-color: var(--nbe-dark-border-hover);
+}
+
+.settings-main .nbe-btn--primary {
+    background: var(--nbe-dark-accent-primary);
+    border: none;
+    color: var(--nbe-dark-bg-primary);
+}
+
+.settings-main .nbe-btn--primary:hover {
+    background: var(--nbe-dark-accent-primary-hover);
+}
+
+.page-sidebar.settings-sidebar .nbe-btn--secondary,
+.settings-sidebar .nbe-btn--secondary {
+    background: var(--nbe-dark-bg-tertiary) !important;
+    border: 1px solid var(--nbe-dark-border-primary) !important;
+    color: var(--nbe-dark-text-primary) !important;
+}
+
+.page-sidebar.settings-sidebar .nbe-btn--secondary:hover,
+.settings-sidebar .nbe-btn--secondary:hover {
+    background: var(--nbe-dark-bg-hover) !important;
+}
+
+/* Tab badge override for dark theme */
+.settings-main .nbe-tab-badge {
+    background: var(--nbe-dark-validation-warning-bg);
+    color: var(--nbe-warning);
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: var(--nbe-space-sm);
+}
+
+.settings-main .nbe-tab-badge--success {
+    background: var(--nbe-dark-validation-success-bg);
+    color: var(--nbe-success);
+}
+
+/* Scrollbar - dark theme */
+.settings-sidebar::-webkit-scrollbar,
+.settings-main::-webkit-scrollbar {
+    width: 8px;
+}
+
+.settings-sidebar::-webkit-scrollbar-track,
+.settings-main::-webkit-scrollbar-track {
+    background: var(--nbe-dark-bg-primary);
+}
+
+.settings-sidebar::-webkit-scrollbar-thumb,
+.settings-main::-webkit-scrollbar-thumb {
+    background: var(--nbe-dark-border-primary);
+    border-radius: var(--nbe-radius-md);
+}
+
+.settings-sidebar::-webkit-scrollbar-thumb:hover,
+.settings-main::-webkit-scrollbar-thumb:hover {
+    background: var(--nbe-dark-text-muted);
+}
