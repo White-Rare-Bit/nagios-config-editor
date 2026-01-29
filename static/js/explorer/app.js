@@ -210,6 +210,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Load any staged changes from server (shared across all users)
     await Explorer.loadStagedChanges();
 
+    // Restore tree folder expanded state from localStorage
+    restoreTreeFolderState();
+
     buildTree();
 
     // Restore selected object from session storage using stable key
@@ -1458,6 +1461,30 @@ function toggleFolder(folder) {
         } else {
             state.openTreeFolders.delete(filePath);
         }
+        // Save to localStorage for persistence across page refreshes
+        saveTreeFolderState();
+    }
+}
+
+function saveTreeFolderState() {
+    try {
+        localStorage.setItem('nagios_openTreeFolders', JSON.stringify([...state.openTreeFolders]));
+    } catch (e) {
+        console.warn('Failed to save tree folder state:', e);
+    }
+}
+
+function restoreTreeFolderState() {
+    try {
+        const saved = localStorage.getItem('nagios_openTreeFolders');
+        if (saved) {
+            const arr = JSON.parse(saved);
+            if (Array.isArray(arr)) {
+                state.openTreeFolders = new Set(arr);
+            }
+        }
+    } catch (e) {
+        console.warn('Failed to restore tree folder state:', e);
     }
 }
 

@@ -117,9 +117,19 @@ function collectAllSuggestions() {
     // 1. Issues/Errors from health check (grouped errors)
     if (state.groupedErrors) {
         for (const group of state.groupedErrors) {
-            const refCount = group.issues?.length || 0;
             // Skip ungrouped errors that can't be resolved by creating something
             if (!group.objectType) continue;
+
+            // Build detail showing actual referencing object names
+            let detail = '';
+            if (group.issues && group.issues.length > 0) {
+                const names = group.issues.map(i => i.object || 'unknown');
+                if (names.length <= 3) {
+                    detail = `Referenced by: ${names.join(', ')}`;
+                } else {
+                    detail = `Referenced by: ${names.slice(0, 2).join(', ')} +${names.length - 2} more`;
+                }
+            }
 
             suggestions.push({
                 id: `error-${group.objectType}-${group.missingName}`,
@@ -127,7 +137,7 @@ function collectAllSuggestions() {
                 type: 'missing',
                 label: `Missing ${group.objectType}`,
                 name: group.missingName || 'unknown',
-                detail: `${refCount} object${refCount !== 1 ? 's' : ''} reference this`,
+                detail,
                 actionLabel: 'Create',
                 actionType: 'create',
                 data: group
@@ -375,11 +385,11 @@ function renderSuggestionRow(s) {
             <span class="suggestion-text">
                 <span class="suggestion-type">${Explorer.escapeHtml(s.label)}:</span>
                 <span class="suggestion-name">${Explorer.escapeHtml(s.name)}</span>
-                ${s.detail ? `<span class="suggestion-detail"> — ${Explorer.escapeHtml(s.detail)}</span>` : ''}
             </span>
             <button class="suggestion-action ${actionClass}" onclick="Explorer.handleSuggestionAction('${s.id}', event)">
                 ${Explorer.escapeHtml(s.actionLabel)}
             </button>
+            ${s.detail ? `<div class="suggestion-detail">${Explorer.escapeHtml(s.detail)}</div>` : ''}
         </div>
     `;
 }
@@ -400,6 +410,12 @@ function handleSuggestionClick(id, event) {
     } else if (s.data?.objects && s.data.objects.length > 0) {
         // For duplicates, show the first one
         Explorer.navigateToObjectByIndex(s.data.objects[0].global_index);
+    } else if (s.data?.issues && s.data.issues.length > 0) {
+        // For missing objects, navigate to the first referencing object
+        const firstIssue = s.data.issues[0];
+        if (firstIssue.object && firstIssue.object_type) {
+            navigateToIssue(firstIssue.object, firstIssue.object_type);
+        }
     }
 }
 

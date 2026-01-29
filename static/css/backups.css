@@ -170,7 +170,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--nbe-space-lg) var(--nbe-space-xl);
+    height: 36px;
+    padding: 0 var(--nbe-space-lg);
     background: var(--nbe-dark-bg-secondary) !important;
     border-bottom: 1px solid var(--nbe-dark-border-primary) !important;
 }

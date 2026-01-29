@@ -36,7 +36,10 @@
 
 .dep-container .sidebar-section-title,
 .dep-sidebar .sidebar-section-title {
-    color: var(--nbe-dark-text-muted) !important;
+    padding: var(--nbe-space-sm) 12px;
+    border-bottom: none;
+    font-size: var(--nbe-font-size-xs-plus);
+    color: var(--nbe-dark-text-secondary) !important;
     background: transparent !important;
 }
 
@@ -101,11 +104,9 @@
 /* Section title */
 .dep-container .dep-section-title,
 .dep-section-title {
-    font-size: var(--nbe-font-size-xs);
-    font-weight: 600;
-    text-transform: uppercase;
-    color: var(--nbe-dark-text-muted) !important;
-    padding: var(--nbe-space-md) var(--nbe-space-lg) var(--nbe-space-sm);
+    padding: var(--nbe-space-sm) 12px;
+    font-size: var(--nbe-font-size-xs-plus);
+    color: var(--nbe-dark-text-secondary) !important;
     display: flex;
     justify-content: space-between;
     align-items: center;
