@@ -1258,6 +1258,10 @@ function getNameFieldForObject(obj) {
     if (typeField && attrs[typeField]) {
         return typeField;
     }
+    // For escalations/dependencies, fall back to hostgroup_name if host_name not present
+    if ((obj.object_type === 'hostescalation' || obj.object_type === 'hostdependency') && attrs.hostgroup_name) {
+        return 'hostgroup_name';
+    }
     if (attrs.name) {
         return 'name';
     }

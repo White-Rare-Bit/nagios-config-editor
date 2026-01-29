@@ -131,12 +131,44 @@ class NagiosObject:
     line_number: int = 0
 
     def get_name(self) -> Optional[str]:
-        """Get the primary name/identifier for this object."""
+        """Get the primary name/identifier for this object.
+
+        For escalations and dependencies, includes additional attributes to ensure
+        uniqueness when multiple objects target the same service/host.
+        """
         name_field = NAME_FIELDS.get(self.object_type)
+        base_name = None
         if name_field:
-            value = self.attributes.get(name_field)
-            if value:
-                return value
+            base_name = self.attributes.get(name_field)
+
+        # For host escalations/dependencies, fall back to hostgroup_name
+        if self.object_type in ('hostescalation', 'hostdependency'):
+            if not base_name:
+                base_name = self.attributes.get('hostgroup_name')
+            # For hostescalation, append first_notification to ensure uniqueness
+            if self.object_type == 'hostescalation' and base_name:
+                first = self.attributes.get('first_notification', '')
+                if first:
+                    return f"{base_name}:esc{first}"
+            return base_name
+
+        # For service dependencies, append dependent_service_description
+        if self.object_type == 'servicedependency' and base_name:
+            dep_desc = self.attributes.get('dependent_service_description', '')
+            if dep_desc:
+                return f"{base_name}→{dep_desc}"
+            return base_name
+
+        # For service escalations, append first_notification
+        if self.object_type == 'serviceescalation' and base_name:
+            first = self.attributes.get('first_notification', '')
+            if first:
+                return f"{base_name}:esc{first}"
+            return base_name
+
+        if base_name:
+            return base_name
+
         # Fallback: try 'name' field (used by templates) and other common fields
         for field_name in ['name', 'host_name', 'service_description', 'contact_name']:
             if field_name in self.attributes and self.attributes[field_name]:
@@ -148,6 +180,7 @@ class NagiosObject:
 
         For services and service-related objects, includes context (host/hostgroup)
         to distinguish services with the same service_description on different targets.
+        For escalations and dependencies, shows the target host/hostgroup.
         """
         name = self.get_name()
 
@@ -161,12 +194,42 @@ class NagiosObject:
                 hosts = [h.strip() for h in host_raw.split(',') if h.strip() and not h.strip().startswith('!')]
                 hostgroup = self.attributes.get('hostgroup_name', '')
 
+                # Build base name with context
                 if hosts:
-                    # Use actual hosts (not exclusions)
-                    return f"{desc} on {','.join(hosts)}"
+                    base = f"{desc} on {','.join(hosts)}"
                 elif hostgroup:
-                    return f"{desc} on {hostgroup}"
-                return desc  # No context available
+                    base = f"{desc} on {hostgroup}"
+                else:
+                    base = desc
+
+                # Add distinguishing suffix for dependencies and escalations
+                if self.object_type == 'servicedependency':
+                    dep_desc = self.attributes.get('dependent_service_description', '')
+                    if dep_desc:
+                        return f"{base} → {dep_desc}"
+                elif self.object_type == 'serviceescalation':
+                    first = self.attributes.get('first_notification', '')
+                    last = self.attributes.get('last_notification', '0')
+                    if first:
+                        suffix = f"{first}+" if last == '0' else f"{first}-{last}"
+                        return f"{base} (esc {suffix})"
+
+                return base
+
+        # For host escalations and dependencies, show target (host or hostgroup)
+        if self.object_type in ('hostescalation', 'hostdependency'):
+            host = self.attributes.get('host_name', '')
+            hostgroup = self.attributes.get('hostgroup_name', '')
+            base = host if host else f"[{hostgroup}]" if hostgroup else None
+            if base:
+                # Add escalation level for hostescalation
+                if self.object_type == 'hostescalation':
+                    first = self.attributes.get('first_notification', '')
+                    last = self.attributes.get('last_notification', '0')
+                    if first:
+                        suffix = f"{first}+" if last == '0' else f"{first}-{last}"
+                        return f"{base} (esc {suffix})"
+                return base
 
         if name:
             return name

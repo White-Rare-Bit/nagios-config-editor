@@ -93,7 +93,7 @@ console.log('dependencies.js loaded');
             description: 'Host parent-child topology and service bindings'
         },
         contacts: {
-            categories: ['contacts', 'templates'],  // Include templates to find inherited contacts
+            categories: ['contacts', 'templates', 'groups'],  // Include groups for hostgroup→host member edges
             layout: 'hierarchicalLR',  // Dagre LR - notification flows left→right
             description: 'Notification routing to contacts',
             includeMembers: true,  // Also follow contactgroup → contact via members edge
@@ -1766,7 +1766,11 @@ console.log('dependencies.js loaded');
     // Cytoscape.js Rendering
     // ========================================
 
-    function getCytoscapeStyle() {
+    function getCytoscapeStyle(layoutType) {
+        // Use straight edges for hierarchical layouts, bezier for others
+        const isHierarchical = layoutType === 'hierarchical' || layoutType === 'hierarchicalLR';
+        const edgeCurveStyle = isHierarchical ? 'straight' : 'bezier';
+
         return [
             // Node styles
             {
@@ -1816,7 +1820,7 @@ console.log('dependencies.js loaded');
                     'target-arrow-color': 'data(color)',
                     'target-arrow-shape': 'triangle',
                     'arrow-scale': 0.8,
-                    'curve-style': 'bezier',
+                    'curve-style': edgeCurveStyle,
                     'label': 'data(displayLabel)',
                     'font-size': 9,
                     'color': '#888',
@@ -1826,7 +1830,7 @@ console.log('dependencies.js loaded');
                     'text-rotation': 'autorotate'
                 }
             },
-            // Bundled edges - route through cluster centroid
+            // Bundled edges - use straight for hierarchical, bezier with control points otherwise
             {
                 selector: 'edge[?hasBundling]',
                 style: {
@@ -1835,11 +1839,11 @@ console.log('dependencies.js loaded');
                     'target-arrow-color': 'data(color)',
                     'target-arrow-shape': 'triangle',
                     'arrow-scale': 0.8,
-                    'curve-style': 'unbundled-bezier',
-                    'control-point-distances': function(ele) {
+                    'curve-style': isHierarchical ? 'straight' : 'unbundled-bezier',
+                    'control-point-distances': isHierarchical ? undefined : function(ele) {
                         return [ele.data('controlDistance')];
                     },
-                    'control-point-weights': [0.5],
+                    'control-point-weights': isHierarchical ? undefined : [0.5],
                     'label': 'data(displayLabel)',
                     'font-size': 9,
                     'color': '#888',
@@ -2022,7 +2026,7 @@ console.log('dependencies.js loaded');
         cy = cytoscape({
             container: container,
             elements: [...cyNodes, ...cyEdges],
-            style: getCytoscapeStyle(),
+            style: getCytoscapeStyle(layoutType),
             layout: getLayoutConfig(layoutType, hasOrganizedLayout),
             // Interaction options
             boxSelectionEnabled: true,
