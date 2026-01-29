@@ -610,6 +610,77 @@ var(--nbe-shadow-sm)         /* Elevation */
 
 Use tokens instead of hard-coded values. See tokens.css for complete reference.
 
+### Typography Token System
+
+The typography system uses semantic tokens that bundle size, weight, and line-height properties. This provides single-source-of-truth for typography decisions and reduces cognitive load.
+
+**Bundled Fonts**: Inter (UI) and JetBrains Mono (code) are bundled in `static/vendor/fonts/` for cross-platform consistency on Ubuntu 22.04+/RHEL 8+ servers.
+
+**Font Stacks**:
+- `--nbe-font-sans`: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif
+- `--nbe-font-mono`: 'JetBrains Mono', 'SF Mono', 'Consolas', 'Ubuntu Mono', monospace
+
+#### Semantic Typography Tokens
+
+Use semantic tokens for standard elements. Individual property tokens (`--nbe-font-size-*`) remain available for edge cases.
+
+| Token Group | Size | Weight | Line Height | Use Case |
+|-------------|------|--------|-------------|----------|
+| `--nbe-typography-h1-*` | 20px | 600 | 1.2 | Page titles |
+| `--nbe-typography-h2-*` | 16px | 600 | 1.2 | Section headers |
+| `--nbe-typography-h3-*` | 14px | 600 | 1.5 | Subsection headers |
+| `--nbe-typography-label-*` | 12px | 600 | 1.5 | Form labels |
+| `--nbe-typography-body-*` | 13px | 400 | 1.5 | Primary text |
+| `--nbe-typography-secondary-*` | 12px | 400 | 1.5 | Secondary text, metadata |
+| `--nbe-typography-muted-*` | 10px | 400 | 1.5 | Hints, timestamps |
+| `--nbe-typography-code-*` | 12px | 400 | 1.6 | Code blocks (mono font) |
+| `--nbe-typography-badge-*` | 10px | 600 | 1.2 | Badges, tags |
+| `--nbe-typography-button-*` | 13px | 500 | 1 | Buttons |
+| `--nbe-typography-button-sm-*` | 12px | 500 | 1 | Small buttons |
+| `--nbe-typography-input-*` | 13px | 400 | 1.5 | Form inputs |
+
+**Pattern**: Each semantic group has three properties: `-size`, `-weight`, `-line-height`
+
+**Usage**:
+```css
+.page-title {
+    font-size: var(--nbe-typography-h1-size);
+    font-weight: var(--nbe-typography-h1-weight);
+    line-height: var(--nbe-typography-h1-line-height);
+}
+```
+
+#### Line Height Scale
+
+| Token | Value | Use Case |
+|-------|-------|----------|
+| `--nbe-line-height-tight` | 1.2 | Headings, dense text |
+| `--nbe-line-height-normal` | 1.5 | Body text, default |
+| `--nbe-line-height-relaxed` | 1.6 | Code blocks, readable prose |
+| `--nbe-line-height-loose` | 1.8 | Very readable prose (future use) |
+
+#### Letter Spacing Scale
+
+| Token | Value | Use Case |
+|-------|-------|----------|
+| `--nbe-letter-spacing-tight` | -0.02em | Headings, tight spacing |
+| `--nbe-letter-spacing-normal` | 0 | Default spacing |
+| `--nbe-letter-spacing-wide` | 0.02em | All-caps, tracking |
+
+#### Typography Usage Guidelines
+
+**When to use semantic tokens**:
+- Standard UI elements (headings, body text, labels, buttons)
+- Consistent typography patterns across pages
+- When size + weight + line-height are all needed
+
+**When to use individual size tokens**:
+- Icons (`--nbe-font-size-icon-*`)
+- Special decorative elements outside semantic scale
+- One-off adjustments where semantic token doesn't fit
+
+**Rationale**: Semantic tokens reduce maintenance burden. Changing all headings = update one token set, not hunt through 16 files.
+
 ## Staging System Architecture
 
 The staging system implements true staging where NO changes are written to disk until user clicks "Apply".

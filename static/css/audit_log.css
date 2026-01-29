@@ -87,7 +87,7 @@
     top: 50%;
     transform: translateY(-50%);
     color: var(--nbe-dark-text-muted);
-    font-size: 14px;
+    font-size: var(--nbe-typography-h3-size);
     pointer-events: none;
     z-index: 1;
 }
@@ -193,7 +193,7 @@
     content: '✓';
     display: block;
     color: var(--nbe-dark-bg-primary);
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     font-weight: bold;
     text-align: center;
     line-height: 10px;
@@ -314,7 +314,7 @@
     content: '\f078';
     font-family: 'Font Awesome 6 Free';
     font-weight: 900;
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     margin-left: auto;
     transition: transform 0.2s;
 }

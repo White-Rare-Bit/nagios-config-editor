@@ -373,7 +373,7 @@ body.editing-locked .settings-container #identityTab {
 .settings-main .nbe-tab-badge {
     background: var(--nbe-dark-validation-warning-bg);
     color: var(--nbe-warning);
-    font-size: 10px;
+    font-size: var(--nbe-font-size-xs);
     padding: 2px 6px;
     border-radius: 10px;
     margin-left: var(--nbe-space-sm);

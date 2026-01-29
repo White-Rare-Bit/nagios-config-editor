@@ -123,9 +123,85 @@ The following tokens are theme-agnostic and shared across light/dark themes:
 
 **Pattern:** All light tokens (`--nbe-bg-*`, `--nbe-text-*`, `--nbe-border-*`) converted to `--nbe-dark-*` equivalents.
 
-### Key Invariants
+## Typography Token System
 
-- All dark theme colors MUST use `--nbe-dark-*` tokens (never hard-coded hex values)
-- WCAG AA contrast ratios maintained (4.5:1 for text, 3:1 for UI components)
-- Separate namespace from light theme (`--nbe-*`) to preserve other pages
-- VS Code-inspired color palette for familiarity
+Semantic typography tokens provide consistent type scaling and hierarchy across the application. All font-size values MUST use tokens (no hardcoded px or rem values).
+
+### Semantic Typography Token Groups
+
+Composite tokens combining size, weight, and line-height for common text roles:
+
+| Token Group | Size | Weight | Line Height | Use Case |
+|-------------|------|--------|-------------|----------|
+| `--nbe-typography-h1-*` | 20px | 600 | 1.2 (tight) | Page titles, dialog headings |
+| `--nbe-typography-h2-*` | 16px | 600 | 1.2 (tight) | Section headings |
+| `--nbe-typography-h3-*` | 14px | 600 | 1.5 (normal) | Subsection headings |
+| `--nbe-typography-label-*` | 12px | 600 | 1.5 (normal) | Form labels, tree labels |
+| `--nbe-typography-body-*` | 13px | 400 | 1.5 (normal) | Body text, paragraphs |
+| `--nbe-typography-secondary-*` | 12px | 400 | 1.5 (normal) | Secondary text, captions |
+| `--nbe-typography-muted-*` | 10px | 400 | 1.5 (normal) | Muted text, placeholders |
+| `--nbe-typography-code-*` | 12px | 400 | 1.6 (relaxed) | Code blocks, monospace |
+| `--nbe-typography-badge-*` | 10px | 600 | 1.2 (tight) | Badges, status indicators |
+| `--nbe-typography-button-*` | 13px | 500 | 1 | Standard buttons |
+| `--nbe-typography-button-sm-*` | 12px | 500 | 1 | Small buttons |
+| `--nbe-typography-input-*` | 13px | 400 | 1.5 (normal) | Form inputs, textareas |
+
+**Usage pattern:**
+```css
+.dialog-title {
+    font-size: var(--nbe-typography-h1-size);
+    font-weight: var(--nbe-typography-h1-weight);
+    line-height: var(--nbe-typography-h1-line-height);
+}
+```
+
+### Font Size Scale
+
+Individual size tokens for precise control (use semantic tokens above when possible):
+
+| Token | Value | Use Case |
+|-------|-------|----------|
+| `--nbe-font-size-3xs` | 8px | Font Awesome icons |
+| `--nbe-font-size-2xs` | 9px | Micro text, compact badges |
+| `--nbe-font-size-xs` | 10px | Muted text (use `--nbe-typography-muted-*` semantically) |
+| `--nbe-font-size-xs-plus` | 11px | Intermediate size |
+| `--nbe-font-size-sm` | 12px | Small text (use `--nbe-typography-label-*` semantically) |
+| `--nbe-font-size-base` | 13px | Body text (use `--nbe-typography-body-*` semantically) |
+| `--nbe-font-size-md` | 14px | Subsection headings (use `--nbe-typography-h3-*` semantically) |
+| `--nbe-font-size-lg` | 16px | Section headings (use `--nbe-typography-h2-*` semantically) |
+| `--nbe-font-size-xl` | 18px | Large text |
+| `--nbe-font-size-2xl` | 20px | Page titles (use `--nbe-typography-h1-*` semantically) |
+
+**Icon sizes** (decorative elements, empty states):
+- `--nbe-font-size-icon-sm` (24px)
+- `--nbe-font-size-icon-md` (32px)
+- `--nbe-font-size-icon-lg` (48px)
+- `--nbe-font-size-icon-xl` (64px)
+
+### Line Height Scale
+
+| Token | Value | Use Case |
+|-------|-------|----------|
+| `--nbe-line-height-tight` | 1.2 | Headings, compact text |
+| `--nbe-line-height-normal` | 1.5 | Body text, labels |
+| `--nbe-line-height-relaxed` | 1.6 | Code blocks |
+| `--nbe-line-height-loose` | 1.8 | Long-form content |
+
+### Letter Spacing Scale
+
+| Token | Value | Use Case |
+|-------|-------|----------|
+| `--nbe-letter-spacing-tight` | -0.02em | Headings |
+| `--nbe-letter-spacing-normal` | 0 | Body text |
+| `--nbe-letter-spacing-wide` | 0.02em | Uppercase labels |
+
+### Bundled Fonts
+
+Application uses bundled web fonts for cross-platform consistency:
+
+- **UI Font**: Inter (static/vendor/fonts/Inter-*.woff2) - system fallback to -apple-system, BlinkMacSystemFont, "Segoe UI", etc.
+- **Code Font**: JetBrains Mono (static/vendor/fonts/JetBrainsMono-*.woff2) - system fallback to "SFMono-Regular", Consolas, "Liberation Mono", etc.
+
+Font stack tokens:
+- `--nbe-font-sans`: Inter with system fallbacks
+- `--nbe-font-mono`: JetBrains Mono with system fallbacks

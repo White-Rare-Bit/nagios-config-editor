@@ -57,13 +57,13 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     color: var(--nbe-white-alpha-90);
 }
 
 .commit-stat-count {
     font-weight: 600;
-    font-size: 16px;
+    font-size: var(--nbe-typography-h2-size);
 }
 
 .commit-stat.creates .commit-stat-count { color: var(--nbe-success-border); }
@@ -75,7 +75,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     color: var(--nbe-white-alpha-80);
 }
 
@@ -157,7 +157,7 @@
     color: var(--color-edit);
     padding: 3px 8px;
     border-radius: var(--nbe-radius-sm);
-    font-size: 9px;
+    font-size: var(--nbe-font-size-2xs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.3px;
@@ -199,7 +199,7 @@
     background: var(--nbe-code-bg);
     color: var(--nbe-code-text);
     font-family: var(--nbe-font-mono);
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     line-height: 1.5;
     overflow-x: auto;
 }
@@ -240,14 +240,14 @@
     text-align: center;
     background: var(--nbe-dark-bg);
     padding: 4px 16px;
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
 }
 
 .diff-file-header {
     padding: 8px 16px;
     background: var(--nbe-code-bg);
     color: var(--nbe-dark-text);
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     font-weight: 600;
     border-bottom: 1px solid var(--nbe-dark-border);
     border-top: 1px solid var(--nbe-dark-border);
@@ -269,7 +269,7 @@
 }
 
 .commit-footer-left {
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     color: var(--nbe-dark-text-secondary);
 }
 
@@ -403,7 +403,7 @@
     top: 50%;
     transform: translateY(-50%);
     color: var(--nbe-dark-text-muted);
-    font-size: 14px;
+    font-size: var(--nbe-typography-h3-size);
     pointer-events: none;
     z-index: 1;
 }
@@ -523,7 +523,7 @@
 }
 
 .toolbar-label {
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     font-weight: 600;
     color: var(--nbe-dark-text-secondary);
     text-transform: uppercase;
@@ -544,7 +544,7 @@
 }
 
 .batch-count {
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     font-weight: 600;
     color: var(--nbe-primary);
     white-space: nowrap;
@@ -552,7 +552,7 @@
 
 .batch-btn {
     padding: 2px 8px;
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     font-weight: 500;
     border: 1px solid var(--nbe-dark-input-border);
     background: var(--nbe-dark-bg-primary);
@@ -582,7 +582,7 @@
 
 .batch-clear-btn {
     padding: 2px 6px;
-    font-size: 14px;
+    font-size: var(--nbe-typography-h3-size);
     line-height: 1;
     border: none;
     background: none;
@@ -611,12 +611,11 @@
     font-size: var(--nbe-font-size-base);
 }
 
-/* tree-filters now uses toolbar-row class */
 .tree-filter-option {
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     color: var(--nbe-dark-text-primary);
     cursor: pointer;
 }
@@ -645,7 +644,7 @@
 }
 
 .filter-count {
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     font-weight: 600;
     color: var(--nbe-primary);
     margin-left: 2px;
@@ -690,13 +689,13 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     color: var(--nbe-dark-text-muted);
     white-space: nowrap;
 }
 
 .shortcut-item i {
-    font-size: 9px;
+    font-size: var(--nbe-font-size-2xs);
     opacity: 0.7;
 }
 
@@ -748,7 +747,7 @@
 
 .tree-folder-count {
     color: var(--nbe-white-alpha-70);
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     min-width: 24px;
     text-align: right;
 }
@@ -760,7 +759,7 @@
     border-radius: var(--nbe-radius-sm);
     background: var(--nbe-white-alpha-15);
     color: var(--nbe-text-inverse);
-    font-size: 14px;
+    font-size: var(--nbe-typography-h3-size);
     font-weight: 500;
     cursor: pointer;
     display: inline-flex;
@@ -981,7 +980,7 @@
     background: var(--color-delete);
     color: var(--nbe-text-inverse);
     border-radius: 0;
-    font-size: 14px;
+    font-size: var(--nbe-typography-h3-size);
     font-weight: 700;
     margin-right: 8px;
     flex-shrink: 0;
@@ -991,7 +990,7 @@
 .tree-item-undo-btn {
     margin-left: auto;
     padding: 2px 8px;
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     background: var(--nbe-dark-btn-bg);
     border: 1px solid var(--color-delete);
     border-radius: var(--nbe-radius-sm);
@@ -1013,7 +1012,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     margin-right: 6px;
     flex-shrink: 0;
     pointer-events: none;
@@ -1023,7 +1022,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     margin-right: 6px;
     flex-shrink: 0;
     pointer-events: none;
@@ -1064,7 +1063,7 @@
     border-radius: var(--nbe-radius-sm);
     background: var(--nbe-dark-btn-danger-bg);
     color: var(--nbe-text-inverse);
-    font-size: 18px;
+    font-size: var(--nbe-font-size-xl);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -1098,7 +1097,7 @@
 
 .center-header .breadcrumb-separator {
     color: var(--nbe-white-alpha-50);
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
 }
 
 .center-header .breadcrumb-name {
@@ -1115,7 +1114,6 @@
 }
 
 .center-header .card-file {
-    /* Legacy - now using breadcrumb-file */
     color: var(--nbe-white-alpha-70);
     font-size: var(--nbe-font-size-sm);
     white-space: nowrap;
@@ -1138,7 +1136,7 @@
     border: 1px solid var(--nbe-white-alpha-30);
     border-radius: var(--nbe-radius-sm);
     color: var(--nbe-text-inverse);
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     cursor: pointer;
     white-space: nowrap;
 }
@@ -1160,13 +1158,13 @@
     background: var(--nbe-dark-validation-warning-bg);
     border-bottom: 1px solid var(--nbe-dark-border-primary);
     color: var(--nbe-dark-accent-warning);
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     font-family: var(--nbe-font-mono);
 }
 
 .template-scope-warning .template-scope-icon {
     color: var(--nbe-dark-accent-warning);
-    font-size: 14px;
+    font-size: var(--nbe-typography-h3-size);
 }
 
 .template-scope-warning .template-scope-text {
@@ -1260,7 +1258,7 @@
 
 .tab-header-title {
     flex: 1;
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     font-weight: 600;
     color: var(--nbe-dark-text-secondary);
     text-transform: uppercase;
@@ -1298,7 +1296,7 @@
     text-align: center;
     color: var(--nbe-dark-text-muted);
     padding: 40px 20px;
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
 }
 
 .filter-chip {
@@ -1332,14 +1330,14 @@
 
 .filter-label {
     color: var(--nbe-dark-text-secondary);
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     font-weight: 600;
     text-transform: uppercase;
 }
 
 .validation-output {
     font-family: var(--nbe-font-mono);
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     white-space: pre-wrap;
     background: var(--nbe-code-bg);
     color: var(--nbe-code-text);
@@ -1352,7 +1350,7 @@
 
 .validation-status {
     padding: 10px 12px;
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.3px;
@@ -1391,11 +1389,11 @@
 
 .suggestion-name {
     font-weight: 500;
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
 }
 
 .suggestion-type {
-    font-size: 9px;
+    font-size: var(--nbe-font-size-2xs);
     padding: 2px 6px;
     background: var(--nbe-dark-bg-elevated) !important;
     border-radius: 0;
@@ -1413,7 +1411,7 @@
 .suggestion-type.ungrouped { background: var(--nbe-dark-suggestion-ungrouped-bg) !important; color: var(--nbe-dark-suggestion-ungrouped-text) !important; }
 
 .suggestion-meta {
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     color: var(--nbe-dark-text-muted);
     margin-bottom: 4px;
 }
@@ -1425,7 +1423,7 @@
 }
 
 .suggestion-member {
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     padding: 2px 6px;
     background: var(--nbe-dark-bg-hover);
     border: 1px solid var(--nbe-dark-border-primary);
@@ -1435,7 +1433,7 @@
 }
 
 .suggestion-confidence {
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     padding: 2px 6px;
     border-radius: 0;
     font-weight: 600;
@@ -1471,7 +1469,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 14px;
+    font-size: var(--nbe-typography-h3-size);
     font-weight: 600;
     color: var(--nbe-dark-text-primary);
     white-space: nowrap;
@@ -1485,7 +1483,7 @@
 }
 
 .workspace-root-meta {
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     color: var(--nbe-dark-text-secondary);
     padding-left: 24px;
 }
@@ -1562,7 +1560,7 @@
     border: none;
     border-bottom: 1px solid var(--nbe-dark-border-primary);
     padding: 2px 0;
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     font-weight: 500;
     color: var(--nbe-dark-text-primary);
     background: transparent;
@@ -1575,7 +1573,7 @@
 }
 
 .tree-item-inline-edit .tree-inline-suffix {
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     font-weight: 500;
     color: var(--nbe-dark-text-secondary);
     flex-shrink: 0;
@@ -1700,7 +1698,7 @@
 .tree-label {
     flex: 1;
     min-width: 0;
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     font-weight: 500;
     color: var(--nbe-dark-text-primary);
     white-space: nowrap;
@@ -1727,7 +1725,7 @@
     min-width: 28px;
     padding: 2px 6px;
     margin-left: 8px;
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     font-weight: 600;
     color: var(--tree-text-secondary);
     background: var(--nbe-dark-bg-secondary);
@@ -1883,7 +1881,7 @@
     flex-shrink: 0;
     padding: 2px 6px;
     margin-right: 8px;
-    font-size: 9px;
+    font-size: var(--nbe-font-size-2xs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.3px;
@@ -1909,7 +1907,7 @@
 .tree-object-name {
     flex: 1;
     min-width: 0;
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     color: var(--tree-text-primary);
     white-space: nowrap;
     overflow: hidden;
@@ -1973,7 +1971,7 @@
 .workspace-empty-file {
     padding: 12px;
     padding-left: calc(12px + var(--tree-indent-width) * 2);
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     color: var(--tree-text-secondary);
     font-style: italic;
 }
@@ -1988,7 +1986,7 @@
     background: var(--nbe-dark-bg-primary);
     border-left: 4px solid var(--nbe-danger);
     border-bottom: 1px solid var(--nbe-dark-border-primary);
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
 }
 
 .validation-summary-icon {
@@ -1999,7 +1997,7 @@
     height: 20px;
     background: var(--nbe-danger);
     color: var(--nbe-text-inverse);
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     font-weight: 700;
     border-radius: 0;
     flex-shrink: 0;
@@ -2020,7 +2018,7 @@
     border: 1px solid var(--nbe-danger);
     color: var(--nbe-danger);
     border-radius: 0;
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     font-weight: 500;
     cursor: pointer;
 }
@@ -2053,7 +2051,7 @@
     border: 1px solid var(--nbe-dark-border-primary);
     border-radius: var(--nbe-radius-sm);
     color: var(--nbe-dark-text-secondary);
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     font-weight: 500;
     cursor: pointer;
     transition: all 0.15s;
@@ -2074,7 +2072,7 @@
     background: var(--nbe-dark-bg-tertiary);
     padding: 1px 6px;
     border-radius: var(--nbe-radius-sm);
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     font-weight: 600;
 }
 
@@ -2157,7 +2155,7 @@
 .suggestion-text {
     flex: 1;
     min-width: 0;
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     color: var(--nbe-dark-text-primary);
     white-space: nowrap;
     overflow: hidden;
@@ -2176,7 +2174,7 @@
 
 .suggestion-text .suggestion-detail {
     color: var(--nbe-dark-text-muted);
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
 }
 
 /* Action button */
@@ -2186,7 +2184,7 @@
     border: 1px solid var(--nbe-dark-border-primary);
     border-radius: var(--nbe-radius-sm);
     color: var(--nbe-dark-text-primary);
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     font-weight: 500;
     cursor: pointer;
     white-space: nowrap;
@@ -2230,7 +2228,7 @@
 }
 
 .batch-create-type-label {
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     color: var(--nbe-dark-text-primary);
 }
 
@@ -2239,7 +2237,7 @@
     padding: 10px 12px 10px 32px;
     background: var(--nbe-dark-bg-secondary);
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     color: var(--nbe-dark-text-secondary);
     display: none;
 }
@@ -2259,7 +2257,7 @@
     background: var(--nbe-dark-bg-tertiary);
     padding: 2px 8px;
     border-radius: var(--nbe-radius-sm);
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     color: var(--nbe-dark-text-primary);
 }
 
@@ -2267,7 +2265,7 @@
 .suggestion-divider {
     padding: 6px 12px;
     background: var(--nbe-dark-bg-tertiary);
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     font-weight: 600;
     color: var(--nbe-dark-text-muted);
     text-transform: uppercase;
@@ -2293,7 +2291,7 @@
     border: 1px solid var(--nbe-dark-border-primary);
     border-radius: var(--nbe-radius-sm);
     color: var(--nbe-dark-text-primary);
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     font-weight: 500;
     cursor: pointer;
     transition: all 0.15s;
@@ -2315,20 +2313,20 @@
 }
 
 .suggestions-empty-icon {
-    font-size: 32px;
+    font-size: var(--nbe-font-size-icon-sm);
     color: var(--nbe-success);
     margin-bottom: 12px;
 }
 
 .suggestions-empty-title {
-    font-size: 14px;
+    font-size: var(--nbe-typography-h3-size);
     font-weight: 600;
     color: var(--nbe-dark-text-primary);
     margin-bottom: 4px;
 }
 
 .suggestions-empty-desc {
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     color: var(--nbe-dark-text-secondary);
 }
 
@@ -2367,7 +2365,7 @@
 }
 
 .suggestion-section-header .section-icon {
-    font-size: 16px;
+    font-size: var(--nbe-typography-h2-size);
     flex-shrink: 0;
     min-width: 20px;
     width: 20px;
@@ -2380,7 +2378,7 @@
 
 .suggestion-section-header .section-title {
     flex: 1;
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     font-weight: 600;
     margin: 0;
     padding: 0;
@@ -2393,7 +2391,7 @@
 
 .suggestion-section-header .section-badge {
     padding: 2px 8px;
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     font-weight: 600;
     border-radius: 0;
     min-width: 20px;
@@ -2416,7 +2414,7 @@
 }
 
 .suggestion-section-header .section-toggle {
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     color: var(--nbe-dark-text-muted);
     transition: transform 0.2s;
 }
@@ -2442,12 +2440,12 @@
     padding: 10px 0;
     margin-bottom: 8px;
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
 }
 
 .section-filters .filter-label {
     color: var(--nbe-dark-text-secondary);
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     font-weight: 600;
     text-transform: uppercase;
 }
@@ -2515,7 +2513,7 @@
 }
 
 .template-suggestion-icon {
-    font-size: 18px;
+    font-size: var(--nbe-font-size-xl);
     flex-shrink: 0;
     width: 24px;
     text-align: center;
@@ -2535,12 +2533,12 @@
 
 .template-suggestion-name {
     font-weight: 600;
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     color: var(--nbe-dark-text-primary);
 }
 
 .template-suggestion-type {
-    font-size: 9px;
+    font-size: var(--nbe-font-size-2xs);
     padding: 2px 6px;
     background: var(--nbe-dark-bg-elevated) !important;
     border-radius: 0;
@@ -2551,7 +2549,7 @@
 }
 
 .template-suggestion-meta {
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     color: var(--nbe-dark-text-secondary);
     margin-bottom: 6px;
 }
@@ -2563,7 +2561,7 @@
 }
 
 .template-attr {
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     padding: 2px 6px;
     background: var(--nbe-dark-bg-secondary);
     border-radius: 0;
@@ -2574,7 +2572,7 @@
 
 .template-suggestion-objects {
     margin-top: 6px;
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     color: var(--nbe-dark-text-secondary);
 }
 
@@ -2585,7 +2583,7 @@
     border-radius: var(--nbe-radius-sm);
     margin: 2px;
     border: 1px solid var(--nbe-dark-border-primary);
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     color: var(--nbe-dark-text-primary);
 }
 
@@ -2595,7 +2593,7 @@
     gap: 12px;
     padding: 6px 0;
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
 }
 
 .attr-display-row:last-child {
@@ -2606,7 +2604,7 @@
     flex: 0 0 160px;
     color: var(--nbe-dark-text-secondary);
     font-family: var(--nbe-font-mono);
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     word-break: break-all;
 }
 
@@ -2614,7 +2612,7 @@
     flex: 1;
     color: var(--nbe-dark-text-primary);
     font-family: var(--nbe-font-mono);
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     word-break: break-all;
 }
 
@@ -2624,7 +2622,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     color: var(--nbe-dark-text-primary);
     cursor: pointer;
     margin: var(--nbe-space-md) 0;
@@ -2686,7 +2684,7 @@
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
     cursor: pointer;
     user-select: none;
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.3px;
@@ -2701,13 +2699,13 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     font-weight: 600;
     color: var(--nbe-dark-text-primary);
 }
 
 .cleanup-section-icon {
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     opacity: 0.7;
 }
 
@@ -2716,7 +2714,7 @@
     color: var(--nbe-text-inverse);
     padding: 1px 6px;
     border-radius: 2px;
-    font-size: 9px;
+    font-size: var(--nbe-font-size-2xs);
     font-weight: 600;
 }
 
@@ -2736,7 +2734,7 @@
 
 .cleanup-section-btn {
     padding: 2px 8px;
-    font-size: 9px;
+    font-size: var(--nbe-font-size-2xs);
     border: 1px solid var(--nbe-dark-btn-border);
     border-radius: 2px;
     background: var(--nbe-dark-btn-bg);
@@ -2790,7 +2788,7 @@
 }
 
 .cleanup-section-toggle {
-    font-size: 9px;
+    font-size: var(--nbe-font-size-2xs);
     color: var(--nbe-dark-text-muted);
     transition: transform 0.2s;
 }
@@ -2924,20 +2922,20 @@
 }
 
 .cleanup-title {
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     font-weight: 500;
     color: var(--nbe-dark-text-primary);
     margin-bottom: 1px;
 }
 
 .cleanup-desc {
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     color: var(--nbe-dark-text-primary);
 }
 
 .cleanup-action-btn {
     padding: 3px 10px;
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     border: 1px solid var(--nbe-dark-btn-border);
     background: var(--nbe-dark-btn-bg);
     color: var(--nbe-dark-btn-text);
@@ -2975,7 +2973,7 @@
     background: var(--nbe-dark-bg-secondary);
     border-radius: 0;
     border: 1px solid var(--nbe-dark-border-secondary);
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
 }
 
 .diff-attr {
@@ -3013,7 +3011,7 @@
 }
 
 .cleanup-detail-line {
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     color: var(--nbe-dark-text-secondary);
 }
 
@@ -3023,7 +3021,7 @@
 }
 
 .notification-group-header {
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     font-weight: 600;
     text-transform: uppercase;
     color: var(--nbe-dark-text-secondary);
@@ -3047,7 +3045,7 @@
 }
 
 .notification-icon {
-    font-size: 14px;
+    font-size: var(--nbe-typography-h3-size);
     flex-shrink: 0;
 }
 
@@ -3057,14 +3055,14 @@
 }
 
 .notification-title {
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     font-weight: 500;
     color: var(--nbe-dark-text-primary);
     margin-bottom: 2px;
 }
 
 .notification-desc {
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     color: var(--nbe-dark-text-secondary);
 }
 
@@ -3110,14 +3108,14 @@
 }
 
 .issue-file {
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     color: var(--nbe-dark-text-muted);
     font-family: var(--nbe-font-mono);
 }
 
 .btn-apply {
     padding: 3px 10px;
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     background: var(--nbe-dark-btn-bg);
     color: var(--nbe-dark-btn-text);
     border: 1px solid var(--nbe-dark-btn-border);
@@ -3141,7 +3139,7 @@
     background: var(--nbe-dark-bg-primary);
     border: 1px solid var(--nbe-dark-input-border);
     border-radius: 0;
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     color: var(--nbe-dark-text-secondary);
     cursor: pointer;
 }
@@ -3169,7 +3167,7 @@
     align-items: center;
     padding: 6px 12px;
     border-left: 3px solid transparent;
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     cursor: default;
 }
 
@@ -3196,7 +3194,7 @@
 
 .target-object-item .drag-handle::before {
     content: '⋮⋮';
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     color: var(--nbe-dark-text-secondary);
     letter-spacing: -2px;
 }
@@ -3330,7 +3328,7 @@
 .modal-close {
     background: var(--nbe-white-alpha-15);
     border: none;
-    font-size: 20px;
+    font-size: var(--nbe-typography-h1-size);
     color: var(--nbe-text-inverse);
     cursor: pointer;
     padding: 4px 8px;
@@ -3367,7 +3365,7 @@
 
 .card-type {
     display: inline-block;
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.3px;
@@ -3413,7 +3411,7 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     font-weight: 600;
     padding: 3px 8px;
     border: none;
@@ -3468,7 +3466,7 @@
 
 .new-object-type-btn {
     padding: 4px 24px 4px 8px;
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     font-weight: 600;
     text-transform: uppercase;
     border: 1px solid var(--color-create);
@@ -3488,7 +3486,7 @@
     right: 6px;
     top: 50%;
     transform: translateY(-50%);
-    font-size: 8px;
+    font-size: var(--nbe-font-size-3xs);
 }
 
 .object-type-dropdown {
@@ -3510,7 +3508,7 @@
 .object-type-dropdown-item {
     padding: 8px 12px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     text-transform: uppercase;
     font-weight: 500;
     color: var(--nbe-dark-text-primary);
@@ -3527,7 +3525,7 @@
 }
 
 .new-object-badge {
-    font-size: 9px;
+    font-size: var(--nbe-font-size-2xs);
     font-weight: 600;
     padding: 2px 6px;
     background: var(--color-create);
@@ -3538,7 +3536,7 @@
 
 .new-object-name-input {
     width: 100%;
-    font-size: 24px;
+    font-size: var(--nbe-font-size-icon-sm);
     font-weight: 600;
     border: none;
     border-bottom: 2px solid var(--color-create);
@@ -3553,14 +3551,14 @@
 
 .card-name {
     margin: 0;
-    font-size: 24px;
+    font-size: var(--nbe-font-size-icon-sm);
     font-weight: 600;
 }
 
 .card-file {
     display: block;
     margin-top: 4px;
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     color: var(--nbe-dark-text-muted);
 }
 
@@ -3573,7 +3571,7 @@
 }
 
 .section-title {
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     font-weight: 600;
     text-transform: uppercase;
     color: var(--nbe-dark-text-secondary);
@@ -3600,7 +3598,7 @@
 }
 
 .section-toggle {
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     color: var(--nbe-dark-text-muted);
     transition: transform 0.2s;
 }
@@ -3625,7 +3623,7 @@
 
 .section-content .loading {
     color: var(--nbe-dark-text-muted);
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     padding: 8px 0;
 }
 
@@ -3648,7 +3646,7 @@
     width: 160px;
     flex-shrink: 0;
     font-family: var(--nbe-font-mono);
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     color: var(--nbe-dark-accent-primary);
     word-break: break-word;
     padding-right: 12px;
@@ -3657,7 +3655,7 @@
 .attr-value {
     flex: 1;
     font-family: var(--nbe-font-mono);
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     padding: 6px 10px;
     border: 1px solid var(--nbe-dark-border-primary);
     border-radius: 4px;
@@ -3697,7 +3695,7 @@
     margin: 0;
     padding: 6px 10px;
     font-family: var(--nbe-font-mono);
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     line-height: 1.4;
     white-space: pre-wrap;
     word-wrap: break-word;
@@ -3714,7 +3712,7 @@
     z-index: 2;
     width: 100%;
     font-family: var(--nbe-font-mono);
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     padding: 6px 10px;
     border: 1px solid var(--nbe-dark-border-primary);
     border-radius: 4px;
@@ -3783,7 +3781,7 @@
     background: none;
     color: var(--nbe-dark-text-secondary);
     cursor: pointer;
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     transition: opacity 0.15s, color 0.15s;
 }
 
@@ -3802,7 +3800,7 @@
     background: none;
     color: var(--nbe-dark-accent-danger);
     cursor: pointer;
-    font-size: 16px;
+    font-size: var(--nbe-typography-h2-size);
 }
 
 .attr-row:hover .attr-delete {
@@ -3854,7 +3852,7 @@
     border-radius: 4px;
     color: var(--nbe-dark-text-secondary);
     cursor: pointer;
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     font-family: var(--nbe-font-mono);
 }
 
@@ -3893,7 +3891,7 @@
 }
 
 .template-breadcrumb i {
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     color: var(--nbe-dark-text-muted);
 }
 
@@ -4018,7 +4016,7 @@
 
 .multi-select h3 {
     margin: 0 0 16px 0;
-    font-size: 14px;
+    font-size: var(--nbe-typography-h3-size);
     font-weight: 600;
 }
 
@@ -4066,7 +4064,7 @@
     width: 14px;
     margin-right: 6px;
     text-align: center;
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     color: var(--nbe-dark-text-secondary);
 }
 
@@ -4141,7 +4139,7 @@
 
 .preview-header span {
     font-family: var(--nbe-font-mono);
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     font-weight: normal;
     color: var(--nbe-dark-text);
 }
@@ -4150,7 +4148,7 @@
     background: none;
     border: none;
     color: var(--nbe-dark-text-muted);
-    font-size: 18px;
+    font-size: var(--nbe-font-size-xl);
     cursor: pointer;
     padding: 0;
     line-height: 1;
@@ -4176,7 +4174,7 @@
     border-radius: 0;
     color: var(--nbe-dark-text);
     font-family: var(--nbe-font-mono);
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     line-height: 1.4;
     white-space: pre;
 }
@@ -4367,7 +4365,7 @@
 
 .dialog-body label {
     display: block;
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     color: var(--nbe-dark-text-secondary);
     margin-bottom: 4px;
 }
@@ -4510,7 +4508,7 @@ body.dragging-objects .right-pane::after {
     color: var(--nbe-text-inverse);
     padding: 4px 12px;
     border-radius: var(--nbe-radius-sm);
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     font-weight: 500;
     pointer-events: none;
     opacity: 0.85;
@@ -4520,7 +4518,7 @@ body.dragging-objects .right-pane::after {
 /* Empty message */
 .empty-message {
     color: var(--nbe-dark-text-muted);
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     padding: 8px 0;
 }
 
@@ -4577,7 +4575,7 @@ body.dragging-objects .right-pane::after {
 }
 
 .ref-item .ref-type-badge {
-    font-size: 9px;
+    font-size: var(--nbe-font-size-2xs);
     padding: 2px 6px;
     border-radius: var(--nbe-radius-sm);
     margin-right: 10px;
@@ -4602,7 +4600,7 @@ body.dragging-objects .right-pane::after {
 
 .ref-item .ref-name {
     font-weight: 500;
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -4631,7 +4629,7 @@ body.dragging-objects .right-pane::after {
 .dep-rule-badge {
     display: inline-block;
     padding: 2px 6px;
-    font-size: 0.7rem;
+    font-size: var(--nbe-font-size-2xs);
     font-weight: 600;
     color: var(--nbe-text-inverse);
     background-color: var(--nbe-warning);
@@ -4653,7 +4651,7 @@ body.dragging-objects .right-pane::after {
 }
 
 .info-section-title {
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     font-weight: 600;
     text-transform: uppercase;
     color: var(--nbe-dark-text-muted);
@@ -4694,12 +4692,12 @@ body.dragging-objects .right-pane::after {
 .dep-tree-connector {
     color: var(--nbe-dark-text-muted);
     margin-right: 6px;
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
 }
 
 /* Inheritance tree using ref-item style */
 .inheritance-tree {
-    font-size: 13px;
+    font-size: var(--nbe-typography-body-size);
     font-family: var(--nbe-font-mono);
     color: var(--nbe-dark-text-primary);
 }
@@ -4759,7 +4757,7 @@ body.dragging-objects .right-pane::after {
 
 .ref-item .error-marker {
     color: var(--color-delete);
-    font-size: 11px;
+    font-size: var(--nbe-font-size-xs-plus);
     margin-left: 8px;
 }
 
@@ -4811,7 +4809,7 @@ body.dragging-objects .right-pane::after {
 }
 
 .impact-subsection-title i {
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
     color: var(--nbe-dark-text-secondary);
 }
 
@@ -4836,7 +4834,7 @@ body.dragging-objects .right-pane::after {
 
 .impact-subsection-toggle {
     color: var(--nbe-dark-text-secondary);
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     transition: transform 0.2s ease;
 }
 
@@ -4879,7 +4877,7 @@ body.dragging-objects .right-pane::after {
 }
 
 .impact-summary-icon {
-    font-size: 14px;
+    font-size: var(--nbe-typography-h3-size);
 }
 
 .impact-summary.warning .impact-summary-icon {
@@ -4914,7 +4912,7 @@ body.dragging-objects .right-pane::after {
 }
 
 .dep-rule-detail i {
-    font-size: 10px;
+    font-size: var(--nbe-typography-muted-size);
     color: var(--nbe-dark-text-muted);
 }
 
@@ -4960,7 +4958,7 @@ body.dragging-objects .right-pane::after {
 /* Badge inside ancestry chain item */
 .ancestry-chain-item .ref-type-badge {
     display: inline-block;
-    font-size: 9px;
+    font-size: var(--nbe-font-size-2xs);
     padding: 2px 6px;
     border-radius: var(--nbe-radius-sm);
     font-weight: 600;
@@ -4983,7 +4981,7 @@ body.dragging-objects .right-pane::after {
 
 .ancestry-chain-separator {
     color: var(--nbe-dark-text-muted);
-    font-size: 12px;
+    font-size: var(--nbe-typography-secondary-size);
 }
 
 /* Ancestry subsection labels */

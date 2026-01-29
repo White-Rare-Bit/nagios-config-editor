@@ -4,6 +4,36 @@
    All page-specific CSS files should use var(--token-name) instead of hard-coded values.
    ============================================================================= */
 
+/* Bundled Web Fonts - ensures consistent rendering on Ubuntu 22.04+/RHEL 8+ */
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../vendor/fonts/Inter-Regular.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('../vendor/fonts/Inter-Medium.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('../vendor/fonts/Inter-SemiBold.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'JetBrains Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../vendor/fonts/JetBrainsMono-Regular.woff2') format('woff2');
+}
+
 :root {
     /* ---- Primary ---- */
     --nbe-primary: #006fcc;
@@ -64,8 +94,12 @@
     --nbe-shadow-overlay: 0 8px 32px rgba(0, 0, 0, 0.25);
 
     /* ---- Typography ---- */
-    --nbe-font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --nbe-font-mono: 'SF Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+    /* Inter bundled for cross-platform consistency; system fonts as fallback */
+    --nbe-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    /* JetBrains Mono bundled for code; system mono fonts as fallback */
+    --nbe-font-mono: 'JetBrains Mono', 'SF Mono', 'Consolas', 'Ubuntu Mono', monospace;
+    /* 8px for Font Awesome icons - maintains proportion with 10px text in collapse toggles */
+    --nbe-font-size-3xs: 8px;
     --nbe-font-size-2xs: 9px;
     --nbe-font-size-xs: 10px;
     --nbe-font-size-xs-plus: 11px;
@@ -75,9 +109,72 @@
     --nbe-font-size-lg: 16px;
     --nbe-font-size-xl: 18px;
     --nbe-font-size-2xl: 20px;
-    /* Icon sizes for empty states */
+    /* Icon sizes for decorative elements and empty states */
+    --nbe-font-size-icon-sm: 24px;
+    --nbe-font-size-icon-md: 32px;
     --nbe-font-size-icon-lg: 48px;
     --nbe-font-size-icon-xl: 64px;
+
+    /* Line Height Scale */
+    --nbe-line-height-tight: 1.2;
+    --nbe-line-height-normal: 1.5;
+    --nbe-line-height-relaxed: 1.6;
+    --nbe-line-height-loose: 1.8;
+
+    /* Letter Spacing Scale */
+    --nbe-letter-spacing-tight: -0.02em;
+    --nbe-letter-spacing-normal: 0;
+    --nbe-letter-spacing-wide: 0.02em;
+
+    /* Semantic Typography Tokens */
+    --nbe-typography-h1-size: var(--nbe-font-size-2xl);
+    --nbe-typography-h1-weight: 600;
+    --nbe-typography-h1-line-height: var(--nbe-line-height-tight);
+
+    --nbe-typography-h2-size: var(--nbe-font-size-lg);
+    --nbe-typography-h2-weight: 600;
+    --nbe-typography-h2-line-height: var(--nbe-line-height-tight);
+
+    --nbe-typography-h3-size: var(--nbe-font-size-md);
+    --nbe-typography-h3-weight: 600;
+    /* Uses normal line-height (1.5) for token scale consistency */
+    --nbe-typography-h3-line-height: var(--nbe-line-height-normal);
+
+    --nbe-typography-label-size: var(--nbe-font-size-sm);
+    --nbe-typography-label-weight: 600;
+    --nbe-typography-label-line-height: var(--nbe-line-height-normal);
+
+    --nbe-typography-body-size: var(--nbe-font-size-base);
+    --nbe-typography-body-weight: 400;
+    --nbe-typography-body-line-height: var(--nbe-line-height-normal);
+
+    --nbe-typography-secondary-size: var(--nbe-font-size-sm);
+    --nbe-typography-secondary-weight: 400;
+    --nbe-typography-secondary-line-height: var(--nbe-line-height-normal);
+
+    --nbe-typography-muted-size: var(--nbe-font-size-xs);
+    --nbe-typography-muted-weight: 400;
+    --nbe-typography-muted-line-height: var(--nbe-line-height-normal);
+
+    --nbe-typography-code-size: var(--nbe-font-size-sm);
+    --nbe-typography-code-weight: 400;
+    --nbe-typography-code-line-height: var(--nbe-line-height-relaxed);
+
+    --nbe-typography-badge-size: var(--nbe-font-size-xs);
+    --nbe-typography-badge-weight: 600;
+    --nbe-typography-badge-line-height: var(--nbe-line-height-tight);
+
+    --nbe-typography-button-size: var(--nbe-font-size-base);
+    --nbe-typography-button-weight: 500;
+    --nbe-typography-button-line-height: 1;
+
+    --nbe-typography-button-sm-size: var(--nbe-font-size-sm);
+    --nbe-typography-button-sm-weight: 500;
+    --nbe-typography-button-sm-line-height: 1;
+
+    --nbe-typography-input-size: var(--nbe-font-size-base);
+    --nbe-typography-input-weight: 400;
+    --nbe-typography-input-line-height: var(--nbe-line-height-normal);
 
     /* ---- Spacing ---- */
     --nbe-space-xs: 4px;

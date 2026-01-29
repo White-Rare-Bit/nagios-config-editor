@@ -37,7 +37,7 @@ pre {
     border: 1px solid var(--nbe-border);
     border-radius: 0.25rem;
     padding: 1rem;
-    font-size: 0.875rem;
+    font-size: var(--nbe-font-size-md);
     overflow-x: auto;
 }
 
@@ -45,7 +45,7 @@ code {
     background-color: var(--nbe-bg-subtle);
     padding: 0.125rem 0.25rem;
     border-radius: 0.25rem;
-    font-size: 0.875em;
+    font-size: var(--nbe-font-size-md);
 }
 
 /* Preview/diff styles */

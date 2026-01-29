@@ -2,33 +2,48 @@
 
 ## 1. Font Families
 
-### System Font Stack (Primary UI)
+### Bundled Fonts (Cross-Platform)
+
+Web fonts are bundled in `static/vendor/fonts/` to ensure consistent rendering across Ubuntu 22.04+, RHEL 8+, macOS, and Windows.
+
+#### Inter (UI Font)
 ```css
---nbe-font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+--nbe-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 ```
 
-| Platform | Font Used |
-|----------|-----------|
-| macOS | San Francisco (-apple-system) |
-| Windows | Segoe UI |
-| Android/Linux | Roboto |
-| Fallback | System sans-serif |
+| File | Weight | Size |
+|------|--------|------|
+| Inter-Regular.woff2 | 400 | ~95KB |
+| Inter-Medium.woff2 | 500 | ~96KB |
+| Inter-SemiBold.woff2 | 600 | ~96KB |
 
 **Purpose:** All UI text - buttons, labels, dialogs, navigation, form inputs
 
-### Monospace Stack (Code/Config)
+**License:** SIL Open Font License 1.1
+
+#### JetBrains Mono (Code Font)
 ```css
---nbe-font-mono: 'SF Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+--nbe-font-mono: 'JetBrains Mono', 'SF Mono', 'Consolas', 'Ubuntu Mono', monospace;
 ```
 
-| Platform | Font Used |
-|----------|-----------|
-| macOS | SF Mono, Monaco, Menlo |
-| Linux | Ubuntu Mono |
-| Windows | Consolas |
-| Fallback | System monospace |
+| File | Weight | Size |
+|------|--------|------|
+| JetBrainsMono-Regular.woff2 | 400 | ~90KB |
 
 **Purpose:** Code blocks, configuration content, syntax highlighting, git diffs
+
+**License:** SIL Open Font License 1.1
+
+### System Font Fallbacks
+
+If bundled fonts fail to load, the following system fonts are used:
+
+| Platform | Sans Fallback | Mono Fallback |
+|----------|---------------|---------------|
+| macOS | San Francisco (-apple-system) | SF Mono |
+| Windows | Segoe UI | Consolas |
+| Linux | Roboto (if installed) | Ubuntu Mono |
+| Generic | sans-serif | monospace |
 
 ---
 
@@ -237,10 +252,12 @@ All colors meet WCAG AA contrast requirements (4.5:1 minimum).
 
 | Aspect | Value |
 |--------|-------|
-| UI Font | System font stack (native per-platform) |
-| Code Font | Monospace stack (SF Mono, Consolas, etc.) |
+| UI Font | Inter (bundled) with system fallbacks |
+| Code Font | JetBrains Mono (bundled) with system fallbacks |
+| Font Files | 4 woff2 files (~377KB total) |
 | Size Scale | 11 sizes (9px - 64px) |
 | Weights | 400, 500, 600, 900 |
 | Icon Library | Font Awesome 6 Free |
 | Total Icons | ~60 unique icons used |
 | WCAG Compliance | AA (4.5:1 minimum contrast) |
+| Cross-Platform | Ubuntu 22.04+, RHEL 8+, macOS, Windows |
