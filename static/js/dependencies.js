@@ -35,12 +35,18 @@ console.log('dependencies.js loaded');
         templates: [
             'use'                         // Template inheritance
         ],
-        // Groups: organizational grouping
+        // Groups: organizational grouping (bidirectional - includes member→group edges)
         groups: [
             'hostgroups',                 // Host → Hostgroup membership
             'hostgroup_name',             // Object → Hostgroup reference
             'servicegroups',              // Service → Servicegroup membership
             'servicegroup_name',          // Object → Servicegroup reference
+            'members',                    // Group → Members
+            'hostgroup_members',          // Hostgroup → Members
+            'servicegroup_members'        // Servicegroup → Members
+        ],
+        // Membership: group → members only (for notifications view - no reverse edges)
+        membership: [
             'members',                    // Group → Members
             'hostgroup_members',          // Hostgroup → Members
             'servicegroup_members'        // Servicegroup → Members
@@ -85,26 +91,101 @@ console.log('dependencies.js loaded');
         inheritance: {
             categories: ['templates'],
             layout: 'hierarchical',  // Dagre TB - template chains flow top-down
-            description: 'Template inheritance chains'
+            description: 'Template inheritance chains',
+            icon: 'fa-sitemap',
+            label: 'Inheritance'
         },
         network: {
             categories: ['dependencies'],
             layout: 'hierarchical',  // Dagre TB - network topology flows parent→child
-            description: 'Host parent-child topology and service bindings'
+            description: 'Host parent-child topology and service bindings',
+            icon: 'fa-network-wired',
+            label: 'Network'
         },
-        contacts: {
-            categories: ['contacts', 'templates', 'groups'],  // Include groups for hostgroup→host member edges
+        notifications: {
+            categories: ['contacts', 'membership'],  // membership = group→members only (no reverse)
             layout: 'hierarchicalLR',  // Dagre LR - notification flows left→right
             description: 'Notification routing to contacts',
-            includeMembers: true,  // Also follow contactgroup → contact via members edge
-            directional: true  // Only follow outward: object → contacts (not reverse)
+            directional: true,  // Only follow outward: object → contacts (not reverse)
+            icon: 'fa-bell',
+            label: 'Notifications'
+        },
+        services: {
+            categories: ['dependencies'],
+            layout: 'hierarchicalLR',
+            description: 'Services monitoring this host',
+            directional: false,  // Follow both directions to find services bound to host
+            icon: 'fa-gear',
+            label: 'Services'
+        },
+        members: {
+            categories: ['membership'],
+            layout: 'hierarchicalLR',
+            description: 'Members of this group',
+            directional: true,  // group → members direction
+            icon: 'fa-users',
+            label: 'Members'
+        },
+        notifiedBy: {
+            categories: ['contacts', 'membership'],
+            layout: 'hierarchicalLR',
+            description: 'What notifies this contact/group',
+            directional: false,  // Follow edges in both directions to find sources
+            icon: 'fa-bell',
+            label: 'Notified By'
+        },
+        usedBy: {
+            categories: ['commands', 'schedules'],
+            layout: 'hierarchicalLR',
+            description: 'Objects using this command/timeperiod',
+            directional: false,  // Follow edges backwards to find users
+            icon: 'fa-arrow-left',
+            label: 'Used By'
+        },
+        monitoring: {
+            categories: ['commands', 'schedules'],
+            layout: 'hierarchicalLR',
+            description: 'Check commands and time periods',
+            directional: true,
+            icon: 'fa-clock',
+            label: 'Monitoring'
+        },
+        escalations: {
+            categories: ['contacts', 'dependencies'],
+            layout: 'hierarchicalLR',
+            description: 'Escalation paths for this object',
+            directional: true,
+            icon: 'fa-arrow-up',
+            label: 'Escalations'
         },
         full: {
-            categories: ['dependencies', 'templates', 'groups'],  // Match explorer default
+            categories: ['dependencies', 'templates', 'groups', 'contacts', 'commands', 'schedules'],  // All categories
             layout: 'static',  // COSe force-directed - best for exploration
-            description: 'Full config graph (same as explorer)',
-            useSmartExpansion: true  // Use addAllConnectedRecursively for semantic-aware expansion
+            description: 'Complete graph with all relationships',
+            useSmartExpansion: true,  // Use addAllConnectedRecursively for semantic-aware expansion
+            icon: 'fa-diagram-project',
+            label: 'Full Graph'
         }
+    };
+
+    // Map object types to relevant quick view presets
+    // Each type shows only the presets that make sense for that object
+    const presetsByType = {
+        host: ['inheritance', 'network', 'notifications', 'services', 'monitoring', 'escalations', 'full'],
+        hostgroup: ['inheritance', 'notifications', 'members', 'escalations', 'full'],
+        service: ['inheritance', 'notifications', 'monitoring', 'escalations', 'full'],
+        servicegroup: ['inheritance', 'notifications', 'members', 'full'],
+        contact: ['inheritance', 'notifiedBy', 'full'],
+        contactgroup: ['inheritance', 'members', 'notifiedBy', 'full'],
+        command: ['usedBy', 'full'],
+        timeperiod: ['usedBy', 'full'],
+        // Dependency/escalation types
+        hostdependency: ['full'],
+        servicedependency: ['full'],
+        hostescalation: ['notifications', 'full'],
+        serviceescalation: ['notifications', 'full'],
+        // Default for unknown types
+        default: ['inheritance', 'full']
     };
 
     // Currently active quick view preset (null = custom)
@@ -112,6 +193,31 @@ console.log('dependencies.js loaded');
 
     // Currently enabled edge categories
     let enabledCategories = new Set(['dependencies', 'templates', 'groups']);
+
+    // All available object types for filtering
+    const allObjectTypes = [
+        'host', 'hostgroup', 'service', 'servicegroup',
+        'contact', 'contactgroup', 'command', 'timeperiod',
+        'hostdependency', 'servicedependency', 'hostescalation', 'serviceescalation'
+    ];
+
+    // Currently enabled object types (all enabled by default)
+    let enabledTypes = new Set(allObjectTypes);
+
+    // Map quick view presets to relevant object types
+    // When a quick view is applied, only these types are shown
+    const typesByPreset = {
+        inheritance: null,  // null = all types (templates can be any type)
+        network: ['host', 'hostgroup', 'hostdependency'],
+        notifications: ['host', 'hostgroup', 'service', 'servicegroup', 'contact', 'contactgroup', 'hostescalation', 'serviceescalation'],
+        services: ['host', 'service', 'servicegroup'],
+        members: null,  // depends on starting type - show all
+        notifiedBy: ['host', 'hostgroup', 'service', 'servicegroup', 'contact', 'contactgroup'],
+        usedBy: ['host', 'service', 'contact', 'command', 'timeperiod'],
+        monitoring: ['host', 'service', 'command', 'timeperiod'],
+        escalations: ['host', 'hostgroup', 'service', 'servicegroup', 'contact', 'contactgroup', 'hostescalation', 'serviceescalation'],
+        full: null  // null = all types
+    };
 
     const typeColors = {
         'host': '#4CAF50',
@@ -279,6 +385,9 @@ console.log('dependencies.js loaded');
         updateAddedNodesList();
         saveGraphState();  // Save state so refresh preserves it
 
+        // Render context-sensitive quick view buttons based on focus node type
+        renderQuickViewButtons();
+
         // Add hint for keyboard shortcuts
         const graphContainer = document.querySelector('.dep-graph');
         const hint = document.createElement('div');
@@ -334,6 +443,9 @@ console.log('dependencies.js loaded');
                     break;
                 case 'onEdgeFilterChange':
                     onEdgeFilterChange();
+                    break;
+                case 'onTypeFilterChange':
+                    onTypeFilterChange();
                     break;
             }
         });
@@ -1285,6 +1397,7 @@ console.log('dependencies.js loaded');
             showEdgeLabels: showEdgeLabels,
             focusNodeId: focusNodeId,
             enabledCategories: Array.from(enabledCategories),
+            enabledTypes: Array.from(enabledTypes),
             viewMode: document.getElementById('viewMode')?.value || 'overview'
         };
         sessionStorage.setItem('graphViewState', JSON.stringify(state));
@@ -1327,6 +1440,12 @@ console.log('dependencies.js loaded');
             if (state.enabledCategories && Array.isArray(state.enabledCategories)) {
                 enabledCategories = new Set(state.enabledCategories);
                 syncCheckboxesToCategories();
+            }
+
+            // Restore object type filters
+            if (state.enabledTypes && Array.isArray(state.enabledTypes)) {
+                enabledTypes = new Set(state.enabledTypes);
+                syncCheckboxesToTypes();
             }
 
             // Restore view mode
@@ -1427,7 +1546,8 @@ console.log('dependencies.js loaded');
         }
 
         // If this is the first node, set it as the focus/root node
-        if (addedNodeIds.size === 0) {
+        const isFirstNode = addedNodeIds.size === 0;
+        if (isFirstNode) {
             focusNodeId = nodeId;
         }
 
@@ -1435,6 +1555,11 @@ console.log('dependencies.js loaded');
         updateGraph();
         updateAddedNodesList();
         saveGraphState();
+
+        // Re-render quick view buttons when first node added (determines context)
+        if (isFirstNode) {
+            renderQuickViewButtons();
+        }
     }
 
     function removeNode(nodeId) {
@@ -1481,7 +1606,7 @@ console.log('dependencies.js loaded');
         addedNodeIds.clear();
         focusNodeId = null;  // Clear the focus node as well
         activeQuickView = null;  // Clear active quick view
-        updateQuickViewButtons();  // Update button states
+        renderQuickViewButtons();  // Re-render buttons (will show default set)
         updateGraph();
         updateAddedNodesList();
         saveGraphState();
@@ -1549,8 +1674,8 @@ console.log('dependencies.js loaded');
                     return enabledCategories.has('contacts');
                 }
             }
-            // hostgroup/servicegroup members: requires 'groups' category
-            return enabledCategories.has('groups');
+            // hostgroup/servicegroup members: requires 'groups' or 'membership' category
+            return enabledCategories.has('groups') || enabledCategories.has('membership');
         }
 
         // Standard label-based check
@@ -1589,6 +1714,33 @@ console.log('dependencies.js loaded');
         saveGraphState();
     }
 
+    // Update type filter checkboxes to match enabled types
+    function syncCheckboxesToTypes() {
+        const checkboxes = document.querySelectorAll('#objectTypeFilters input[type="checkbox"]');
+        checkboxes.forEach(cb => {
+            const objType = cb.dataset.type;
+            cb.checked = enabledTypes.has(objType);
+        });
+    }
+
+    // Handle object type filter checkbox change
+    function onTypeFilterChange() {
+        // Read current checkbox state
+        const checkboxes = document.querySelectorAll('#objectTypeFilters input[type="checkbox"]');
+        enabledTypes = new Set();
+        checkboxes.forEach(cb => {
+            if (cb.checked) {
+                enabledTypes.add(cb.dataset.type);
+            }
+        });
+
+        // Clear active quick view since user is making custom changes
+        clearActiveQuickView();
+
+        updateGraph();
+        saveGraphState();
+    }
+
     // Apply a quick view preset - sets edge filters, auto-expands connections, applies optimal layout
     function applyQuickView(preset) {
         const config = quickViewPresets[preset];
@@ -1603,6 +1755,16 @@ console.log('dependencies.js loaded');
         // Apply edge category filter
         enabledCategories = new Set(config.categories);
         syncCheckboxesToCategories();
+
+        // Apply object type filter
+        const presetTypes = typesByPreset[preset];
+        if (presetTypes === null) {
+            // null means show all types
+            enabledTypes = new Set(allObjectTypes);
+        } else {
+            enabledTypes = new Set(presetTypes);
+        }
+        syncCheckboxesToTypes();
 
         // Apply optimal layout
         const layoutSelect = document.getElementById('layoutType');
@@ -1672,6 +1834,15 @@ console.log('dependencies.js loaded');
             allowedLabels.add('members');
         }
 
+        // If membership category is included, also allow reverse membership edges
+        // (hosts/services declaring which groups they belong to)
+        if (categories.includes('membership')) {
+            allowedLabels.add('hostgroups');
+            allowedLabels.add('servicegroups');
+            allowedLabels.add('hostgroup_name');
+            allowedLabels.add('servicegroup_name');
+        }
+
         // Inheritance-only view is always directional (follow upward only)
         const isInheritanceOnly = categories.length === 1 && categories[0] === 'templates';
         const isDirectionalView = isInheritanceOnly || options.directional;
@@ -1695,6 +1866,19 @@ console.log('dependencies.js loaded');
                     if (edge.from === nodeId) {
                         connectedId = edge.to;
                     }
+                    // Special case: reverse membership edges
+                    // When hosts declare `hostgroups: mygroup`, the edge is host→group
+                    // To find group members, we need to follow these in reverse
+                    else if (edge.to === nodeId) {
+                        const reverseMembershipLabels = ['hostgroups', 'servicegroups', 'hostgroup_name', 'servicegroup_name'];
+                        if (reverseMembershipLabels.includes(edge.label)) {
+                            // Only follow reverse if we're at a group node
+                            const currentNode = allNodes.find(n => n.id === nodeId);
+                            if (currentNode && (currentNode.type === 'hostgroup' || currentNode.type === 'servicegroup')) {
+                                connectedId = edge.from;
+                            }
+                        }
+                    }
                 } else {
                     // For other views: follow edges in both directions
                     if (edge.from === nodeId) {
@@ -1711,7 +1895,54 @@ console.log('dependencies.js loaded');
         }
     }
 
-    // Update quick view button active states
+    // Get the type of the current focus/root node
+    function getCurrentNodeType() {
+        const rootNode = focusNodeId || (addedNodeIds.size > 0 ? [...addedNodeIds][0] : null);
+        if (!rootNode) return null;
+        const node = allNodes.find(n => n.id === rootNode);
+        return node ? node.type : null;
+    }
+
+    // Render quick view buttons based on the current node type
+    function renderQuickViewButtons() {
+        const container = document.getElementById('quickViewContainer');
+        if (!container) return;
+
+        const nodeType = getCurrentNodeType();
+        const presets = presetsByType[nodeType] || presetsByType.default;
+
+        // Build button HTML
+        const buttonsHtml = presets.map(presetId => {
+            const preset = quickViewPresets[presetId];
+            if (!preset) return '';
+            const isActive = presetId === activeQuickView ? 'active' : '';
+            return `
+                <button class="quick-view-btn ${isActive}"
+                        data-action="applyQuickView"
+                        data-preset="${presetId}"
+                        title="${preset.description}">
+                    <i class="fa-solid ${preset.icon}"></i>
+                    <span>${preset.label}</span>
+                </button>
+            `;
+        }).join('');
+
+        container.innerHTML = buttonsHtml;
+
+        // Update the context label
+        const contextLabel = document.getElementById('quickViewContextLabel');
+        if (contextLabel) {
+            if (nodeType) {
+                contextLabel.textContent = `for ${nodeType}`;
+                contextLabel.style.display = '';
+            } else {
+                contextLabel.textContent = '';
+                contextLabel.style.display = 'none';
+            }
+        }
+    }
+
+    // Update quick view button active states (call after preset applied)
     function updateQuickViewButtons() {
         const buttons = document.querySelectorAll('.quick-view-btn');
         buttons.forEach(btn => {
@@ -1732,10 +1963,24 @@ console.log('dependencies.js loaded');
         }
     }
 
+    // Check if a node type is enabled in filters
+    function isNodeTypeEnabled(nodeType) {
+        return enabledTypes.has(nodeType);
+    }
+
     function updateGraph() {
-        // First filter edges based on node membership AND edge category filters
+        // First filter nodes by type
+        const typeFilteredNodeIds = new Set();
+        for (const nodeId of addedNodeIds) {
+            const node = allNodes.find(n => n.id === nodeId);
+            if (node && isNodeTypeEnabled(node.type)) {
+                typeFilteredNodeIds.add(nodeId);
+            }
+        }
+
+        // Filter edges based on node membership AND edge category filters
         const displayEdges = allEdges.filter(e =>
-            addedNodeIds.has(e.from) && addedNodeIds.has(e.to) && isEdgeEnabled(e)
+            typeFilteredNodeIds.has(e.from) && typeFilteredNodeIds.has(e.to) && isEdgeEnabled(e)
         );
 
         // Build set of nodes that have at least one visible edge
@@ -1748,13 +1993,13 @@ console.log('dependencies.js loaded');
         // Filter nodes: show if they have visible connections OR are focus/selected
         // This provides focused views while keeping the user's primary node visible
         const displayNodes = allNodes.filter(n => {
-            if (!addedNodeIds.has(n.id)) return false;
-            // Always show focus node (layout center)
+            if (!typeFilteredNodeIds.has(n.id)) return false;
+            // Always show focus node (layout center) if its type is enabled
             if (n.id === focusNodeId) return true;
             // Always show selected node in Cytoscape
             if (cy && cy.$id(n.id).selected()) return true;
             // Always show if only one node added
-            if (addedNodeIds.size === 1) return true;
+            if (typeFilteredNodeIds.size === 1) return true;
             // Otherwise, must have visible edges
             return connectedNodeIds.has(n.id);
         });
@@ -2329,6 +2574,9 @@ console.log('dependencies.js loaded');
         focusNodeId = selectedNodeId;
         updateGraph();
         saveGraphState();
+
+        // Re-render quick view buttons for new focus node type
+        renderQuickViewButtons();
 
         const node = allNodes.find(n => n.id === selectedNodeId);
         const label = node ? getNodeDisplayLabel(node.id, node.type, node.label) : selectedNodeId;

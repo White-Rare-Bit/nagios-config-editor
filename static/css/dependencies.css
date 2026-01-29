@@ -217,6 +217,14 @@
     opacity: 1;
 }
 
+/* Context label showing object type */
+.quick-view-context-label {
+    font-size: var(--nbe-font-size-xs);
+    font-weight: 400;
+    color: var(--nbe-dark-accent-primary);
+    margin-left: 4px;
+}
+
 /* Custom filters expandable section */
 .custom-filters-details {
     margin-top: 10px;
@@ -309,6 +317,82 @@
 .edge-filter-option input[type="checkbox"]:checked + span {
     color: var(--nbe-dark-text-primary);
 }
+
+/* Filter sections within custom filters */
+.filter-section {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--nbe-dark-border-secondary);
+}
+
+.filter-section:first-child {
+    margin-top: 8px;
+    padding-top: 0;
+    border-top: none;
+}
+
+.filter-section-title {
+    font-size: var(--nbe-font-size-xs);
+    font-weight: 600;
+    color: var(--nbe-dark-text-muted);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Object type filter grid */
+.type-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+}
+
+.type-filter-option {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+.type-filter-option:hover {
+    background: var(--nbe-dark-bg-hover);
+}
+
+.type-filter-option input[type="checkbox"] {
+    width: 12px;
+    height: 12px;
+    accent-color: var(--nbe-dark-accent-primary);
+    cursor: pointer;
+}
+
+.type-filter-option input[type="checkbox"]:not(:checked) + .type-badge {
+    opacity: 0.4;
+}
+
+/* Type badges in filters */
+.type-badge {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 1px 4px;
+    border-radius: 3px;
+    text-transform: lowercase;
+    white-space: nowrap;
+}
+
+.type-badge--host { background: #4CAF50; color: white; }
+.type-badge--hostgroup { background: #8BC34A; color: white; }
+.type-badge--service { background: #2196F3; color: white; }
+.type-badge--servicegroup { background: #03A9F4; color: white; }
+.type-badge--contact { background: #FF9800; color: white; }
+.type-badge--contactgroup { background: #FFC107; color: #333; }
+.type-badge--command { background: #9C27B0; color: white; }
+.type-badge--timeperiod { background: #607D8B; color: white; }
+.type-badge--hostdependency { background: #795548; color: white; }
+.type-badge--servicedependency { background: #795548; color: white; }
+.type-badge--hostescalation { background: #E91E63; color: white; }
+.type-badge--serviceescalation { background: #E91E63; color: white; }
 
 .dep-container .form-input,
 .dep-sidebar .form-input {

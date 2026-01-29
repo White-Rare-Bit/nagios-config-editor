@@ -29,58 +29,102 @@
         </div>
 
         <div class="dep-section">
-            <div class="dep-section-title">Quick Views</div>
+            <div class="dep-section-title">Quick Views <span id="quickViewContextLabel" class="quick-view-context-label" style="display:none"></span></div>
             <div class="dep-section-content">
-                <div class="quick-view-grid">
-                    <button class="quick-view-btn" data-action="applyQuickView" data-preset="inheritance" title="Template inheritance chains (hierarchical layout)">
-                        <i class="fa-solid fa-sitemap"></i>
-                        <span>Inheritance</span>
-                    </button>
-                    <button class="quick-view-btn" data-action="applyQuickView" data-preset="network" title="Host parent-child topology (hierarchical layout)">
-                        <i class="fa-solid fa-network-wired"></i>
-                        <span>Network</span>
-                    </button>
-                    <button class="quick-view-btn" data-action="applyQuickView" data-preset="contacts" title="Notification routing (left-to-right flow)">
-                        <i class="fa-solid fa-bell"></i>
-                        <span>Notifications</span>
-                    </button>
-                    <button class="quick-view-btn" data-action="applyQuickView" data-preset="full" title="All connections (force-directed layout)">
-                        <i class="fa-solid fa-diagram-project"></i>
-                        <span>Full Graph</span>
-                    </button>
+                <div id="quickViewContainer" class="quick-view-grid">
+                    <!-- Buttons rendered dynamically based on selected node type -->
                 </div>
                 <details class="custom-filters-details">
                     <summary class="custom-filters-toggle">
                         <i class="fa-solid fa-sliders"></i> Custom Filters
                     </summary>
-                    <div id="edgeCategoryFilters" class="edge-category-filters">
-                        <label class="edge-filter-option" title="Network parents, host/service dependencies">
-                            <input type="checkbox" id="filterDependencies" data-category="dependencies" data-action="onEdgeFilterChange" checked>
-                            <span>Dependencies</span>
-                        </label>
-                        <label class="edge-filter-option" title="Template inheritance (use)">
-                            <input type="checkbox" id="filterTemplates" data-category="templates" data-action="onEdgeFilterChange" checked>
-                            <span>Templates</span>
-                        </label>
-                        <label class="edge-filter-option" title="Host groups, service groups, members">
-                            <input type="checkbox" id="filterGroups" data-category="groups" data-action="onEdgeFilterChange" checked>
-                            <span>Groups</span>
-                        </label>
-                        <label class="edge-filter-option" title="Contacts, contact groups">
-                            <input type="checkbox" id="filterContacts" data-category="contacts" data-action="onEdgeFilterChange">
-                            <span>Contacts</span>
-                        </label>
-                        <label class="edge-filter-option" title="Check commands, event handlers">
-                            <input type="checkbox" id="filterCommands" data-category="commands" data-action="onEdgeFilterChange">
-                            <span>Commands</span>
-                        </label>
-                        <label class="edge-filter-option" title="Time periods (check, notification, escalation)">
-                            <input type="checkbox" id="filterSchedules" data-category="schedules" data-action="onEdgeFilterChange">
-                            <span>Schedules</span>
-                        </label>
+
+                    <div class="filter-section">
+                        <div class="filter-section-title">Object Types</div>
+                        <div id="objectTypeFilters" class="type-filter-grid">
+                            <label class="type-filter-option" title="Host objects">
+                                <input type="checkbox" data-type="host" data-action="onTypeFilterChange" checked>
+                                <span class="type-badge type-badge--host">host</span>
+                            </label>
+                            <label class="type-filter-option" title="Host groups">
+                                <input type="checkbox" data-type="hostgroup" data-action="onTypeFilterChange" checked>
+                                <span class="type-badge type-badge--hostgroup">hostgroup</span>
+                            </label>
+                            <label class="type-filter-option" title="Service objects">
+                                <input type="checkbox" data-type="service" data-action="onTypeFilterChange" checked>
+                                <span class="type-badge type-badge--service">service</span>
+                            </label>
+                            <label class="type-filter-option" title="Service groups">
+                                <input type="checkbox" data-type="servicegroup" data-action="onTypeFilterChange" checked>
+                                <span class="type-badge type-badge--servicegroup">servicegroup</span>
+                            </label>
+                            <label class="type-filter-option" title="Contact objects">
+                                <input type="checkbox" data-type="contact" data-action="onTypeFilterChange" checked>
+                                <span class="type-badge type-badge--contact">contact</span>
+                            </label>
+                            <label class="type-filter-option" title="Contact groups">
+                                <input type="checkbox" data-type="contactgroup" data-action="onTypeFilterChange" checked>
+                                <span class="type-badge type-badge--contactgroup">contactgroup</span>
+                            </label>
+                            <label class="type-filter-option" title="Command objects">
+                                <input type="checkbox" data-type="command" data-action="onTypeFilterChange" checked>
+                                <span class="type-badge type-badge--command">command</span>
+                            </label>
+                            <label class="type-filter-option" title="Time period objects">
+                                <input type="checkbox" data-type="timeperiod" data-action="onTypeFilterChange" checked>
+                                <span class="type-badge type-badge--timeperiod">timeperiod</span>
+                            </label>
+                            <label class="type-filter-option" title="Host dependencies">
+                                <input type="checkbox" data-type="hostdependency" data-action="onTypeFilterChange" checked>
+                                <span class="type-badge type-badge--hostdependency">hostdep</span>
+                            </label>
+                            <label class="type-filter-option" title="Service dependencies">
+                                <input type="checkbox" data-type="servicedependency" data-action="onTypeFilterChange" checked>
+                                <span class="type-badge type-badge--servicedependency">svcdep</span>
+                            </label>
+                            <label class="type-filter-option" title="Host escalations">
+                                <input type="checkbox" data-type="hostescalation" data-action="onTypeFilterChange" checked>
+                                <span class="type-badge type-badge--hostescalation">hostesc</span>
+                            </label>
+                            <label class="type-filter-option" title="Service escalations">
+                                <input type="checkbox" data-type="serviceescalation" data-action="onTypeFilterChange" checked>
+                                <span class="type-badge type-badge--serviceescalation">svcesc</span>
+                            </label>
+                        </div>
                     </div>
-                    <div class="custom-layout-row">
-                        <label class="dep-filter-label" for="layoutType">Layout</label>
+
+                    <div class="filter-section">
+                        <div class="filter-section-title">Edge Categories</div>
+                        <div id="edgeCategoryFilters" class="edge-category-filters">
+                            <label class="edge-filter-option" title="Network parents, host/service dependencies">
+                                <input type="checkbox" data-category="dependencies" data-action="onEdgeFilterChange" checked>
+                                <span>Dependencies</span>
+                            </label>
+                            <label class="edge-filter-option" title="Template inheritance (use)">
+                                <input type="checkbox" data-category="templates" data-action="onEdgeFilterChange" checked>
+                                <span>Templates</span>
+                            </label>
+                            <label class="edge-filter-option" title="Host groups, service groups, members">
+                                <input type="checkbox" data-category="groups" data-action="onEdgeFilterChange" checked>
+                                <span>Groups</span>
+                            </label>
+                            <label class="edge-filter-option" title="Contacts, contact groups">
+                                <input type="checkbox" data-category="contacts" data-action="onEdgeFilterChange">
+                                <span>Contacts</span>
+                            </label>
+                            <label class="edge-filter-option" title="Check commands, event handlers">
+                                <input type="checkbox" data-category="commands" data-action="onEdgeFilterChange">
+                                <span>Commands</span>
+                            </label>
+                            <label class="edge-filter-option" title="Time periods (check, notification, escalation)">
+                                <input type="checkbox" data-category="schedules" data-action="onEdgeFilterChange">
+                                <span>Schedules</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="filter-section">
+                        <div class="filter-section-title">Layout</div>
                         <select class="form-select" id="layoutType" data-action="applyLayout">
                             <option value="static">Force-Directed</option>
                             <option value="hierarchical">Hierarchical TB</option>
