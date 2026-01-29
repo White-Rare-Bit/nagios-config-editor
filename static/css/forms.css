@@ -162,7 +162,7 @@
     border-radius: var(--nbe-radius-xl);
     padding: var(--nbe-space-lg);
     box-shadow: var(--nbe-shadow-sm);
-    max-width: 400px;
+    width: 400px;
 }
 
 .empty-tips .tip {
@@ -197,6 +197,39 @@
 .empty-state--constrained {
     max-width: 400px;
     margin: 0 auto;
+}
+
+/* Dark theme modifier for pages with dark backgrounds */
+.empty-state--dark {
+    color: var(--nbe-dark-text-secondary);
+}
+
+.empty-state--dark .empty-icon,
+.empty-state--dark .icon {
+    color: var(--nbe-dark-text-muted);
+}
+
+.empty-state--dark h3 {
+    color: var(--nbe-dark-text-primary);
+}
+
+.empty-state--dark p {
+    color: var(--nbe-dark-text-secondary);
+}
+
+.empty-state--dark .empty-tips {
+    background: var(--nbe-dark-bg-secondary);
+    border: 1px solid var(--nbe-dark-border-primary);
+    box-shadow: none;
+}
+
+.empty-state--dark .empty-tips .tip {
+    color: var(--nbe-dark-text-secondary);
+    border-bottom-color: var(--nbe-dark-border-secondary);
+}
+
+.empty-state--dark .empty-tips .tip strong {
+    color: var(--nbe-dark-text-primary);
 }
 
 /* Search suggestions dropdown (used by find-replace) */

@@ -86,9 +86,7 @@ def validate():
 @bp.route('/dependencies')
 def dependencies():
     """Dependency graph visualization."""
-    p = get_service().parser
-    types = p.get_object_types()
-    return render_template('dependencies.html', object_types=types)
+    return render_template('dependencies.html')
 
 
 @bp.route('/git')

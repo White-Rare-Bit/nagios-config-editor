@@ -23,65 +23,71 @@
                            aria-autocomplete="list" aria-controls="nodeSearchResults">
                     <div id="nodeSearchResults" class="dep-search-dropdown" role="listbox" aria-label="Search results"></div>
                 </div>
-                <div class="dep-filter-row">
-                    <label class="dep-filter-label" for="objectType">Type</label>
-                    <select class="form-select" id="objectType" data-action="onNodeSearchInput">
-                        <option value="">All Types</option>
-                        {% for type in object_types %}
-                        <option value="{{ type }}">{{ type }}</option>
-                        {% endfor %}
-                    </select>
-                    <label class="dep-filter-label" for="layoutType">Layout</label>
-                    <select class="form-select" id="layoutType" data-action="applyLayout">
-                        <option value="static">Static</option>
-                        <option value="hierarchical">Hierarchical ↓</option>
-                        <option value="hierarchicalLR">Hierarchical →</option>
-                    </select>
-                </div>
-                <button class="nbe-btn nbe-btn--secondary nbe-btn--full" data-action="addConnected">+ Add Connected to Selected</button>
                 <button class="nbe-btn nbe-btn--secondary nbe-btn--full" data-action="fitGraph">Fit to View</button>
                 <button class="nbe-btn nbe-btn--secondary nbe-btn--full dep-btn-toggle" id="toggleLabelsBtn" data-action="toggleEdgeLabels">Hide Connection Labels</button>
             </div>
         </div>
 
         <div class="dep-section">
-            <div class="dep-section-title">Show Connections</div>
+            <div class="dep-section-title">Quick Views</div>
             <div class="dep-section-content">
-                <div class="dep-filter-row dep-filter-row--single">
-                    <label class="dep-filter-label" for="viewMode">View</label>
-                    <select class="form-select" id="viewMode" data-action="onViewModeChange">
-                        <option value="dependencies">Dependencies Only</option>
-                        <option value="overview" selected>Config Overview</option>
-                        <option value="all">All Connections</option>
-                        <option value="custom">Custom...</option>
-                    </select>
+                <div class="quick-view-grid">
+                    <button class="quick-view-btn" data-action="applyQuickView" data-preset="inheritance" title="Template inheritance chains (hierarchical layout)">
+                        <i class="fa-solid fa-sitemap"></i>
+                        <span>Inheritance</span>
+                    </button>
+                    <button class="quick-view-btn" data-action="applyQuickView" data-preset="network" title="Host parent-child topology (hierarchical layout)">
+                        <i class="fa-solid fa-network-wired"></i>
+                        <span>Network</span>
+                    </button>
+                    <button class="quick-view-btn" data-action="applyQuickView" data-preset="contacts" title="Notification routing (left-to-right flow)">
+                        <i class="fa-solid fa-bell"></i>
+                        <span>Notifications</span>
+                    </button>
+                    <button class="quick-view-btn" data-action="applyQuickView" data-preset="full" title="All connections (force-directed layout)">
+                        <i class="fa-solid fa-diagram-project"></i>
+                        <span>Full Graph</span>
+                    </button>
                 </div>
-                <div id="edgeCategoryFilters" class="edge-category-filters">
-                    <label class="edge-filter-option" title="Network parents, host/service dependencies">
-                        <input type="checkbox" id="filterDependencies" data-category="dependencies" data-action="onEdgeFilterChange" checked>
-                        <span>Dependencies</span>
-                    </label>
-                    <label class="edge-filter-option" title="Template inheritance (use)">
-                        <input type="checkbox" id="filterTemplates" data-category="templates" data-action="onEdgeFilterChange" checked>
-                        <span>Templates</span>
-                    </label>
-                    <label class="edge-filter-option" title="Host groups, service groups, members">
-                        <input type="checkbox" id="filterGroups" data-category="groups" data-action="onEdgeFilterChange" checked>
-                        <span>Groups</span>
-                    </label>
-                    <label class="edge-filter-option" title="Contacts, contact groups">
-                        <input type="checkbox" id="filterContacts" data-category="contacts" data-action="onEdgeFilterChange">
-                        <span>Contacts</span>
-                    </label>
-                    <label class="edge-filter-option" title="Check commands, event handlers">
-                        <input type="checkbox" id="filterCommands" data-category="commands" data-action="onEdgeFilterChange">
-                        <span>Commands</span>
-                    </label>
-                    <label class="edge-filter-option" title="Time periods (check, notification, escalation)">
-                        <input type="checkbox" id="filterSchedules" data-category="schedules" data-action="onEdgeFilterChange">
-                        <span>Schedules</span>
-                    </label>
-                </div>
+                <details class="custom-filters-details">
+                    <summary class="custom-filters-toggle">
+                        <i class="fa-solid fa-sliders"></i> Custom Filters
+                    </summary>
+                    <div id="edgeCategoryFilters" class="edge-category-filters">
+                        <label class="edge-filter-option" title="Network parents, host/service dependencies">
+                            <input type="checkbox" id="filterDependencies" data-category="dependencies" data-action="onEdgeFilterChange" checked>
+                            <span>Dependencies</span>
+                        </label>
+                        <label class="edge-filter-option" title="Template inheritance (use)">
+                            <input type="checkbox" id="filterTemplates" data-category="templates" data-action="onEdgeFilterChange" checked>
+                            <span>Templates</span>
+                        </label>
+                        <label class="edge-filter-option" title="Host groups, service groups, members">
+                            <input type="checkbox" id="filterGroups" data-category="groups" data-action="onEdgeFilterChange" checked>
+                            <span>Groups</span>
+                        </label>
+                        <label class="edge-filter-option" title="Contacts, contact groups">
+                            <input type="checkbox" id="filterContacts" data-category="contacts" data-action="onEdgeFilterChange">
+                            <span>Contacts</span>
+                        </label>
+                        <label class="edge-filter-option" title="Check commands, event handlers">
+                            <input type="checkbox" id="filterCommands" data-category="commands" data-action="onEdgeFilterChange">
+                            <span>Commands</span>
+                        </label>
+                        <label class="edge-filter-option" title="Time periods (check, notification, escalation)">
+                            <input type="checkbox" id="filterSchedules" data-category="schedules" data-action="onEdgeFilterChange">
+                            <span>Schedules</span>
+                        </label>
+                    </div>
+                    <div class="custom-layout-row">
+                        <label class="dep-filter-label" for="layoutType">Layout</label>
+                        <select class="form-select" id="layoutType" data-action="applyLayout">
+                            <option value="static">Force-Directed</option>
+                            <option value="hierarchical">Hierarchical TB</option>
+                            <option value="hierarchicalLR">Hierarchical LR</option>
+                        </select>
+                    </div>
+                </details>
             </div>
         </div>
 
@@ -98,7 +104,7 @@
 
     <!-- Graph Area -->
     <div class="dep-graph">
-        <div id="graphEmptyState" class="empty-state empty-state--centered">
+        <div id="graphEmptyState" class="empty-state empty-state--dark empty-state--centered">
             <div class="empty-icon"><i class="fa-solid fa-diagram-project"></i></div>
             <h3>No nodes in graph</h3>
             <p>Search for objects on the left and add them to visualize their relationships</p>
@@ -167,8 +173,8 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="https://unpkg.com/cytoscape@3.31.0/dist/cytoscape.min.js"></script>
-<script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
-<script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+<script src="{{ url_for('static', filename='vendor/js/cytoscape.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/js/dagre.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/js/cytoscape-dagre.js') }}"></script>
 <script src="{{ url_for('static', filename='js/dependencies.js') }}"></script>
 {% endblock %}

@@ -219,8 +219,8 @@ function showEmptyState() {
     const container = document.querySelector('.backup-table-container');
     if (container && !document.querySelector('.backup-row')) {
         container.innerHTML = `
-            <div class="empty-state backup-empty">
-                <div class="empty-state-icon"><i class="fa-solid fa-box-archive"></i></div>
+            <div class="empty-state empty-state--dark empty-state--flex">
+                <div class="empty-icon"><i class="fa-solid fa-box-archive"></i></div>
                 <h3>No backups available</h3>
                 <p>Backups are automatically created before any changes are committed</p>
                 <div class="empty-tips">

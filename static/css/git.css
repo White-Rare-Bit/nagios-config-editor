@@ -561,47 +561,8 @@
 }
 
 /* ============================================================================
-   Empty/Loading States
+   Loading State
    ============================================================================ */
-
-.git-empty-state,
-.git-clean-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    flex: 1;
-    width: 100%;
-    color: var(--nbe-dark-text-secondary);
-    text-align: center;
-    padding: var(--nbe-space-2xl);
-    box-sizing: border-box;
-}
-
-.git-empty-state .icon,
-.git-empty-state .empty-icon,
-.git-clean-state .icon,
-.git-clean-state .empty-icon {
-    font-size: var(--nbe-font-size-icon-xl);
-    margin-bottom: var(--nbe-space-lg);
-    opacity: 0.6;
-    color: var(--nbe-dark-text-muted);
-}
-
-.git-empty-state h3,
-.git-clean-state h3 {
-    margin: 0 0 var(--nbe-space-sm);
-    color: var(--nbe-dark-text-primary);
-    font-size: var(--nbe-font-size-xl);
-    font-weight: 500;
-}
-
-.git-empty-state p,
-.git-clean-state p {
-    margin: 0 0 var(--nbe-space-xl);
-    font-size: var(--nbe-font-size-md);
-    color: var(--nbe-dark-text-secondary);
-}
 
 .git-loading {
     display: flex;

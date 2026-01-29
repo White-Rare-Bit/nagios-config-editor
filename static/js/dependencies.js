@@ -79,6 +79,37 @@ console.log('dependencies.js loaded');
         custom: null  // No preset, use checkbox state
     };
 
+    // Quick view presets - combines edge filter + optimal layout for common exploration patterns
+    // Each preset answers a specific admin question with the best visual representation
+    const quickViewPresets = {
+        inheritance: {
+            categories: ['templates'],
+            layout: 'hierarchical',  // Dagre TB - template chains flow top-down
+            description: 'Template inheritance chains'
+        },
+        network: {
+            categories: ['dependencies'],
+            layout: 'hierarchical',  // Dagre TB - network topology flows parent→child
+            description: 'Host parent-child topology and service bindings'
+        },
+        contacts: {
+            categories: ['contacts', 'templates'],  // Include templates to find inherited contacts
+            layout: 'hierarchicalLR',  // Dagre LR - notification flows left→right
+            description: 'Notification routing to contacts',
+            includeMembers: true,  // Also follow contactgroup → contact via members edge
+            directional: true  // Only follow outward: object → contacts (not reverse)
+        },
+        full: {
+            categories: ['dependencies', 'templates', 'groups'],  // Match explorer default
+            layout: 'static',  // COSe force-directed - best for exploration
+            description: 'Full config graph (same as explorer)',
+            useSmartExpansion: true  // Use addAllConnectedRecursively for semantic-aware expansion
+        }
+    };
+
+    // Currently active quick view preset (null = custom)
+    let activeQuickView = null;
+
     // Currently enabled edge categories
     let enabledCategories = new Set(['dependencies', 'templates', 'groups']);
 
@@ -301,9 +332,6 @@ console.log('dependencies.js loaded');
                 case 'applyLayout':
                     applyLayout();
                     break;
-                case 'onViewModeChange':
-                    onViewModeChange();
-                    break;
                 case 'onEdgeFilterChange':
                     onEdgeFilterChange();
                     break;
@@ -318,9 +346,6 @@ console.log('dependencies.js loaded');
             const action = actionEl.dataset.action;
             switch (action) {
                 // Sidebar buttons
-                case 'addConnected':
-                    addConnected();
-                    break;
                 case 'fitGraph':
                     fitGraph();
                     break;
@@ -329,6 +354,9 @@ console.log('dependencies.js loaded');
                     break;
                 case 'toggleEdgeLabels':
                     toggleEdgeLabels();
+                    break;
+                case 'applyQuickView':
+                    applyQuickView(actionEl.dataset.preset);
                     break;
                 // Context menu items
                 case 'contextExpandConnections':
@@ -1344,11 +1372,9 @@ console.log('dependencies.js loaded');
     }
 
     function performNodeSearch(search) {
-        const typeFilter = document.getElementById('objectType').value;
         const results = [];
 
         for (const node of allNodes) {
-            if (typeFilter && node.type !== typeFilter) continue;
             if (node.label.toLowerCase().includes(search)) {
                 results.push(node);
                 if (results.length >= 30) break;
@@ -1400,6 +1426,11 @@ console.log('dependencies.js loaded');
             return;
         }
 
+        // If this is the first node, set it as the focus/root node
+        if (addedNodeIds.size === 0) {
+            focusNodeId = nodeId;
+        }
+
         addedNodeIds.add(nodeId);
         updateGraph();
         updateAddedNodesList();
@@ -1408,32 +1439,6 @@ console.log('dependencies.js loaded');
 
     function removeNode(nodeId) {
         addedNodeIds.delete(nodeId);
-        updateGraph();
-        updateAddedNodesList();
-        saveGraphState();
-    }
-
-    function addAllOfType() {
-        const typeFilter = document.getElementById('objectType').value;
-        if (!typeFilter) {
-            showToast('Please select an object type first', 'warning');
-            return;
-        }
-
-        const maxNodes = MAX_NODES;
-        let added = 0;
-
-        for (const node of allNodes) {
-            if (node.type === typeFilter && !addedNodeIds.has(node.id)) {
-                if (addedNodeIds.size >= maxNodes) {
-                    showToast(`Reached maximum of ${maxNodes} nodes. Added ${added} nodes.`, 'info');
-                    break;
-                }
-                addedNodeIds.add(node.id);
-                added++;
-            }
-        }
-
         updateGraph();
         updateAddedNodesList();
         saveGraphState();
@@ -1475,6 +1480,8 @@ console.log('dependencies.js loaded');
     function clearGraph() {
         addedNodeIds.clear();
         focusNodeId = null;  // Clear the focus node as well
+        activeQuickView = null;  // Clear active quick view
+        updateQuickViewButtons();  // Update button states
         updateGraph();
         updateAddedNodesList();
         saveGraphState();
@@ -1564,22 +1571,6 @@ console.log('dependencies.js loaded');
         });
     }
 
-    // Handle view mode dropdown change
-    function onViewModeChange() {
-        const viewMode = document.getElementById('viewMode').value;
-        const preset = viewModePresets[viewMode];
-
-        if (preset) {
-            // Apply preset - update enabledCategories and sync checkboxes
-            enabledCategories = new Set(preset);
-            syncCheckboxesToCategories();
-        }
-        // For 'custom', keep current checkbox state
-
-        updateGraph();
-        saveGraphState();
-    }
-
     // Handle individual edge filter checkbox change
     function onEdgeFilterChange() {
         // Read current checkbox state
@@ -1591,23 +1582,154 @@ console.log('dependencies.js loaded');
             }
         });
 
-        // Switch view mode to "Custom" since user manually changed filters
-        const viewModeSelect = document.getElementById('viewMode');
-        if (viewModeSelect.value !== 'custom') {
-            // Check if current state matches any preset
-            let matchedPreset = null;
-            for (const [mode, preset] of Object.entries(viewModePresets)) {
-                if (preset && preset.length === enabledCategories.size &&
-                    preset.every(cat => enabledCategories.has(cat))) {
-                    matchedPreset = mode;
-                    break;
-                }
-            }
-            viewModeSelect.value = matchedPreset || 'custom';
-        }
+        // Clear active quick view since user is making custom changes
+        clearActiveQuickView();
 
         updateGraph();
         saveGraphState();
+    }
+
+    // Apply a quick view preset - sets edge filters, auto-expands connections, applies optimal layout
+    function applyQuickView(preset) {
+        const config = quickViewPresets[preset];
+        if (!config) {
+            console.warn('Unknown quick view preset:', preset);
+            return;
+        }
+
+        // Update active quick view
+        activeQuickView = preset;
+
+        // Apply edge category filter
+        enabledCategories = new Set(config.categories);
+        syncCheckboxesToCategories();
+
+        // Apply optimal layout
+        const layoutSelect = document.getElementById('layoutType');
+        if (layoutSelect) {
+            layoutSelect.value = config.layout;
+        }
+
+        // Determine the root node (the node user searched for)
+        // Use focusNodeId if set AND valid, otherwise the first added node
+        // Validation prevents ghost nodes if focusNodeId references a deleted object
+        const validFocusNode = focusNodeId && allNodes.find(n => n.id === focusNodeId) ? focusNodeId : null;
+        const rootNode = validFocusNode || (addedNodeIds.size > 0 ? [...addedNodeIds][0] : null);
+
+        if (!rootNode) {
+            // No root node available - inform user and don't change button state
+            showToast('Add a node to the graph first, then apply a quick view', 'info');
+            activeQuickView = null;  // Reset since we couldn't apply
+            updateQuickViewButtons();
+            return;
+        }
+
+        // Clear all expanded nodes and start fresh from root
+        addedNodeIds.clear();
+        addedNodeIds.add(rootNode);  // Always include the root node
+
+        if (config.useSmartExpansion) {
+            // Use semantic-aware expansion that understands Nagios object relationships
+            addAllConnectedRecursively(rootNode);
+        } else {
+            // Re-expand from root with this view's edge category settings
+            const expandOptions = {
+                includeMembers: config.includeMembers || false,
+                directional: config.directional || false
+            };
+            expandConnectionsForCategories(rootNode, config.categories, expandOptions);
+        }
+
+        // Update button states
+        updateQuickViewButtons();
+
+        // Refresh graph with new settings
+        updateGraph();
+        updateAddedNodesList();
+        saveGraphState();
+    }
+
+    // Expand connections from a node following only edges in specified categories
+    // Expand connections following edges in specified categories
+    // Options:
+    //   includeMembers: also follow 'members' edges (for contactgroup→contact)
+    //   directional: only follow from→to direction (avoid pulling in siblings)
+    function expandConnectionsForCategories(startNodeId, categories, options = {}) {
+        const visited = new Set();
+        const toVisit = [startNodeId];
+
+        // Build set of edge labels to follow based on categories
+        const allowedLabels = new Set();
+        for (const category of categories) {
+            const labels = edgeCategories[category];
+            if (labels) {
+                labels.forEach(l => allowedLabels.add(l));
+            }
+        }
+
+        // If includeMembers option is set, also follow 'members' edges
+        if (options.includeMembers) {
+            allowedLabels.add('members');
+        }
+
+        // Inheritance-only view is always directional (follow upward only)
+        const isInheritanceOnly = categories.length === 1 && categories[0] === 'templates';
+        const isDirectionalView = isInheritanceOnly || options.directional;
+
+        while (toVisit.length > 0) {
+            const nodeId = toVisit.pop();
+            if (visited.has(nodeId)) continue;
+            visited.add(nodeId);
+
+            // Add this node
+            addedNodeIds.add(nodeId);
+
+            // Find connected nodes via allowed edge labels
+            for (const edge of allEdges) {
+                if (!allowedLabels.has(edge.label)) continue;
+
+                let connectedId = null;
+
+                if (isDirectionalView) {
+                    // For directional views: only follow from→to direction
+                    if (edge.from === nodeId) {
+                        connectedId = edge.to;
+                    }
+                } else {
+                    // For other views: follow edges in both directions
+                    if (edge.from === nodeId) {
+                        connectedId = edge.to;
+                    } else if (edge.to === nodeId) {
+                        connectedId = edge.from;
+                    }
+                }
+
+                if (connectedId && !visited.has(connectedId)) {
+                    toVisit.push(connectedId);
+                }
+            }
+        }
+    }
+
+    // Update quick view button active states
+    function updateQuickViewButtons() {
+        const buttons = document.querySelectorAll('.quick-view-btn');
+        buttons.forEach(btn => {
+            const preset = btn.dataset.preset;
+            if (preset === activeQuickView) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+
+    // Clear active quick view when user makes custom changes
+    function clearActiveQuickView() {
+        if (activeQuickView) {
+            activeQuickView = null;
+            updateQuickViewButtons();
+        }
     }
 
     function updateGraph() {
@@ -1623,12 +1745,18 @@ console.log('dependencies.js loaded');
             connectedNodeIds.add(edge.to);
         }
 
-        // Filter nodes: must be in addedNodeIds AND have visible connections
-        // Exception: if only one node is added (starting point), show it even without edges
+        // Filter nodes: show if they have visible connections OR are focus/selected
+        // This provides focused views while keeping the user's primary node visible
         const displayNodes = allNodes.filter(n => {
             if (!addedNodeIds.has(n.id)) return false;
-            // Show node if it has connections OR it's the only node (user just added it)
-            return connectedNodeIds.has(n.id) || addedNodeIds.size === 1;
+            // Always show focus node (layout center)
+            if (n.id === focusNodeId) return true;
+            // Always show selected node in Cytoscape
+            if (cy && cy.$id(n.id).selected()) return true;
+            // Always show if only one node added
+            if (addedNodeIds.size === 1) return true;
+            // Otherwise, must have visible edges
+            return connectedNodeIds.has(n.id);
         });
 
         renderGraph(displayNodes, displayEdges);
@@ -2023,7 +2151,12 @@ console.log('dependencies.js loaded');
         }
     });
 
-    function applyLayout() { updateGraph(); saveGraphState(); }
+    function applyLayout() {
+        // Clear active quick view since user is making custom changes
+        clearActiveQuickView();
+        updateGraph();
+        saveGraphState();
+    }
     function fitGraph() {
         if (cy) cy.fit(50);
     }
@@ -2313,7 +2446,6 @@ console.log('dependencies.js loaded');
     // Expose functions to global scope for inline onclick handlers
     window.addNode = addNode;
     window.removeNode = removeNode;
-    window.addAllOfType = addAllOfType;
     window.addConnected = addConnected;
     window.clearGraph = clearGraph;
     window.openNodeInExplorer = openNodeInExplorer;

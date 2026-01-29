@@ -85,14 +85,14 @@ async function refreshAuditLog() {
         const data = await response.json();
 
         if (data.error) {
-            container.innerHTML = `<div class="audit-empty">Error: ${escapeHtml(data.error)}</div>`;
+            container.innerHTML = `<div class="empty-state empty-state--dark empty-state--flex">Error: ${escapeHtml(data.error)}</div>`;
             return;
         }
 
         allEntries = (data.entries || []).reverse();
         renderEntries();
     } catch (error) {
-        container.innerHTML = `<div class="audit-empty">Error loading audit log: ${escapeHtml(error.message)}</div>`;
+        container.innerHTML = `<div class="empty-state empty-state--dark empty-state--flex">Error loading audit log: ${escapeHtml(error.message)}</div>`;
     }
 }
 
@@ -103,7 +103,7 @@ function renderEntries() {
     if (allEntries.length === 0) {
         countEl.textContent = '0 entries';
         container.innerHTML = `
-            <div class="audit-empty">
+            <div class="empty-state empty-state--dark empty-state--flex">
                 <div class="empty-icon"><i class="fa-solid fa-clipboard-list"></i></div>
                 <h3>No audit log entries</h3>
                 <p>Changes will be logged here when you commit modifications to your Nagios configuration</p>
@@ -211,7 +211,7 @@ function renderEntries() {
             ? `No entries match "${escapeHtml(searchQuery)}". Try a different search term.`
             : 'No entries match the current filter. Try selecting different filters.';
         container.innerHTML = `
-            <div class="audit-empty">
+            <div class="empty-state empty-state--dark empty-state--flex">
                 <div class="empty-icon"><i class="fa-solid fa-magnifying-glass"></i></div>
                 <h3>No matching entries</h3>
                 <p>${emptyMessage}</p>
@@ -631,14 +631,14 @@ async function loadArchive(filename) {
         const data = await response.json();
 
         if (data.error) {
-            container.innerHTML = `<div class="audit-empty">Error: ${escapeHtml(data.error)}</div>`;
+            container.innerHTML = `<div class="empty-state empty-state--dark empty-state--flex">Error: ${escapeHtml(data.error)}</div>`;
             return;
         }
 
         allEntries = (data.entries || []).reverse();
         renderEntries();
     } catch (error) {
-        container.innerHTML = `<div class="audit-empty">Error loading archive: ${escapeHtml(error.message)}</div>`;
+        container.innerHTML = `<div class="empty-state empty-state--dark empty-state--flex">Error loading archive: ${escapeHtml(error.message)}</div>`;
     }
 }
 

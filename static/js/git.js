@@ -26,7 +26,7 @@ async function loadGitStatus(forceRefresh = false) {
     // Only show error if we have no data at all (network error)
     if (!statusResult.data) {
         console.error('Failed to load git status:', statusResult.error);
-        content.innerHTML = '<div class="git-empty-state"><h3>Error</h3><p>Failed to load git status</p></div>';
+        content.innerHTML = '<div class="empty-state empty-state--dark empty-state--flex"><h3>Error</h3><p>Failed to load git status</p></div>';
         return;
     }
 
@@ -40,8 +40,8 @@ async function loadGitStatus(forceRefresh = false) {
             <p class="sidebar-info-text">Make changes and use the Commit button in the navbar to initialize git.</p>
         `;
         content.innerHTML = `
-            <div class="git-empty-state">
-                <div class="icon">&#128193;</div>
+            <div class="empty-state empty-state--dark empty-state--flex">
+                <div class="empty-icon"><i class="fa-solid fa-folder-open"></i></div>
                 <h3>Not a Git Repository</h3>
                 <p>Use the Commit button in the navbar to initialize git<br>and create your first commit.</p>
             </div>
@@ -52,7 +52,7 @@ async function loadGitStatus(forceRefresh = false) {
 
     if (data.error) {
         repoStatus.innerHTML = `<p class="sidebar-info-text" style="color: var(--color-delete);">${data.error}</p>`;
-        content.innerHTML = `<div class="git-empty-state"><h3>Error</h3><p>${data.error}</p></div>`;
+        content.innerHTML = `<div class="empty-state empty-state--dark empty-state--flex"><h3>Error</h3><p>${escapeHtml(data.error)}</p></div>`;
         return;
     }
 
@@ -137,8 +137,8 @@ function renderGitStatus() {
     // Clean state - no changes at all
     if (!gitStatus.has_changes && !hasStagedChanges) {
         content.innerHTML = `
-            <div class="git-clean-state">
-                <div class="icon">&#10024;</div>
+            <div class="empty-state empty-state--dark empty-state--flex">
+                <div class="empty-icon"><i class="fa-solid fa-circle-check"></i></div>
                 <h3>Working Directory Clean</h3>
                 <p>No uncommitted changes to your configuration files</p>
                 <div class="empty-tips">

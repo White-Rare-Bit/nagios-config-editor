@@ -1038,55 +1038,6 @@
     overflow: hidden;
 }
 
-/* Center empty state - Terminal style */
-.center-empty-state {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    color: var(--nbe-dark-text-secondary);
-    max-width: 400px;
-    margin: 0 auto;
-    text-align: center;
-    padding: var(--nbe-space-2xl);
-}
-
-.center-empty-state .empty-icon {
-    font-size: var(--nbe-font-size-icon-xl);
-    margin-bottom: var(--nbe-space-lg);
-    opacity: 0.6;
-    color: var(--nbe-dark-accent-primary);
-}
-
-.center-empty-state h3 {
-    margin: 0 0 var(--nbe-space-sm);
-    font-size: var(--nbe-font-size-xl);
-    font-weight: 500;
-    color: var(--nbe-dark-text-primary);
-}
-
-.center-empty-state p {
-    margin: 0 0 var(--nbe-space-xl);
-    font-size: var(--nbe-font-size-md);
-    color: var(--nbe-dark-text-secondary);
-}
-
-.center-empty-state .empty-tips {
-    background: var(--nbe-dark-bg-secondary);
-    border: 1px solid var(--nbe-dark-border-primary);
-    box-shadow: none;
-}
-
-.center-empty-state .empty-tips .tip {
-    color: var(--nbe-dark-text-secondary);
-    border-bottom-color: var(--nbe-dark-border-primary);
-}
-
-.center-empty-state .empty-tips .tip strong {
-    color: var(--nbe-dark-accent-primary);
-}
-
 .center-content {
     flex: 1;
     display: flex;

@@ -137,6 +137,16 @@ def api_dependencies():
             nodes.append(node_data)
             node_ids.add(node_id)
             defined_node_ids.add(node_id)
+        else:
+            # Node was already created (possibly as orphan reference) - update it
+            # to mark it as existing and set template flag if applicable
+            for existing_node in nodes:
+                if existing_node['id'] == node_id:
+                    existing_node['exists'] = True
+                    if (obj.object_type, obj_name) in template_names:
+                        existing_node['is_template'] = True
+                    break
+            defined_node_ids.add(node_id)
 
         resolved_attrs = resolve_inherited_attributes(obj)
 
