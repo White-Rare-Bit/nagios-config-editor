@@ -215,11 +215,6 @@
     font-size: var(--nbe-font-size-sm);
 }
 
-.backup-table thead th {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-}
 
 .backup-table th {
     background: var(--nbe-dark-bg-secondary);
