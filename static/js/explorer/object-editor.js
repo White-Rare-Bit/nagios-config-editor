@@ -1376,11 +1376,20 @@
     /**
      * Get all templates for a specific object type.
      * Filters by register=0 and matches object type for type-safe autocomplete.
+     *
+     * D-04: Nagios Template Convention:
+     * - In Nagios, objects with "register 0" are templates (not monitored)
+     * - Templates must have a "name" attribute (for inheritance reference)
+     * - Regular objects have "register 1" (default, often omitted)
+     * - Templates are referenced via the "use" directive in other objects
+     * - An object can inherit from multiple templates (comma-separated)
+     * - Inheritance is processed in order; later templates override earlier ones
+     *
      * @param {string} objectType - Object type (host, service, etc.)
      * @returns {Array<string>} - Template names with optional alias suffix
      */
     function getTemplatesForType(objectType) {
-        // Get all templates for the given object type
+        // Get all templates for the given object type (register=0 is the Nagios template marker)
         const templates = state.allObjects
             .filter(o => o.object_type === objectType && o.attributes.register === '0')
             .map(o => {
