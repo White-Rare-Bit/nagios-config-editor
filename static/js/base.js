@@ -33,7 +33,10 @@ const baseState = {
     gitOnlyContextLines: 3,
 
     // Reference analysis
-    currentRefData: null
+    currentRefData: null,
+
+    // C-10: Pending commit message for retry after failed git commit
+    pendingCommitMessage: null
 };
 
 // Global lock state alias - used by explorer/data-loading.js for lock status checks
@@ -828,7 +831,7 @@ async function discardGitChanges() {
     showGitDiscardResultPanel(result.success && result.data?.success, result.data || { error: result.error });
 }
 
-function showResultPanel({ command, success, title, outputHtml, needsReload = true }) {
+function showResultPanel({ command, success, title, outputHtml, needsReload = true, showRetryCommit = false }) {
     const overlay = document.getElementById('gitResultOverlay');
     const icon = document.getElementById('gitResultIcon');
     const titleEl = document.getElementById('gitResultTitle');
@@ -842,9 +845,62 @@ function showResultPanel({ command, success, title, outputHtml, needsReload = tr
     titleEl.textContent = title;
     commandEl.textContent = command;
     output.className = 'git-result-output';
-    output.innerHTML = outputHtml;
+
+    // C-10: Add retry button if commit failed but staging was preserved
+    let retryButtonHtml = '';
+    if (showRetryCommit) {
+        retryButtonHtml = `
+            <div class="git-retry-section">
+                <button class="btn-retry-commit" onclick="retryGitCommit()">
+                    <i class="fa-solid fa-redo"></i> Retry Commit
+                </button>
+                <button class="btn-discard-staging" onclick="discardStagingAfterFailedCommit()">
+                    Discard Staging
+                </button>
+            </div>
+        `;
+    }
+    output.innerHTML = outputHtml + retryButtonHtml;
 
     overlay.classList.add('visible');
+}
+
+/**
+ * C-10: Retry git commit after a failed attempt.
+ * Staging was preserved after apply, so we can retry the commit.
+ */
+async function retryGitCommit() {
+    const message = baseState.pendingCommitMessage;
+    if (!message) {
+        showToast('No pending commit message found', 'error');
+        return;
+    }
+
+    // Close the result panel and retry
+    const overlay = document.getElementById('gitResultOverlay');
+    overlay.classList.remove('visible');
+
+    await autoGitCommitGlobal(message, true);
+}
+
+/**
+ * C-10: Discard staging after a failed commit.
+ * User chose not to retry, so clear the preserved staging.
+ */
+async function discardStagingAfterFailedCommit() {
+    const confirmed = await showConfirmDialog({
+        title: 'Discard Staging?',
+        message: 'Your changes have been written to disk but not committed to git. Discarding staging will clear the staging state. The files on disk will remain changed.',
+        confirmText: 'Discard Staging',
+        type: 'warning'
+    });
+
+    if (confirmed) {
+        await ApiClient.delete('/api/staging', { silent: true });
+        baseState.pendingCommitMessage = null;
+        closeGitResultOverlay();
+        showToast('Staging cleared', 'info');
+    }
 }
 
 function showGitDiscardResultPanel(success, result) {
@@ -1489,17 +1545,21 @@ async function applyGlobalCommit() {
     const updateRefsCheckbox = document.getElementById('globalUpdateReferences');
     const updateReferences = updateRefsCheckbox ? updateRefsCheckbox.checked : false;
 
-    // First, apply all staged changes to disk using the new apply endpoint
-    const applyResult = await ApiClient.post('/api/staging/apply', { updateReferences }, { silent: true });
+    // C-10: Apply with deferClear=true to ensure atomicity with git commit
+    // If git commit fails, staging remains intact for retry
+    const applyResult = await ApiClient.post('/api/staging/apply', {
+        updateReferences,
+        deferClear: true  // Don't clear staging yet - wait for git commit success
+    }, { silent: true });
 
     if (!applyResult.success || !applyResult.data?.success) {
         showStagingResultPanel(false, applyResult.data?.error || applyResult.error || 'Failed to apply staged changes');
         return;
     }
 
-    // Now do the git commit
+    // Now do the git commit - pass callback to clear staging on success
     updateNavCommitButton(0);
-    await autoGitCommitGlobal(commitMessage);
+    await autoGitCommitGlobal(commitMessage, true);  // true = clear staging on success
 }
 
 function showStagingResultPanel(success, message) {
@@ -1512,7 +1572,7 @@ function showStagingResultPanel(success, message) {
     });
 }
 
-async function autoGitCommitGlobal(message) {
+async function autoGitCommitGlobal(message, clearStagingOnSuccess = false) {
     if (!message) return;
 
     const identity = getUserIdentity();
@@ -1529,14 +1589,22 @@ async function autoGitCommitGlobal(message) {
     }, { silent: true });
 
     if (!result.success && result.data?.needsConfig) {
-        showGitResultPanel(message, false, { error: 'Configure git name and email in Settings to enable version control' });
+        showGitResultPanel(message, false, { error: 'Configure git name and email in Settings to enable version control' }, clearStagingOnSuccess);
         return;
     }
 
-    showGitResultPanel(message, result.success, result.data || { error: result.error });
+    const isSuccess = result.success && result.data?.success;
+
+    // C-10: Only clear staging if commit was successful
+    if (isSuccess && clearStagingOnSuccess) {
+        // Clear staging after successful commit
+        await ApiClient.delete('/api/staging', { silent: true });
+    }
+
+    showGitResultPanel(message, result.success, result.data || { error: result.error }, clearStagingOnSuccess && !isSuccess);
 }
 
-function showGitResultPanel(message, success, result) {
+function showGitResultPanel(message, success, result, showRetryOption = false) {
     const identity = getUserIdentity();
     const displayMessage = message.length > 60 ? message.substring(0, 60) + '...' : message;
     const command = `git -c user.name="${identity.userName || '?'}" -c user.email="${identity.userEmail || '?'}" commit -m "${displayMessage}"`;
@@ -1554,13 +1622,22 @@ function showGitResultPanel(message, success, result) {
     } else {
         const errorMsg = result.error || 'Unknown error occurred';
         outputHtml = `<span class="error-text">${escapeHtml(errorMsg)}</span>`;
+
+        // C-10: Show retry option if staging was preserved after apply
+        if (showRetryOption) {
+            outputHtml += '\n\n<span class="info-text">Changes have been applied to disk but not committed to git.</span>';
+            outputHtml += '\n<span class="info-text">Staging preserved - you can retry the commit.</span>';
+            // Store message for retry
+            baseState.pendingCommitMessage = message;
+        }
     }
 
     showResultPanel({
         command,
         success: isSuccess,
         title: isSuccess ? 'Git Commit Successful' : 'Git Commit Failed',
-        outputHtml
+        outputHtml,
+        showRetryCommit: showRetryOption && !isSuccess
     });
 }
 

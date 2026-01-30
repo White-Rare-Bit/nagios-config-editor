@@ -25,6 +25,31 @@ NAME_FIELDS: Dict[str, str] = {
     'hostescalation': 'host_name',
 }
 
+# C-05: Required fields per object type for validation
+# Each entry is a list of field requirements:
+# - String: field is required
+# - Tuple of strings: at least one of these fields must be present (OR condition)
+# Note: Templates (register=0) require 'name' instead of the type-specific name field
+REQUIRED_FIELDS: Dict[str, List] = {
+    'host': ['host_name'],  # Templates need 'name' instead
+    'hostgroup': ['hostgroup_name'],
+    'service': ['service_description', ('host_name', 'hostgroup_name')],  # Need target host(s)
+    'servicegroup': ['servicegroup_name'],
+    'contact': ['contact_name'],
+    'contactgroup': ['contactgroup_name'],
+    'command': ['command_name', 'command_line'],
+    'timeperiod': ['timeperiod_name'],
+    'hostdependency': [('host_name', 'hostgroup_name'), ('dependent_host_name', 'dependent_hostgroup_name')],
+    'servicedependency': [
+        'service_description',
+        ('host_name', 'hostgroup_name'),
+        'dependent_service_description',
+        ('dependent_host_name', 'dependent_hostgroup_name')
+    ],
+    'hostescalation': [('host_name', 'hostgroup_name')],
+    'serviceescalation': ['service_description', ('host_name', 'hostgroup_name')],
+}
+
 # Attribute sort order for formatting (name fields first, then alphabetical)
 ATTRIBUTE_SORT_ORDER: List[str] = [
     'host_name', 'hostgroup_name', 'service_description',

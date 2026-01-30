@@ -691,7 +691,7 @@ async function loadArchivesList() {
             html += `
                 <div class="archive-item ${currentArchive === archive.filename ? 'active' : ''}"
                      data-archive="${escapeHtml(archive.filename)}"
-                     onclick="loadArchive('${escapeHtml(archive.filename)}')">
+                     onclick="loadArchive('${escapeJs(archive.filename)}')">
                     <span class="archive-name">${escapeHtml(displayDate)}</span>
                     <span class="archive-size">${sizeKB} KB</span>
                 </div>

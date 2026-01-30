@@ -5,11 +5,121 @@ let browseTargetField = null;
 let browseMode = 'dir';
 let currentBrowsePath = '/';
 
+// =============================================================================
+// Path Validation (C-03: Client-side feedback for invalid paths)
+// =============================================================================
+
+/**
+ * Validate a file system path for security issues.
+ * Provides client-side feedback before sending to server.
+ *
+ * @param {string} path - The path to validate
+ * @param {string} fieldName - Human-readable field name for error messages
+ * @returns {{valid: boolean, error: string|null}} Validation result
+ */
+function validatePath(path, fieldName) {
+    if (!path || path.trim() === '') {
+        return { valid: true, error: null }; // Empty paths are allowed (will use defaults)
+    }
+
+    path = path.trim();
+
+    // Check for null byte injection
+    if (path.includes('\0')) {
+        return {
+            valid: false,
+            error: `${fieldName}: Path contains invalid null character`
+        };
+    }
+
+    // Check for path traversal attempts
+    // Split by both forward and back slashes to handle cross-platform paths
+    const segments = path.split(/[/\\]/);
+    for (const segment of segments) {
+        if (segment === '..') {
+            return {
+                valid: false,
+                error: `${fieldName}: Path traversal (..) is not allowed`
+            };
+        }
+    }
+
+    // Check for other potentially dangerous patterns
+    // Control characters (except common whitespace)
+    if (/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(path)) {
+        return {
+            valid: false,
+            error: `${fieldName}: Path contains invalid control characters`
+        };
+    }
+
+    return { valid: true, error: null };
+}
+
+/**
+ * Validate all path fields before saving.
+ * @returns {{valid: boolean, errors: string[]}} Validation result with all errors
+ */
+function validateAllPaths() {
+    const errors = [];
+
+    const pathFields = [
+        { id: 'nagiosConfigPath', name: 'Nagios Config Path' },
+        { id: 'backupPath', name: 'Backup Path' },
+        { id: 'nagiosBin', name: 'Nagios Binary' },
+        { id: 'nagiosCfg', name: 'Nagios Config File' }
+    ];
+
+    for (const field of pathFields) {
+        const el = document.getElementById(field.id);
+        if (el) {
+            const result = validatePath(el.value, field.name);
+            if (!result.valid) {
+                errors.push(result.error);
+                // Highlight the invalid field
+                el.classList.add('is-invalid');
+            } else {
+                el.classList.remove('is-invalid');
+            }
+        }
+    }
+
+    return { valid: errors.length === 0, errors };
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     refreshStatus();
     loadGitIdentity();
     loadLoggingSettings();
     restoreActiveTab();
+
+    // C-03: Real-time path validation as user types
+    const pathFields = ['nagiosConfigPath', 'backupPath', 'nagiosBin', 'nagiosCfg'];
+    const fieldNames = {
+        'nagiosConfigPath': 'Nagios Config Path',
+        'backupPath': 'Backup Path',
+        'nagiosBin': 'Nagios Binary',
+        'nagiosCfg': 'Nagios Config File'
+    };
+
+    pathFields.forEach(fieldId => {
+        const el = document.getElementById(fieldId);
+        if (el) {
+            el.addEventListener('input', function() {
+                const result = validatePath(this.value, fieldNames[fieldId]);
+                if (!result.valid) {
+                    this.classList.add('is-invalid');
+                    // Show inline error if there's a feedback element
+                    const feedback = this.nextElementSibling;
+                    if (feedback && feedback.classList.contains('invalid-feedback')) {
+                        feedback.textContent = result.error;
+                    }
+                } else {
+                    this.classList.remove('is-invalid');
+                }
+            });
+        }
+    });
 
     // Event delegation for data-action elements
     document.addEventListener('click', function(e) {
@@ -151,6 +261,13 @@ async function saveServerSettings() {
         return;
     }
 
+    // C-03: Client-side path validation before sending to server
+    const validation = validateAllPaths();
+    if (!validation.valid) {
+        showToast('Invalid path: ' + validation.errors[0], 'error');
+        return;
+    }
+
     // Save server settings (config paths)
     const settings = {
         nagios_config_path: document.getElementById('nagiosConfigPath').value,
@@ -233,7 +350,7 @@ async function loadDirectory(path) {
 
     if (result.data.parent) {
         html += `
-            <a href="#" class="list-group-item list-group-item-action" onclick="loadDirectory('${escapeHtml(result.data.parent)}'); return false;">
+            <a href="#" class="list-group-item list-group-item-action" onclick="loadDirectory('${escapeJs(result.data.parent)}'); return false;">
                 <i class="text-muted">..</i> (parent directory)
             </a>
         `;
@@ -242,13 +359,13 @@ async function loadDirectory(path) {
     for (const entry of result.data.entries) {
         if (entry.is_dir) {
             html += `
-                <a href="#" class="list-group-item list-group-item-action" onclick="loadDirectory('${escapeHtml(entry.path)}'); return false;">
+                <a href="#" class="list-group-item list-group-item-action" onclick="loadDirectory('${escapeJs(entry.path)}'); return false;">
                     <strong>${escapeHtml(entry.name)}/</strong>
                 </a>
             `;
         } else if (browseMode === 'file') {
             html += `
-                <a href="#" class="list-group-item list-group-item-action" onclick="selectFile('${escapeHtml(entry.path)}'); return false;">
+                <a href="#" class="list-group-item list-group-item-action" onclick="selectFile('${escapeJs(entry.path)}'); return false;">
                     ${escapeHtml(entry.name)}
                 </a>
             `;

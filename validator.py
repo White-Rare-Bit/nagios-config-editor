@@ -36,6 +36,13 @@ class ValidationResult:
 class NagiosValidator:
     """Validates Nagios configuration files."""
 
+    # Pattern to match Nagios version output
+    # Examples: "Nagios Core 4.4.6", "Nagios 3.5.1", "Naemon Core 1.2.3"
+    NAGIOS_VERSION_PATTERN = re.compile(
+        r'(Nagios(\s+Core)?|Naemon(\s+Core)?)\s+\d+\.\d+',
+        re.IGNORECASE
+    )
+
     def __init__(self, nagios_bin: str = "/usr/local/nagios/bin/nagios",
                  config_file: str = "./sample-config/nagios.cfg"):
         self.nagios_bin = nagios_bin
@@ -54,12 +61,29 @@ class NagiosValidator:
                     self.nagios_bin = path
                     break
 
-    def validate(self) -> ValidationResult:
+    def validate(self, skip_binary_verification: bool = False) -> ValidationResult:
         """
         Run nagios -v to validate the configuration.
 
+        Args:
+            skip_binary_verification: Skip verification that binary is Nagios.
+                                     Only set True if binary was already verified.
+
         Returns a ValidationResult with parsed errors and warnings.
         """
+        # Security: Verify binary is actually Nagios before executing with config
+        if not skip_binary_verification:
+            is_valid, message, _ = self.verify_binary()
+            if not is_valid:
+                return ValidationResult(
+                    success=False,
+                    errors=[{'message': f'Invalid Nagios binary: {message}'}],
+                    warnings=[],
+                    total_errors=1,
+                    total_warnings=0,
+                    raw_output=f'Binary verification failed: {message}'
+                )
+
         if not os.path.exists(self.nagios_bin):
             return ValidationResult(
                 success=False,
@@ -198,9 +222,77 @@ class NagiosValidator:
             return False, f"Nagios binary exists but is not executable: {self.nagios_bin}"
         return False, f"Nagios binary not found: {self.nagios_bin}"
 
+    def verify_binary(self) -> Tuple[bool, str, Optional[str]]:
+        """Verify that the binary is actually a Nagios executable.
+
+        Security: Prevents command injection by verifying the binary
+        produces expected Nagios version output before using it.
+
+        Returns:
+            Tuple of (is_valid, message, version_string or None)
+        """
+        if not os.path.exists(self.nagios_bin):
+            return False, f"Binary not found: {self.nagios_bin}", None
+
+        if not os.access(self.nagios_bin, os.X_OK):
+            return False, f"Binary is not executable: {self.nagios_bin}", None
+
+        try:
+            # Run with -V flag to get version info
+            result = subprocess.run(
+                [self.nagios_bin, '-V'],
+                capture_output=True,
+                text=True,
+                timeout=5  # Short timeout for version check
+            )
+            output = result.stdout + result.stderr
+
+            # Check if output matches expected Nagios/Naemon version pattern
+            match = self.NAGIOS_VERSION_PATTERN.search(output)
+            if match:
+                # Extract full version line for display
+                version_line = None
+                for line in output.split('\n'):
+                    if self.NAGIOS_VERSION_PATTERN.search(line):
+                        version_line = line.strip()
+                        break
+                return True, "Valid Nagios binary", version_line
+
+            # Binary exists and runs but doesn't produce expected output
+            return False, "Binary does not appear to be Nagios (unexpected version output)", None
+
+        except subprocess.TimeoutExpired:
+            return False, "Binary timed out when checking version", None
+        except PermissionError:
+            return False, f"Permission denied executing: {self.nagios_bin}", None
+        except Exception as e:
+            return False, f"Error verifying binary: {str(e)}", None
+
 
 def validate_config(nagios_bin: str = "/usr/local/nagios/bin/nagios",
                     config_file: str = "./sample-config/nagios.cfg") -> ValidationResult:
     """Convenience function to validate Nagios configuration."""
     validator = NagiosValidator(nagios_bin, config_file)
     return validator.validate()
+
+
+def verify_nagios_binary(binary_path: str) -> Tuple[bool, str, Optional[str]]:
+    """Verify that a path points to a valid Nagios binary.
+
+    Security: Use this to validate user-provided paths before saving
+    to configuration. Prevents command injection attacks where a malicious
+    path could execute arbitrary code during validation.
+
+    Args:
+        binary_path: Path to the binary to verify
+
+    Returns:
+        Tuple of (is_valid, message, version_string or None)
+
+    Example:
+        is_valid, message, version = verify_nagios_binary('/usr/sbin/nagios')
+        if not is_valid:
+            return jsonify({'error': message}), 400
+    """
+    validator = NagiosValidator(nagios_bin=binary_path)
+    return validator.verify_binary()

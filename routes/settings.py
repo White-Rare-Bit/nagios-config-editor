@@ -21,6 +21,7 @@ from audit_service import (
     get_audit_log_path,
     rotate_audit_log,
 )
+from validator import verify_nagios_binary
 
 bp = Blueprint('settings', __name__)
 
@@ -114,8 +115,19 @@ def api_update_settings():
     # Update Nagios binary path
     if 'nagios_bin' in data:
         path = data['nagios_bin']
-        server_config.paths.nagios_bin = path
-        updated.append('nagios_bin')
+        if path:
+            # Security: Verify the binary is actually Nagios before saving
+            # This prevents command injection via malicious binary paths
+            is_valid, message, version = verify_nagios_binary(path)
+            if is_valid:
+                server_config.paths.nagios_bin = path
+                updated.append('nagios_bin')
+            else:
+                errors.append(f'Invalid Nagios binary: {message}')
+        else:
+            # Allow clearing the path
+            server_config.paths.nagios_bin = path
+            updated.append('nagios_bin')
 
     # Update Nagios config file path
     if 'nagios_cfg' in data:

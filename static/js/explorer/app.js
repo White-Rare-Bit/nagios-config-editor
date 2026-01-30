@@ -931,13 +931,13 @@ function buildFileTree(container, objects) {
             }).join('');
 
             return `
-            <div class="tree-folder${isOpen ? ' open' : ''}" data-file="${filePath}">
+            <div class="tree-folder${isOpen ? ' open' : ''}" data-file="${Explorer.escapeHtml(filePath)}">
                 <div class="tree-folder-header" onclick="Explorer.toggleFolder(this.parentElement)"
-                     ondragover="Explorer.handleDragOver(event)" ondrop="Explorer.handleDrop(event, '${filePath}')"
+                     ondragover="Explorer.handleDragOver(event)" ondrop="Explorer.handleDrop(event, '${Explorer.escapeJs(filePath)}')"
                      ondragleave="if(!this.contains(event.relatedTarget))this.closest('.tree-folder')?.classList.remove('drop-target')">
                     <span class="tree-folder-icon"><i class="fa-solid fa-chevron-right"></i></span>
                     <span class="tree-folder-name">${Explorer.escapeHtml(file)}</span>
-                    <button class="tree-folder-add-btn" onclick="event.stopPropagation(); Explorer.createNewObject('${filePath.replace(/'/g, "\\'")}')" title="Add new object">+</button>
+                    <button class="tree-folder-add-btn" onclick="event.stopPropagation(); Explorer.createNewObject('${Explorer.escapeJs(filePath)}')" title="Add new object">+</button>
                     <span class="tree-folder-count">${totalCount}${staged.length > 0 ? ` <span class="staged-count">(+${staged.length})</span>` : ''}</span>
                 </div>
                 <div class="tree-folder-children">

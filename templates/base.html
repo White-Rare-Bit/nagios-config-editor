@@ -1019,6 +1019,44 @@
     .git-result-output .error-text {
         color: var(--nbe-terminal-error);
     }
+    .git-result-output .info-text {
+        color: var(--nbe-terminal-prompt);
+    }
+    /* C-10: Retry commit section for failed git commits */
+    .git-retry-section {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--nbe-terminal-border);
+        display: flex;
+        gap: 8px;
+    }
+    .btn-retry-commit {
+        background: var(--nbe-primary);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: var(--nbe-typography-body-size);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .btn-retry-commit:hover {
+        background: var(--nbe-primary-hover);
+    }
+    .btn-discard-staging {
+        background: transparent;
+        color: var(--nbe-terminal-text);
+        border: 1px solid var(--nbe-terminal-border);
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: var(--nbe-typography-body-size);
+    }
+    .btn-discard-staging:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
     .cursor {
         color: var(--nbe-terminal-text);
         animation: blink 1s step-end infinite;

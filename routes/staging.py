@@ -861,7 +861,13 @@ def api_apply_staging():
     - Phases execute sequentially
     - If any phase encounters errors, execution halts immediately
     - On error, staging is NOT cleared (allows retry after fixing issues)
-    - On success, staging is cleared and parser is reloaded
+    - On success, staging is cleared UNLESS deferClear=true
+
+    Request body options:
+    - updateReferences: bool - Update references when objects are renamed
+    - deferClear: bool - If true, don't clear staging on success (C-10 fix).
+                         Use this when git commit will follow; clear staging
+                         manually after git commit succeeds.
 
     Returns summary of applied changes and optionally prompts for git commit.
     """
@@ -871,8 +877,10 @@ def api_apply_staging():
     op_log = get_op_logger()
 
     # C-06: Read updateReferences flag from request body (use silent=True to handle missing body)
+    # C-10: Read deferClear flag - if true, don't clear staging on success (for atomic apply+commit)
     request_data = request.get_json(silent=True) or {}
     update_references_flag = request_data.get('updateReferences', False)
+    defer_clear = request_data.get('deferClear', False)
 
     # Validate preconditions
     error_response, staging_data = _validate_apply_preconditions(sm, session_id, op_log)
@@ -934,7 +942,13 @@ def api_apply_staging():
                 log.warning(f"Reference update failed (non-fatal): {ref_err}")
                 errors.append(f"Reference update warning: {ref_err}")
 
-        sm.clear_staging()
+        # C-10: Only clear staging if deferClear is not requested
+        # When deferClear=true, caller will clear staging after git commit succeeds
+        staging_cleared = False
+        if not defer_clear:
+            sm.clear_staging()
+            staging_cleared = True
+
         total_changes = sum(applied_summary.values())
 
         # C-10: Track audit log write result and include failure in response
@@ -948,7 +962,9 @@ def api_apply_staging():
         response_data = {
             'success': True, 'applied': applied_summary,
             'totalChanges': total_changes, 'errors': errors if errors else None,
-            'referencesUpdated': refs_updated
+            'referencesUpdated': refs_updated,
+            'stagingCleared': staging_cleared,
+            'stagingDeferred': defer_clear
         }
         if audit_failed:
             response_data['warnings'] = ['Audit log write failed - changes applied but not logged']

@@ -121,6 +121,77 @@
         'members': null
     };
 
+    // C-05: Required fields per object type for validation
+    // Each entry is a list of field requirements:
+    // - String: field is required
+    // - Array of strings: at least one of these fields must be present (OR condition)
+    // Must stay in sync with REQUIRED_FIELDS in nagios_model.py
+    const REQUIRED_FIELDS = {
+        'host': ['host_name'],
+        'hostgroup': ['hostgroup_name'],
+        'service': ['service_description', ['host_name', 'hostgroup_name']],
+        'servicegroup': ['servicegroup_name'],
+        'contact': ['contact_name'],
+        'contactgroup': ['contactgroup_name'],
+        'command': ['command_name', 'command_line'],
+        'timeperiod': ['timeperiod_name'],
+        'hostdependency': [['host_name', 'hostgroup_name'], ['dependent_host_name', 'dependent_hostgroup_name']],
+        'servicedependency': [
+            'service_description',
+            ['host_name', 'hostgroup_name'],
+            'dependent_service_description',
+            ['dependent_host_name', 'dependent_hostgroup_name']
+        ],
+        'hostescalation': [['host_name', 'hostgroup_name']],
+        'serviceescalation': ['service_description', ['host_name', 'hostgroup_name']]
+    };
+
+    /**
+     * C-05: Validate object has required fields.
+     * @param {string} objectType - The object type
+     * @param {Object} attributes - The object attributes
+     * @returns {{valid: boolean, errors: string[]}} Validation result
+     */
+    function validateRequiredFields(objectType, attributes) {
+        const errors = [];
+        const requirements = REQUIRED_FIELDS[objectType];
+
+        if (!requirements) {
+            // Unknown object type - allow it (might be a custom type)
+            return { valid: true, errors: [] };
+        }
+
+        // Check if this is a template (register=0)
+        const isTemplate = attributes.register === '0';
+
+        // Templates need 'name' field instead of type-specific name field
+        if (isTemplate) {
+            if (!attributes.name || attributes.name.trim() === '') {
+                errors.push("Templates require the 'name' attribute");
+            }
+            // For templates, skip other required field checks (they're inherited)
+            return { valid: errors.length === 0, errors };
+        }
+
+        // Check each requirement
+        for (const req of requirements) {
+            if (Array.isArray(req)) {
+                // OR condition - at least one of these fields must be present
+                const hasAny = req.some(field => attributes[field] && attributes[field].trim() !== '');
+                if (!hasAny) {
+                    errors.push(`One of these fields is required: ${req.join(' or ')}`);
+                }
+            } else {
+                // Simple required field
+                if (!attributes[req] || attributes[req].trim() === '') {
+                    errors.push(`'${req}' is required`);
+                }
+            }
+        }
+
+        return { valid: errors.length === 0, errors };
+    }
+
     // Nagios attribute definitions by object type
     const NAGIOS_ATTRIBUTES = {
         host: [
@@ -477,9 +548,22 @@
 
         if (!refType) return [];
 
+        // C-06: Build a set of objects staged for deletion (source_file + line_number)
+        const stagedDeletions = state.stagedObjectDeletions || [];
+        const deletedKeys = new Set(
+            stagedDeletions.map(d => `${d.source_file}:${d.line_number}`)
+        );
+
         // Get all objects of the referenced type from current disk state
+        // C-06: Filter out objects that are staged for deletion
         const suggestions = state.allObjects
-            .filter(o => o.object_type === refType)
+            .filter(o => {
+                if (o.object_type !== refType) return false;
+                // Check if this object is staged for deletion
+                const objKey = `${o.source_file}:${o.line_number}`;
+                if (deletedKeys.has(objKey)) return false;
+                return true;
+            })
             .map(o => o.display_name)
             .filter(name => name && name !== '(unnamed)');
 
@@ -1093,6 +1177,23 @@
     function stageCurrentChanges() {
         const globalIndex = state.editedObject.global_index;
 
+        // C-05: Validate required fields (warning only - allow staging for template inheritance)
+        const validation = validateRequiredFields(
+            state.editedObject.object_type,
+            state.editedObject.attributes
+        );
+        if (!validation.valid) {
+            // Check if object uses a template (which may provide the missing fields)
+            const usesTemplate = state.editedObject.attributes.use && state.editedObject.attributes.use.trim() !== '';
+            if (usesTemplate) {
+                // Just show a subtle warning - template may provide the fields
+                console.warn(`Object may be missing required fields (may be inherited from template): ${validation.errors.join(', ')}`);
+            } else {
+                // Show warning toast for non-template objects
+                showToast(`Warning: ${validation.errors[0]}`, 'warning');
+            }
+        }
+
         // Get the original state (either from state.pendingEdits or current state.originalAttributes)
         const existingEdit = state.pendingEdits.get(globalIndex);
         const originalState = existingEdit ? existingEdit.original : {...state.originalAttributes};
@@ -1389,9 +1490,22 @@
      * @returns {Array<string>} - Template names with optional alias suffix
      */
     function getTemplatesForType(objectType) {
+        // C-06: Build a set of objects staged for deletion (source_file + line_number)
+        const stagedDeletions = state.stagedObjectDeletions || [];
+        const deletedKeys = new Set(
+            stagedDeletions.map(d => `${d.source_file}:${d.line_number}`)
+        );
+
         // Get all templates for the given object type (register=0 is the Nagios template marker)
+        // C-06: Filter out templates that are staged for deletion
         const templates = state.allObjects
-            .filter(o => o.object_type === objectType && o.attributes.register === '0')
+            .filter(o => {
+                if (o.object_type !== objectType || o.attributes.register !== '0') return false;
+                // Check if this template is staged for deletion
+                const objKey = `${o.source_file}:${o.line_number}`;
+                if (deletedKeys.has(objKey)) return false;
+                return true;
+            })
             .map(o => {
                 const name = o.attributes.name;
                 const alias = o.attributes.alias;
@@ -1433,6 +1547,7 @@
     Explorer.handleAddAttrAutocompleteKey = handleAddAttrAutocompleteKey;
     Explorer.checkForChanges = checkForChanges;
     Explorer.stageCurrentChanges = stageCurrentChanges;
+    Explorer.validateRequiredFields = validateRequiredFields;  // C-05: Export for use in dialogs.js
     Explorer.toggleSection = toggleSection;
     Explorer.saveDetailSectionState = saveDetailSectionState;
     Explorer.restoreDetailSectionState = restoreDetailSectionState;

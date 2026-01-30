@@ -42,13 +42,32 @@ def api_validate():
 
 @bp.route('/api/validate/check', methods=['GET'])
 def api_validate_check():
-    """Check if Nagios binary is available."""
+    """Check if Nagios binary is available and valid.
+
+    Returns verification status including:
+    - Whether binary exists and is executable
+    - Whether binary is actually Nagios (verified via version check)
+    - Version string if verification succeeded
+    """
     config = get_config()
     validator = NagiosValidator(config['nagios_bin'], config['nagios_cfg'])
-    exists, message = validator.check_binary_exists()
+
+    # First check existence
+    exists, exists_message = validator.check_binary_exists()
+
+    # If binary exists, verify it's actually Nagios
+    verified = False
+    version = None
+    verify_message = exists_message
+
+    if exists:
+        verified, verify_message, version = validator.verify_binary()
+
     return jsonify({
         'available': exists,
-        'message': message,
+        'verified': verified,
+        'version': version,
+        'message': verify_message,
         'nagios_bin': config['nagios_bin'],
         'nagios_cfg': config['nagios_cfg']
     })

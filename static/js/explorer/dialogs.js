@@ -362,6 +362,20 @@
     function stageNewObjectChanges() {
         if (!state.isNewObject) return;
 
+        // C-05: Validate required fields for new objects
+        const validation = Explorer.validateRequiredFields(
+            state.editedObject.object_type,
+            state.editedObject.attributes
+        );
+        if (!validation.valid) {
+            // Check if object uses a template (which may provide the missing fields)
+            const usesTemplate = state.editedObject.attributes.use && state.editedObject.attributes.use.trim() !== '';
+            if (!usesTemplate) {
+                // Show warning for non-template objects without required fields
+                showToast(`Warning: ${validation.errors[0]}`, 'warning');
+            }
+        }
+
         const nameField = getNewObjectNameField(state.editedObject.object_type);
         const name = state.editedObject.attributes[nameField] || '';
 

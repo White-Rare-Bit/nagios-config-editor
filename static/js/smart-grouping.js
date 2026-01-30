@@ -195,7 +195,7 @@ function renderMembersList() {
     container.innerHTML = currentMembers.map(m => `
         <div class="d-flex justify-content-between align-items-center mb-1">
             <span>${escapeHtml(m)}</span>
-            <button class="nbe-btn nbe-btn--danger nbe-btn--sm" onclick="removeMember('${escapeHtml(m)}')">&times;</button>
+            <button class="nbe-btn nbe-btn--danger nbe-btn--sm" onclick="removeMember('${escapeJs(m)}')">&times;</button>
         </div>
     `).join('');
     document.getElementById('createMemberCount').textContent = currentMembers.length;

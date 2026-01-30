@@ -14,6 +14,7 @@
     let saveDebounceTimer = null;
     let saveInProgress = false;
     let analysisDebounceTimer = null;
+    let isPollingInProgress = false;  // C-02: Guard against concurrent polling
 
     /**
      * Trigger analysis update with debouncing (500ms)
@@ -268,31 +269,37 @@
         if (stagingPollInterval) return;
 
         stagingPollInterval = setInterval(async () => {
-            if (isSavingStaging) return;
+            // C-02: Prevent concurrent polling - skip if another poll or save is in progress
+            if (isSavingStaging || isPollingInProgress) return;
 
-            const result = await ApiClient.get('/api/staging/info', { silent: true });
+            isPollingInProgress = true;
+            try {
+                const result = await ApiClient.get('/api/staging/info', { silent: true });
 
-            if (result.success) {
-                const info = result.data;
+                if (result.success) {
+                    const info = result.data;
 
-                if (info.lastModified && info.lastModified !== lastStagingTimestamp) {
-                    const state = Explorer.state;
+                    if (info.lastModified && info.lastModified !== lastStagingTimestamp) {
+                        const state = Explorer.state;
 
-                    // If user is actively editing an object, don't disrupt them
-                    if (state.editedObject) {
-                        // Mark that external changes are pending
-                        state.externalChangePending = true;
-                        Explorer.showToast('External changes detected. Save or cancel your edit to refresh.', 'info');
-                        return;
+                        // If user is actively editing an object, don't disrupt them
+                        if (state.editedObject) {
+                            // Mark that external changes are pending
+                            state.externalChangePending = true;
+                            Explorer.showToast('External changes detected. Save or cancel your edit to refresh.', 'info');
+                            return;
+                        }
+
+                        await Explorer.loadStagedChanges(false);
+                        lastStagingTimestamp = info.lastModified;
+
+                        // Centralized refresh ensures all UI components stay in sync
+                        // Suggestions now filter by stagedObjectDeletions, so polling won't resurrect deleted objects
+                        Explorer.refreshAfterObjectChange();
                     }
-
-                    await Explorer.loadStagedChanges(false);
-                    lastStagingTimestamp = info.lastModified;
-
-                    // Centralized refresh ensures all UI components stay in sync
-                    // Suggestions now filter by stagedObjectDeletions, so polling won't resurrect deleted objects
-                    Explorer.refreshAfterObjectChange();
                 }
+            } finally {
+                isPollingInProgress = false;
             }
         }, 3000);
     };

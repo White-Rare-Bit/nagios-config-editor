@@ -61,13 +61,13 @@ async function loadAttributes() {
         const filterField = document.getElementById('filterField');
         filterField.innerHTML = '<option value="">No filter</option>';
         sortedAttrs.forEach(attr => {
-            filterField.innerHTML += `<option value="${attr}">${attr}</option>`;
+            filterField.innerHTML += `<option value="${escapeHtml(attr)}">${escapeHtml(attr)}</option>`;
         });
 
         const targetField = document.getElementById('targetField');
         targetField.innerHTML = '<option value="">Select attribute...</option>';
         sortedAttrs.forEach(attr => {
-            targetField.innerHTML += `<option value="${attr}">${attr}</option>`;
+            targetField.innerHTML += `<option value="${escapeHtml(attr)}">${escapeHtml(attr)}</option>`;
         });
 
     } catch (error) {

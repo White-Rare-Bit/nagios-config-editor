@@ -9,7 +9,7 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from validator import NagiosValidator, ValidationResult, validate_config
+from validator import NagiosValidator, ValidationResult, validate_config, verify_nagios_binary
 
 
 class TestValidationResult:
@@ -122,7 +122,8 @@ class TestNagiosValidator:
                 nagios_bin='/usr/sbin/nagios',
                 config_file='/nonexistent/nagios.cfg'
             )
-            result = validator.validate()
+            # Skip binary verification to test config file not found case
+            result = validator.validate(skip_binary_verification=True)
 
         assert result.success is False
         assert 'not found' in result.errors[0]['message'].lower()
@@ -139,7 +140,8 @@ class TestNagiosValidator:
         )
 
         validator = NagiosValidator()
-        result = validator.validate()
+        # Skip binary verification to test validation parsing
+        result = validator.validate(skip_binary_verification=True)
 
         assert result.success is True
         assert result.total_errors == 0
@@ -173,7 +175,8 @@ class TestNagiosValidator:
         )
 
         validator = NagiosValidator()
-        result = validator.validate()
+        # Skip binary verification to test validation parsing
+        result = validator.validate(skip_binary_verification=True)
 
         assert result.success is True
         assert result.total_warnings == 1
@@ -187,7 +190,8 @@ class TestNagiosValidator:
         mock_run.side_effect = subprocess.TimeoutExpired(cmd='nagios', timeout=60)
 
         validator = NagiosValidator()
-        result = validator.validate()
+        # Skip binary verification to test timeout handling
+        result = validator.validate(skip_binary_verification=True)
 
         assert result.success is False
         assert 'timed out' in result.errors[0]['message'].lower()
@@ -200,7 +204,8 @@ class TestNagiosValidator:
         mock_run.side_effect = Exception('Unexpected error')
 
         validator = NagiosValidator()
-        result = validator.validate()
+        # Skip binary verification to test exception handling
+        result = validator.validate(skip_binary_verification=True)
 
         assert result.success is False
         assert 'Failed to run validation' in result.errors[0]['message']
@@ -331,3 +336,134 @@ class TestValidateConfigConvenience:
         )
         # Should fail because paths don't exist
         assert result.success is False
+
+
+class TestBinaryVerification:
+    """Tests for the Nagios binary verification feature (C-04, C-11 security fix)."""
+
+    def test_verify_binary_not_found(self):
+        """Test verification fails for non-existent binary."""
+        validator = NagiosValidator(nagios_bin='/nonexistent/nagios')
+        is_valid, message, version = validator.verify_binary()
+
+        assert is_valid is False
+        assert 'not found' in message.lower()
+        assert version is None
+
+    @patch('os.access')
+    @patch('os.path.exists')
+    def test_verify_binary_not_executable(self, mock_exists, mock_access):
+        """Test verification fails for non-executable binary."""
+        mock_exists.return_value = True
+        mock_access.return_value = False
+
+        validator = NagiosValidator(nagios_bin='/usr/sbin/nagios')
+        is_valid, message, version = validator.verify_binary()
+
+        assert is_valid is False
+        assert 'not executable' in message.lower()
+        assert version is None
+
+    @patch('subprocess.run')
+    @patch('os.access')
+    @patch('os.path.exists')
+    def test_verify_binary_valid_nagios(self, mock_exists, mock_access, mock_run):
+        """Test verification succeeds for valid Nagios binary."""
+        mock_exists.return_value = True
+        mock_access.return_value = True
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout='Nagios Core 4.4.6\nCopyright (c) ...',
+            stderr=''
+        )
+
+        validator = NagiosValidator(nagios_bin='/usr/sbin/nagios')
+        is_valid, message, version = validator.verify_binary()
+
+        assert is_valid is True
+        assert 'valid' in message.lower()
+        assert 'Nagios Core 4.4.6' in version
+
+    @patch('subprocess.run')
+    @patch('os.access')
+    @patch('os.path.exists')
+    def test_verify_binary_valid_naemon(self, mock_exists, mock_access, mock_run):
+        """Test verification succeeds for Naemon binary (Nagios fork)."""
+        mock_exists.return_value = True
+        mock_access.return_value = True
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout='Naemon Core 1.2.3\nCopyright ...',
+            stderr=''
+        )
+
+        validator = NagiosValidator(nagios_bin='/usr/sbin/naemon')
+        is_valid, message, version = validator.verify_binary()
+
+        assert is_valid is True
+        assert version is not None
+
+    @patch('subprocess.run')
+    @patch('os.access')
+    @patch('os.path.exists')
+    def test_verify_binary_not_nagios(self, mock_exists, mock_access, mock_run):
+        """Test verification fails for non-Nagios binary (security check)."""
+        mock_exists.return_value = True
+        mock_access.return_value = True
+        # Simulate a different binary that doesn't output Nagios version
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout='Python 3.10.0\n',
+            stderr=''
+        )
+
+        validator = NagiosValidator(nagios_bin='/usr/bin/python3')
+        is_valid, message, version = validator.verify_binary()
+
+        assert is_valid is False
+        assert 'unexpected' in message.lower() or 'not' in message.lower()
+        assert version is None
+
+    @patch('subprocess.run')
+    @patch('os.access')
+    @patch('os.path.exists')
+    def test_verify_binary_timeout(self, mock_exists, mock_access, mock_run):
+        """Test verification handles timeout gracefully."""
+        import subprocess
+        mock_exists.return_value = True
+        mock_access.return_value = True
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd='nagios', timeout=5)
+
+        validator = NagiosValidator(nagios_bin='/usr/sbin/nagios')
+        is_valid, message, version = validator.verify_binary()
+
+        assert is_valid is False
+        assert 'timed out' in message.lower()
+        assert version is None
+
+    def test_verify_nagios_binary_convenience(self):
+        """Test the verify_nagios_binary convenience function."""
+        is_valid, message, version = verify_nagios_binary('/nonexistent/nagios')
+
+        assert is_valid is False
+        assert 'not found' in message.lower()
+
+    @patch('subprocess.run')
+    @patch('os.access')
+    @patch('os.path.exists')
+    def test_validate_rejects_invalid_binary(self, mock_exists, mock_access, mock_run):
+        """Test that validation fails if binary verification fails."""
+        mock_exists.return_value = True
+        mock_access.return_value = True
+        # Binary runs but doesn't produce Nagios output
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout='Not Nagios',
+            stderr=''
+        )
+
+        validator = NagiosValidator()
+        result = validator.validate()  # Don't skip verification
+
+        assert result.success is False
+        assert 'invalid nagios binary' in result.errors[0]['message'].lower()

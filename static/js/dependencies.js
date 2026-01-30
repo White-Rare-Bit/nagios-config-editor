@@ -2853,7 +2853,11 @@ console.log('dependencies.js loaded');
     }
 
     function escapeAttr(text) {
-        return text.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        if (text === null || text === undefined) return '';
+        return String(text)
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/"/g, '\\"');
     }
 
     // Get display label for a node, including context for services

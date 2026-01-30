@@ -39,12 +39,12 @@ function displayObjectList(objects) {
     });
 
     const html = objects.map(obj => `
-        <div class="object-list-item" onclick="selectObject('${escapeHtml(obj.name)}')">
+        <div class="object-list-item" onclick="selectObject('${escapeJs(obj.name)}')">
             <div>
                 ${obj.is_template ? '<span class="badge bg-warning template-badge">template</span> ' : ''}
                 <span>${escapeHtml(obj.name)}</span>
             </div>
-            ${obj.uses.length > 0 ? `<small class="object-list-muted">uses: ${obj.uses.join(', ')}</small>` : ''}
+            ${obj.uses.length > 0 ? `<small class="object-list-muted">uses: ${obj.uses.map(u => escapeHtml(u)).join(', ')}</small>` : ''}
         </div>
     `).join('');
 
