@@ -636,6 +636,33 @@
     white-space: nowrap;
 }
 
+.git-history-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.git-history-table th.sortable:hover {
+    background: var(--nbe-dark-bg-hover);
+}
+
+.git-history-table th .sort-icon {
+    color: var(--nbe-dark-text-muted);
+    font-size: var(--nbe-typography-muted-size);
+    margin-left: 4px;
+}
+
+.git-history-table th.sort-active .sort-icon {
+    color: var(--nbe-dark-accent-primary);
+}
+
+.git-history-table th.sort-asc .sort-icon::after {
+    content: '▲';
+}
+
+.git-history-table th.sort-desc .sort-icon::after {
+    content: '▼';
+}
+
 /* Column widths */
 .history-col-date { width: 140px; }
 .history-col-hash { width: 140px; }

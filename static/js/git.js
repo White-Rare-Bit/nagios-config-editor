@@ -7,6 +7,10 @@ let gitHistory = null;
 let currentTab = 'changes';
 let stagingInfo = null;
 
+// History sort state
+let historySortColumn = 'date';
+let historySortDirection = 'desc';
+
 async function loadGitStatus(forceRefresh = false) {
     const content = document.getElementById('gitContent');
     const repoStatus = document.getElementById('repoStatus');
@@ -464,14 +468,20 @@ function renderGitHistory() {
         <table class="git-history-table" role="grid" aria-label="Commit history">
             <thead>
                 <tr>
-                    <th class="history-col-date">Date/Time</th>
+                    <th class="history-col-date sortable" data-sort="date" data-action="sort-history">
+                        Date/Time <span class="sort-icon"></span>
+                    </th>
                     <th class="history-col-hash">Commit</th>
-                    <th class="history-col-message">Message</th>
-                    <th class="history-col-author">Author</th>
+                    <th class="history-col-message sortable" data-sort="message" data-action="sort-history">
+                        Message <span class="sort-icon"></span>
+                    </th>
+                    <th class="history-col-author sortable" data-sort="author" data-action="sort-history">
+                        Author <span class="sort-icon"></span>
+                    </th>
                     <th class="history-col-actions">Actions</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="historyTableBody">
     `;
 
     for (const commit of gitHistory) {
@@ -479,7 +489,7 @@ function renderGitHistory() {
         const escapedMessage = escapeHtml(commit.message);
         const isCurrent = commit.matches_working_dir;
         html += `
-            <tr class="history-row${isCurrent ? ' is-current' : ''}">
+            <tr class="history-row${isCurrent ? ' is-current' : ''}" data-date="${commit.date}" data-message="${escapedMessage}" data-author="${escapeHtml(commit.author)}">
                 <td class="history-cell-date">
                     <span class="history-date-value">${date}</span>
                 </td>
@@ -505,10 +515,57 @@ function renderGitHistory() {
 
     html += '</tbody></table>';
     container.innerHTML = html;
+
+    // Initialize sort indicators
+    updateHistorySortIndicators();
 }
 
 function updateHistoryBadge(count) {
     // Could add a badge to the History tab if needed
+}
+
+function sortHistory(column) {
+    const tbody = document.getElementById('historyTableBody');
+    if (!tbody) return;
+
+    const rows = Array.from(tbody.querySelectorAll('.history-row'));
+    if (rows.length === 0) return;
+
+    // Toggle direction if same column, otherwise default to desc for date, asc for others
+    if (column === historySortColumn) {
+        historySortDirection = historySortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        historySortColumn = column;
+        historySortDirection = column === 'date' ? 'desc' : 'asc';
+    }
+
+    // Sort rows
+    rows.sort((a, b) => {
+        let aVal = a.dataset[column] || '';
+        let bVal = b.dataset[column] || '';
+
+        const result = aVal.localeCompare(bVal);
+        return historySortDirection === 'asc' ? result : -result;
+    });
+
+    // Re-append in sorted order
+    rows.forEach(row => tbody.appendChild(row));
+
+    // Update header sort indicators
+    updateHistorySortIndicators();
+}
+
+function updateHistorySortIndicators() {
+    // Remove all sort classes
+    document.querySelectorAll('.git-history-table th.sortable').forEach(th => {
+        th.classList.remove('sort-active', 'sort-asc', 'sort-desc');
+    });
+
+    // Add to current sort column
+    const activeHeader = document.querySelector(`.git-history-table th[data-sort="${historySortColumn}"]`);
+    if (activeHeader) {
+        activeHeader.classList.add('sort-active', `sort-${historySortDirection}`);
+    }
 }
 
 // formatDate() is defined in app.js (loaded first) with relative time support
@@ -644,6 +701,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (hash) restoreCommit(hash, message);
             } else if (action === 'clearGitHistory') {
                 clearGitHistory();
+            } else if (action === 'sort-history') {
+                const column = actionEl.dataset.sort;
+                if (column) sortHistory(column);
             }
         }
     });
