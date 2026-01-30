@@ -556,6 +556,10 @@ def api_save_staging():
     )
 
     # Group multiple operations into single bulk undo entries
+    # D-05: Threshold is >1 (not >5 or >10) because:
+    # - User expectation: Multiple objects selected and edited together should undo together
+    # - UI simplicity: Bulk operations appear as single "Bulk edit N objects" in undo stack
+    # - Single operation stays atomic to allow granular undo when user edits one object at a time
     if len(new_edits) > 1:
         # Create single bulk edit undo entry
         undo_stack.append(_create_bulk_undo_entry('bulk_edit', new_edits, f"Bulk edit {len(new_edits)} object(s)"))

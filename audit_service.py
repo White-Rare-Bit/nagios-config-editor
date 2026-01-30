@@ -21,11 +21,14 @@ AUDIT_LOG_MAX_ENTRIES = 1000  # Rotate after this many entries
 def get_audit_log_dir(config_dir: str = None):
     """Get the path to the audit log directory, creating it if needed.
 
+    D-08: Clarified default location behavior.
+
     Args:
-        config_dir: Configuration directory path. If None, uses current directory.
+        config_dir: Configuration directory path. If None, uses the directory
+            containing this module (audit_service.py), NOT the current working directory.
 
     Returns:
-        Path to audit log directory.
+        Path to audit log directory (config_dir/logs/).
     """
     global AUDIT_LOG_DIR
     if AUDIT_LOG_DIR is None:
@@ -40,7 +43,8 @@ def get_audit_log_path(config_dir: str = None):
     """Get the path to the current audit log file.
 
     Args:
-        config_dir: Configuration directory path. If None, uses current directory.
+        config_dir: Configuration directory path. If None, uses the directory
+            containing this module (audit_service.py).
 
     Returns:
         Path to audit log file.

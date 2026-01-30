@@ -2452,6 +2452,7 @@ function loadCenterReferences(obj) {
         'escalation_contact_groups': 'contactgroup',
 
         // Command references
+        // N-05: Synced with nagios_model.py REFERENCE_FIELDS
         'check_command': 'command',
         'event_handler': 'command',
         'notification_commands': 'command',
@@ -2459,6 +2460,8 @@ function loadCenterReferences(obj) {
         'service_notification_commands': 'command',
         'obsess_over_host_command': 'command',
         'obsess_over_service_command': 'command',
+        'ocsp_command': 'command',  // N-05: Added - Object Check Service Processor command
+        'ochp_command': 'command',  // N-05: Added - Object Check Host Processor command
         'global_host_event_handler': 'command',
         'global_service_event_handler': 'command',
 

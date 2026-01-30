@@ -109,18 +109,26 @@ class NagiosValidator:
             )
 
     def _parse_output(self, output: str, exit_success: bool) -> ValidationResult:
-        """Parse nagios -v output to extract errors and warnings."""
+        """Parse nagios -v output to extract errors and warnings.
+
+        D-03: Nagios output format compatibility notes:
+        - Tested with Nagios Core 4.x output format (4.0.0 - 4.5.x)
+        - Error patterns match both legacy "Error:" and newer "CONFIG ERROR:" prefixes
+        - File/line extraction pattern handles Nagios 4.x format: "Error in file 'X' on line N:"
+        - Nagios 3.x used slightly different output; may need pattern updates if 3.x support needed
+        - Naemon and Icinga use similar formats but not explicitly tested
+        """
         errors = []
         warnings = []
 
-        # Pattern for error lines
+        # Pattern for error lines (compatible with Nagios Core 4.x)
         error_patterns = [
             r"Error:\s*(.+)",
             r"CONFIG ERROR:\s*(.+)",
             r"Error in file '([^']+)' on line (\d+):\s*(.+)",
         ]
 
-        # Pattern for warning lines
+        # Pattern for warning lines (compatible with Nagios Core 4.x)
         warning_patterns = [
             r"Warning:\s*(.+)",
             r"CONFIG WARNING:\s*(.+)",

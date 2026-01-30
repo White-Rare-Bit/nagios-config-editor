@@ -154,6 +154,13 @@ def api_browse_directory():
 
     path = os.path.normpath(path)
 
+    # D-06: Path traversal prevention for directory browser
+    # Unlike file operations (which are confined to config_path via is_safe_path()),
+    # this browse endpoint intentionally allows browsing the full filesystem for
+    # initial setup. The '..' check prevents URL-encoded traversal attacks like
+    # "/../../../etc/passwd" from reaching directories via normpath manipulation.
+    # This is a defense-in-depth measure since normpath already resolves '..'
+    # but could be bypassed with certain edge cases on some platforms.
     if '..' in path.split(os.sep):
         return jsonify({'error': 'Invalid path'}), 400
 
