@@ -1011,3 +1011,101 @@
 .nbe-input--dark::placeholder {
     color: var(--nbe-dark-text-muted);
 }
+
+/* =============================================================================
+   PAGINATION COMPONENT
+   Shared pagination styles for tables (backups, git history, audit log)
+   ============================================================================= */
+
+.nbe-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--nbe-space-md) var(--nbe-space-lg);
+    background: var(--nbe-dark-bg-secondary);
+    border-top: 1px solid var(--nbe-dark-border-primary);
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-dark-text-secondary);
+}
+
+.nbe-pagination-info {
+    display: flex;
+    align-items: center;
+    gap: var(--nbe-space-lg);
+}
+
+.nbe-pagination-showing {
+    color: var(--nbe-dark-text-secondary);
+}
+
+.nbe-pagination-page-size {
+    display: flex;
+    align-items: center;
+    gap: var(--nbe-space-sm);
+}
+
+.nbe-pagination-page-size select {
+    padding: var(--nbe-space-xs) var(--nbe-space-sm);
+    background: var(--nbe-dark-bg-tertiary);
+    border: 1px solid var(--nbe-dark-border-primary);
+    border-radius: var(--nbe-radius-md);
+    color: var(--nbe-dark-text-primary);
+    font-size: var(--nbe-font-size-sm);
+    cursor: pointer;
+}
+
+.nbe-pagination-page-size select:focus {
+    outline: none;
+    border-color: var(--nbe-dark-accent-primary);
+}
+
+.nbe-pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--nbe-space-sm);
+}
+
+.nbe-pagination-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 var(--nbe-space-sm);
+    background: var(--nbe-dark-bg-tertiary);
+    border: 1px solid var(--nbe-dark-border-primary);
+    border-radius: var(--nbe-radius-md);
+    color: var(--nbe-dark-text-primary);
+    font-size: var(--nbe-font-size-sm);
+    cursor: pointer;
+    transition: all var(--nbe-transition-fast);
+}
+
+.nbe-pagination-btn:hover:not(:disabled) {
+    background: var(--nbe-dark-bg-hover);
+    border-color: var(--nbe-dark-border-hover);
+}
+
+.nbe-pagination-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.nbe-pagination-btn.active {
+    background: var(--nbe-dark-accent-primary);
+    border-color: var(--nbe-dark-accent-primary);
+    color: var(--nbe-dark-bg-primary);
+}
+
+.nbe-pagination-ellipsis {
+    color: var(--nbe-dark-text-muted);
+    padding: 0 var(--nbe-space-xs);
+}
+
+.nbe-pagination-nav {
+    padding: 0 var(--nbe-space-md);
+}
+
+.nbe-pagination-nav i {
+    font-size: var(--nbe-font-size-xs);
+}

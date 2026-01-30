@@ -5,6 +5,11 @@
 let currentSortColumn = 'date';
 let currentSortDirection = 'desc';
 
+// Pagination state
+let backupCurrentPage = 1;
+let backupPageSize = 25;
+let allBackupRows = [];
+
 async function createBackup() {
     const btn = document.getElementById('createBackupBtn');
     const description = document.getElementById('backupDescription').value.trim();
@@ -99,16 +104,8 @@ async function deleteBackup(name, btn = null) {
     const result = await ApiClient.del(`/api/backups/${name}`, { silent: true });
 
     if (result.success) {
-        // Animate out and remove
-        if (backupRow) {
-            backupRow.style.transition = 'all 0.3s ease';
-            backupRow.style.opacity = '0';
-            backupRow.style.transform = 'translateX(20px)';
-            setTimeout(() => {
-                backupRow.remove();
-                updateBackupCount();
-            }, 300);
-        }
+        // Remove from list and re-render
+        removeBackupFromList(name);
         showToast('Backup deleted', 'success');
     } else {
         if (backupRow) backupRow.classList.remove('deleting');
@@ -137,21 +134,10 @@ async function deleteAllBackups() {
     const result = await ApiClient.del('/api/backups/all', { silent: true });
 
     if (result.success) {
-        // Animate out all backup rows
-        backupRows.forEach((row, index) => {
-            setTimeout(() => {
-                row.style.transition = 'all 0.3s ease';
-                row.style.opacity = '0';
-                row.style.transform = 'translateX(20px)';
-                setTimeout(() => row.remove(), 300);
-            }, index * 50);
-        });
-
-        setTimeout(() => {
-            updateBackupCount();
-            showEmptyState();
-        }, count * 50 + 350);
-
+        // Clear all backups
+        allBackupRows = [];
+        updateBackupCount();
+        showEmptyState();
         showToast(`Deleted ${result.data.deleted_count} backup${result.data.deleted_count !== 1 ? 's' : ''}`, 'success');
     } else {
         showToast('Error: ' + (result.error || 'Unknown error'), 'error');
@@ -159,11 +145,7 @@ async function deleteAllBackups() {
 }
 
 function sortBackups(column) {
-    const tbody = document.getElementById('backupTableBody');
-    if (!tbody) return;
-
-    const rows = Array.from(tbody.querySelectorAll('.backup-row'));
-    if (rows.length === 0) return;
+    if (allBackupRows.length === 0) return;
 
     // Toggle direction if same column, otherwise default to desc for date, asc for others
     if (column === currentSortColumn) {
@@ -173,8 +155,8 @@ function sortBackups(column) {
         currentSortDirection = column === 'date' ? 'desc' : 'asc';
     }
 
-    // Sort rows
-    rows.sort((a, b) => {
+    // Sort allBackupRows array
+    allBackupRows.sort((a, b) => {
         let aVal, bVal;
 
         if (column === 'date') {
@@ -193,11 +175,118 @@ function sortBackups(column) {
             : bVal.localeCompare(aVal);
     });
 
-    // Re-append in sorted order
-    rows.forEach(row => tbody.appendChild(row));
+    // Reset to first page after sorting
+    backupCurrentPage = 1;
+
+    // Re-render with pagination
+    renderBackupPage();
 
     // Update header sort indicators
     updateSortIndicators();
+}
+
+function renderBackupPage() {
+    const tbody = document.getElementById('backupTableBody');
+    if (!tbody) return;
+
+    const totalItems = allBackupRows.length;
+    const totalPages = Math.ceil(totalItems / backupPageSize);
+    backupCurrentPage = Math.min(backupCurrentPage, Math.max(1, totalPages));
+    const startIdx = (backupCurrentPage - 1) * backupPageSize;
+    const endIdx = Math.min(startIdx + backupPageSize, totalItems);
+
+    // Clear tbody and add only current page rows
+    tbody.innerHTML = '';
+    for (let i = startIdx; i < endIdx; i++) {
+        tbody.appendChild(allBackupRows[i].cloneNode(true));
+    }
+
+    // Update or create pagination
+    renderBackupPagination(totalItems, totalPages, startIdx, endIdx);
+}
+
+function renderBackupPagination(totalItems, totalPages, startIdx, endIdx) {
+    const container = document.querySelector('.backup-table-container');
+    if (!container) return;
+
+    // Remove existing pagination
+    const existingPagination = container.querySelector('.nbe-pagination');
+    if (existingPagination) {
+        existingPagination.remove();
+    }
+
+    // Only show pagination if needed
+    if (totalPages <= 1 && totalItems <= 25) return;
+
+    let pagesHtml = '';
+
+    // Previous button
+    pagesHtml += `<button class="nbe-pagination-btn nbe-pagination-nav" data-action="backup-page" data-page="${backupCurrentPage - 1}" ${backupCurrentPage === 1 ? 'disabled' : ''}>
+        <i class="fa-solid fa-chevron-left"></i>
+    </button>`;
+
+    // Page numbers
+    const maxVisible = 5;
+    let startPage = Math.max(1, backupCurrentPage - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+        startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+
+    if (startPage > 1) {
+        pagesHtml += `<button class="nbe-pagination-btn" data-action="backup-page" data-page="1">1</button>`;
+        if (startPage > 2) {
+            pagesHtml += `<span class="nbe-pagination-ellipsis">...</span>`;
+        }
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        pagesHtml += `<button class="nbe-pagination-btn${i === backupCurrentPage ? ' active' : ''}" data-action="backup-page" data-page="${i}">${i}</button>`;
+    }
+
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            pagesHtml += `<span class="nbe-pagination-ellipsis">...</span>`;
+        }
+        pagesHtml += `<button class="nbe-pagination-btn" data-action="backup-page" data-page="${totalPages}">${totalPages}</button>`;
+    }
+
+    // Next button
+    pagesHtml += `<button class="nbe-pagination-btn nbe-pagination-nav" data-action="backup-page" data-page="${backupCurrentPage + 1}" ${backupCurrentPage === totalPages ? 'disabled' : ''}>
+        <i class="fa-solid fa-chevron-right"></i>
+    </button>`;
+
+    const paginationHtml = `
+        <div class="nbe-pagination">
+            <div class="nbe-pagination-info">
+                <span class="nbe-pagination-showing">Showing ${startIdx + 1}-${endIdx} of ${totalItems}</span>
+                <div class="nbe-pagination-page-size">
+                    <span>Per page:</span>
+                    <select data-action="backup-page-size">
+                        <option value="25" ${backupPageSize === 25 ? 'selected' : ''}>25</option>
+                        <option value="50" ${backupPageSize === 50 ? 'selected' : ''}>50</option>
+                        <option value="100" ${backupPageSize === 100 ? 'selected' : ''}>100</option>
+                    </select>
+                </div>
+            </div>
+            <div class="nbe-pagination-controls">
+                ${pagesHtml}
+            </div>
+        </div>
+    `;
+
+    container.insertAdjacentHTML('beforeend', paginationHtml);
+}
+
+function setBackupPage(page) {
+    backupCurrentPage = page;
+    renderBackupPage();
+}
+
+function setBackupPageSize(size) {
+    backupPageSize = size;
+    backupCurrentPage = 1;
+    renderBackupPage();
 }
 
 function updateSortIndicators() {
@@ -234,17 +323,29 @@ function showEmptyState() {
 }
 
 function updateBackupCount() {
-    const rows = document.querySelectorAll('.backup-row');
     const countEl = document.querySelector('.badge-count');
     if (countEl) {
-        const count = rows.length;
+        const count = allBackupRows.length;
         countEl.textContent = `${count} backup${count !== 1 ? 's' : ''}`;
     }
 
     // Show empty state if no backups left
-    if (rows.length === 0) {
+    if (allBackupRows.length === 0) {
         showEmptyState();
     }
+}
+
+function removeBackupFromList(name) {
+    // Remove from allBackupRows array
+    const index = allBackupRows.findIndex(row => row.dataset.name === name);
+    if (index !== -1) {
+        allBackupRows.splice(index, 1);
+    }
+    // Re-render page
+    if (allBackupRows.length > 0) {
+        renderBackupPage();
+    }
+    updateBackupCount();
 }
 
 // =============================================================================
@@ -252,8 +353,30 @@ function updateBackupCount() {
 // =============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Store all backup rows for pagination
+    const tbody = document.getElementById('backupTableBody');
+    if (tbody) {
+        allBackupRows = Array.from(tbody.querySelectorAll('.backup-row'));
+        // Initial render with pagination
+        if (allBackupRows.length > 0) {
+            renderBackupPage();
+        }
+    }
+
     // Initialize sort indicators
     updateSortIndicators();
+
+    // Event delegation for select changes (pagination page size)
+    document.addEventListener('change', function(e) {
+        const actionEl = e.target.closest('[data-action]');
+        if (actionEl) {
+            const action = actionEl.dataset.action;
+            if (action === 'backup-page-size') {
+                const size = parseInt(actionEl.value);
+                if (size) setBackupPageSize(size);
+            }
+        }
+    });
 
     // Event delegation for data-action elements
     document.addEventListener('click', function(e) {
@@ -279,6 +402,10 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'sort-backups':
                 const column = actionEl.dataset.sort;
                 if (column) sortBackups(column);
+                break;
+            case 'backup-page':
+                const page = parseInt(actionEl.dataset.page);
+                if (page) setBackupPage(page);
                 break;
         }
     });

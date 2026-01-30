@@ -11,6 +11,10 @@ let stagingInfo = null;
 let historySortColumn = 'date';
 let historySortDirection = 'desc';
 
+// Pagination state
+let historyCurrentPage = 1;
+let historyPageSize = 25;
+
 async function loadGitStatus(forceRefresh = false) {
     const content = document.getElementById('gitContent');
     const repoStatus = document.getElementById('repoStatus');
@@ -464,6 +468,15 @@ function renderGitHistory() {
 
     updateHistoryBadge(gitHistory.length);
 
+    // Calculate pagination
+    const totalItems = gitHistory.length;
+    const totalPages = Math.ceil(totalItems / historyPageSize);
+    historyCurrentPage = Math.min(historyCurrentPage, totalPages);
+    historyCurrentPage = Math.max(historyCurrentPage, 1);
+    const startIdx = (historyCurrentPage - 1) * historyPageSize;
+    const endIdx = Math.min(startIdx + historyPageSize, totalItems);
+    const pageItems = gitHistory.slice(startIdx, endIdx);
+
     let html = `
         <table class="git-history-table" role="grid" aria-label="Commit history">
             <thead>
@@ -484,7 +497,7 @@ function renderGitHistory() {
             <tbody id="historyTableBody">
     `;
 
-    for (const commit of gitHistory) {
+    for (const commit of pageItems) {
         const date = formatDate(commit.date);
         const escapedMessage = escapeHtml(commit.message);
         const isCurrent = commit.matches_working_dir;
@@ -514,10 +527,86 @@ function renderGitHistory() {
     }
 
     html += '</tbody></table>';
+
+    // Add pagination controls if more than one page
+    if (totalPages > 1 || totalItems > 25) {
+        html += renderHistoryPagination(totalItems, totalPages, startIdx, endIdx);
+    }
+
     container.innerHTML = html;
 
     // Initialize sort indicators
     updateHistorySortIndicators();
+}
+
+function renderHistoryPagination(totalItems, totalPages, startIdx, endIdx) {
+    let pagesHtml = '';
+
+    // Previous button
+    pagesHtml += `<button class="nbe-pagination-btn nbe-pagination-nav" data-action="history-page" data-page="${historyCurrentPage - 1}" ${historyCurrentPage === 1 ? 'disabled' : ''}>
+        <i class="fa-solid fa-chevron-left"></i>
+    </button>`;
+
+    // Page numbers
+    const maxVisible = 5;
+    let startPage = Math.max(1, historyCurrentPage - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+        startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+
+    if (startPage > 1) {
+        pagesHtml += `<button class="nbe-pagination-btn" data-action="history-page" data-page="1">1</button>`;
+        if (startPage > 2) {
+            pagesHtml += `<span class="nbe-pagination-ellipsis">...</span>`;
+        }
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        pagesHtml += `<button class="nbe-pagination-btn${i === historyCurrentPage ? ' active' : ''}" data-action="history-page" data-page="${i}">${i}</button>`;
+    }
+
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            pagesHtml += `<span class="nbe-pagination-ellipsis">...</span>`;
+        }
+        pagesHtml += `<button class="nbe-pagination-btn" data-action="history-page" data-page="${totalPages}">${totalPages}</button>`;
+    }
+
+    // Next button
+    pagesHtml += `<button class="nbe-pagination-btn nbe-pagination-nav" data-action="history-page" data-page="${historyCurrentPage + 1}" ${historyCurrentPage === totalPages ? 'disabled' : ''}>
+        <i class="fa-solid fa-chevron-right"></i>
+    </button>`;
+
+    return `
+        <div class="nbe-pagination">
+            <div class="nbe-pagination-info">
+                <span class="nbe-pagination-showing">Showing ${startIdx + 1}-${endIdx} of ${totalItems}</span>
+                <div class="nbe-pagination-page-size">
+                    <span>Per page:</span>
+                    <select data-action="history-page-size">
+                        <option value="25" ${historyPageSize === 25 ? 'selected' : ''}>25</option>
+                        <option value="50" ${historyPageSize === 50 ? 'selected' : ''}>50</option>
+                        <option value="100" ${historyPageSize === 100 ? 'selected' : ''}>100</option>
+                    </select>
+                </div>
+            </div>
+            <div class="nbe-pagination-controls">
+                ${pagesHtml}
+            </div>
+        </div>
+    `;
+}
+
+function setHistoryPage(page) {
+    historyCurrentPage = page;
+    renderGitHistory();
+}
+
+function setHistoryPageSize(size) {
+    historyPageSize = size;
+    historyCurrentPage = 1;
+    renderGitHistory();
 }
 
 function updateHistoryBadge(count) {
@@ -525,11 +614,7 @@ function updateHistoryBadge(count) {
 }
 
 function sortHistory(column) {
-    const tbody = document.getElementById('historyTableBody');
-    if (!tbody) return;
-
-    const rows = Array.from(tbody.querySelectorAll('.history-row'));
-    if (rows.length === 0) return;
+    if (!gitHistory || gitHistory.length === 0) return;
 
     // Toggle direction if same column, otherwise default to desc for date, asc for others
     if (column === historySortColumn) {
@@ -539,20 +624,32 @@ function sortHistory(column) {
         historySortDirection = column === 'date' ? 'desc' : 'asc';
     }
 
-    // Sort rows
-    rows.sort((a, b) => {
-        let aVal = a.dataset[column] || '';
-        let bVal = b.dataset[column] || '';
+    // Sort the gitHistory array
+    gitHistory.sort((a, b) => {
+        let aVal, bVal;
+        if (column === 'date') {
+            aVal = a.date || '';
+            bVal = b.date || '';
+        } else if (column === 'message') {
+            aVal = a.message || '';
+            bVal = b.message || '';
+        } else if (column === 'author') {
+            aVal = a.author || '';
+            bVal = b.author || '';
+        } else {
+            aVal = '';
+            bVal = '';
+        }
 
         const result = aVal.localeCompare(bVal);
         return historySortDirection === 'asc' ? result : -result;
     });
 
-    // Re-append in sorted order
-    rows.forEach(row => tbody.appendChild(row));
+    // Reset to first page after sorting
+    historyCurrentPage = 1;
 
-    // Update header sort indicators
-    updateHistorySortIndicators();
+    // Re-render
+    renderGitHistory();
 }
 
 function updateHistorySortIndicators() {
@@ -670,6 +767,18 @@ document.addEventListener('DOMContentLoaded', () => {
     loadGitStatus(true);
     loadGitHistory(true);
 
+    // Event delegation for select changes (pagination page size)
+    document.addEventListener('change', function(e) {
+        const actionEl = e.target.closest('[data-action]');
+        if (actionEl) {
+            const action = actionEl.dataset.action;
+            if (action === 'history-page-size') {
+                const size = parseInt(actionEl.value);
+                if (size) setHistoryPageSize(size);
+            }
+        }
+    });
+
     // Event delegation for git page actions
     document.addEventListener('click', function(e) {
         // Handle file item clicks (select file)
@@ -704,6 +813,9 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (action === 'sort-history') {
                 const column = actionEl.dataset.sort;
                 if (column) sortHistory(column);
+            } else if (action === 'history-page') {
+                const page = parseInt(actionEl.dataset.page);
+                if (page) setHistoryPage(page);
             }
         }
     });
