@@ -1076,7 +1076,8 @@
         const result = response.data;
         let html = '';
 
-        if (result.valid) {
+        // F-03: Backend returns 'success' field, not 'valid'
+        if (result.success) {
             html += '<div class="validation-status valid">Configuration is valid</div>';
             badge.style.display = 'none';
         } else {

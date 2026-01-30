@@ -102,11 +102,7 @@ def api_create_file():
 
     The file will be created when user clicks "Apply".
     """
-    session_id = request.headers.get('X-Session-Id')
-    success, error = ensure_staging_lock(session_id)
-    if not success:
-        return error
-
+    # S-04: Validate BEFORE acquiring lock to prevent lock on validation failure
     data = request.get_json() or {}
     file_path = data.get('path')
 
@@ -133,6 +129,12 @@ def api_create_file():
     if os.path.exists(file_path):
         return jsonify({'error': 'File already exists'}), 400
 
+    # Only acquire lock after all validation passes
+    session_id = request.headers.get('X-Session-Id')
+    success, error = ensure_staging_lock(session_id)
+    if not success:
+        return error
+
     # Stage the file creation instead of creating immediately
     sm = get_staging_manager()
     result = sm.stage_file_creation(file_path)
@@ -155,11 +157,7 @@ def api_create_folder():
 
     The folder will be created when user clicks "Apply".
     """
-    session_id = request.headers.get('X-Session-Id')
-    success, error = ensure_staging_lock(session_id)
-    if not success:
-        return error
-
+    # S-04: Validate BEFORE acquiring lock to prevent lock on validation failure
     data = request.get_json() or {}
     folder_path = data.get('path')
 
@@ -171,6 +169,12 @@ def api_create_folder():
     abs_folder_path = os.path.abspath(folder_path)
     if not abs_folder_path.startswith(os.path.abspath(config_path)):
         return jsonify({'error': 'Path must be within config directory'}), 400
+
+    # Only acquire lock after all validation passes
+    session_id = request.headers.get('X-Session-Id')
+    success, error = ensure_staging_lock(session_id)
+    if not success:
+        return error
 
     # Stage the folder creation instead of creating immediately
     sm = get_staging_manager()
@@ -199,11 +203,7 @@ def api_move_file():
 
     The file will be moved when user clicks "Apply".
     """
-    session_id = request.headers.get('X-Session-Id')
-    success, error = ensure_staging_lock(session_id)
-    if not success:
-        return error
-
+    # S-04: Validate BEFORE acquiring lock to prevent lock on validation failure
     data = request.get_json() or {}
     source_path = data.get('sourcePath')
     target_folder = data.get('targetFolder')
@@ -229,6 +229,12 @@ def api_move_file():
     # Calculate target path
     file_name = os.path.basename(abs_source)
     target_path = os.path.join(abs_target_folder, file_name)
+
+    # Only acquire lock after all validation passes
+    session_id = request.headers.get('X-Session-Id')
+    success, error = ensure_staging_lock(session_id)
+    if not success:
+        return error
 
     # Stage the file move instead of moving immediately
     sm = get_staging_manager()
@@ -257,11 +263,7 @@ def api_move_folder():
 
     The folder will be moved when user clicks "Apply".
     """
-    session_id = request.headers.get('X-Session-Id')
-    success, error = ensure_staging_lock(session_id)
-    if not success:
-        return error
-
+    # S-04: Validate BEFORE acquiring lock to prevent lock on validation failure
     data = request.get_json() or {}
     source_path = data.get('sourcePath')
     target_folder = data.get('targetFolder')
@@ -284,9 +286,19 @@ def api_move_folder():
     if not os.path.isdir(abs_source):
         return jsonify({'error': 'Source folder does not exist'}), 404
 
+    # S-03: Prevent circular folder move (moving folder into itself or descendant)
+    if abs_target_folder == abs_source or abs_target_folder.startswith(abs_source + os.sep):
+        return jsonify({'error': 'Cannot move folder into itself or a descendant'}), 400
+
     # Calculate target path
     folder_name = os.path.basename(abs_source)
     target_path = os.path.join(abs_target_folder, folder_name)
+
+    # Only acquire lock after all validation passes
+    session_id = request.headers.get('X-Session-Id')
+    success, error = ensure_staging_lock(session_id)
+    if not success:
+        return error
 
     # Stage the folder move instead of moving immediately
     sm = get_staging_manager()
@@ -447,11 +459,7 @@ def api_delete_file(file_path):
     The file_path is URL-encoded and relative to config directory.
     The file will be deleted when user clicks "Apply".
     """
-    session_id = request.headers.get('X-Session-Id')
-    success, error = ensure_staging_lock(session_id)
-    if not success:
-        return error
-
+    # S-04: Validate BEFORE acquiring lock to prevent lock on validation failure
     # Convert to absolute path
     config_path = get_config_path()
     abs_path = os.path.join(config_path, file_path)
@@ -463,6 +471,12 @@ def api_delete_file(file_path):
 
     if not os.path.isfile(abs_path):
         return jsonify({'error': 'File does not exist'}), 404
+
+    # Only acquire lock after all validation passes
+    session_id = request.headers.get('X-Session-Id')
+    success, error = ensure_staging_lock(session_id)
+    if not success:
+        return error
 
     # Stage the file deletion instead of deleting immediately
     sm = get_staging_manager()
@@ -487,11 +501,7 @@ def api_delete_folder(folder_path):
     The folder_path is URL-encoded and relative to config directory.
     The folder will be deleted when user clicks "Apply".
     """
-    session_id = request.headers.get('X-Session-Id')
-    success, error = ensure_staging_lock(session_id)
-    if not success:
-        return error
-
+    # S-04: Validate BEFORE acquiring lock to prevent lock on validation failure
     # Convert to absolute path
     config_path = get_config_path()
     abs_path = os.path.join(config_path, folder_path)
@@ -507,6 +517,12 @@ def api_delete_folder(folder_path):
 
     if not os.path.isdir(abs_path):
         return jsonify({'error': 'Folder does not exist'}), 404
+
+    # Only acquire lock after all validation passes
+    session_id = request.headers.get('X-Session-Id')
+    success, error = ensure_staging_lock(session_id)
+    if not success:
+        return error
 
     # Stage the folder deletion instead of deleting immediately
     sm = get_staging_manager()

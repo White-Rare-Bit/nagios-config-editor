@@ -619,8 +619,32 @@ class StagingManager:
             logger.debug(f"Queued undo entry: {action_type} - {description}")
             return undo_id
 
+    def peek_undo_stack(self) -> Optional[Dict]:
+        """Peek at the last action from the undo stack without removing it.
+
+        C-04 FIX: Used for atomic undo operations - peek first, then remove
+        only after successfully applying the reversal and saving.
+
+        Returns:
+            The undo entry, or None if stack is empty
+        """
+        staging = self.get_staging()
+        if not staging:
+            return None
+
+        staging = self.migrate_staging_schema(staging)
+        undo_stack = staging.get('undoStack', [])
+
+        if not undo_stack:
+            return None
+
+        return undo_stack[-1]
+
     def pop_undo_stack(self) -> Optional[Dict]:
         """Pop and return the last action from the undo stack.
+
+        NOTE: Prefer using peek_undo_stack() + manual removal in atomic operations
+        to avoid data loss if subsequent operations fail.
 
         Returns:
             The undo entry, or None if stack is empty or failed
@@ -1263,13 +1287,38 @@ def _normalize_deletion_entry(entry):
 # Undo Helper Functions
 # =============================================================================
 
+class UndoKeyError(ValueError):
+    """Raised when undo operation has invalid/empty key."""
+    pass
+
+
 def _filter_staged_entries(entries, target_key, normalize_fn):
-    """Filter staged entries, keeping those that don't match target_key."""
+    """Filter staged entries, keeping those that don't match target_key.
+
+    C-05 FIX: Raises UndoKeyError if target_key is empty/None instead of
+    silently returning all entries (which would make undo appear successful
+    while actually removing nothing).
+
+    Args:
+        entries: List of staged entries to filter
+        target_key: Key to match for removal
+        normalize_fn: Function to normalize entry format
+
+    Returns:
+        List of entries that don't match target_key
+
+    Raises:
+        UndoKeyError: If target_key is None or empty string
+    """
     if entries is None:
         return []
-    # Empty target_key cannot match any staged entry; returns entries unmodified
+
+    # C-05 FIX: Raise error instead of silently returning unmodified entries
     if target_key is None or target_key == '':
-        return entries
+        raise UndoKeyError(
+            "Cannot filter staged entries with empty target_key. "
+            "This indicates corrupted undo data or a bug in undo entry creation."
+        )
 
     filtered = []
     for entry in entries:
@@ -1342,8 +1391,9 @@ def _undo_folder_move(staging, action_data):
 
 def _undo_edit(staging, action_data):
     """Remove pending edit."""
-    # Entries use either dict-format (with 'key' field) or list-format (with 'globalIndex'); match on whichever is present
-    edit_key = action_data.get('key') or str(action_data.get('globalIndex', ''))
+    # F-02: Use explicit None check instead of `or` to handle globalIndex=0 correctly
+    # Entries use either dict-format (with 'key' field) or list-format (with 'globalIndex')
+    edit_key = str(action_data['key']) if 'key' in action_data else str(action_data.get('globalIndex', ''))
     pending_edits = staging.get('pendingEdits', [])
     staging['pendingEdits'] = _filter_staged_entries(pending_edits, edit_key, _normalize_edit_entry)
     return f"Unstaged edit: {action_data.get('object', {}).get('name', 'unknown')}"
@@ -1351,8 +1401,8 @@ def _undo_edit(staging, action_data):
 
 def _undo_move(staging, action_data):
     """Remove staged move."""
-    # Entries use either dict-format (with 'key' field) or list-format (with 'globalIndex'); match on whichever is present
-    move_key = action_data.get('key') or str(action_data.get('globalIndex', ''))
+    # F-02: Use explicit None check instead of `or` to handle globalIndex=0 correctly
+    move_key = str(action_data['key']) if 'key' in action_data else str(action_data.get('globalIndex', ''))
     staged_moves = staging.get('stagedMoves', [])
     staging['stagedMoves'] = _filter_staged_entries(staged_moves, move_key, _normalize_move_entry)
     return f"Unstaged move: {action_data.get('object', {}).get('name', 'unknown')}"
@@ -1371,8 +1421,8 @@ def _undo_creation(staging, action_data):
 
 def _undo_deletion(staging, action_data):
     """Remove staged deletion."""
-    # Entries use either dict-format (with 'key' field) or list-format (with 'globalIndex'); match on whichever is present
-    deletion_key = action_data.get('key') or str(action_data.get('globalIndex', ''))
+    # F-02: Use explicit None check instead of `or` to handle globalIndex=0 correctly
+    deletion_key = str(action_data['key']) if 'key' in action_data else str(action_data.get('globalIndex', ''))
     staged_deletions = staging.get('stagedObjectDeletions', [])
     staging['stagedObjectDeletions'] = _filter_staged_entries(staged_deletions, deletion_key, _normalize_deletion_entry)
     return f"Unstaged deletion: {action_data.get('deletion', {}).get('name', 'unknown')}"
@@ -1391,7 +1441,8 @@ def _undo_bulk_move(staging, action_data):
     items = action_data.get('items', [])
     count = 0
     for item in items:
-        move_key = item.get('key') or str(item.get('globalIndex', ''))
+        # F-02: Use explicit None check instead of `or` to handle globalIndex=0 correctly
+        move_key = str(item['key']) if 'key' in item else str(item.get('globalIndex', ''))
         staged_moves = staging.get('stagedMoves', [])
         before_len = len(staged_moves)
         staging['stagedMoves'] = _filter_staged_entries(staged_moves, move_key, _normalize_move_entry)
@@ -1405,7 +1456,8 @@ def _undo_bulk_edit(staging, action_data):
     items = action_data.get('items', [])
     count = 0
     for item in items:
-        edit_key = item.get('key') or str(item.get('globalIndex', ''))
+        # F-02: Use explicit None check instead of `or` to handle globalIndex=0 correctly
+        edit_key = str(item['key']) if 'key' in item else str(item.get('globalIndex', ''))
         pending_edits = staging.get('pendingEdits', [])
         before_len = len(pending_edits)
         staging['pendingEdits'] = _filter_staged_entries(pending_edits, edit_key, _normalize_edit_entry)
@@ -1433,7 +1485,8 @@ def _undo_bulk_deletion(staging, action_data):
     items = action_data.get('items', [])
     count = 0
     for item in items:
-        deletion_key = item.get('key') or str(item.get('globalIndex', ''))
+        # F-02: Use explicit None check instead of `or` to handle globalIndex=0 correctly
+        deletion_key = str(item['key']) if 'key' in item else str(item.get('globalIndex', ''))
         staged_deletions = staging.get('stagedObjectDeletions', [])
         before_len = len(staged_deletions)
         staging['stagedObjectDeletions'] = _filter_staged_entries(staged_deletions, deletion_key, _normalize_deletion_entry)

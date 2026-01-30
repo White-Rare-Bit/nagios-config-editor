@@ -1855,7 +1855,7 @@ document.addEventListener('DOMContentLoaded', () => {
             closeKeyboardShortcuts();
         }
 
-        // Ctrl+Z (or Cmd+Z on Mac) for undo - but not when editing text
+        // Ctrl+Z (or Cmd+Z on Mac) for undo - but not when editing text or in dialogs
         if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
             const activeEl = document.activeElement;
             const isTextInput = activeEl && (
@@ -1864,8 +1864,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 activeEl.isContentEditable
             );
 
-            // Only handle undo if not in a text input
-            if (!isTextInput) {
+            // F-01: Check if any modal dialog is open (Bootstrap modals or custom overlays)
+            const hasOpenModal = document.querySelector('.modal.show') !== null;
+            const hasOpenOverlay = document.querySelector('.confirm-dialog-overlay.visible, .global-commit-overlay.visible, .git-result-panel.visible') !== null;
+            const isDialogOpen = hasOpenModal || hasOpenOverlay;
+
+            // Only handle undo if not in a text input and no dialog is open
+            if (!isTextInput && !isDialogOpen) {
                 e.preventDefault();
                 handleUndoClick();
             }

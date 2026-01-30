@@ -13,7 +13,8 @@ from staging_manager import (
     _normalize_edit_entry,
     _normalize_move_entry,
     _normalize_deletion_entry,
-    UNDO_HANDLERS
+    UNDO_HANDLERS,
+    UndoKeyError
 )
 from audit_service import write_audit_log
 import file_operations
@@ -985,7 +986,9 @@ def api_staging_undo():
     """
     Undo the last staged operation.
 
-    Pops the most recent action from the undo stack and reverses it.
+    C-04 FIX: Uses atomic undo pattern - peeks at entry first, applies reversal,
+    removes from stack, then saves all changes atomically. This prevents data
+    loss if save fails after popping.
     """
     sm = get_staging_manager()
     session_id = request.headers.get('X-Session-Id')
@@ -996,11 +999,12 @@ def api_staging_undo():
     if not sm.can_modify(session_id):
         return jsonify({'error': 'Staging is locked by another user'}), 423
 
-    undo_entry = sm.pop_undo_stack()
+    # C-04 FIX: Peek first, don't pop yet
+    undo_entry = sm.peek_undo_stack()
     if not undo_entry:
-        return jsonify({'error': 'Nothing to undo'}), 400
+        return jsonify({'error': 'Nothing to undo'}), 404
 
-    # Reverse the action based on type
+    # Get staging for modification
     staging = sm.get_staging()
     if not staging:
         return jsonify({'error': 'No staging data'}), 400
@@ -1016,11 +1020,21 @@ def api_staging_undo():
         else:
             logger.warning(f"Unknown undo action_type: {action_type}, skipping")
             reversed_action = f"Skipped unknown action: {action_type}"
+    except UndoKeyError as e:
+        # C-05 FIX: Catch empty key errors and report to user instead of silent failure
+        logger.error(f"Undo failed due to invalid key: {e}")
+        return jsonify({'error': f'Undo failed: {e}'}), 400
     except ValueError:
         logger.warning(f"Invalid undo action_type: {action_type}, skipping")
         reversed_action = f"Skipped invalid action: {action_type}"
 
-    # Save updated staging
+    # C-04 FIX: Now remove from stack (in memory) after successful reversal
+    undo_stack = staging.get('undoStack', [])
+    if undo_stack:
+        undo_stack.pop()
+        staging['undoStack'] = undo_stack
+
+    # Save updated staging atomically (reversal + stack removal together)
     if sm.save_staging(staging).success:
         return jsonify({
             'success': True,
@@ -1029,6 +1043,7 @@ def api_staging_undo():
             'undoCount': len(staging.get('undoStack', []))
         })
     else:
+        # If save fails, nothing was changed - entry still in stack, no data loss
         return jsonify({'error': 'Failed to save staging'}), 500
 
 

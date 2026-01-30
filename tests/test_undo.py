@@ -402,7 +402,7 @@ class TestUndoEdgeCases:
     """Edge case tests for undo system."""
 
     def test_undo_empty_stack(self, app_client):
-        """Undo with empty stack returns 400."""
+        """Undo with empty stack returns 404 (nothing to undo = resource not found)."""
         client, config_dir = app_client
         session_id = "test-undo-empty-stack"
 
@@ -418,10 +418,10 @@ class TestUndoEdgeCases:
         client.post('/api/staging', json=staging_data,
                     headers={'X-Session-Id': session_id})
 
-        # Undo with empty stack
+        # Undo with empty stack - returns 404 (nothing to undo)
         response = client.post('/api/staging/undo',
                                headers={'X-Session-Id': session_id})
-        assert response.status_code == 400
+        assert response.status_code == 404
         assert 'Nothing to undo' in response.get_json()['error']
 
     def test_undo_no_session_header(self, app_client):

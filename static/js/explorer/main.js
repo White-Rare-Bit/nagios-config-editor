@@ -139,7 +139,8 @@ Explorer.constants = {
         'event_handler', 'check_period', 'notification_period', 'contacts', 'members'
     ],
 
-    // Name fields by object type
+    // Name fields by object type (must stay in sync with nagios_model.py:NAME_FIELDS)
+    // N-01: Added dependency and escalation object types
     nameFields: {
         host: 'host_name',
         hostgroup: 'hostgroup_name',
@@ -148,7 +149,11 @@ Explorer.constants = {
         contact: 'contact_name',
         contactgroup: 'contactgroup_name',
         command: 'command_name',
-        timeperiod: 'timeperiod_name'
+        timeperiod: 'timeperiod_name',
+        servicedependency: 'service_description',
+        hostdependency: 'host_name',
+        serviceescalation: 'service_description',
+        hostescalation: 'host_name'
     },
 
     // Notification options

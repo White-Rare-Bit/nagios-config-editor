@@ -567,8 +567,12 @@
             .map(([key, value]) => {
                 const suggestions = getAttributeSuggestions(key, objectType);
                 const hasSuggestions = suggestions.length > 0;
+                // S-01: Pre-compute escaped key for safe use in HTML attributes
+                // First escape for JS context, then escape for HTML attribute context
+                const keyJsEscaped = Explorer.escapeJs(key);
+                const keyHtmlAttr = Explorer.escapeHtml(keyJsEscaped);
                 const inputEvents = hasSuggestions
-                    ? `oninput="Explorer.showAttrAutocomplete(this, '${Explorer.escapeJs(key)}')" onblur="Explorer.hideAttrAutocomplete(event)" onkeydown="Explorer.handleAttrAutocompleteKey(event, '${Explorer.escapeJs(key)}')"`
+                    ? `oninput="Explorer.showAttrAutocomplete(this, '${keyHtmlAttr}')" onblur="Explorer.hideAttrAutocomplete(event)" onkeydown="Explorer.handleAttrAutocompleteKey(event, '${keyHtmlAttr}')"`
                     : '';
                 const placeholder = hasSuggestions ? ` placeholder="Type for suggestions..."` : '';
                 const acTitle = hasSuggestions ? ` title="Arrow keys to navigate suggestions, Enter to select, Escape to close"` : '';
@@ -585,14 +589,14 @@
                         <span class="attr-name">${Explorer.escapeHtml(key)}</span>
                         <div class="attr-value-long-wrapper">
                             <textarea class="attr-value attr-value-long"
-                                   onchange="Explorer.updateAttribute('${Explorer.escapeJs(key)}', this.value, this)"
+                                   onchange="Explorer.updateAttribute('${keyHtmlAttr}', this.value, this)"
                                    oninput="Explorer.syncHighlight(this)"
                                    spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"
                                    ${inputEvents}${placeholder}${acTitle}>${Explorer.escapeHtml(value)}</textarea>
                             <pre class="attr-value-highlight" aria-hidden="true">${highlighted}</pre>
                         </div>
-                        <button class="attr-copy" onclick="Explorer.copyAttributeValue('${Explorer.escapeJs(key)}')" title="Copy value"><i class="fa-regular fa-copy"></i></button>
-                        <button class="attr-delete" onclick="Explorer.deleteAttribute('${Explorer.escapeJs(key)}')">&times;</button>
+                        <button class="attr-copy" onclick="Explorer.copyAttributeValue('${keyHtmlAttr}')" title="Copy value"><i class="fa-regular fa-copy"></i></button>
+                        <button class="attr-delete" onclick="Explorer.deleteAttribute('${keyHtmlAttr}')">&times;</button>
                     </div>
                 `}
 
@@ -600,10 +604,10 @@
                 <div class="attr-row${hasSuggestions ? ' has-autocomplete' : ''}" data-attr="${Explorer.escapeHtml(key)}">
                     <span class="attr-name">${Explorer.escapeHtml(key)}</span>
                     <input type="text" class="attr-value" value="${escapedValue}"
-                           onchange="Explorer.updateAttribute('${Explorer.escapeJs(key)}', this.value, this)"
+                           onchange="Explorer.updateAttribute('${keyHtmlAttr}', this.value, this)"
                            ${inputEvents}${placeholder}${acTitle} autocomplete="off">
-                    <button class="attr-copy" onclick="Explorer.copyAttributeValue('${Explorer.escapeJs(key)}')" title="Copy value"><i class="fa-regular fa-copy"></i></button>
-                    <button class="attr-delete" onclick="Explorer.deleteAttribute('${Explorer.escapeJs(key)}')">&times;</button>
+                    <button class="attr-copy" onclick="Explorer.copyAttributeValue('${keyHtmlAttr}')" title="Copy value"><i class="fa-regular fa-copy"></i></button>
+                    <button class="attr-delete" onclick="Explorer.deleteAttribute('${keyHtmlAttr}')">&times;</button>
                 </div>
             `}).join('');
 
@@ -672,7 +676,9 @@
             const handler = selectHandler
                 ? selectHandler(s)
                 : `Explorer.selectAttrAutocomplete('${Explorer.escapeJs(attrKey)}', '${Explorer.escapeJs(s)}')`;
-            return `<div class="attr-autocomplete-item" data-index="${i}" data-value="${Explorer.escapeHtml(s)}" onmousedown="${handler}">${Explorer.escapeHtml(s)}</div>`;
+            // S-01: HTML-escape the handler for safe insertion into HTML attribute
+            // JS-escaped strings like \" would break out of HTML attributes otherwise
+            return `<div class="attr-autocomplete-item" data-index="${i}" data-value="${Explorer.escapeHtml(s)}" onmousedown="${Explorer.escapeHtml(handler)}">${Explorer.escapeHtml(s)}</div>`;
         }).join('');
 
         if (container) {
@@ -941,9 +947,11 @@
         dropdown.className = 'attr-autocomplete';
         dropdown.style.left = '0';
         dropdown.style.right = '0';
-        dropdown.innerHTML = filtered.slice(0, 20).map((s, i) =>
-            `<div class="attr-autocomplete-item" data-index="${i}" data-value="${Explorer.escapeHtml(s)}" onmousedown="Explorer.selectAddAttrNameAutocomplete('${Explorer.escapeJs(s)}')">${Explorer.escapeHtml(s)}</div>`
-        ).join('');
+        // S-01: Build handler and HTML-escape for safe attribute insertion
+        dropdown.innerHTML = filtered.slice(0, 20).map((s, i) => {
+            const handler = `Explorer.selectAddAttrNameAutocomplete('${Explorer.escapeJs(s)}')`;
+            return `<div class="attr-autocomplete-item" data-index="${i}" data-value="${Explorer.escapeHtml(s)}" onmousedown="${Explorer.escapeHtml(handler)}">${Explorer.escapeHtml(s)}</div>`;
+        }).join('');
 
         container.appendChild(dropdown);
     }

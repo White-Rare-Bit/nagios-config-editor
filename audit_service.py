@@ -6,7 +6,11 @@ Manages audit log persistence, rotation, and retrieval.
 
 import os
 import json
+import threading
 from datetime import datetime
+
+# C-09: Module-level lock for thread-safe audit log writes
+_audit_lock = threading.Lock()
 
 
 AUDIT_LOG_DIR = None
@@ -76,28 +80,33 @@ def rotate_audit_log(entries: list) -> list:
 def write_audit_log(audit_entry: dict, config_dir: str = None):
     """Write an audit log entry to the audit log file.
 
+    C-09: Uses threading lock to prevent concurrent write race condition.
+    The read-modify-write pattern requires atomicity to avoid lost updates.
+
     Args:
         audit_entry: Audit entry dictionary to log.
         config_dir: Configuration directory path. If None, uses current directory.
     """
     audit_path = get_audit_log_path(config_dir)
 
-    # Load existing entries
-    entries = []
-    if os.path.exists(audit_path):
-        try:
-            with open(audit_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                entries = data.get('entries', [])
-        except (IOError, json.JSONDecodeError):
-            entries = []
+    # C-09: Acquire lock for thread-safe read-modify-write
+    with _audit_lock:
+        # Load existing entries
+        entries = []
+        if os.path.exists(audit_path):
+            try:
+                with open(audit_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    entries = data.get('entries', [])
+            except (IOError, json.JSONDecodeError):
+                entries = []
 
-    # Append new entry
-    entries.append(audit_entry)
+        # Append new entry
+        entries.append(audit_entry)
 
-    # Rotate if needed
-    entries = rotate_audit_log(entries)
+        # Rotate if needed
+        entries = rotate_audit_log(entries)
 
-    # Save
-    with open(audit_path, 'w', encoding='utf-8') as f:
-        json.dump({'entries': entries}, f, indent=2)
+        # Save
+        with open(audit_path, 'w', encoding='utf-8') as f:
+            json.dump({'entries': entries}, f, indent=2)

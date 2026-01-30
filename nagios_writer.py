@@ -84,11 +84,15 @@ class NagiosConfigWriter:
             # Atomic rename (on POSIX systems)
             os.replace(temp_path, filepath)
         except Exception as e:
-            # Clean up temp file on failure
+            # C-07: Clean up temp file on failure with proper error logging
             try:
                 os.unlink(temp_path)
-            except OSError:
-                pass
+            except OSError as cleanup_err:
+                # Log temp file cleanup failure for manual intervention
+                if self._op_logger:
+                    self._op_logger.error('writer', 'write_file',
+                        params={'filepath': filepath, 'temp_file': temp_path},
+                        error=f"DISK_LEAK: Temp file cleanup failed: {cleanup_err}")
             if self._op_logger:
                 self._op_logger.error('writer', 'write_file', params={'filepath': filepath}, error=str(e))
             raise

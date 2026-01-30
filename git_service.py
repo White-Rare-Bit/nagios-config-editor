@@ -234,8 +234,9 @@ class GitService:
         if branch_result.success and branch_result.data.returncode == 0:
             branch = branch_result.data.stdout.strip() or 'HEAD detached'
 
-        # Get status with porcelain format
-        status_result = self._run_git(['status', '--porcelain', '-uall'], timeout=TIMEOUT_STATUS)
+        # D-07: Use -unormal instead of -uall to avoid memory issues on large repos
+        # -uall recursively lists every file in untracked directories which can be slow/memory-intensive
+        status_result = self._run_git(['status', '--porcelain', '-unormal'], timeout=TIMEOUT_STATUS)
         if not status_result.success:
             return OperationResult(success=False, error=status_result.error)
 
