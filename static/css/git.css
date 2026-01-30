@@ -620,7 +620,7 @@
     font-size: var(--nbe-font-size-sm);
 }
 
-.git-history-table thead {
+.git-history-table thead th {
     position: sticky;
     top: 0;
     z-index: 1;
