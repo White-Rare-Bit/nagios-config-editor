@@ -61,6 +61,7 @@ def api_health_check():
     p = service.parser
 
     issues = []
+    reported_missing = set()  # Track reported missing objects to avoid duplicates
 
     # Build lookup sets for quick reference checking
     hosts = set()
@@ -132,6 +133,39 @@ def api_health_check():
                             'message': f'Service references non-existent host: {h}'
                         })
 
+            # 1b. Check for services referencing non-existent hostgroups
+            hostgroup_ref = obj.attributes.get('hostgroup_name', '')
+            if hostgroup_ref:
+                for hg in hostgroup_ref.split(','):
+                    hg = hg.strip().lstrip('+!').strip()  # Strip additive/exclusion prefixes
+                    if hg and hg not in hostgroups:
+                        issues.append({
+                            'type': 'missing_hostgroup',
+                            'severity': 'error',
+                            'object': obj_name,
+                            'object_type': obj.object_type,
+                            'file': obj.source_file,
+                            'message': f'Service references non-existent hostgroup: {hg}'
+                        })
+
+        # 1c. Check for hosts with missing parents
+        if obj.object_type == 'host':
+            # Skip templates
+            if obj.attributes.get('register', '1') != '0':
+                parents_ref = obj.attributes.get('parents', '')
+                if parents_ref:
+                    for parent in parents_ref.split(','):
+                        parent = parent.strip()
+                        if parent and parent not in hosts:
+                            issues.append({
+                                'type': 'missing_parent',
+                                'severity': 'warning',
+                                'object': obj_name,
+                                'object_type': obj.object_type,
+                                'file': obj.source_file,
+                                'message': f'Host references non-existent parent: {parent}'
+                            })
+
         # 2. Check for missing templates
         if 'use' in obj.attributes:
             template_refs = [t.strip() for t in obj.attributes['use'].split(',')]
@@ -148,6 +182,7 @@ def api_health_check():
                     })
 
         # 3. Check for missing commands
+        # Severity: error (missing command would cause Nagios config verification failure)
         for cmd_field in ['check_command', 'event_handler', 'notification_commands']:
             if cmd_field in obj.attributes:
                 cmd_ref = obj.attributes[cmd_field].split('!')[0]  # Get command without args
@@ -271,7 +306,7 @@ def api_health_check():
                 if not is_used:
                     issues.append({
                         'type': 'empty_group',
-                        'severity': 'info',
+                        'severity': 'warning',
                         'object': obj.get_name() or obj.get_display_name(),
                         'object_type': obj.object_type,
                         'file': obj.source_file,
@@ -294,13 +329,42 @@ def api_health_check():
                         obj.attributes.get('name') == tmpl_name):
                         issues.append({
                             'type': 'unused_template',
-                            'severity': 'info',
+                            'severity': 'warning',
                             'object': tmpl_name,
                             'object_type': obj_type,
                             'file': obj.source_file,
                             'message': f'Template is not used by any {obj_type}'
                         })
                         break
+
+    # 9. Check for duplicate dependencies
+    # Build signature for each dependency to detect duplicates
+    dep_signatures = {}
+    for obj in p.objects:
+        if obj.object_type in ['hostdependency', 'servicedependency']:
+            # Build a signature from key fields
+            sig_parts = []
+            for field in ['dependent_host_name', 'dependent_hostgroup_name',
+                         'dependent_service_description', 'host_name',
+                         'hostgroup_name', 'service_description']:
+                val = obj.attributes.get(field, '')
+                if val:
+                    sig_parts.append(f'{field}={val}')
+            sig = '|'.join(sorted(sig_parts))
+
+            if sig in dep_signatures:
+                # Found duplicate
+                orig = dep_signatures[sig]
+                issues.append({
+                    'type': 'duplicate_dependency',
+                    'severity': 'warning',
+                    'object': obj.get_name() or obj.get_display_name(),
+                    'object_type': obj.object_type,
+                    'file': obj.source_file,
+                    'message': f'Duplicate dependency rule (also defined in {orig["file"]})'
+                })
+            else:
+                dep_signatures[sig] = {'file': obj.source_file, 'obj': obj}
 
     # Summary
     summary = {
