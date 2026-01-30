@@ -97,6 +97,10 @@
         'notification_commands': 'command',
         'host_notification_commands': 'command',
         'service_notification_commands': 'command',
+        'obsess_over_host_command': 'command',
+        'obsess_over_service_command': 'command',
+        'global_host_event_handler': 'command',
+        'global_service_event_handler': 'command',
 
         // Timeperiod references
         'check_period': 'timeperiod',

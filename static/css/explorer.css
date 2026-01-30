@@ -4665,6 +4665,11 @@ body.dragging-objects .right-pane::after {
     text-transform: uppercase;
 }
 
+/* Escalation rule badge (different color from dependency rule) */
+.dep-rule-badge.esc-badge {
+    background-color: var(--nbe-info, #17a2b8);
+}
+
 /* Reference type group header */
 .ref-type-group {
     margin-bottom: var(--nbe-space-lg);
