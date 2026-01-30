@@ -78,22 +78,28 @@ def api_health_check():
         if not name:
             continue
 
-        if obj.object_type == 'host':
-            hosts.add(name)
-        elif obj.object_type == 'hostgroup':
-            hostgroups.add(name)
-        elif obj.object_type == 'service':
-            services.add(name)
-        elif obj.object_type == 'servicegroup':
-            servicegroups.add(name)
-        elif obj.object_type == 'contact':
-            contacts.add(name)
-        elif obj.object_type == 'contactgroup':
-            contactgroups.add(name)
-        elif obj.object_type == 'command':
-            commands.add(name)
-        elif obj.object_type == 'timeperiod':
-            timeperiods.add(name)
+        # Check if this is a template (register=0) - templates should not be in lookup sets
+        # because they are not real monitored objects, just configuration blueprints
+        is_template = obj.attributes.get('register', '1') == '0'
+
+        # Only add non-template objects to lookup sets for reference validation
+        if not is_template:
+            if obj.object_type == 'host':
+                hosts.add(name)
+            elif obj.object_type == 'hostgroup':
+                hostgroups.add(name)
+            elif obj.object_type == 'service':
+                services.add(name)
+            elif obj.object_type == 'servicegroup':
+                servicegroups.add(name)
+            elif obj.object_type == 'contact':
+                contacts.add(name)
+            elif obj.object_type == 'contactgroup':
+                contactgroups.add(name)
+            elif obj.object_type == 'command':
+                commands.add(name)
+            elif obj.object_type == 'timeperiod':
+                timeperiods.add(name)
 
         # Track templates (objects with 'name' attribute and register 0)
         if 'name' in obj.attributes:
