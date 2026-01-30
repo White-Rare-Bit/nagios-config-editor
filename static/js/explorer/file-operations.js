@@ -1437,6 +1437,32 @@
             return;
         }
 
+        // C-08: Check if there are staged object moves targeting this file
+        const movesToThisFile = state.stagedMoves.filter(move => {
+            const targetFile = move[1]?.targetFile || move.targetFile;
+            return targetFile === filePath;
+        });
+
+        if (movesToThisFile.length > 0) {
+            const confirmed = await showConfirmDialog({
+                title: 'File Has Pending Moves',
+                message: `${movesToThisFile.length} object(s) are being moved to this file. Deleting the file will remove those pending moves.`,
+                confirmText: 'Delete Anyway',
+                cancelText: 'Cancel',
+                type: 'warning'
+            });
+
+            if (!confirmed) {
+                return;
+            }
+
+            // Remove the staged moves targeting this file
+            state.stagedMoves = state.stagedMoves.filter(move => {
+                const targetFile = move[1]?.targetFile || move.targetFile;
+                return targetFile !== filePath;
+            });
+        }
+
         // Delete file immediately via API
         let relativePath = filePath;
         if (filePath.startsWith(state.configPath + '/')) {
@@ -1466,6 +1492,32 @@
         if (folderPath === state.configPath) {
             showToast('Cannot delete the config root folder', 'error');
             return;
+        }
+
+        // C-08: Check if there are staged object moves targeting files in this folder
+        const movesToThisFolder = state.stagedMoves.filter(move => {
+            const targetFile = move[1]?.targetFile || move.targetFile;
+            return targetFile && targetFile.startsWith(folderPath + '/');
+        });
+
+        if (movesToThisFolder.length > 0) {
+            const confirmed = await showConfirmDialog({
+                title: 'Folder Has Pending Moves',
+                message: `${movesToThisFolder.length} object(s) are being moved to files in this folder. Deleting the folder will remove those pending moves.`,
+                confirmText: 'Delete Anyway',
+                cancelText: 'Cancel',
+                type: 'warning'
+            });
+
+            if (!confirmed) {
+                return;
+            }
+
+            // Remove the staged moves targeting files in this folder
+            state.stagedMoves = state.stagedMoves.filter(move => {
+                const targetFile = move[1]?.targetFile || move.targetFile;
+                return !targetFile || !targetFile.startsWith(folderPath + '/');
+            });
         }
 
         // Remove any new files (staged only) that are inside this folder

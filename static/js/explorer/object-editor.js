@@ -474,14 +474,26 @@
 
         if (!refType) return [];
 
-        // Get all objects of the referenced type
+        // Get all objects of the referenced type from current disk state
         const suggestions = state.allObjects
             .filter(o => o.object_type === refType)
             .map(o => o.display_name)
-            .filter(name => name && name !== '(unnamed)')
-            .sort();
+            .filter(name => name && name !== '(unnamed)');
 
-        return [...new Set(suggestions)]; // Remove duplicates
+        // F-04: Also include staged creations that haven't been applied yet
+        // This allows referencing objects created in the same editing session
+        const stagedCreations = state.stagedCreations || [];
+        for (const creation of stagedCreations) {
+            if (creation.object_type === refType) {
+                const nameField = state.nameFields[refType];
+                const name = creation.attributes?.[nameField];
+                if (name && name !== '(unnamed)' && !suggestions.includes(name)) {
+                    suggestions.push(name);
+                }
+            }
+        }
+
+        return [...new Set(suggestions)].sort(); // Remove duplicates and sort
     }
 
     // Attributes that typically have long values and should use textarea

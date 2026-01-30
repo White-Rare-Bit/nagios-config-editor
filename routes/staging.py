@@ -707,12 +707,18 @@ def _execute_apply_phases(service, staging_data, is_safe_path_func):
 def _write_apply_audit_log(staging_data, session_id, all_details, errors, log):
     """Write audit log entry for apply operation.
 
+    C-10: Returns success status and error message if write fails.
+    Caller should include audit failure in response warnings.
+
     Args:
         staging_data: Staging data dict
         session_id: Session ID
         all_details: Details from each phase
         errors: List of errors encountered
         log: Logger instance
+
+    Returns:
+        Tuple of (success: bool, error_message: Optional[str])
     """
     try:
         audit_entry = {
@@ -741,8 +747,92 @@ def _write_apply_audit_log(staging_data, session_id, all_details, errors, log):
         if errors:
             audit_entry['errors'] = errors
         write_audit_log(audit_entry)
+        return True, None
     except Exception as e:
-        log.warning(f"Failed to write audit log: {e}")
+        error_msg = f"Failed to write audit log: {e}"
+        log.error(error_msg)  # C-10: Elevated from warning to error
+        return False, error_msg
+
+
+def _extract_name_changes(staging_data):
+    """Extract name changes from pendingEdits for reference updates.
+
+    C-06: Identifies objects whose name field was modified.
+
+    Args:
+        staging_data: Staging data dict containing pendingEdits
+
+    Returns:
+        List of dicts with {oldName, newName, objectType} for each name change
+    """
+    name_changes = []
+    pending_edits = staging_data.get('pendingEdits', [])
+
+    for edit_entry in pending_edits:
+        edit_data = _normalize_edit_entry(edit_entry)
+        obj_info = edit_data.get('object', {})
+        obj_type = obj_info.get('object_type')
+        if not obj_type:
+            continue
+
+        name_field = NAME_FIELDS.get(obj_type)
+        if not name_field:
+            continue
+
+        original = edit_data.get('original', {})
+        edited = edit_data.get('edited', {})
+
+        # Check if name field was modified
+        if name_field in edited:
+            old_name = original.get(name_field)
+            new_name = edited.get(name_field)
+            if old_name and new_name and old_name != new_name:
+                name_changes.append({
+                    'oldName': old_name,
+                    'newName': new_name,
+                    'objectType': obj_type
+                })
+
+    return name_changes
+
+
+def _apply_reference_updates(service, name_changes, log):
+    """Apply reference updates for name changes.
+
+    C-06: Updates references in other objects when objects are renamed.
+
+    Args:
+        service: NagiosService instance (must have fresh parser after apply)
+        name_changes: List of {oldName, newName, objectType} from _extract_name_changes
+        log: Logger instance
+
+    Returns:
+        Total count of references updated
+    """
+    from nagios_writer import NagiosConfigWriter
+
+    if not name_changes:
+        return 0
+
+    total_refs_updated = 0
+    objects = service.get_objects()
+
+    for change in name_changes:
+        old_name = change['oldName']
+        new_name = change['newName']
+        refs_updated = service.update_references(objects, old_name, new_name)
+        total_refs_updated += refs_updated
+        if refs_updated > 0:
+            log.info(f"Updated {refs_updated} references: {old_name} -> {new_name}")
+
+    if total_refs_updated > 0:
+        # Write modified objects back to their files
+        writer = NagiosConfigWriter()
+        writer.write_objects_to_original_files(objects)
+        # Reload parser to reflect reference changes
+        service.reload()
+
+    return total_refs_updated
 
 
 @bp.route('/api/staging/apply', methods=['POST'])
@@ -776,15 +866,24 @@ def api_apply_staging():
     session_id = request.headers.get('X-Session-Id')
     op_log = get_op_logger()
 
+    # C-06: Read updateReferences flag from request body (use silent=True to handle missing body)
+    request_data = request.get_json(silent=True) or {}
+    update_references_flag = request_data.get('updateReferences', False)
+
     # Validate preconditions
     error_response, staging_data = _validate_apply_preconditions(sm, session_id, op_log)
     if error_response:
         return error_response
 
+    # C-06: Extract name changes BEFORE applying phases (needed for reference updates)
+    name_changes = _extract_name_changes(staging_data) if update_references_flag else []
+
     if op_log:
         op_log.info('app', 'staging_apply', session_id=session_id,
                     user_name=staging_data.get('userName', ''),
-                    user_email=staging_data.get('userEmail', ''))
+                    user_email=staging_data.get('userEmail', ''),
+                    update_references=update_references_flag,
+                    name_changes_count=len(name_changes))
 
     service = get_service()
 
@@ -813,18 +912,44 @@ def api_apply_staging():
                 'stagingPreserved': True
             }), 500
 
-        # All phases succeeded - clear staging and finalize
+        # All phases succeeded - reload parser, apply reference updates, then clear staging
         service.reload()
+
+        # C-06: Apply reference updates if requested and there are name changes
+        refs_updated = 0
+        if update_references_flag and name_changes:
+            try:
+                refs_updated = _apply_reference_updates(service, name_changes, log)
+                if refs_updated > 0:
+                    all_details['referenceUpdates'] = {
+                        'count': refs_updated,
+                        'renames': name_changes
+                    }
+            except Exception as ref_err:
+                # Reference update failure is non-fatal - objects were already renamed
+                log.warning(f"Reference update failed (non-fatal): {ref_err}")
+                errors.append(f"Reference update warning: {ref_err}")
+
         sm.clear_staging()
         total_changes = sum(applied_summary.values())
 
+        # C-10: Track audit log write result and include failure in response
+        audit_failed = False
         if total_changes > 0:
-            _write_apply_audit_log(staging_data, session_id, all_details, errors, log)
+            audit_success, audit_error = _write_apply_audit_log(staging_data, session_id, all_details, errors, log)
+            if not audit_success:
+                audit_failed = True
+                errors.append(audit_error)
 
-        return jsonify({
+        response_data = {
             'success': True, 'applied': applied_summary,
-            'totalChanges': total_changes, 'errors': errors if errors else None
-        })
+            'totalChanges': total_changes, 'errors': errors if errors else None,
+            'referencesUpdated': refs_updated
+        }
+        if audit_failed:
+            response_data['warnings'] = ['Audit log write failed - changes applied but not logged']
+
+        return jsonify(response_data)
 
     except Exception as e:
         # Unexpected exception - do NOT clear staging
@@ -1309,14 +1434,19 @@ def api_staging_commit():
 
     # Apply staged changes to disk before committing
     if staging:
+        # Pass through request JSON data (e.g., updateReferences flag)
+        request_data = request.get_json(silent=True) or {}
         with current_app.test_client() as client:
             apply_resp = client.post('/api/staging/apply',
-                                     headers={'X-Session-Id': session_id})
+                                     json=request_data,
+                                     headers={'X-Session-Id': session_id,
+                                              'Content-Type': 'application/json'})
             if apply_resp.status_code >= 400:
                 apply_data = apply_resp.get_json()
+                error_msg = apply_data.get('error', 'Failed to apply staged changes') if apply_data else 'Failed to apply staged changes'
                 return jsonify({
                     'success': False,
-                    'error': apply_data.get('error', 'Failed to apply staged changes')
+                    'error': error_msg
                 }), apply_resp.status_code
 
     # Check if there are uncommitted git changes (the real indicator of pending work)

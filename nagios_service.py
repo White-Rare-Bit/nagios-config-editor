@@ -939,11 +939,18 @@ class NagiosService:
                                 changes.append({'type': 'modify', 'key': key, 'from': old_val, 'to': new_val})
                         name_field = NAME_FIELDS.get(target_obj.object_type)
                         obj_name = old_attrs.get(name_field, '') if name_field else ''
-                        details.append({
+                        # C-11: Include both old and new names when name changes for audit trail
+                        detail_entry = {
                             'object_type': target_obj.object_type,
                             'object_name': obj_name,
                             'changes': changes
-                        })
+                        }
+                        # Check if name field was changed and record new name
+                        if name_field and name_field in edited_attrs:
+                            new_name = edited_attrs.get(name_field)
+                            if new_name and new_name != obj_name:
+                                detail_entry['renamed_to'] = new_name
+                        details.append(detail_entry)
                         p = self.parser
                     elif result.error:
                         errors.append(f"Failed to edit object: {result.error}")

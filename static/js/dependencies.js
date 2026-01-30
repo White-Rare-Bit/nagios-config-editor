@@ -2306,7 +2306,9 @@ console.log('dependencies.js loaded');
     function expandWithRules(startNodeId, preset) {
         // Guard against uninitialized graph state
         if (!allEdges || !allNodes) return;
-        _expandWithRulesImpl(startNodeId, preset, allNodes, allEdges, addedNodeIds, false);
+        // exemptRootFromStopAt=true: root node bypasses stopAt to allow expansion from it
+        // (applyQuickView pre-adds root, stopAt prevents sibling expansion not root expansion)
+        _expandWithRulesImpl(startNodeId, preset, allNodes, allEdges, addedNodeIds, true);
     }
 
     /**

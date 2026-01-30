@@ -56,9 +56,8 @@ def api_update_settings():
     if 'nagios_config_path' in data:
         path = data['nagios_config_path']
         if os.path.isdir(path):
-            server_config.paths.nagios_config_path = os.path.abspath(path)
-
-            # Reinitialize services with new path
+            # F-05: Create all services BEFORE updating config to prevent inconsistent state
+            # If any service fails to initialize, roll back entirely
             op_logger = get_op_logger()
             from staging_manager import StagingManager
             from nagios_service import NagiosService
@@ -66,19 +65,30 @@ def api_update_settings():
             from git_service import GitService
             import file_operations
 
-            normalized_path = server_config.nagios_config_path
-            staging_manager = StagingManager(normalized_path, op_logger=op_logger)
-            service = NagiosService(normalized_path, staging_manager, op_logger=op_logger)
-            backup_manager = BackupManager(normalized_path, server_config.backup_path, op_logger=op_logger)
-            file_operations.set_logger(op_logger)
-            git_service = GitService(normalized_path, op_logger=op_logger)
+            normalized_path = os.path.abspath(path)
+            old_config_path = server_config.paths.nagios_config_path
 
-            current_app.extensions['service'] = service
-            current_app.extensions['staging'] = staging_manager
-            current_app.extensions['backup'] = backup_manager
-            current_app.extensions['git'] = git_service
+            try:
+                # Create all services with new path (may fail if config is invalid)
+                new_staging = StagingManager(normalized_path, op_logger=op_logger)
+                new_service = NagiosService(normalized_path, new_staging, op_logger=op_logger)
+                # Force parser initialization to catch config errors early
+                _ = new_service.parser
+                new_backup = BackupManager(normalized_path, server_config.backup_path, op_logger=op_logger)
+                new_git = GitService(normalized_path, op_logger=op_logger)
 
-            updated.append('nagios_config_path')
+                # All services created successfully - now safe to update config and extensions
+                server_config.paths.nagios_config_path = normalized_path
+                file_operations.set_logger(op_logger)
+                current_app.extensions['service'] = new_service
+                current_app.extensions['staging'] = new_staging
+                current_app.extensions['backup'] = new_backup
+                current_app.extensions['git'] = new_git
+
+                updated.append('nagios_config_path')
+            except Exception as e:
+                # Service initialization failed - config remains unchanged
+                errors.append(f'Failed to initialize services for path: {e}')
         else:
             errors.append(f'Invalid directory: {path}')
 
