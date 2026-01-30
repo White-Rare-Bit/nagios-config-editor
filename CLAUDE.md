@@ -387,7 +387,8 @@ Modular architecture using shared `Explorer` namespace defined in main.js.
 | git.js | Git page: file list, diff viewer, commit/discard UI, tab switching | Modifying git page UI or diff display |
 | backups.js | Backup page: list backups, restore modal, delete confirmations | Adding backup management features |
 | audit-log.js | Audit log: filtering, pagination, event type display | Modifying audit log UI or filters |
-| dependencies.js | Graph view: D3 dependency graph, zoom/pan, legend, object type filtering (1932 lines) | Changing graph visualization or layout |
+| dependencies.js | Graph view: D3 dependency graph, edge categories, quick view presets, zoom/pan, legend, object type filtering | Changing graph visualization, adding relationship types, or modifying presets |
+| js/README.md | Dependency graph edge category system architecture, invariants, data flow | Understanding graph relationship mapping, adding new Nagios relationship types |
 | settings.js | Settings page: identity config, git preferences, config path management | Adding settings fields or validation |
 | find-replace.js | Find/replace: search, preview, bulk replacement | Modifying search or replace logic |
 | bulk-rename.js | Bulk rename: pattern-based renaming, preview | Changing bulk rename UI |

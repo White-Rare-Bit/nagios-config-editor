@@ -26,10 +26,13 @@ console.log('dependencies.js loaded');
         dependencies: [
             'parents',                    // Host parent-child (network topology)
             'host_name',                  // Service → Host binding
-            'dependent_host_name',        // Host dependency master/dependent
-            'dependent_hostgroup_name',   // Host dependency via group
-            'dependent_service_description', // Service dependency
-            'service_description'         // Service dependency master
+            'dependent_host_name',        // Host dependency dependent host
+            'dependent_hostgroup_name',   // Host dependency dependent via group
+            'dependent_service_description', // Service dependency dependent
+            'service_description',        // Service dependency master service
+            'master_host_name',           // Host dependency master host
+            'master_hostgroup_name',      // Host dependency master via group
+            'master_service_description'  // Service dependency master service
         ],
         // Templates: inheritance chain
         templates: [
@@ -45,19 +48,33 @@ console.log('dependencies.js loaded');
             'hostgroup_members',          // Hostgroup → Members
             'servicegroup_members'        // Servicegroup → Members
         ],
+        // Group references only - for finding services/escalations that target hostgroups
+        // Does NOT include hostgroups/servicegroups edges (those pull in all hosts in a group)
+        'group-refs': [
+            'hostgroup_name',             // Service/escalation → Hostgroup reference
+            'servicegroup_name'           // Object → Servicegroup reference
+        ],
+        // Service bindings - minimal edges for finding services related to a host
+        // Does NOT include parents/dependency fields that would pull in siblings
+        'service-bindings': [
+            'host_name',                  // Service → Host binding (followed backward from hosts)
+            'hostgroups'                  // Host → Hostgroup membership (followed forward from hosts)
+        ],
         // Membership: group → members only (for notifications view - no reverse edges)
         membership: [
             'members',                    // Group → Members
             'hostgroup_members',          // Hostgroup → Members
             'servicegroup_members'        // Servicegroup → Members
         ],
-        // Contacts: notification routing
+        // Contacts: notification routing (includes escalation contacts)
         contacts: [
             'contacts',                   // Object → Contact
             'contact_groups',             // Object → Contact group
             'contact_name',               // Contact reference
             'contactgroup_name',          // Contact group reference
-            'contactgroup_members'        // Contact group → Members
+            'contactgroup_members',       // Contact group → Members
+            'escalation_contacts',        // Escalation → Contact
+            'escalation_contact_groups'   // Escalation → Contact group
         ],
         // Commands: implementation details
         commands: [
@@ -73,7 +90,9 @@ console.log('dependencies.js loaded');
             'notification_period',        // Notification time period
             'host_notification_period',   // Contact host notification period
             'service_notification_period', // Contact service notification period
-            'escalation_period'           // Escalation time period
+            'escalation_period',          // Escalation time period
+            'dependency_period',          // Dependency time period
+            'exclude'                     // Timeperiod exclusion
         ]
     };
 
@@ -111,10 +130,10 @@ console.log('dependencies.js loaded');
             label: 'Notifications'
         },
         services: {
-            categories: ['dependencies'],
+            categories: ['service-bindings', 'group-refs'],
             layout: 'hierarchicalLR',
-            description: 'Services monitoring this host',
-            directional: false,  // Follow both directions to find services bound to host
+            description: 'Services monitoring this host (including via hostgroups)',
+            directional: true,  // Only follow specific directions to avoid pulling in sibling hosts
             icon: 'fa-gear',
             label: 'Services'
         },
@@ -151,12 +170,20 @@ console.log('dependencies.js loaded');
             label: 'Monitoring'
         },
         escalations: {
-            categories: ['contacts', 'dependencies'],
+            categories: ['contacts', 'dependencies', 'schedules'],
             layout: 'hierarchicalLR',
             description: 'Escalation paths for this object',
             directional: true,
             icon: 'fa-arrow-up',
             label: 'Escalations'
+        },
+        dependencies: {
+            categories: ['dependencies'],
+            layout: 'hierarchical',
+            description: 'Dependency rules affecting this object',
+            directional: false,
+            icon: 'fa-link',
+            label: 'Dependencies'
         },
         full: {
             categories: ['dependencies', 'templates', 'groups', 'contacts', 'commands', 'schedules'],  // All categories
@@ -168,22 +195,365 @@ console.log('dependencies.js loaded');
         }
     };
 
+    // Declarative expansion rules for quick view presets
+    // Each (objectType, preset) combination defines which edges to follow
+    // Keyed by (objectType, preset) for O(1) lookup during BFS traversal
+    const expansionRules = {
+        host: {
+            inheritance: {
+                // Template inheritance chains
+                forward: ['use'],
+                backward: ['use'],
+                stopAt: []
+            },
+            services: {
+                // Services linked directly + services via hostgroups
+                // stopAt prevents sibling host expansion
+                forward: ['hostgroups'],
+                backward: ['host_name'],
+                atType: {
+                    hostgroup: { backward: ['hostgroup_name'] }
+                },
+                stopAt: ['host']
+            },
+            network: {
+                // Network topology: parents, group membership, and dependencies
+                forward: ['parents', 'hostgroups'],
+                backward: ['parents', 'dependent_host_name', 'master_host_name'],
+                stopAt: []
+            },
+            notifications: {
+                // Notification routing to contacts
+                // atType expands contactgroups to members
+                forward: ['contacts', 'contact_groups'],
+                backward: [],
+                atType: {
+                    contactgroup: { forward: ['members'] }
+                },
+                stopAt: []
+            },
+            monitoring: {
+                // Commands and time periods for monitoring config
+                forward: ['check_command', 'check_period', 'notification_period', 'event_handler'],
+                backward: [],
+                stopAt: []
+            },
+            escalations: {
+                // Find hostescalations targeting this host
+                forward: [],
+                backward: ['host_name'],
+                atType: {
+                    hostescalation: { forward: ['contacts', 'contact_groups', 'escalation_period'] }
+                },
+                stopAt: []
+            },
+            dependencies: {
+                // Find hostdependencies where this host is dependent or master
+                forward: [],
+                backward: ['dependent_host_name', 'host_name', 'master_host_name'],
+                atType: {
+                    hostdependency: { forward: ['dependent_host_name', 'host_name', 'master_host_name', 'dependent_hostgroup_name', 'hostgroup_name', 'master_hostgroup_name'] }
+                },
+                stopAt: []
+            }
+        },
+        hostgroup: {
+            inheritance: {
+                // Template inheritance chains
+                forward: ['use'],
+                backward: ['use'],
+                stopAt: []
+            },
+            services: {
+                // Services targeting this hostgroup
+                // stopAt prevents host expansion
+                forward: [],
+                backward: ['hostgroup_name'],
+                stopAt: ['host']
+            },
+            members: {
+                // Hosts in this group + nested hostgroups
+                forward: ['members', 'hostgroup_members'],
+                backward: ['hostgroups'],
+                stopAt: []
+            },
+            notifications: {
+                // Notification routing from group
+                forward: ['contacts', 'contact_groups'],
+                backward: [],
+                atType: {
+                    contactgroup: { forward: ['members'] }
+                },
+                stopAt: []
+            },
+            escalations: {
+                // Find hostescalations targeting this hostgroup
+                forward: [],
+                backward: ['hostgroup_name'],
+                atType: {
+                    hostescalation: { forward: ['contacts', 'contact_groups', 'escalation_period'] }
+                },
+                stopAt: []
+            },
+            dependencies: {
+                // Find hostdependencies referencing this hostgroup
+                forward: [],
+                backward: ['dependent_hostgroup_name', 'hostgroup_name', 'master_hostgroup_name'],
+                atType: {
+                    hostdependency: { forward: ['dependent_host_name', 'host_name', 'master_host_name'] }
+                },
+                stopAt: []
+            }
+        },
+        service: {
+            inheritance: {
+                // Template inheritance chains
+                forward: ['use'],
+                backward: ['use'],
+                stopAt: []
+            },
+            network: {
+                // Host binding and service dependencies
+                forward: ['host_name', 'hostgroup_name'],
+                backward: ['dependent_service_description', 'service_description'],
+                stopAt: []
+            },
+            monitoring: {
+                // Check commands and time periods
+                forward: ['check_command', 'check_period', 'notification_period', 'event_handler'],
+                backward: [],
+                stopAt: []
+            },
+            notifications: {
+                // Notification routing to contacts
+                forward: ['contacts', 'contact_groups'],
+                backward: [],
+                atType: {
+                    contactgroup: { forward: ['members'] }
+                },
+                stopAt: []
+            },
+            escalations: {
+                // Find serviceescalations targeting this service
+                forward: [],
+                backward: ['service_description'],
+                atType: {
+                    serviceescalation: { forward: ['contacts', 'contact_groups', 'escalation_period'] }
+                },
+                stopAt: []
+            },
+            dependencies: {
+                // Find servicedependencies where this service is dependent or master
+                forward: [],
+                backward: ['dependent_service_description', 'service_description', 'master_service_description'],
+                atType: {
+                    servicedependency: { forward: ['dependent_service_description', 'service_description', 'master_service_description', 'dependent_host_name', 'host_name', 'master_host_name'] }
+                },
+                stopAt: []
+            }
+        },
+        servicegroup: {
+            inheritance: {
+                // Template inheritance chains
+                forward: ['use'],
+                backward: ['use'],
+                stopAt: []
+            },
+            network: {
+                // Service dependencies referencing this group
+                forward: ['servicegroups'],
+                backward: ['servicegroup_name'],
+                stopAt: []
+            },
+            members: {
+                // Services in this group + nested servicegroups
+                forward: ['members', 'servicegroup_members'],
+                backward: ['servicegroups'],
+                stopAt: []
+            },
+            notifications: {
+                // Notification routing from group
+                forward: ['contacts', 'contact_groups'],
+                backward: [],
+                atType: {
+                    contactgroup: { forward: ['members'] }
+                },
+                stopAt: []
+            },
+            escalations: {
+                // Find serviceescalations targeting this servicegroup
+                forward: [],
+                backward: ['servicegroup_name'],
+                atType: {
+                    serviceescalation: { forward: ['contacts', 'contact_groups', 'escalation_period'] }
+                },
+                stopAt: []
+            },
+            dependencies: {
+                // Find servicedependencies referencing this servicegroup
+                forward: [],
+                backward: ['servicegroup_name'],
+                atType: {
+                    servicedependency: { forward: ['dependent_service_description', 'service_description', 'master_service_description'] }
+                },
+                stopAt: []
+            }
+        },
+        contact: {
+            inheritance: {
+                // Template inheritance chains
+                forward: ['use'],
+                backward: ['use'],
+                stopAt: []
+            },
+            notifiedBy: {
+                // Objects that notify this contact
+                forward: [],
+                backward: ['contacts', 'members'],
+                atType: {
+                    contactgroup: { backward: ['contact_groups'] }
+                },
+                stopAt: []
+            }
+        },
+        contactgroup: {
+            inheritance: {
+                // Template inheritance chains
+                forward: ['use'],
+                backward: ['use'],
+                stopAt: []
+            },
+            members: {
+                // Contacts in this group + nested contactgroups
+                forward: ['members', 'contactgroup_members'],
+                backward: [],
+                stopAt: []
+            },
+            notifiedBy: {
+                // Objects that notify this group
+                forward: [],
+                backward: ['contact_groups'],
+                stopAt: []
+            }
+        },
+        command: {
+            usedBy: {
+                // Objects using this command
+                forward: [],
+                backward: ['check_command', 'event_handler', 'host_notification_commands', 'service_notification_commands', 'notification_commands'],
+                stopAt: []
+            }
+        },
+        timeperiod: {
+            usedBy: {
+                // Objects using this time period
+                forward: [],
+                backward: ['check_period', 'notification_period', 'host_notification_period', 'service_notification_period', 'escalation_period', 'exclude'],
+                stopAt: []
+            }
+        },
+        hostdependency: {
+            inheritance: {
+                forward: ['use'],
+                backward: ['use'],
+                stopAt: []
+            },
+            network: {
+                // Dependency topology: dependent and master hosts
+                forward: ['dependent_host_name', 'dependent_hostgroup_name', 'host_name', 'hostgroup_name', 'master_host_name', 'master_hostgroup_name'],
+                backward: [],
+                stopAt: []
+            },
+            monitoring: {
+                // Time period constraints
+                forward: ['dependency_period'],
+                backward: [],
+                stopAt: []
+            }
+        },
+        servicedependency: {
+            inheritance: {
+                forward: ['use'],
+                backward: ['use'],
+                stopAt: []
+            },
+            network: {
+                // Dependency topology: dependent and master services
+                forward: ['dependent_service_description', 'dependent_host_name', 'dependent_hostgroup_name', 'service_description', 'host_name', 'hostgroup_name', 'master_service_description', 'master_host_name', 'master_hostgroup_name'],
+                backward: [],
+                stopAt: []
+            },
+            monitoring: {
+                // Time period constraints
+                forward: ['dependency_period'],
+                backward: [],
+                stopAt: []
+            }
+        },
+        hostescalation: {
+            inheritance: {
+                // Template inheritance chains
+                forward: ['use'],
+                backward: ['use'],
+                stopAt: []
+            },
+            notifications: {
+                // Contacts and time periods for this escalation
+                forward: ['contacts', 'contact_groups', 'escalation_period'],
+                backward: [],
+                atType: {
+                    contactgroup: { forward: ['members'] }
+                },
+                stopAt: []
+            },
+            network: {
+                // Hosts/hostgroups this escalation targets
+                forward: ['host_name', 'hostgroup_name'],
+                backward: [],
+                stopAt: []
+            }
+        },
+        serviceescalation: {
+            inheritance: {
+                // Template inheritance chains
+                forward: ['use'],
+                backward: ['use'],
+                stopAt: []
+            },
+            notifications: {
+                // Contacts and time periods for this escalation
+                forward: ['contacts', 'contact_groups', 'escalation_period'],
+                backward: [],
+                atType: {
+                    contactgroup: { forward: ['members'] }
+                },
+                stopAt: []
+            },
+            network: {
+                // Hosts/services this escalation targets
+                forward: ['host_name', 'hostgroup_name', 'service_description', 'servicegroup_name'],
+                backward: [],
+                stopAt: []
+            }
+        }
+    };
+
     // Map object types to relevant quick view presets
     // Each type shows only the presets that make sense for that object
     const presetsByType = {
-        host: ['inheritance', 'network', 'notifications', 'services', 'monitoring', 'escalations', 'full'],
-        hostgroup: ['inheritance', 'notifications', 'members', 'escalations', 'full'],
-        service: ['inheritance', 'notifications', 'monitoring', 'escalations', 'full'],
-        servicegroup: ['inheritance', 'notifications', 'members', 'full'],
+        host: ['inheritance', 'network', 'notifications', 'services', 'monitoring', 'escalations', 'dependencies', 'full'],
+        hostgroup: ['inheritance', 'notifications', 'services', 'members', 'escalations', 'dependencies', 'full'],
+        service: ['inheritance', 'network', 'notifications', 'monitoring', 'escalations', 'dependencies', 'full'],
+        servicegroup: ['inheritance', 'network', 'notifications', 'members', 'escalations', 'dependencies', 'full'],
         contact: ['inheritance', 'notifiedBy', 'full'],
         contactgroup: ['inheritance', 'members', 'notifiedBy', 'full'],
         command: ['usedBy', 'full'],
         timeperiod: ['usedBy', 'full'],
         // Dependency/escalation types
-        hostdependency: ['full'],
-        servicedependency: ['full'],
-        hostescalation: ['notifications', 'full'],
-        serviceescalation: ['notifications', 'full'],
+        hostdependency: ['inheritance', 'network', 'monitoring', 'full'],
+        servicedependency: ['inheritance', 'network', 'monitoring', 'full'],
+        hostescalation: ['inheritance', 'notifications', 'network', 'full'],
+        serviceescalation: ['inheritance', 'notifications', 'network', 'full'],
         // Default for unknown types
         default: ['inheritance', 'full']
     };
@@ -208,14 +578,15 @@ console.log('dependencies.js loaded');
     // When a quick view is applied, only these types are shown
     const typesByPreset = {
         inheritance: null,  // null = all types (templates can be any type)
-        network: ['host', 'hostgroup', 'hostdependency'],
+        network: ['host', 'hostgroup', 'service', 'servicegroup', 'hostdependency', 'servicedependency', 'hostescalation', 'serviceescalation'],
         notifications: ['host', 'hostgroup', 'service', 'servicegroup', 'contact', 'contactgroup', 'hostescalation', 'serviceescalation'],
-        services: ['host', 'service', 'servicegroup'],
+        services: ['host', 'hostgroup', 'service'],
         members: null,  // depends on starting type - show all
         notifiedBy: ['host', 'hostgroup', 'service', 'servicegroup', 'contact', 'contactgroup'],
         usedBy: ['host', 'service', 'contact', 'command', 'timeperiod'],
-        monitoring: ['host', 'service', 'command', 'timeperiod'],
+        monitoring: ['host', 'service', 'command', 'timeperiod', 'hostdependency', 'servicedependency'],
         escalations: ['host', 'hostgroup', 'service', 'servicegroup', 'contact', 'contactgroup', 'hostescalation', 'serviceescalation'],
+        dependencies: ['host', 'hostgroup', 'service', 'servicegroup', 'hostdependency', 'servicedependency'],
         full: null  // null = all types
     };
 
@@ -296,6 +667,9 @@ console.log('dependencies.js loaded');
         'contact_groups': 'notifies',
         'contactgroup_name': 'in group',
         'contactgroup_members': 'includes',
+        'hostgroup_members': 'has member',
+        'servicegroup_members': 'has member',
+        'notification_commands': 'notif cmd',
         'use': 'uses',
         'members': 'has member',
         'parents': 'parent',
@@ -310,7 +684,8 @@ console.log('dependencies.js loaded');
         'escalation_period': 'escalation period',
         'dependent_host_name': 'depends on',
         'dependent_hostgroup_name': 'depends on group',
-        'dependent_service_description': 'depends on'
+        'dependent_service_description': 'depends on',
+        'exclude': 'excludes'
     };
 
     // Edge colors by relationship type
@@ -333,7 +708,18 @@ console.log('dependencies.js loaded');
         'escalation_period': '#607D8B',
         'dependent_host_name': '#F44336',      // Red for dependencies
         'dependent_hostgroup_name': '#F44336',
-        'dependent_service_description': '#E91E63'
+        'dependent_service_description': '#E91E63',
+        'exclude': '#607D8B',             // Gray - matches timeperiod colors
+        'contact_name': '#FF9800',        // Orange for contacts
+        'contactgroup_name': '#FFC107',   // Yellow for contact groups
+        'contactgroup_members': '#FF9800', // Orange for contact membership
+        'hostgroup_name': '#8BC34A',      // Light green for hostgroup refs
+        'hostgroup_members': '#4CAF50',   // Green for hostgroup membership
+        'servicegroup_name': '#03A9F4',   // Cyan for servicegroup refs
+        'servicegroup_members': '#03A9F4', // Cyan for servicegroup membership
+        'servicegroups': '#03A9F4',       // Cyan for servicegroups
+        'service_description': '#2196F3', // Blue for service refs
+        'notification_commands': '#E91E63' // Pink for notification commands
     };
 
     function formatEdgeLabel(fieldName) {
@@ -1689,10 +2075,32 @@ console.log('dependencies.js loaded');
 
     // Update checkbox UI to match enabled categories
     function syncCheckboxesToCategories() {
+        // Internal categories map to UI checkboxes:
+        // - 'membership' → groups (directional member edges)
+        // - 'service-bindings' → dependencies (host_name) + groups (hostgroups)
+        // - 'group-refs' → groups (hostgroup_name, servicegroup_name)
+        const internalToCheckbox = {
+            'membership': ['groups'],
+            'service-bindings': ['dependencies', 'groups'],
+            'group-refs': ['groups']
+        };
+
         const checkboxes = document.querySelectorAll('#edgeCategoryFilters input[type="checkbox"]');
         checkboxes.forEach(cb => {
             const category = cb.dataset.category;
-            cb.checked = enabledCategories.has(category);
+            // Direct match
+            if (enabledCategories.has(category)) {
+                cb.checked = true;
+                return;
+            }
+            // Check if any internal category maps to this checkbox
+            for (const [internal, checkboxCategories] of Object.entries(internalToCheckbox)) {
+                if (enabledCategories.has(internal) && checkboxCategories.includes(category)) {
+                    cb.checked = true;
+                    return;
+                }
+            }
+            cb.checked = false;
         });
     }
 
@@ -1794,12 +2202,8 @@ console.log('dependencies.js loaded');
             // Use semantic-aware expansion that understands Nagios object relationships
             addAllConnectedRecursively(rootNode);
         } else {
-            // Re-expand from root with this view's edge category settings
-            const expandOptions = {
-                includeMembers: config.includeMembers || false,
-                directional: config.directional || false
-            };
-            expandConnectionsForCategories(rootNode, config.categories, expandOptions);
+            // Use declarative expansion rules for type-aware traversal
+            expandWithRules(rootNode, preset);
         }
 
         // Update button states
@@ -1811,88 +2215,120 @@ console.log('dependencies.js loaded');
         saveGraphState();
     }
 
-    // Expand connections from a node following only edges in specified categories
-    // Expand connections following edges in specified categories
-    // Options:
-    //   includeMembers: also follow 'members' edges (for contactgroup→contact)
-    //   directional: only follow from→to direction (avoid pulling in siblings)
-    function expandConnectionsForCategories(startNodeId, categories, options = {}) {
+    /**
+     * Shared BFS implementation for rule-based expansion.
+     * @param {string} startNodeId - Node ID to expand from
+     * @param {string} preset - Quick view preset name
+     * @param {Array} nodes - Node array to search
+     * @param {Array} edges - Edge array to traverse
+     * @param {Set} resultSet - Set to populate with expanded node IDs
+     * @param {boolean} exemptRootFromStopAt - If true, root node bypasses stopAt check
+     * @private
+     */
+    function _expandWithRulesImpl(startNodeId, preset, nodes, edges, resultSet, exemptRootFromStopAt) {
+        if (!edges || !nodes) return;
+
+        const startNode = nodes.find(n => n.id === startNodeId);
+        if (!startNode) return;
+
+        const nodeType = startNode.type;
+        const rules = expansionRules[nodeType]?.[preset];
+
+        // No rules defined -> show nothing (prevents unpredictable expansion)
+        if (!rules) return;
+
         const visited = new Set();
         const toVisit = [startNodeId];
-
-        // Build set of edge labels to follow based on categories
-        const allowedLabels = new Set();
-        for (const category of categories) {
-            const labels = edgeCategories[category];
-            if (labels) {
-                labels.forEach(l => allowedLabels.add(l));
-            }
-        }
-
-        // If includeMembers option is set, also follow 'members' edges
-        if (options.includeMembers) {
-            allowedLabels.add('members');
-        }
-
-        // If membership category is included, also allow reverse membership edges
-        // (hosts/services declaring which groups they belong to)
-        if (categories.includes('membership')) {
-            allowedLabels.add('hostgroups');
-            allowedLabels.add('servicegroups');
-            allowedLabels.add('hostgroup_name');
-            allowedLabels.add('servicegroup_name');
-        }
-
-        // Inheritance-only view is always directional (follow upward only)
-        const isInheritanceOnly = categories.length === 1 && categories[0] === 'templates';
-        const isDirectionalView = isInheritanceOnly || options.directional;
 
         while (toVisit.length > 0) {
             const nodeId = toVisit.pop();
             if (visited.has(nodeId)) continue;
             visited.add(nodeId);
 
-            // Add this node
-            addedNodeIds.add(nodeId);
+            const currentNode = nodes.find(n => n.id === nodeId);
+            if (!currentNode) continue;
 
-            // Find connected nodes via allowed edge labels
-            for (const edge of allEdges) {
-                if (!allowedLabels.has(edge.label)) continue;
+            const currentType = currentNode.type;
 
-                let connectedId = null;
+            // stopAt nodes: prevent expansion through unwanted intermediate nodes
+            // (e.g., services view from hostgroup shouldn't expand to sibling hosts)
+            // Dual tracking required: visited set prevents BFS cycles, resultSet
+            // controls graph membership. Mark visited but exclude from graph.
+            const shouldApplyStopAt = exemptRootFromStopAt ? (nodeId !== startNodeId) : true;
+            if (shouldApplyStopAt && rules.stopAt?.includes(currentType)) {
+                continue;
+            }
 
-                if (isDirectionalView) {
-                    // For directional views: only follow from→to direction
-                    if (edge.from === nodeId) {
-                        connectedId = edge.to;
-                    }
-                    // Special case: reverse membership edges
-                    // When hosts declare `hostgroups: mygroup`, the edge is host→group
-                    // To find group members, we need to follow these in reverse
-                    else if (edge.to === nodeId) {
-                        const reverseMembershipLabels = ['hostgroups', 'servicegroups', 'hostgroup_name', 'servicegroup_name'];
-                        if (reverseMembershipLabels.includes(edge.label)) {
-                            // Only follow reverse if we're at a group node
-                            const currentNode = allNodes.find(n => n.id === nodeId);
-                            if (currentNode && (currentNode.type === 'hostgroup' || currentNode.type === 'servicegroup')) {
-                                connectedId = edge.from;
-                            }
-                        }
-                    }
-                } else {
-                    // For other views: follow edges in both directions
-                    if (edge.from === nodeId) {
-                        connectedId = edge.to;
-                    } else if (edge.to === nodeId) {
-                        connectedId = edge.from;
+            resultSet.add(nodeId);
+
+            // Get applicable rules: base rules + type-specific atType rules
+            // atType rule merging via union enables type-aware behavior at intermediate nodes
+            // Union (not override) prevents losing base rules when type-specific rules apply
+            let applicableForward = rules.forward || [];
+            let applicableBackward = rules.backward || [];
+
+            if (rules.atType && rules.atType[currentType]) {
+                const typeRules = rules.atType[currentType];
+                // Union of arrays: combine base + type-specific rules
+                applicableForward = [...new Set([...applicableForward, ...(typeRules.forward || [])])];
+                applicableBackward = [...new Set([...applicableBackward, ...(typeRules.backward || [])])];
+            }
+
+            // Follow forward edges: edge.from === nodeId
+            for (const edge of edges) {
+                if (applicableForward.includes(edge.label) && edge.from === nodeId) {
+                    const targetNode = nodes.find(n => n.id === edge.to);
+                    if (targetNode && !visited.has(edge.to)) {
+                        toVisit.push(edge.to);
                     }
                 }
+            }
 
-                if (connectedId && !visited.has(connectedId)) {
-                    toVisit.push(connectedId);
+            // Follow backward edges: edge.to === nodeId
+            for (const edge of edges) {
+                if (applicableBackward.includes(edge.label) && edge.to === nodeId) {
+                    const sourceNode = nodes.find(n => n.id === edge.from);
+                    if (sourceNode && !visited.has(edge.from)) {
+                        toVisit.push(edge.from);
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * Expand graph from a starting node using type-aware expansion rules.
+     * Production version that operates on closure variables (allNodes, allEdges, addedNodeIds).
+     *
+     * @param {string} startNodeId - Node ID to expand from
+     * @param {string} preset - Quick view preset name (e.g., 'services', 'network')
+     */
+    function expandWithRules(startNodeId, preset) {
+        // Guard against uninitialized graph state
+        if (!allEdges || !allNodes) return;
+        _expandWithRulesImpl(startNodeId, preset, allNodes, allEdges, addedNodeIds, false);
+    }
+
+    /**
+     * Testable version of expandWithRules that accepts graph data as parameters.
+     * Used by unit tests to inject mock data. Root node is exempt from stopAt
+     * (matches applyQuickView behavior where root is pre-added before expansion).
+     *
+     * @param {string} startNodeId - Node ID to expand from
+     * @param {string} preset - Quick view preset name
+     * @param {Array} nodes - Mock node array
+     * @param {Array} edges - Mock edge array
+     * @param {Set} resultSet - Set to populate with expanded node IDs
+     */
+    function expandWithRulesTestable(startNodeId, preset, nodes, edges, resultSet) {
+        _expandWithRulesImpl(startNodeId, preset, nodes, edges, resultSet, true);
+    }
+
+    // Export for browser (window) and Jest (module.exports)
+    window.expansionRules = expansionRules;
+    window.expandWithRules = expandWithRules;
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = { expansionRules, expandWithRules, expandWithRulesTestable };
     }
 
     // Get the type of the current focus/root node

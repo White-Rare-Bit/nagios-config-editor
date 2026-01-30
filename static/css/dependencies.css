@@ -230,6 +230,12 @@
     margin-top: 10px;
 }
 
+/* When custom filters is open, limit height and allow scrolling */
+.custom-filters-details[open] {
+    max-height: 320px;
+    overflow-y: auto;
+}
+
 .custom-filters-toggle {
     display: flex;
     align-items: center;
@@ -946,25 +952,29 @@ body.editing-locked .dep-container {
 
 .dep-sidebar::-webkit-scrollbar,
 .dep-node-list::-webkit-scrollbar,
-.dep-search-dropdown::-webkit-scrollbar {
+.dep-search-dropdown::-webkit-scrollbar,
+.custom-filters-details::-webkit-scrollbar {
     width: 8px;
 }
 
 .dep-sidebar::-webkit-scrollbar-track,
 .dep-node-list::-webkit-scrollbar-track,
-.dep-search-dropdown::-webkit-scrollbar-track {
+.dep-search-dropdown::-webkit-scrollbar-track,
+.custom-filters-details::-webkit-scrollbar-track {
     background: var(--nbe-dark-bg-primary);
 }
 
 .dep-sidebar::-webkit-scrollbar-thumb,
 .dep-node-list::-webkit-scrollbar-thumb,
-.dep-search-dropdown::-webkit-scrollbar-thumb {
+.dep-search-dropdown::-webkit-scrollbar-thumb,
+.custom-filters-details::-webkit-scrollbar-thumb {
     background: var(--nbe-dark-border-primary);
     border-radius: var(--nbe-radius-md);
 }
 
 .dep-sidebar::-webkit-scrollbar-thumb:hover,
 .dep-node-list::-webkit-scrollbar-thumb:hover,
-.dep-search-dropdown::-webkit-scrollbar-thumb:hover {
+.dep-search-dropdown::-webkit-scrollbar-thumb:hover,
+.custom-filters-details::-webkit-scrollbar-thumb:hover {
     background: var(--nbe-dark-text-muted);
 }
