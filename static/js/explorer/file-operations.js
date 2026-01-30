@@ -859,7 +859,9 @@
 
                 if (objData.source_file === targetFile) continue;
 
-                const objKey = `${objData.source_file}|${objData.object_type}|${objData.name}`;
+                // Use same fallback logic as getObjectKey for null-safe key generation
+                const nameComponent = objData.name ?? objData.display_name ?? `idx:${objData.global_index}`;
+                const objKey = `${objData.source_file}|${objData.object_type}|${nameComponent}`;
                 state.stagedMoves.set(objKey, {
                     originalFile: objData.source_file,
                     targetFile: targetFile,
@@ -969,7 +971,9 @@
         const processObject = (objData) => {
             if (!objData) return;
 
-            const objKey = `${objData.source_file}|${objData.object_type}|${objData.name}`;
+            // Use same fallback logic as getObjectKey for null-safe key generation
+            const nameComponent = objData.name ?? objData.display_name ?? `idx:${objData.global_index}`;
+            const objKey = `${objData.source_file}|${objData.object_type}|${nameComponent}`;
 
             const existingMove = state.stagedMoves.get(objKey);
 

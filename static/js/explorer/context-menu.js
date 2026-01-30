@@ -913,7 +913,9 @@
                 if (!objData || !objData.source_file) return;
 
                 if (objData.source_file !== targetFile) {
-                    const objKey = `${objData.source_file}|${objData.object_type}|${objData.name}`;
+                    // Use same fallback logic as getObjectKey for null-safe key generation
+                    const nameComponent = objData.name ?? objData.display_name ?? `idx:${objData.global_index}`;
+                    const objKey = `${objData.source_file}|${objData.object_type}|${nameComponent}`;
                     state.stagedMoves.set(objKey, {
                         targetFile: targetFile,
                         originalFile: objData.source_file,

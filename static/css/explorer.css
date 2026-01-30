@@ -4272,6 +4272,34 @@
     color: var(--nbe-dark-text-primary);
 }
 
+/* Reference items inside dialog scrollable list - override flex layout */
+.dialog-scrollable-list:has(.ref-item) {
+    display: block;
+    padding: 0;
+}
+
+.dialog-scrollable-list .ref-item {
+    background: var(--nbe-dark-bg-tertiary);
+    color: var(--nbe-dark-text-primary);
+    border-bottom: 1px solid var(--nbe-dark-border-secondary);
+}
+
+.dialog-scrollable-list .ref-item:nth-child(even) {
+    background: var(--nbe-dark-bg-hover);
+}
+
+.dialog-scrollable-list .ref-item:hover {
+    background: var(--nbe-dark-bg-elevated);
+}
+
+.dialog-scrollable-list .ref-item:last-child {
+    border-bottom: none;
+}
+
+.dialog-scrollable-list .ref-item .ref-name {
+    color: var(--nbe-dark-text-primary);
+}
+
 /* Variant for shorter scrollable lists */
 .dialog-scrollable-list--short {
     max-height: 120px;

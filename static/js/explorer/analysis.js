@@ -62,8 +62,10 @@ async function loadAllSuggestions(forceRefresh = false) {
 }
 
 function updateSuggestionsBadge() {
-    // Use grouped error count for the badge
-    const errorCount = state.groupedErrors ? state.groupedErrors.length : 0;
+    // Use grouped error count for the badge (exclude commands - they're external plugins, not config objects)
+    const errorCount = state.groupedErrors
+        ? state.groupedErrors.filter(g => g.objectType !== 'command').length
+        : 0;
 
     // Count template issues
     const templateIssueCount = state.templateIssues
@@ -119,6 +121,9 @@ function collectAllSuggestions() {
         for (const group of state.groupedErrors) {
             // Skip ungrouped errors that can't be resolved by creating something
             if (!group.objectType) continue;
+
+            // Skip missing commands - these are typically external check plugins, not config objects
+            if (group.objectType === 'command') continue;
 
             // Build detail showing actual referencing object names
             let detail = '';
@@ -434,7 +439,7 @@ function handleSuggestionAction(id, event) {
             if (s.data && state.groupedErrors) {
                 const idx = state.groupedErrors.indexOf(s.data);
                 if (idx !== -1) {
-                    showGroupedErrorDetail(idx);
+                    resolveGroupedError(idx);
                 }
             }
             break;
@@ -712,19 +717,25 @@ async function loadTemplateSuggestions(forceRefresh = false) {
         return;
     }
 
-    container.innerHTML = '<div class="tab-placeholder">Analyzing objects...</div>';
+    if (container) {
+        container.innerHTML = '<div class="tab-placeholder">Analyzing objects...</div>';
+    }
 
     // Analyze objects client-side
     state.allTemplateSuggestions = analyzeTemplateConsolidation();
 
     if (state.allTemplateSuggestions.length === 0) {
-        container.innerHTML = '<div class="empty-state empty-state-success"><span class="empty-icon"><i class="fa-solid fa-circle-check"></i></span><div class="empty-title">No opportunities found</div><div class="empty-desc">Your objects are well-templated!</div></div>';
-        badge.style.display = 'none';
+        if (container) {
+            container.innerHTML = '<div class="empty-state empty-state-success"><span class="empty-icon"><i class="fa-solid fa-circle-check"></i></span><div class="empty-title">No opportunities found</div><div class="empty-desc">Your objects are well-templated!</div></div>';
+        }
+        if (badge) badge.style.display = 'none';
         return;
     }
 
-    badge.textContent = state.allTemplateSuggestions.length;
-    badge.style.display = 'inline-flex';
+    if (badge) {
+        badge.textContent = state.allTemplateSuggestions.length;
+        badge.style.display = 'inline-flex';
+    }
 
     filterTemplateSuggestions();
 }
@@ -842,8 +853,13 @@ function generateTemplateName(objType, objects, attrs) {
 
 function filterTemplateSuggestions() {
     const container = document.getElementById('templatesContent');
-    const minObjects = parseInt(document.getElementById('minTemplateObjects').value);
-    document.getElementById('minTemplateObjectsValue').textContent = minObjects;
+    const slider = document.getElementById('minTemplateObjects');
+    const sliderValue = document.getElementById('minTemplateObjectsValue');
+
+    if (!container || !slider) return;
+
+    const minObjects = parseInt(slider.value);
+    if (sliderValue) sliderValue.textContent = minObjects;
 
     const filtered = state.allTemplateSuggestions.filter(s => s.count >= minObjects);
 
@@ -891,7 +907,9 @@ async function loadGroupingSuggestions(forceRefresh = false) {
         return;
     }
 
-    container.innerHTML = '<div class="tab-placeholder">Loading suggestions...</div>';
+    if (container) {
+        container.innerHTML = '<div class="tab-placeholder">Loading suggestions...</div>';
+    }
 
     try {
         const response = await fetch('/api/smart-grouping/suggest');
@@ -900,24 +918,35 @@ async function loadGroupingSuggestions(forceRefresh = false) {
         state.allGroupingSuggestions = result.suggestions || [];
 
         if (state.allGroupingSuggestions.length === 0) {
-            container.innerHTML = '<div class="empty-state empty-state-success"><span class="empty-icon"><i class="fa-solid fa-circle-check"></i></span><div class="empty-title">No suggestions</div><div class="empty-desc">Your hosts are well organized!</div></div>';
-            badge.style.display = 'none';
+            if (container) {
+                container.innerHTML = '<div class="empty-state empty-state-success"><span class="empty-icon"><i class="fa-solid fa-circle-check"></i></span><div class="empty-title">No suggestions</div><div class="empty-desc">Your hosts are well organized!</div></div>';
+            }
+            if (badge) badge.style.display = 'none';
             return;
         }
 
-        badge.textContent = state.allGroupingSuggestions.length;
-        badge.style.display = 'inline-flex';
+        if (badge) {
+            badge.textContent = state.allGroupingSuggestions.length;
+            badge.style.display = 'inline-flex';
+        }
 
         filterGroupingSuggestions();
     } catch (error) {
-        container.innerHTML = `<div class="tab-placeholder">Error: ${Explorer.escapeHtml(error.message)}</div>`;
+        if (container) {
+            container.innerHTML = `<div class="tab-placeholder">Error: ${Explorer.escapeHtml(error.message)}</div>`;
+        }
     }
 }
 
 function filterGroupingSuggestions() {
     const container = document.getElementById('suggestionsContent');
-    const minMembers = parseInt(document.getElementById('minMembersSlider').value);
-    document.getElementById('minMembersValue').textContent = minMembers;
+    const slider = document.getElementById('minMembersSlider');
+    const sliderValue = document.getElementById('minMembersValue');
+
+    if (!container || !slider) return;
+
+    const minMembers = parseInt(slider.value);
+    if (sliderValue) sliderValue.textContent = minMembers;
 
     const filtered = state.allGroupingSuggestions.filter(s => s.count >= minMembers);
 
@@ -1199,19 +1228,25 @@ async function loadCleanupSuggestions(forceRefresh = false) {
         return;
     }
 
-    container.innerHTML = '<div class="tab-placeholder">Analyzing configuration...</div>';
+    if (container) {
+        container.innerHTML = '<div class="tab-placeholder">Analyzing configuration...</div>';
+    }
 
     // Client-side analysis
     state.allCleanupSuggestions = analyzeCleanupIssues();
 
     if (state.allCleanupSuggestions.length === 0) {
-        container.innerHTML = '<div class="empty-state empty-state-success"><span class="empty-icon"><i class="fa-solid fa-circle-check"></i></span><div class="empty-title">No cleanup needed</div><div class="empty-desc">Your configuration is clean!</div></div>';
-        badge.style.display = 'none';
+        if (container) {
+            container.innerHTML = '<div class="empty-state empty-state-success"><span class="empty-icon"><i class="fa-solid fa-circle-check"></i></span><div class="empty-title">No cleanup needed</div><div class="empty-desc">Your configuration is clean!</div></div>';
+        }
+        if (badge) badge.style.display = 'none';
         return;
     }
 
-    badge.textContent = state.allCleanupSuggestions.length;
-    badge.style.display = 'inline-flex';
+    if (badge) {
+        badge.textContent = state.allCleanupSuggestions.length;
+        badge.style.display = 'inline-flex';
+    }
 
     renderCleanupSuggestions();
 }
@@ -1595,6 +1630,7 @@ function analyzeCleanupIssues() {
 
 function renderCleanupSuggestions() {
     const container = document.getElementById('cleanupContent');
+    if (!container) return;
 
     if (state.allCleanupSuggestions.length === 0) {
         container.innerHTML = '<div class="tab-placeholder">No cleanup opportunities found.</div>';
@@ -2150,19 +2186,25 @@ async function loadNotificationSuggestions(forceRefresh = false) {
         return;
     }
 
-    container.innerHTML = '<div class="tab-placeholder">Analyzing notification coverage...</div>';
+    if (container) {
+        container.innerHTML = '<div class="tab-placeholder">Analyzing notification coverage...</div>';
+    }
 
     // Client-side analysis
     state.allNotificationSuggestions = analyzeNotificationGaps();
 
     if (state.allNotificationSuggestions.length === 0) {
-        container.innerHTML = '<div class="empty-state empty-state-success"><span class="empty-icon"><i class="fa-solid fa-circle-check"></i></span><div class="empty-title">All covered</div><div class="empty-desc">All hosts and services have notification contacts configured!</div></div>';
-        badge.style.display = 'none';
+        if (container) {
+            container.innerHTML = '<div class="empty-state empty-state-success"><span class="empty-icon"><i class="fa-solid fa-circle-check"></i></span><div class="empty-title">All covered</div><div class="empty-desc">All hosts and services have notification contacts configured!</div></div>';
+        }
+        if (badge) badge.style.display = 'none';
         return;
     }
 
-    badge.textContent = state.allNotificationSuggestions.length;
-    badge.style.display = 'inline-flex';
+    if (badge) {
+        badge.textContent = state.allNotificationSuggestions.length;
+        badge.style.display = 'inline-flex';
+    }
 
     renderNotificationSuggestions();
 }
@@ -2239,6 +2281,7 @@ function analyzeNotificationGaps() {
 
 function renderNotificationSuggestions() {
     const container = document.getElementById('notificationsContent');
+    if (!container) return;
 
     if (state.allNotificationSuggestions.length === 0) {
         container.innerHTML = '<div class="tab-placeholder">No notification gaps found.</div>';
@@ -2296,7 +2339,9 @@ async function loadIssues() {
     const container = document.getElementById('issuesContent');
     const badge = document.getElementById('issuesSectionBadge');
 
-    container.innerHTML = '<div class="tab-placeholder">Loading issues...</div>';
+    if (container) {
+        container.innerHTML = '<div class="tab-placeholder">Loading issues...</div>';
+    }
 
     try {
         const response = await fetch('/api/health-check');
@@ -2315,7 +2360,9 @@ async function loadIssues() {
 
         updateSuggestionsBadge();
     } catch (error) {
-        container.innerHTML = `<div class="tab-placeholder">Error: ${Explorer.escapeHtml(error.message)}</div>`;
+        if (container) {
+            container.innerHTML = `<div class="tab-placeholder">Error: ${Explorer.escapeHtml(error.message)}</div>`;
+        }
     }
 }
 

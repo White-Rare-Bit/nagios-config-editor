@@ -400,8 +400,9 @@
         handleHostgroupServiceLink();
 
         // Centralized refresh ensures all UI components stay in sync
+        // Skip center pane sync since we're about to show the new object
         Explorer.saveStagedChanges();
-        Explorer.refreshAfterObjectChange();
+        Explorer.refreshAfterObjectChange({ skipCenter: true });
 
         // Scroll to and highlight the newly staged item
         setTimeout(() => {

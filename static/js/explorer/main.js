@@ -249,21 +249,27 @@ Explorer.getIcon = function(name) {
 /**
  * Generate a stable key for an object
  * Format: "source_file|object_type|name"
+ * Note: Uses display_name as fallback when name is null to ensure key uniqueness
  */
 Explorer.getObjectKey = function(obj) {
-    return `${obj.source_file}|${obj.object_type}|${obj.name}`;
+    // Use name if available, otherwise fall back to display_name
+    const nameComponent = obj.name ?? obj.display_name ?? `idx:${obj.global_index}`;
+    return `${obj.source_file}|${obj.object_type}|${nameComponent}`;
 };
 
 /**
  * Find an object by its stable key
  */
 Explorer.findObjectByKey = function(key) {
-    const [source_file, object_type, name] = key.split('|');
-    return Explorer.state.allObjects.find(o =>
-        o.source_file === source_file &&
-        o.object_type === object_type &&
-        o.name === name
-    );
+    const [source_file, object_type, ...nameParts] = key.split('|');
+    // Rejoin name parts in case the name itself contains '|'
+    const name = nameParts.join('|');
+    return Explorer.state.allObjects.find(o => {
+        const objName = o.name ?? o.display_name ?? `idx:${o.global_index}`;
+        return o.source_file === source_file &&
+               o.object_type === object_type &&
+               objName === name;
+    });
 };
 
 /**
@@ -403,7 +409,10 @@ Explorer.initEventDelegation = function() {
         // Unified suggestions list actions
         filterSuggestions: (el, e) => Explorer.filterSuggestions(e),
         bulkDeleteUnused: () => Explorer.bulkDeleteUnused(),
-        bulkCreateMissing: () => Explorer.bulkCreateMissing()
+        bulkCreateMissing: () => Explorer.bulkCreateMissing(),
+
+        // Undo action
+        undo: () => Explorer.undoLastAction()
     };
 
     // Handle click events with event delegation
@@ -422,10 +431,9 @@ Explorer.initEventDelegation = function() {
         const action = actionEl.dataset.action;
         const handler = actionHandlers[action];
 
+        // Only handle actions this module knows about; other modules (base.js) may handle others
         if (handler) {
             handler(actionEl, e);
-        } else {
-            console.warn('Unknown action:', action);
         }
     });
 

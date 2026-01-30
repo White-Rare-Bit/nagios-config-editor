@@ -548,11 +548,16 @@
 
         if (!refType) return [];
 
-        // C-06: Build a set of objects staged for deletion (source_file + line_number)
-        const stagedDeletions = state.stagedObjectDeletions || [];
-        const deletedKeys = new Set(
-            stagedDeletions.map(d => `${d.source_file}:${d.line_number}`)
-        );
+        // C-06: Build a set of objects staged for deletion
+        // stagedObjectDeletions is a Set of global_index values
+        const stagedDeletionIndices = state.stagedObjectDeletions || new Set();
+        const deletedKeys = new Set();
+        for (const idx of stagedDeletionIndices) {
+            const obj = state.allObjects.find(o => o.global_index === idx);
+            if (obj) {
+                deletedKeys.add(`${obj.source_file}:${obj.line_number}`);
+            }
+        }
 
         // Get all objects of the referenced type from current disk state
         // C-06: Filter out objects that are staged for deletion
@@ -660,9 +665,10 @@
 
     function renderCenterAttributes() {
         const container = document.getElementById('centerCardAttributes');
+        if (!state.editedObject) return;
         const objectType = state.editedObject.object_type;
 
-        container.innerHTML = Object.entries(state.editedObject.attributes)
+        container.innerHTML = Object.entries(state.editedObject.attributes || {})
             .map(([key, value]) => {
                 const suggestions = getAttributeSuggestions(key, objectType);
                 const hasSuggestions = suggestions.length > 0;
@@ -1490,11 +1496,16 @@
      * @returns {Array<string>} - Template names with optional alias suffix
      */
     function getTemplatesForType(objectType) {
-        // C-06: Build a set of objects staged for deletion (source_file + line_number)
-        const stagedDeletions = state.stagedObjectDeletions || [];
-        const deletedKeys = new Set(
-            stagedDeletions.map(d => `${d.source_file}:${d.line_number}`)
-        );
+        // C-06: Build a set of objects staged for deletion
+        // stagedObjectDeletions is a Set of global_index values
+        const stagedDeletionIndices = state.stagedObjectDeletions || new Set();
+        const deletedKeys = new Set();
+        for (const idx of stagedDeletionIndices) {
+            const obj = state.allObjects.find(o => o.global_index === idx);
+            if (obj) {
+                deletedKeys.add(`${obj.source_file}:${obj.line_number}`);
+            }
+        }
 
         // Get all templates for the given object type (register=0 is the Nagios template marker)
         // C-06: Filter out templates that are staged for deletion

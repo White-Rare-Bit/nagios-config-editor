@@ -896,7 +896,7 @@ async function discardStagingAfterFailedCommit() {
     });
 
     if (confirmed) {
-        await ApiClient.delete('/api/staging', { silent: true });
+        await ApiClient.del('/api/staging', { silent: true });
         baseState.pendingCommitMessage = null;
         closeGitResultOverlay();
         showToast('Staging cleared', 'info');
@@ -1598,7 +1598,7 @@ async function autoGitCommitGlobal(message, clearStagingOnSuccess = false) {
     // C-10: Only clear staging if commit was successful
     if (isSuccess && clearStagingOnSuccess) {
         // Clear staging after successful commit
-        await ApiClient.delete('/api/staging', { silent: true });
+        await ApiClient.del('/api/staging', { silent: true });
     }
 
     showGitResultPanel(message, result.success, result.data || { error: result.error }, clearStagingOnSuccess && !isSuccess);
