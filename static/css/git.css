@@ -591,146 +591,181 @@
 }
 
 /* ============================================================================
-   History Tab
+   History Tab - Table Layout (matches backups page)
    ============================================================================ */
 
-.git-history-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    overflow-y: auto;
+.git-history-content {
     flex: 1;
-}
-
-.git-commit-item {
     display: flex;
-    align-items: flex-start;
-    padding: var(--nbe-space-lg) 20px;
-    border-bottom: 1px solid var(--nbe-dark-border-secondary);
-    gap: var(--nbe-space-lg);
-    background: var(--nbe-dark-bg-secondary);
-    transition: background var(--nbe-transition-normal);
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--nbe-dark-bg-primary);
 }
 
-.git-commit-item:nth-child(even) {
+.git-history-table-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--nbe-space-lg) var(--nbe-space-xl);
+}
+
+.git-history-table-container:has(.empty-state) {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.git-history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--nbe-font-size-sm);
+}
+
+.git-history-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.git-history-table th {
+    background: var(--nbe-dark-bg-secondary);
+    color: var(--nbe-dark-text-primary);
+    font-weight: 600;
+    text-align: left;
+    padding: var(--nbe-space-sm) var(--nbe-space-md);
+    border-bottom: 2px solid var(--nbe-dark-border-primary);
+    white-space: nowrap;
+}
+
+/* Column widths */
+.history-col-date { width: 140px; }
+.history-col-hash { width: 140px; }
+.history-col-message { width: auto; }
+.history-col-author { width: 180px; }
+.history-col-actions { width: 120px; text-align: right; }
+
+/* Table body */
+.git-history-table tbody tr {
+    border-bottom: 1px solid var(--nbe-dark-border-secondary);
+    transition: background-color 0.15s;
+}
+
+.git-history-table tbody tr:nth-child(even) {
     background: var(--nbe-dark-bg-tertiary);
 }
 
-.git-commit-item:hover {
+.git-history-table tbody tr:hover {
     background: var(--nbe-dark-bg-hover);
 }
 
-.git-commit-hash {
-    font-family: var(--nbe-font-mono);
-    font-size: var(--nbe-font-size-sm);
-    background: var(--nbe-dark-bg-tertiary);
-    padding: var(--nbe-space-xs) var(--nbe-space-sm);
-    border-radius: var(--nbe-radius-md);
-    color: var(--nbe-dark-accent-primary);
-    flex-shrink: 0;
-    border: 1px solid var(--nbe-dark-border-secondary);
+.git-history-table tbody tr.is-current {
+    background: var(--nbe-dark-accent-alpha-10);
 }
 
-.git-commit-current-badge {
+.git-history-table tbody tr.is-current:hover {
+    background: var(--nbe-dark-accent-alpha-15);
+}
+
+.git-history-table td {
+    padding: var(--nbe-space-md);
+    vertical-align: middle;
+    color: var(--nbe-dark-text-primary);
+}
+
+/* Cell-specific styles */
+.history-cell-date {
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-typography-secondary-size);
+    color: var(--nbe-dark-text-secondary);
+}
+
+.history-cell-hash {
+    white-space: nowrap;
+}
+
+.history-hash-badge {
+    display: inline-block;
+    font-family: var(--nbe-font-mono);
+    background: var(--nbe-dark-accent-alpha-20);
+    color: var(--nbe-dark-accent-primary);
+    padding: 2px 8px;
+    border-radius: var(--nbe-radius-md);
+    font-weight: 500;
+}
+
+.history-current-badge {
     display: inline-block;
     background: var(--nbe-dark-accent-primary);
     color: var(--nbe-dark-bg-primary);
-    font-size: var(--nbe-font-size-xs);
+    font-size: var(--nbe-font-size-2xs);
     font-weight: 600;
-    padding: 3px var(--nbe-space-sm);
+    padding: 2px 6px;
     border-radius: var(--nbe-radius-pill);
-    margin-left: var(--nbe-space-sm);
+    margin-left: var(--nbe-space-xs);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
-.git-commit-item.is-current {
-    background: var(--nbe-dark-accent-alpha-10);
-    border-left: 3px solid var(--nbe-dark-accent-primary);
+.history-cell-message {
+    max-width: 400px;
 }
 
-.git-commit-item.is-current .git-restore-btn {
-    background: var(--nbe-dark-accent-alpha-15);
-    color: var(--nbe-dark-accent-primary);
-    border-color: var(--nbe-dark-accent-primary);
-    cursor: default;
-}
-
-.git-commit-item.is-current .git-restore-btn:hover {
-    background: var(--nbe-dark-accent-alpha-15);
-}
-
-.git-commit-info {
-    flex: 1;
-    min-width: 0;
-}
-
-.git-commit-message {
-    font-size: var(--nbe-font-size-md);
-    font-weight: 500;
+.history-message-text {
     color: var(--nbe-dark-text-primary);
-    margin-bottom: var(--nbe-space-xs);
-    word-break: break-word;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.git-commit-meta {
-    font-size: var(--nbe-font-size-sm);
+.history-cell-author {
+    font-size: var(--nbe-typography-secondary-size);
+}
+
+.history-author-name {
+    color: var(--nbe-dark-accent-secondary);
+    font-weight: 500;
+}
+
+.history-cell-actions {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.history-current-label {
+    display: inline-block;
     color: var(--nbe-dark-text-muted);
-}
-
-.git-commit-meta span {
-    margin-right: 12px;
-}
-
-.git-commit-actions {
-    flex-shrink: 0;
-}
-
-.git-restore-btn {
-    padding: 6px var(--nbe-space-md);
-    border: 1px solid var(--nbe-dark-border-primary);
-    background: var(--nbe-dark-bg-tertiary);
-    border-radius: var(--nbe-radius-md);
     font-size: var(--nbe-font-size-sm);
-    cursor: pointer;
-    color: var(--nbe-dark-text-secondary);
-    transition: all var(--nbe-transition-fast);
+    font-style: italic;
 }
 
-.git-restore-btn:hover {
+/* Button overrides in table */
+.git-history-table .nbe-btn--secondary {
+    background: var(--nbe-dark-bg-tertiary);
+    border: 1px solid var(--nbe-dark-border-primary);
+    color: var(--nbe-dark-text-primary);
+}
+
+.git-history-table .nbe-btn--secondary:hover {
     background: var(--nbe-dark-bg-hover);
     border-color: var(--nbe-dark-border-hover);
-    color: var(--nbe-dark-text-primary);
 }
 
-.git-history-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    flex: 1;
-    color: var(--nbe-dark-text-secondary);
-    text-align: center;
-    padding: var(--nbe-space-2xl);
+/* Scrollbar for history table */
+.git-history-table-container::-webkit-scrollbar {
+    width: 8px;
 }
 
-.git-history-empty .icon {
-    font-size: var(--nbe-font-size-icon-lg);
-    margin-bottom: var(--nbe-space-lg);
-    opacity: 0.5;
-    color: var(--nbe-dark-text-muted);
+.git-history-table-container::-webkit-scrollbar-track {
+    background: var(--nbe-dark-bg-primary);
 }
 
-.git-history-empty h3 {
-    margin: 0 0 var(--nbe-space-sm);
-    color: var(--nbe-dark-text-primary);
-    font-size: var(--nbe-font-size-xl);
+.git-history-table-container::-webkit-scrollbar-thumb {
+    background: var(--nbe-dark-border-primary);
+    border-radius: var(--nbe-radius-md);
 }
 
-.git-history-empty p {
-    margin: 0;
-    font-size: var(--nbe-font-size-md);
-    color: var(--nbe-dark-text-secondary);
+.git-history-table-container::-webkit-scrollbar-thumb:hover {
+    background: var(--nbe-dark-text-muted);
 }
 
 /* ============================================================================
@@ -828,26 +863,22 @@ body.editing-locked .git-container {
    ============================================================================ */
 
 .git-file-list::-webkit-scrollbar,
-.git-diff-content::-webkit-scrollbar,
-.git-history-list::-webkit-scrollbar {
+.git-diff-content::-webkit-scrollbar {
     width: 8px;
 }
 
 .git-file-list::-webkit-scrollbar-track,
-.git-diff-content::-webkit-scrollbar-track,
-.git-history-list::-webkit-scrollbar-track {
+.git-diff-content::-webkit-scrollbar-track {
     background: var(--nbe-dark-bg-primary);
 }
 
 .git-file-list::-webkit-scrollbar-thumb,
-.git-diff-content::-webkit-scrollbar-thumb,
-.git-history-list::-webkit-scrollbar-thumb {
+.git-diff-content::-webkit-scrollbar-thumb {
     background: var(--nbe-dark-border-primary);
     border-radius: var(--nbe-radius-md);
 }
 
 .git-file-list::-webkit-scrollbar-thumb:hover,
-.git-diff-content::-webkit-scrollbar-thumb:hover,
-.git-history-list::-webkit-scrollbar-thumb:hover {
+.git-diff-content::-webkit-scrollbar-thumb:hover {
     background: var(--nbe-dark-text-muted);
 }

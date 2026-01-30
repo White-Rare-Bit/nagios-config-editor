@@ -386,29 +386,36 @@ function refreshCurrentTab() {
 
 // History functions
 async function loadGitHistory(forceRefresh = false) {
-    const content = document.getElementById('historyContent');
+    const container = document.querySelector('.git-history-table-container');
+    if (!container) return;
 
     if (!forceRefresh && gitHistory !== null) {
         return;
     }
 
-    content.innerHTML = '<div class="git-loading">Loading history...</div>';
+    container.innerHTML = '<div class="git-loading">Loading history...</div>';
 
     const result = await ApiClient.get('/api/git/log?limit=100', { silent: true });
 
     // Only show error if we have no data at all (network error)
     if (!result.data) {
         console.error('Failed to load git history:', result.error);
-        content.innerHTML = '<div class="git-history-empty"><h3>Error</h3><p>Failed to load history</p></div>';
+        container.innerHTML = `
+            <div class="empty-state empty-state--dark empty-state--flex">
+                <div class="empty-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
+                <h3>Error</h3>
+                <p>Failed to load history</p>
+            </div>
+        `;
         return;
     }
 
     const data = result.data;
 
     if (!data.is_repo) {
-        content.innerHTML = `
-            <div class="git-history-empty">
-                <div class="icon">&#128193;</div>
+        container.innerHTML = `
+            <div class="empty-state empty-state--dark empty-state--flex">
+                <div class="empty-icon"><i class="fa-solid fa-folder-open"></i></div>
                 <h3>Not a Git Repository</h3>
                 <p>Initialize git to start tracking history</p>
             </div>
@@ -417,7 +424,13 @@ async function loadGitHistory(forceRefresh = false) {
     }
 
     if (data.error) {
-        content.innerHTML = `<div class="git-history-empty"><h3>Error</h3><p>${escapeHtml(data.error)}</p></div>`;
+        container.innerHTML = `
+            <div class="empty-state empty-state--dark empty-state--flex">
+                <div class="empty-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
+                <h3>Error</h3>
+                <p>${escapeHtml(data.error)}</p>
+            </div>
+        `;
         return;
     }
 
@@ -426,45 +439,76 @@ async function loadGitHistory(forceRefresh = false) {
 }
 
 function renderGitHistory() {
-    const content = document.getElementById('historyContent');
+    const container = document.querySelector('.git-history-table-container');
+    if (!container) return;
 
     if (!gitHistory || gitHistory.length === 0) {
-        content.innerHTML = `
-            <div class="git-history-empty">
-                <div class="icon">&#128214;</div>
+        container.innerHTML = `
+            <div class="empty-state empty-state--dark empty-state--flex">
+                <div class="empty-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
                 <h3>No Commits Yet</h3>
                 <p>Make your first commit to start tracking history</p>
+                <div class="empty-tips">
+                    <div class="tip"><strong>Commit:</strong> Use the Commit button in the navbar to create commits</div>
+                    <div class="tip"><strong>Restore:</strong> Roll back to any previous commit point</div>
+                </div>
             </div>
         `;
+        updateHistoryBadge(0);
         return;
     }
 
-    let html = '<ul class="git-history-list">';
+    updateHistoryBadge(gitHistory.length);
+
+    let html = `
+        <table class="git-history-table" role="grid" aria-label="Commit history">
+            <thead>
+                <tr>
+                    <th class="history-col-date">Date/Time</th>
+                    <th class="history-col-hash">Commit</th>
+                    <th class="history-col-message">Message</th>
+                    <th class="history-col-author">Author</th>
+                    <th class="history-col-actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
 
     for (const commit of gitHistory) {
         const date = formatDate(commit.date);
         const escapedMessage = escapeHtml(commit.message);
+        const isCurrent = commit.matches_working_dir;
         html += `
-            <li class="git-commit-item${commit.matches_working_dir ? ' is-current' : ''}">
-                <span class="git-commit-hash">${escapeHtml(commit.hash_short)}${commit.matches_working_dir ? '<span class="git-commit-current-badge">Current</span>' : ''}</span>
-                <div class="git-commit-info">
-                    <div class="git-commit-message">${escapedMessage}</div>
-                    <div class="git-commit-meta">
-                        <span>${escapeHtml(commit.author)}</span>
-                        <span>${date}</span>
-                    </div>
-                </div>
-                <div class="git-commit-actions">
-                    <button class="git-restore-btn" ${commit.matches_working_dir ? 'disabled' : `data-action="restore-commit" data-hash="${escapeHtml(commit.hash)}" data-message="${escapedMessage}"`}>
-                        ${commit.matches_working_dir ? 'Current' : 'Restore'}
-                    </button>
-                </div>
-            </li>
+            <tr class="history-row${isCurrent ? ' is-current' : ''}">
+                <td class="history-cell-date">
+                    <span class="history-date-value">${date}</span>
+                </td>
+                <td class="history-cell-hash">
+                    <span class="history-hash-badge">${escapeHtml(commit.hash_short)}</span>
+                    ${isCurrent ? '<span class="history-current-badge">Current</span>' : ''}
+                </td>
+                <td class="history-cell-message">
+                    <span class="history-message-text">${escapedMessage}</span>
+                </td>
+                <td class="history-cell-author">
+                    <span class="history-author-name">${escapeHtml(commit.author)}</span>
+                </td>
+                <td class="history-cell-actions">
+                    ${isCurrent
+                        ? '<span class="history-current-label">Current</span>'
+                        : `<button class="nbe-btn nbe-btn--secondary nbe-btn--sm" data-action="restore-commit" data-hash="${escapeHtml(commit.hash)}" data-message="${escapedMessage}">Restore</button>`
+                    }
+                </td>
+            </tr>
         `;
     }
 
-    html += '</ul>';
-    content.innerHTML = html;
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function updateHistoryBadge(count) {
+    // Could add a badge to the History tab if needed
 }
 
 // formatDate() is defined in app.js (loaded first) with relative time support
