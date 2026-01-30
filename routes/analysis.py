@@ -717,7 +717,7 @@ def get_template_issues():
             curr_type, curr_name = stack.pop()
 
             if (curr_type, curr_name) in visited:
-                continue  # Circular dependency or already processed
+                continue  # Already processed (cycle detection is separate)
 
             visited.add((curr_type, curr_name))
             chain.append((curr_type, curr_name))
@@ -730,6 +730,64 @@ def get_template_issues():
                         stack.append((curr_type, parent_name))
 
         return chain
+
+    # N-02: Detect circular dependencies using DFS with path tracking
+    # A cycle exists when we revisit a node that's still in the current traversal path
+    def detect_cycles():
+        """Detect circular template dependencies using DFS."""
+        WHITE, GRAY, BLACK = 0, 1, 2
+        color = {}  # node -> color
+        cycles = []  # List of detected cycles
+
+        def dfs(node, path):
+            """DFS with path tracking for cycle detection."""
+            if color.get(node) == BLACK:
+                return  # Already fully processed
+            if color.get(node) == GRAY:
+                # Found a cycle - extract the cycle from path
+                cycle_start = path.index(node)
+                cycle = path[cycle_start:] + [node]
+                cycles.append(cycle)
+                return
+
+            color[node] = GRAY
+            path.append(node)
+
+            obj_type, tmpl_name = node
+            if obj_type in templates_by_type and tmpl_name in templates_by_type[obj_type]:
+                tmpl_obj = templates_by_type[obj_type][tmpl_name]
+                use_value = tmpl_obj.attributes.get('use', '')
+                if use_value:
+                    for parent_name in [t.strip() for t in use_value.split(',') if t.strip()]:
+                        parent_node = (obj_type, parent_name)
+                        # Only follow edges to existing templates
+                        if obj_type in templates_by_type and parent_name in templates_by_type[obj_type]:
+                            dfs(parent_node, path)
+
+            path.pop()
+            color[node] = BLACK
+
+        # Run DFS from all templates
+        for node in all_templates:
+            if color.get(node) == WHITE or node not in color:
+                dfs(node, [])
+
+        return cycles
+
+    # Detect and report circular dependencies
+    detected_cycles = detect_cycles()
+    seen_cycles = set()  # Track unique cycles (avoid duplicates)
+    for cycle in detected_cycles:
+        # Create a canonical representation for deduplication
+        cycle_key = tuple(sorted(cycle[:-1]))  # Exclude duplicate end node
+        if cycle_key not in seen_cycles:
+            seen_cycles.add(cycle_key)
+            cycle_names = [name for _, name in cycle]
+            issues['circular_dependencies'].append({
+                'cycle': cycle_names,
+                'object_type': cycle[0][0],
+                'message': f"Circular template inheritance: {' -> '.join(cycle_names)}"
+            })
 
     # Expand referenced_templates to include indirect references
     # Unused template definition: template not in ANY inheritance chain (direct or transitive)

@@ -682,6 +682,8 @@ console.log('dependencies.js loaded');
         'host_notification_period': 'host notif period',
         'service_notification_period': 'svc notif period',
         'escalation_period': 'escalation period',
+        'escalation_contacts': 'escalates to',          // N-04: Added missing label
+        'escalation_contact_groups': 'escalates to',    // N-04: Added missing label
         'dependent_host_name': 'depends on',
         'dependent_hostgroup_name': 'depends on group',
         'dependent_service_description': 'depends on',
@@ -706,6 +708,8 @@ console.log('dependencies.js loaded');
         'host_notification_period': '#607D8B',
         'service_notification_period': '#607D8B',
         'escalation_period': '#607D8B',
+        'escalation_contacts': '#00BCD4',     // N-04: Cyan - matches escalation object color
+        'escalation_contact_groups': '#00BCD4', // N-04: Cyan - matches escalation object color
         'dependent_host_name': '#F44336',      // Red for dependencies
         'dependent_hostgroup_name': '#F44336',
         'dependent_service_description': '#E91E63',

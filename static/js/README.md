@@ -22,7 +22,7 @@ User Request (type filter, node selection)
            v
     +----------------+     +------------------+
     | Edge Categories|---->| Quick View       |
-    | (7 groups)     |     | Presets (10)     |
+    | (6 groups)     |     | Presets (10)     |
     +----------------+     +------------------+
            |                        |
            v                        v
@@ -55,25 +55,25 @@ Edge categories exist as an abstraction layer between raw Nagios field names and
 
 ## Edge Categories
 
-The system defines 7 semantic edge categories:
+The system defines 6 semantic edge categories:
 
 1. **dependencies**: Network topology and monitoring logic (parents, host_name, dependency targets)
 2. **templates**: Inheritance chain (use directive)
 3. **groups**: Organizational grouping (bidirectional member/group relationships)
-4. **contacts**: Notification routing (contacts, contact_groups)
+4. **contacts**: Notification routing including escalations (contacts, contact_groups, escalation_contacts, escalation_contact_groups)
 5. **commands**: Implementation details (check_command, event_handler, notification commands, obsession commands)
 6. **schedules**: Time periods (check_period, notification_period, escalation_period, dependency_period)
-7. **escalation**: Escalation-specific contact routing (escalation_contacts, escalation_contact_groups)
 
-### Why Escalation Is Separate
+### Why Escalation Contacts Are in the Contacts Category
 
-Escalation contacts route notifications through multi-tier escalation chains, distinct from direct notification contacts. This separation enables:
+D-02: Escalation contacts (escalation_contacts, escalation_contact_groups) are included in the `contacts` category rather than having a separate `escalation` category because:
 
-- The "escalations" preset to filter only escalation edges (hostescalation/serviceescalation → Contact/ContactGroup), excluding regular notification routing
-- Users to understand escalation chains independently from normal notification flow
-- Clearer graph visualization when analyzing escalation policies
+- **Conceptual unity**: Both regular and escalation contacts are part of the "notification routing" mental model
+- **Notifications preset**: The "notifications" quick view shows all notification routing, including escalations
+- **Escalations preset**: Users who want to see only escalation objects use the separate "escalations" quick view preset, which finds hostescalation/serviceescalation objects targeting the selected object
+- **Reduced complexity**: Fewer categories = simpler mental model; 6 categories instead of 7
 
-**Tradeoff**: More categories increase cognitive load, but escalation routing is conceptually distinct enough to warrant dedicated filtering.
+**Alternative considered**: A separate `escalation` category would allow filtering escalation contact edges independently, but this was judged to add cognitive load without sufficient benefit since the "escalations" preset already serves the "show me escalation policies" use case.
 
 ## Invariants
 
@@ -132,7 +132,7 @@ No preset changes needed if the field's category is already used by relevant pre
 
 ## Tradeoffs
 
-- **More categories = finer filtering but more cognitive load**: 7 categories chosen as balance between filtering granularity and complexity
+- **More categories = finer filtering but more cognitive load**: 6 categories chosen as balance between filtering granularity and complexity
 - **Bidirectional group edges**: Group membership edges include both object→group and group→member directions, increasing edge count but enabling both "what groups contain this?" and "what's in this group?" queries without manual expansion
 - **No reverse edges for most relationships**: Only groups have bidirectional edges; other relationships are forward-only (e.g., service→host but not host→services) to reduce visual clutter
 
