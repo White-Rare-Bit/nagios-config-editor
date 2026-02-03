@@ -1812,8 +1812,8 @@ async function checkPendingChanges() {
         let count = info.totalCount || 0;
         updateUndoButton(info.undoCount || 0);
 
-        // If staging is in RESTORE_PENDING state, check git for actual changes
-        if (count === 0 && info.status === 'restore_pending') {
+        // If no GUI staging, check git for external changes (files modified outside editor)
+        if (count === 0) {
             const gitResult = await ApiClient.get('/api/git/status', { silent: true });
             if (gitResult.success && gitResult.data?.has_changes) {
                 count = gitResult.data.files.length;
