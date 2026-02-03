@@ -537,9 +537,8 @@
             warningHtml += '</ul></div>';
         }
 
-        // Show other broken references
-        warningHtml += '<div class="dialog-scrollable-list">';
-
+        // Show other broken references (non-orphan dependencies)
+        let nonOrphanHtml = '';
         for (const { obj, deps } of objectsWithDeps) {
             const nonOrphanDeps = deps.filter(d =>
                 !(d.object.object_type === 'service' &&
@@ -548,22 +547,26 @@
 
             if (nonOrphanDeps.length === 0) continue;
 
-            warningHtml += `
+            nonOrphanHtml += `
                 <div class="dialog-detail-item">
                     <strong>${Explorer.escapeHtml(obj.object_type)}: ${Explorer.escapeHtml(obj.display_name)}</strong>
                     <ul>
             `;
             for (const dep of nonOrphanDeps.slice(0, 5)) {
-                warningHtml += `<li>${Explorer.escapeHtml(dep.object.object_type)} "${Explorer.escapeHtml(dep.object.display_name)}" (${Explorer.escapeHtml(dep.field)})</li>`;
+                nonOrphanHtml += `<li>${Explorer.escapeHtml(dep.object.object_type)} "${Explorer.escapeHtml(dep.object.display_name)}" (${Explorer.escapeHtml(dep.field)})</li>`;
             }
             if (nonOrphanDeps.length > 5) {
-                warningHtml += `<li class="dialog-detail-more">... and ${nonOrphanDeps.length - 5} more</li>`;
+                nonOrphanHtml += `<li class="dialog-detail-more">... and ${nonOrphanDeps.length - 5} more</li>`;
             }
-            warningHtml += '</ul></div>';
+            nonOrphanHtml += '</ul></div>';
+        }
+
+        // Only add the scrollable list container if there's content
+        if (nonOrphanHtml) {
+            warningHtml += `<div class="dialog-scrollable-list">${nonOrphanHtml}</div>`;
         }
 
         warningHtml += `
-            </div>
             <div class="u-mt-lg dialog-info-text">
                 <p><strong>Total impact:</strong> ${totalDeps} object(s) will have broken references.</p>
                 <p>Nagios may fail to start if these references are not fixed.</p>
