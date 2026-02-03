@@ -560,7 +560,7 @@ async function buildGlobalCommitDialogHtml(data, refData = null, isGitConfigured
                 <details>
                     <summary>Show affected files</summary>
                     <ul class="external-files-list">
-                        ${gitChanges.map(f => `<li>${escapeHtml(f.file || f)}</li>`).join('')}
+                        ${gitChanges.map(f => `<li>${escapeHtml(f.path || f.file || f)}</li>`).join('')}
                     </ul>
                 </details>
             </div>
