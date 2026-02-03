@@ -1271,16 +1271,6 @@ def api_staging_conflicts():
     })
 
 
-@bp.route('/api/staging/info-extended', methods=['GET'])
-def api_staging_info_extended():
-    """
-    Get extended staging info including file/folder operations and undo count.
-    """
-    sm = get_staging_manager()
-    info = sm.get_staging_info_extended()
-    return jsonify(info)
-
-
 @bp.route('/api/staging/diff', methods=['GET'])
 def api_staging_diff():
     """

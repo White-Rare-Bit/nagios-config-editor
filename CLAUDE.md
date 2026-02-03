@@ -205,8 +205,7 @@ config = update_config({'nagios_bin': '/new/path'})  # Update and save
 | /api/staging | GET | Get full staging data (shared across sessions) |
 | /api/staging | POST | Save staged changes to staging.json (no disk writes) |
 | /api/staging | DELETE | Clear all staging data and release lock |
-| /api/staging/info | GET | Lightweight summary (counts only, for polling) |
-| /api/staging/info-extended | GET | Extended summary with file/folder operation counts |
+| /api/staging/info | GET | Staging summary with all counts, undo count, for polling |
 | /api/staging/apply | POST | Apply all staged changes to disk (10-phase process) |
 | /api/staging/virtual-tree | GET | Merged view of objects with staged changes applied (preview) |
 | /api/staging/undo | POST | Pop and reverse last staged operation |

@@ -161,7 +161,7 @@ def test_undo_operations_dict_format(client):
                 headers={'X-Session-Id': 'test-session'})
 
     # Get staging info
-    resp = client.get('/api/staging/info-extended',
+    resp = client.get('/api/staging/info',
                       headers={'X-Session-Id': 'test-session'})
     info = resp.json
     assert info['undoCount'] > 0
@@ -174,7 +174,7 @@ def test_undo_operations_dict_format(client):
     assert resp.status_code == 200
 
     # Verify undo worked
-    resp = client.get('/api/staging/info-extended',
+    resp = client.get('/api/staging/info',
                       headers={'X-Session-Id': 'test-session'})
     info = resp.json
     assert info['undoCount'] == 0
@@ -221,7 +221,7 @@ def test_multi_operation_workflow(client):
     assert resp.status_code == 200
 
     # Verify counts
-    resp = client.get('/api/staging/info-extended', headers=headers)
+    resp = client.get('/api/staging/info', headers=headers)
     info = resp.json
     counts = info.get('counts', {})
     assert counts.get('creations', 0) == 1

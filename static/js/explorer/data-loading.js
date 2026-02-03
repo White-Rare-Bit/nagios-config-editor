@@ -440,7 +440,7 @@
      * @returns {Promise<object>}
      */
     Explorer.getStagingInfoExtended = async function() {
-        const result = await ApiClient.get('/api/staging/info-extended', { silent: true });
+        const result = await ApiClient.get('/api/staging/info', { silent: true });
         if (result.success) {
             return result.data;
         }

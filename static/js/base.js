@@ -1861,7 +1861,7 @@ function closeKeyboardShortcuts() {
 
 async function checkPendingChanges() {
     // Use extended staging info to get accurate count of staged changes
-    const infoResult = await ApiClient.get('/api/staging/info-extended', { silent: true });
+    const infoResult = await ApiClient.get('/api/staging/info', { silent: true });
 
     if (infoResult.success) {
         const info = infoResult.data;

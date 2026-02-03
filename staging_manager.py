@@ -414,27 +414,31 @@ class StagingManager:
     def get_staging_info(self) -> Dict[str, Any]:
         """Get summary info about current staging.
 
-        Returns lightweight counts and metadata for polling.
+        Returns counts for all staged operations including file/folder ops.
 
         Returns:
-            Dictionary with hasStaging, counts, and metadata
+            Dictionary with hasStaging, counts, undoCount, and metadata
         """
         data = self.get_staging()
 
         if self._is_empty_staging(data):
             return {
                 'hasStaging': False,
-                'counts': {}
+                'counts': {},
+                'undoCount': 0
             }
+
+        data = self.migrate_staging_schema(data)
 
         # Count each type of staged change
         counts = {}
 
-        pending_edits = data.get('pendingEdits', [])
+        # Object operations
+        pending_edits = data.get('pendingEdits', {})
         if pending_edits:
             counts['edits'] = len(pending_edits)
 
-        staged_moves = data.get('stagedMoves', [])
+        staged_moves = data.get('stagedMoves', {})
         if staged_moves:
             counts['moves'] = len(staged_moves)
 
@@ -450,9 +454,40 @@ class StagingManager:
         if new_files:
             counts['newFiles'] = len(new_files)
 
+        # File/folder operations
+        file_creates = data.get('stagedFileCreations', [])
+        if file_creates:
+            counts['fileCreations'] = len(file_creates)
+
+        file_deletes = data.get('stagedFileDeletions', [])
+        if file_deletes:
+            counts['fileDeletions'] = len(file_deletes)
+
+        file_moves = data.get('stagedFileMoves', [])
+        if file_moves:
+            counts['fileMoves'] = len(file_moves)
+
+        folder_creates = data.get('stagedFolderCreations', [])
+        if folder_creates:
+            counts['folderCreations'] = len(folder_creates)
+
+        folder_deletes = data.get('stagedFolderDeletions', [])
+        if folder_deletes:
+            counts['folderDeletions'] = len(folder_deletes)
+
+        folder_moves = data.get('stagedFolderMoves', [])
+        if folder_moves:
+            counts['folderMoves'] = len(folder_moves)
+
+        # Calculate total count
+        total_count = sum(counts.values())
+
         result = {
             'hasStaging': True,
-            'counts': counts
+            'status': data.get('status', ''),
+            'counts': counts,
+            'totalCount': total_count,
+            'undoCount': len(data.get('undoStack', []))
         }
 
         # Include timestamp if available
@@ -1073,102 +1108,13 @@ class StagingManager:
 
         return OperationResult(False, f"Operation {op_id} not found")
 
-    # =========================================================================
-    # Extended Staging Info
-    # =========================================================================
-
-    def get_staging_info_extended(self) -> Dict[str, Any]:
-        """Get extended summary info about current staging.
-
-        Returns counts for all staged operations including file/folder ops.
-
-        Returns:
-            Dictionary with hasStaging, counts, undoCount, and metadata
-        """
-        data = self.get_staging()
-
-        if self._is_empty_staging(data):
-            return {
-                'hasStaging': False,
-                'counts': {},
-                'undoCount': 0
-            }
-
-        data = self.migrate_staging_schema(data)
-
-        # Count each type of staged change
-        counts = {}
-
-        # Object operations
-        pending_edits = data.get('pendingEdits', [])
-        if pending_edits:
-            counts['edits'] = len(pending_edits)
-
-        staged_moves = data.get('stagedMoves', [])
-        if staged_moves:
-            counts['moves'] = len(staged_moves)
-
-        staged_creations = data.get('stagedCreations', [])
-        if staged_creations:
-            counts['creations'] = len(staged_creations)
-
-        staged_deletions = data.get('stagedObjectDeletions', [])
-        if staged_deletions:
-            counts['objectDeletions'] = len(staged_deletions)
-
-        new_files = data.get('newFiles', [])
-        if new_files:
-            counts['newFiles'] = len(new_files)
-
-        # File/folder operations
-        file_creates = data.get('stagedFileCreations', [])
-        if file_creates:
-            counts['fileCreations'] = len(file_creates)
-
-        file_deletes = data.get('stagedFileDeletions', [])
-        if file_deletes:
-            counts['fileDeletions'] = len(file_deletes)
-
-        file_moves = data.get('stagedFileMoves', [])
-        if file_moves:
-            counts['fileMoves'] = len(file_moves)
-
-        folder_creates = data.get('stagedFolderCreations', [])
-        if folder_creates:
-            counts['folderCreations'] = len(folder_creates)
-
-        folder_deletes = data.get('stagedFolderDeletions', [])
-        if folder_deletes:
-            counts['folderDeletions'] = len(folder_deletes)
-
-        folder_moves = data.get('stagedFolderMoves', [])
-        if folder_moves:
-            counts['folderMoves'] = len(folder_moves)
-
-        # Calculate total count
-        total_count = sum(counts.values())
-
-        result = {
-            'hasStaging': True,
-            'status': data.get('status', ''),
-            'counts': counts,
-            'totalCount': total_count,
-            'undoCount': len(data.get('undoStack', []))
-        }
-
-        # Include timestamp if available
-        if 'lastModified' in data:
-            result['lastModified'] = data['lastModified']
-
-        return result
-
     def get_total_staged_count(self) -> int:
         """Get total count of all staged operations.
 
         Returns:
             Total number of staged changes
         """
-        info = self.get_staging_info_extended()
+        info = self.get_staging_info()
         counts = info.get('counts', {})
         return sum(counts.values())
 
