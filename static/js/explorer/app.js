@@ -778,13 +778,11 @@ async function loadSuggestionsForBadges() {
         // Build grouped errors (this populates state.groupedErrors array)
         Explorer.filterIssues();
 
-        // Update main badge (total of all suggestions including grouped errors)
-        const totalCount = state.groupedErrors.length + state.allGroupingSuggestions.length + state.allTemplateSuggestions.length +
-                           state.allCleanupSuggestions.length + state.allNotificationSuggestions.length;
-        Explorer.updateBadge('#suggestionsBadge', totalCount);
+        // Update main badge using centralized function that matches collectAllSuggestions()
+        Explorer.updateSuggestionsBadge();
 
-        // Update section badges
-        Explorer.updateBadge('#issuesSectionBadge', state.groupedErrors.length);
+        // Update section badges (issues badge is updated by updateSuggestionsBadge)
+        // Explorer.updateBadge('#issuesSectionBadge', ...) - handled by updateSuggestionsBadge
         Explorer.updateBadge('#groupingSectionBadge', state.allGroupingSuggestions.length);
         Explorer.updateBadge('#templatesSectionBadge', state.allTemplateSuggestions.length);
         Explorer.updateBadge('#cleanupSectionBadge', state.allCleanupSuggestions.length);

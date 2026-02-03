@@ -57,29 +57,17 @@ async function loadAllSuggestions(forceRefresh = false) {
         loadCleanupSuggestions(forceRefresh),
         loadNotificationSuggestions(forceRefresh)
     ]);
-    updateSuggestionsBadge();
+    // Badge is now updated inside renderUnifiedSuggestionsList() using the accurate
+    // collectAllSuggestions() count, so we don't call updateSuggestionsBadge() here
     renderUnifiedSuggestionsList();
 }
 
 function updateSuggestionsBadge() {
-    // Use grouped error count for the badge (exclude commands - they're external plugins, not config objects)
-    const errorCount = state.groupedErrors
-        ? state.groupedErrors.filter(g => g.objectType !== 'command').length
-        : 0;
+    // Use collectAllSuggestions() for accurate count that matches the rendered list
+    const allSuggestions = collectAllSuggestions();
+    const totalCount = allSuggestions.length;
+    const errorCount = allSuggestions.filter(s => s.severity === 'error').length;
 
-    // Count template issues
-    const templateIssueCount = state.templateIssues
-        ? (state.templateIssues.invalid_use?.length || 0) +
-          (state.templateIssues.circular_dependencies?.length || 0) +
-          (state.templateIssues.unused_templates?.length || 0)
-        : 0;
-
-    const totalCount = errorCount +
-                       (state.allTemplateSuggestions ? state.allTemplateSuggestions.length : 0) +
-                       templateIssueCount +
-                       (state.allGroupingSuggestions ? state.allGroupingSuggestions.length : 0) +
-                       (state.allCleanupSuggestions ? state.allCleanupSuggestions.length : 0) +
-                       (state.allNotificationSuggestions ? state.allNotificationSuggestions.length : 0);
     const badge = document.getElementById('suggestionsBadge');
     if (badge) {
         badge.textContent = totalCount;
@@ -320,6 +308,19 @@ function renderUnifiedSuggestionsList() {
     document.getElementById('summaryCountErrors').textContent = errorCount;
     document.getElementById('summaryCountWarnings').textContent = warningCount;
     document.getElementById('summaryCountInfo').textContent = infoCount;
+
+    // Update the tab badge to match the summary count
+    // This ensures badge stays in sync when renderUnifiedSuggestionsList is called
+    // without going through loadAllSuggestions (e.g., after commit refresh)
+    const badge = document.getElementById('suggestionsBadge');
+    if (badge) {
+        badge.textContent = allSuggestions.length;
+        if (allSuggestions.length > 0) {
+            badge.classList.remove('u-hidden');
+        } else {
+            badge.classList.add('u-hidden');
+        }
+    }
 
     // Filter based on current filter
     let filtered = allSuggestions;
