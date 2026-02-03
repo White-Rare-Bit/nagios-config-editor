@@ -551,24 +551,24 @@ async function buildGlobalCommitDialogHtml(data, refData = null, isGitConfigured
     // Check for external changes (git changes that exist alongside staged changes)
     // This indicates files were modified outside the staging system
     const hasExternalChanges = hasGuiStaging && hasGitChanges && gitChanges.length > 0;
-    const externalWarningHtml = hasExternalChanges ? `
-        <div class="commit-external-warning">
-            <div class="commit-external-warning-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
-            <div class="commit-external-warning-content">
-                <strong>External changes detected</strong>
-                <p>${gitChanges.length} file(s) have been modified outside this editor. These changes will be included in the commit.</p>
-                <details>
-                    <summary>Show affected files</summary>
-                    <ul class="external-files-list">
-                        ${gitChanges.map(f => `<li>${escapeHtml(f.path || f.file || f)}</li>`).join('')}
-                    </ul>
-                </details>
+
+    // Build external changes section with actual diffs (not just a warning)
+    let externalChangesHtml = '';
+    if (hasExternalChanges) {
+        const externalDiffsHtml = await buildExternalChangesHtml(gitChanges, baseState.commitContextLines);
+        externalChangesHtml = `
+            <div class="commit-section commit-external-section">
+                <div class="commit-section-title">
+                    <i class="fa-solid fa-triangle-exclamation" style="color: var(--nbe-warning); margin-right: 6px;"></i>
+                    External Changes <span class="badge">${gitChanges.length} file${gitChanges.length !== 1 ? 's' : ''}</span>
+                    <span class="commit-section-subtitle">(modified outside this editor)</span>
+                </div>
+                ${externalDiffsHtml}
             </div>
-        </div>
-    ` : '';
+        `;
+    }
 
     let html = `
-        ${externalWarningHtml}
         <div class="commit-header">
             <div class="commit-summary">
                 ${fileChanges.size > 0 ? `<div class="commit-stat edits"><span class="commit-stat-count">${fileChanges.size}</span> file${fileChanges.size !== 1 ? 's' : ''} changed</div>` : ''}
@@ -585,6 +585,7 @@ async function buildGlobalCommitDialogHtml(data, refData = null, isGitConfigured
         </div>
         <div class="commit-changes-list" id="globalCommitChangesList">
             ${buildGlobalCommitChangesListHtml(fileChanges, configPath, existingFolders, allObjects)}
+            ${externalChangesHtml}
         </div>
         ${refData && refData.hasNameChanges ? buildReferenceChangesSection(refData) : ''}
         <div class="commit-footer">
@@ -771,6 +772,61 @@ async function buildGitOnlyFilesHtml(gitChanges, contextLines) {
 
         filesHtml += `
             <div class="commit-item expanded">
+                <div class="commit-item-header">
+                    <span class="commit-item-expand">&#9658;</span>
+                    <span class="commit-item-type ${typeClass}">${statusLabel}</span>
+                    <span class="commit-item-name">${escapeHtml(change.path.split('/').pop())}</span>
+                    <span class="commit-item-file">${escapeHtml(change.path)}</span>
+                </div>
+                <div class="commit-item-diff">
+                    <div class="diff-content">${diffContent || '<div class="diff-line context">No changes to display</div>'}</div>
+                </div>
+            </div>
+        `;
+    }
+    return filesHtml;
+}
+
+/**
+ * Build HTML for external changes (files modified outside the editor).
+ * Similar to buildGitOnlyFilesHtml but for the mixed GUI+external view.
+ */
+async function buildExternalChangesHtml(gitChanges, contextLines) {
+    const statusLabels = {
+        'modified': 'Modified',
+        'added': 'Added',
+        'deleted': 'Deleted',
+        'untracked': 'Untracked',
+        'renamed': 'Renamed'
+    };
+
+    let filesHtml = '';
+    for (const change of gitChanges) {
+        const statusClass = change.status;
+        const statusLabel = statusLabels[change.status] || change.status;
+        const typeClass = statusClass === 'modified' ? 'external' : statusClass === 'added' || statusClass === 'untracked' ? 'create' : statusClass === 'deleted' ? 'delete' : 'move';
+
+        let diffContent = '';
+        const useFullFile = contextLines > 9;
+        const diffResult = await ApiClient.post('/api/git/diff', {
+            file: change.path,
+            fullFile: useFullFile,
+            contextLines: useFullFile ? null : contextLines
+        }, { silent: true });
+
+        if (diffResult.success && diffResult.data?.diff) {
+            diffContent = diffResult.data.diff.split('\n').map(line => {
+                const lineClass = line.startsWith('+') && !line.startsWith('+++') ? 'add' :
+                                 line.startsWith('-') && !line.startsWith('---') ? 'remove' :
+                                 line.startsWith('@@') ? 'hunk' : 'context';
+                return `<div class="diff-line ${lineClass}">${escapeHtml(line)}</div>`;
+            }).join('');
+        } else {
+            diffContent = '<div class="diff-line context">Unable to load diff</div>';
+        }
+
+        filesHtml += `
+            <div class="commit-item">
                 <div class="commit-item-header">
                     <span class="commit-item-expand">&#9658;</span>
                     <span class="commit-item-type ${typeClass}">${statusLabel}</span>
