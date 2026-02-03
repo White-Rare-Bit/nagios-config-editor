@@ -143,47 +143,12 @@ class BackupManager:
 
                 backups.append(info)
 
-            # Legacy support: directory-based backups
-            elif item.is_dir() and item.name.startswith("backup_"):
-                info = {
-                    'name': item.name,
-                    'path': str(item),
-                    'created': None,
-                    'description': '',
-                    'file_count': 0,
-                    'user_name': '',
-                    'user_email': ''
-                }
-
-                metadata_file = item / "_backup_info.txt"
-                if metadata_file.exists():
-                    with open(metadata_file, 'r') as f:
-                        for line in f:
-                            if line.startswith("Backup created:"):
-                                info['created'] = line.split(":", 1)[1].strip()
-                            elif line.startswith("Description:"):
-                                info['description'] = line.split(":", 1)[1].strip()
-                            elif line.startswith("Files backed up:"):
-                                try:
-                                    info['file_count'] = int(line.split(":")[1].strip())
-                                except ValueError:
-                                    pass
-                            elif line.startswith("User name:"):
-                                info['user_name'] = line.split(":", 1)[1].strip()
-                            elif line.startswith("User email:"):
-                                info['user_email'] = line.split(":", 1)[1].strip()
-                else:
-                    info['created'] = datetime.fromtimestamp(item.stat().st_mtime).isoformat()
-                    info['file_count'] = len(list(item.rglob("*.cfg")))
-
-                backups.append(info)
-
         # Sort by creation time, most recent first
         backups.sort(key=lambda x: x['created'] or '', reverse=True)
         return backups
 
     def restore_backup(self, backup_name: str, user_name: str = "", user_email: str = "") -> Dict:
-        """Restore configuration from a backup (zip or legacy directory).
+        """Restore configuration from a zip backup.
 
         C-01 FIX: Uses atomic restore pattern - extracts to temp dir first, validates,
         then replaces config files. This prevents empty config directory on restore failure.
@@ -203,11 +168,14 @@ class BackupManager:
 
         backup_path = self.backup_path / backup_name
 
-        # Determine if this is a zip or legacy directory backup
-        is_zip = backup_name.endswith('.zip') and backup_path.is_file()
-        is_dir = backup_path.is_dir()
+        # Only zip backups are supported (directory backups removed)
+        if backup_path.is_dir():
+            raise ValueError(
+                f"Directory-based backups are no longer supported. "
+                f"Please restore from a zip backup or manually copy files from {backup_path}"
+            )
 
-        if not is_zip and not is_dir:
+        if not (backup_name.endswith('.zip') and backup_path.is_file()):
             raise ValueError(f"Backup not found: {backup_name}")
 
         # Verify path is actually under backup_path
@@ -228,38 +196,22 @@ class BackupManager:
             restored_count = 0
             skipped_count = 0
 
-            if is_zip:
-                with zipfile.ZipFile(backup_path, 'r') as zf:
-                    for member in zf.namelist():
-                        # Skip metadata file
-                        if member == '_backup_info.txt':
-                            continue
-                        if not member.endswith('.cfg'):
-                            continue
+            # Extract zip backup to temp directory
+            with zipfile.ZipFile(backup_path, 'r') as zf:
+                for member in zf.namelist():
+                    # Skip metadata file
+                    if member == '_backup_info.txt':
+                        continue
+                    if not member.endswith('.cfg'):
+                        continue
 
-                        # Path traversal protection
-                        member_path = Path(member)
-                        if '..' in member_path.parts:
-                            skipped_count += 1
-                            continue
+                    # Path traversal protection
+                    member_path = Path(member)
+                    if '..' in member_path.parts:
+                        skipped_count += 1
+                        continue
 
-                        dest_path = (temp_path / member_path).resolve()
-                        try:
-                            dest_path.relative_to(temp_path.resolve())
-                        except ValueError:
-                            skipped_count += 1
-                            continue
-
-                        dest_path.parent.mkdir(parents=True, exist_ok=True)
-                        with zf.open(member) as src, open(dest_path, 'wb') as dst:
-                            dst.write(src.read())
-                        restored_count += 1
-            else:
-                # Legacy directory restore
-                for cfg_file in backup_path.rglob("*.cfg"):
-                    rel_path = cfg_file.relative_to(backup_path)
-
-                    dest_path = (temp_path / rel_path).resolve()
+                    dest_path = (temp_path / member_path).resolve()
                     try:
                         dest_path.relative_to(temp_path.resolve())
                     except ValueError:
@@ -267,7 +219,8 @@ class BackupManager:
                         continue
 
                     dest_path.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(cfg_file, dest_path)
+                    with zf.open(member) as src, open(dest_path, 'wb') as dst:
+                        dst.write(src.read())
                     restored_count += 1
 
             # Phase 2: Validate extraction succeeded
@@ -311,7 +264,7 @@ class BackupManager:
                     pass  # Best effort cleanup
 
     def delete_backup(self, backup_name: str) -> bool:
-        """Delete a specific backup (zip or legacy directory)."""
+        """Delete a specific zip backup."""
         if self._op_logger:
             self._op_logger.info('backup', 'delete_backup', params={'backup_name': backup_name})
         # Validate backup_name to prevent path traversal
@@ -328,9 +281,6 @@ class BackupManager:
 
         if backup_path.is_file() and backup_name.endswith('.zip'):
             backup_path.unlink()
-            return True
-        elif backup_path.is_dir():
-            shutil.rmtree(backup_path)
             return True
         return False
 

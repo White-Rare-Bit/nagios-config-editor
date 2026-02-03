@@ -10,9 +10,7 @@ from flask import Blueprint, request, jsonify, current_app
 from nagios_model import NAME_FIELDS
 from staging_manager import (
     OperationType,
-    _normalize_edit_entry,
-    _normalize_move_entry,
-    _normalize_deletion_entry,
+    _ensure_dict_format,
     UNDO_HANDLERS,
     UndoKeyError
 )
@@ -32,6 +30,36 @@ logger = logging.getLogger('nagios_bulk_editor')
 
 # Serialize staging operations to prevent race conditions
 staging_operation_lock = threading.Lock()
+
+
+def _iterate_entries(data):
+    """Iterate over staging entries regardless of dict or list format.
+
+    Handles both formats:
+    - Dict format {key: entry_data, ...}: adds key/globalIndex to entry_data
+    - List format [{entry_data}, ...]: returns entries directly
+
+    Args:
+        data: Dict or list of staging entries
+
+    Returns:
+        Iterable of entry dicts with key/globalIndex populated
+    """
+    if isinstance(data, dict):
+        # Dict format: key is the globalIndex, value is the entry data
+        # Add key/globalIndex to each entry for consistent access
+        for key, entry in data.items():
+            if isinstance(entry, dict):
+                # Add key fields if not present
+                if 'globalIndex' not in entry and 'key' not in entry:
+                    entry['globalIndex'] = key
+                    entry['key'] = key
+                yield entry
+            else:
+                yield entry
+    elif isinstance(data, list):
+        for entry in data:
+            yield entry
 
 
 def _create_undo_entry(
@@ -102,8 +130,8 @@ def _create_undo_entries_for_edits(
         List of undo entry dicts for new edits
     """
     entries = []
-    for edit_entry in pending_edits:
-        edit_data = _normalize_edit_entry(edit_entry)
+    for edit_entry in _iterate_entries(pending_edits):
+        edit_data = _ensure_dict_format(edit_entry)
         key = str(edit_data.get('key', '')) or str(edit_data.get('globalIndex', ''))
 
         if key and key not in existing_keys:
@@ -142,8 +170,8 @@ def _create_undo_entries_for_moves(
         List of undo entry dicts for new moves
     """
     entries = []
-    for move_entry in staged_moves:
-        move_data = _normalize_move_entry(move_entry)
+    for move_entry in _iterate_entries(staged_moves):
+        move_data = _ensure_dict_format(move_entry)
         key = str(move_data.get('key', '')) or str(move_data.get('globalIndex', ''))
 
         if key and key not in existing_keys:
@@ -229,8 +257,8 @@ def _create_undo_entries_for_deletions(
         List of undo entry dicts for new deletions
     """
     entries = []
-    for deletion in staged_deletions:
-        deletion_data = _normalize_deletion_entry(deletion)
+    for deletion in _iterate_entries(staged_deletions):
+        deletion_data = _ensure_dict_format(deletion)
         key = str(deletion_data.get('key', '')) or str(deletion_data.get('globalIndex', ''))
         obj_name = deletion_data.get('name', deletion_data.get('display_name', f"Object {key}"))
         obj_type = deletion_data.get('object_type', 'object')
@@ -401,6 +429,34 @@ def api_break_lock():
     })
 
 
+def _validate_staging_format(data):
+    """Validate staging data is dict format (rejects list format).
+
+    Request boundary validation provides clear error for old-format clients.
+    Early validation prevents cryptic failures in apply logic.
+
+    Args:
+        data: Staging data from POST request
+
+    Returns:
+        None if valid, error message string if invalid
+    """
+    # Check pendingEdits - validate all entries, not just first
+    pending_edits = data.get('pendingEdits')
+    if pending_edits is not None and isinstance(pending_edits, list):
+        if any(isinstance(e, list) for e in pending_edits):
+            return "pendingEdits must be dict format {key: data}, not list format [[key, data]]"
+
+    # Check stagedMoves - validate all entries, not just first
+    staged_moves = data.get('stagedMoves')
+    if staged_moves is not None and isinstance(staged_moves, list):
+        if any(isinstance(e, list) for e in staged_moves):
+            return "stagedMoves must be dict format {key: data}, not list format [[key, data]]"
+
+    # stagedObjectDeletions should be list of dicts, no special validation needed
+    return None
+
+
 @bp.route('/api/staging', methods=['POST'])
 def api_save_staging():
     """
@@ -418,6 +474,11 @@ def api_save_staging():
 
     sm = get_staging_manager()
     data = request.get_json() or {}
+
+    # Validate format before processing
+    format_error = _validate_staging_format(data)
+    if format_error:
+        return jsonify({'error': f'Invalid staging format: {format_error}'}), 400
     session_id = request.headers.get('X-Session-Id')
 
     # Log staging request
@@ -460,14 +521,14 @@ def api_save_staging():
 
     # Track files affected by object edits
     pending_edits = data.get('pendingEdits', [])
-    for edit_entry in pending_edits:
-        obj_info = _normalize_edit_entry(edit_entry).get('object', {})
+    for edit_entry in _iterate_entries(pending_edits):
+        obj_info = _ensure_dict_format(edit_entry).get('object', {})
         if obj_info.get('source_file'):
             files_to_track.add(obj_info['source_file'])
 
     # Track files affected by object moves
     for move_entry in data.get('stagedMoves', []):
-        move_data = _normalize_move_entry(move_entry)
+        move_data = _ensure_dict_format(move_entry)
         obj_info = move_data.get('object', {})
         if obj_info.get('source_file'):
             files_to_track.add(obj_info['source_file'])
@@ -486,7 +547,7 @@ def api_save_staging():
 
     # Track files affected by object deletions
     for deletion_entry in data.get('stagedObjectDeletions', []):
-        deletion_data = _normalize_deletion_entry(deletion_entry)
+        deletion_data = _ensure_dict_format(deletion_entry)
         if deletion_data.get('source_file'):
             files_to_track.add(deletion_data['source_file'])
         elif deletion_data.get('key'):
@@ -513,14 +574,14 @@ def api_save_staging():
     if existing:
         # Extract keys from existing pending edits
         for edit_entry in existing.get('pendingEdits', []):
-            normalized = _normalize_edit_entry(edit_entry)
+            normalized = _ensure_dict_format(edit_entry)
             edit_key = str(normalized.get('key', '')) or str(normalized.get('globalIndex', ''))
             if edit_key:
                 existing_pending_edit_keys.add(edit_key)
 
         # Extract keys from existing staged moves
         for move_entry in existing.get('stagedMoves', []):
-            normalized = _normalize_move_entry(move_entry)
+            normalized = _ensure_dict_format(move_entry)
             move_key = str(normalized.get('key', '')) or str(normalized.get('globalIndex', ''))
             if move_key:
                 existing_staged_move_keys.add(move_key)
@@ -532,7 +593,7 @@ def api_save_staging():
 
         # Extract keys from existing staged deletions
         for deletion in existing.get('stagedObjectDeletions', []):
-            normalized = _normalize_deletion_entry(deletion)
+            normalized = _ensure_dict_format(deletion)
             del_key = str(normalized.get('key', '')) or str(normalized.get('globalIndex', ''))
             if del_key:
                 existing_staged_deletion_keys.add(del_key)
@@ -772,8 +833,8 @@ def _extract_name_changes(staging_data):
     name_changes = []
     pending_edits = staging_data.get('pendingEdits', [])
 
-    for edit_entry in pending_edits:
-        edit_data = _normalize_edit_entry(edit_entry)
+    for edit_entry in _iterate_entries(pending_edits):
+        edit_data = _ensure_dict_format(edit_entry)
         obj_info = edit_data.get('object', {})
         obj_type = obj_info.get('object_type')
         if not obj_type:
@@ -1015,7 +1076,7 @@ def api_get_virtual_tree():
     # Apply pending edits virtually
     pending_edits = staging_data.get('pendingEdits', [])
     edited_indices = set()
-    for edit_entry in pending_edits:
+    for edit_entry in _iterate_entries(pending_edits):
         if isinstance(edit_entry, list) and len(edit_entry) >= 2:
             global_index = edit_entry[0]
             edit_data = edit_entry[1]
@@ -1052,7 +1113,7 @@ def api_get_virtual_tree():
 
     # Mark objects for move
     staged_moves = staging_data.get('stagedMoves', [])
-    for move_entry in staged_moves:
+    for move_entry in _iterate_entries(staged_moves):
         if isinstance(move_entry, list) and len(move_entry) >= 2:
             move_data = move_entry[1]
         elif isinstance(move_entry, dict):

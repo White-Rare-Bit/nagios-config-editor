@@ -95,7 +95,7 @@ Old `staging.json` files with `restorePending: true` boolean automatically migra
 9. **Validation**: Run `nagios -v` to check configuration
 10. **Commit**: Write changes and reload parser
 
-Each phase uses normalize helpers (`_normalize_edit_entry()`, `_normalize_move_entry()`, `_normalize_deletion_entry()`) from `staging_manager.py` to handle both legacy list format and current dict format for staging entries.
+Staging entries use dict format only (`{key: data, ...}`). The `_ensure_dict_format()` helper in `staging_manager.py` validates entries and logs warnings for any non-dict data. Legacy list format (`[[key, data], ...]`) is rejected at the API boundary with a 400 error.
 
 ## Key Invariants
 

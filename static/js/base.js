@@ -527,12 +527,12 @@ async function buildGlobalCommitDialogHtml(data, refData = null, isGitConfigured
     const gitChanges = data.gitChanges || [];
     const hasGitChanges = data.hasGitChanges || false;
 
-    const pendingEdits = staging.pendingEdits || [];
-    const stagedMoves = staging.stagedMoves || [];
+    const pendingEdits = staging.pendingEdits || {};
+    const stagedMoves = staging.stagedMoves || {};
     const stagedCreations = staging.stagedCreations || [];
     const stagedObjectDeletions = staging.stagedObjectDeletions || [];
 
-    const hasGuiStaging = pendingEdits.length > 0 || stagedMoves.length > 0 ||
+    const hasGuiStaging = Object.keys(pendingEdits).length > 0 || Object.keys(stagedMoves).length > 0 ||
                           stagedCreations.length > 0 || stagedObjectDeletions.length > 0;
 
     if (!hasGuiStaging && hasGitChanges) {
@@ -993,16 +993,12 @@ function ensureFileChange(fileChanges, filePath, configPath) {
 }
 
 /**
- * Builds a map of globalIndex -> edit data from pendingEdits array.
+ * Builds a map of globalIndex -> edit data from pendingEdits dict.
  */
 function buildEditsMap(pendingEdits) {
     const editsMap = new Map();
-    for (const entry of pendingEdits) {
-        if (Array.isArray(entry)) {
-            editsMap.set(entry[0], entry[1]);
-        } else if (entry && entry.globalIndex !== undefined) {
-            editsMap.set(entry.globalIndex, entry);
-        }
+    for (const [key, entry] of Object.entries(pendingEdits)) {
+        editsMap.set(key, entry);
     }
     return editsMap;
 }
@@ -1151,23 +1147,15 @@ function buildGlobalFileBasedChanges(pendingEdits, stagedMoves, stagedCreations,
     const fileChanges = new Map();
     const editsMap = buildEditsMap(pendingEdits);
 
-    // Process moves (adds to both source and target files)
-    for (const moveEntry of stagedMoves) {
-        processStagedMove(moveEntry, allObjects, editsMap, fileChanges, configPath);
+    // Process moves (adds to both source and target files) - iterate over dict entries
+    for (const [moveKey, move] of Object.entries(stagedMoves)) {
+        processStagedMove([moveKey, move], allObjects, editsMap, fileChanges, configPath);
     }
 
     // Build set of moved indices to skip them in edit processing
     // Need to convert stable keys to global indices for proper matching
     const movedIndices = new Set();
-    for (const moveEntry of stagedMoves) {
-        let moveKey;
-        if (Array.isArray(moveEntry)) {
-            moveKey = moveEntry[0];
-        } else if (moveEntry) {
-            moveKey = moveEntry.globalIndex || moveEntry.key;
-        }
-        if (moveKey === undefined) continue;
-
+    for (const [moveKey, move] of Object.entries(stagedMoves)) {
         // If stable key, find the object and use its global_index
         if (typeof moveKey === 'string' && moveKey.includes('|')) {
             const [source_file, object_type, name] = moveKey.split('|');
@@ -1186,9 +1174,9 @@ function buildGlobalFileBasedChanges(pendingEdits, stagedMoves, stagedCreations,
         }
     }
 
-    // Process edits (skip objects that are being moved)
-    for (const editEntry of pendingEdits) {
-        processPendingEdit(editEntry, allObjects, movedIndices, fileChanges, configPath);
+    // Process edits (skip objects that are being moved) - iterate over dict entries
+    for (const [editKey, edit] of Object.entries(pendingEdits)) {
+        processPendingEdit([editKey, edit], allObjects, movedIndices, fileChanges, configPath);
     }
 
     // Process creations
@@ -1400,8 +1388,8 @@ function updateGlobalContextLines(value) {
         const configPath = baseState.diffData.configPath;
         const existingFolders = baseState.diffData.existingFolders || [];
 
-        const pendingEdits = staging.pendingEdits || [];
-        const stagedMoves = staging.stagedMoves || [];
+        const pendingEdits = staging.pendingEdits || {};
+        const stagedMoves = staging.stagedMoves || {};
         const stagedCreations = staging.stagedCreations || [];
         const stagedObjectDeletions = staging.stagedObjectDeletions || [];
 
@@ -1439,8 +1427,8 @@ async function discardGlobalChanges() {
     let changeSummary = [];
     if (baseState.diffData && baseState.diffData.staging) {
         const s = baseState.diffData.staging;
-        const edits = (s.pendingEdits || []).length;
-        const moves = (s.stagedMoves || []).length;
+        const edits = Object.keys(s.pendingEdits || {}).length;
+        const moves = Object.keys(s.stagedMoves || {}).length;
         const creates = (s.stagedCreations || []).length;
         const objDeletes = (s.stagedObjectDeletions || []).length;
         // Include file/folder operations in count
@@ -1540,26 +1528,47 @@ async function applyGlobalCommit() {
 
     closeGlobalCommitDialog();
     const displayMessage = commitMessage.length > 60 ? commitMessage.substring(0, 60) + '...' : commitMessage;
-    showGitRunningPanel('Applying Changes', 'Applying staged changes...');
 
-    const updateRefsCheckbox = document.getElementById('globalUpdateReferences');
-    const updateReferences = updateRefsCheckbox ? updateRefsCheckbox.checked : false;
+    // Check if we have GUI staging to apply
+    const hasGuiStaging = baseState.diffData && baseState.diffData.staging && (
+        Object.keys(baseState.diffData.staging.pendingEdits || {}).length > 0 ||
+        Object.keys(baseState.diffData.staging.stagedMoves || {}).length > 0 ||
+        (baseState.diffData.staging.stagedCreations || []).length > 0 ||
+        (baseState.diffData.staging.stagedObjectDeletions || []).length > 0 ||
+        (baseState.diffData.staging.stagedFileCreations || []).length > 0 ||
+        (baseState.diffData.staging.stagedFileDeletions || []).length > 0 ||
+        (baseState.diffData.staging.stagedFileMoves || []).length > 0 ||
+        (baseState.diffData.staging.stagedFolderCreations || []).length > 0 ||
+        (baseState.diffData.staging.stagedFolderDeletions || []).length > 0 ||
+        (baseState.diffData.staging.stagedFolderMoves || []).length > 0
+    );
 
-    // C-10: Apply with deferClear=true to ensure atomicity with git commit
-    // If git commit fails, staging remains intact for retry
-    const applyResult = await ApiClient.post('/api/staging/apply', {
-        updateReferences,
-        deferClear: true  // Don't clear staging yet - wait for git commit success
-    }, { silent: true });
+    if (hasGuiStaging) {
+        // Apply GUI staging first
+        showGitRunningPanel('Applying Changes', 'Applying staged changes...');
 
-    if (!applyResult.success || !applyResult.data?.success) {
-        showStagingResultPanel(false, applyResult.data?.error || applyResult.error || 'Failed to apply staged changes');
-        return;
+        const updateRefsCheckbox = document.getElementById('globalUpdateReferences');
+        const updateReferences = updateRefsCheckbox ? updateRefsCheckbox.checked : false;
+
+        // C-10: Apply with deferClear=true to ensure atomicity with git commit
+        // If git commit fails, staging remains intact for retry
+        const applyResult = await ApiClient.post('/api/staging/apply', {
+            updateReferences,
+            deferClear: true  // Don't clear staging yet - wait for git commit success
+        }, { silent: true });
+
+        if (!applyResult.success || !applyResult.data?.success) {
+            showStagingResultPanel(false, applyResult.data?.error || applyResult.error || 'Failed to apply staged changes');
+            return;
+        }
+    } else {
+        // Git-only commit - no staging to apply
+        showGitRunningPanel('Git Commit', 'Committing changes...');
     }
 
     // Now do the git commit - pass callback to clear staging on success
     updateNavCommitButton(0);
-    await autoGitCommitGlobal(commitMessage, true);  // true = clear staging on success
+    await autoGitCommitGlobal(commitMessage, hasGuiStaging);  // only clear staging if we had GUI staging
 }
 
 function showStagingResultPanel(success, message) {
@@ -1801,7 +1810,7 @@ async function checkPendingChanges() {
     if (infoResult.success) {
         const info = infoResult.data;
         let count = info.totalCount || 0;
-        updateUndoButton(info.undoStackLength || 0);
+        updateUndoButton(info.undoCount || 0);
 
         // If staging is in RESTORE_PENDING state, check git for actual changes
         if (count === 0 && info.status === 'restore_pending') {

@@ -14,7 +14,6 @@ from typing import Optional
 # Config directory relative to project root
 CONFIG_DIR = Path(__file__).parent / 'config'
 CONFIG_FILE = CONFIG_DIR / 'settings.json'
-LEGACY_LOGGING_CONFIG = Path(__file__).parent / 'logging_config.json'
 
 # Current schema version for future migrations
 CONFIG_VERSION = 1
@@ -123,35 +122,6 @@ def ensure_config_dir() -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def _migrate_legacy_logging_config() -> Optional[LoggingConfig]:
-    """Migrate legacy logging_config.json to new format.
-
-    Returns LoggingConfig if migration was performed, None otherwise.
-    """
-    if not LEGACY_LOGGING_CONFIG.exists():
-        return None
-
-    try:
-        data = json.loads(LEGACY_LOGGING_CONFIG.read_text(encoding='utf-8'))
-        logging_data = data.get('logging', {})
-
-        config = LoggingConfig(
-            enabled=logging_data.get('enabled', True),
-            log_level=logging_data.get('log_level', 'INFO'),
-            log_dir=logging_data.get('log_dir', 'logs'),
-            log_filename=logging_data.get('log_filename', 'operations.jsonl'),
-            max_file_size_mb=logging_data.get('max_file_size_mb', 10),
-            max_backup_files=logging_data.get('max_backup_files', 5),
-        )
-
-        # Remove legacy file after successful migration
-        LEGACY_LOGGING_CONFIG.unlink()
-        return config
-
-    except (json.JSONDecodeError, OSError):
-        return None
-
-
 def _apply_env_overrides(config: ServerConfig) -> ServerConfig:
     """Apply environment variable overrides to config.
 
@@ -183,17 +153,10 @@ def load_config() -> ServerConfig:
     1. Environment variables
     2. config/settings.json
     3. Default values
-
-    Also handles migration of legacy logging_config.json.
     """
     ensure_config_dir()
 
     config = ServerConfig()
-
-    # Check for legacy logging config and migrate
-    legacy_logging = _migrate_legacy_logging_config()
-    if legacy_logging:
-        config.logging = legacy_logging
 
     # Load from config file if it exists
     if CONFIG_FILE.exists():
@@ -202,10 +165,6 @@ def load_config() -> ServerConfig:
             config = ServerConfig.from_dict(data)
         except (json.JSONDecodeError, OSError):
             pass  # Use defaults
-
-    # If we migrated legacy config, save it to new location
-    if legacy_logging and not CONFIG_FILE.exists():
-        save_config(config)
 
     # Apply environment variable overrides
     config = _apply_env_overrides(config)

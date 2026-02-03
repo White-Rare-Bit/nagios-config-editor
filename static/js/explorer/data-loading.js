@@ -134,8 +134,8 @@
                 userName: identity.userName || '',
                 userEmail: identity.userEmail || '',
                 // Object operations
-                pendingEdits: Array.from(state.pendingEdits.entries()),
-                stagedMoves: Array.from(state.stagedMoves.entries()),
+                pendingEdits: Object.fromEntries(state.pendingEdits.entries()),
+                stagedMoves: Object.fromEntries(state.stagedMoves.entries()),
                 stagedCreations: state.stagedCreations,
                 newFiles: Array.from(state.newFiles),
                 stagedObjectDeletions: Array.from(state.stagedObjectDeletions),
@@ -200,15 +200,15 @@
                 Explorer.updateEditingLockedUI();
             }
 
-            // Object operations
+            // Object operations (dict format: {key: data, ...})
             if (data.pendingEdits) {
-                const validEdits = data.pendingEdits.filter(([key, edit]) => {
+                const validEdits = Object.entries(data.pendingEdits).filter(([key, edit]) => {
                     return edit && edit.object && edit.object.source_file;
                 });
                 state.pendingEdits = new Map(validEdits);
             }
             if (data.stagedMoves) {
-                state.stagedMoves = new Map(data.stagedMoves);
+                state.stagedMoves = new Map(Object.entries(data.stagedMoves));
             }
             if (data.stagedCreations) {
                 state.stagedCreations = data.stagedCreations;

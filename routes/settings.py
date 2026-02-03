@@ -14,7 +14,6 @@ from .helpers import (
     get_backup_manager,
 )
 from operation_logger import LogConfig
-from logging_config import save_config as save_logging_config
 from server_config import save_config as save_server_config, update_config as update_server_config
 from audit_service import (
     get_audit_log_dir,
@@ -252,7 +251,7 @@ def api_update_logging_settings():
         server_config.logging.max_backup_files = new_config.max_backup_files
 
     # Persist to config/settings.json
-    save_logging_config(new_config)
+    save_server_config(server_config)
     op_logger.reconfigure(new_config)
 
     return jsonify({'success': True, 'config': {

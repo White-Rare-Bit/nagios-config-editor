@@ -10,7 +10,7 @@ import multiprocessing
 from contextlib import contextmanager
 from typing import Dict, List, Optional
 
-from nagios_model import NagiosObject, NAME_FIELDS, OperationResult, format_object_block
+from nagios_model import NagiosObject, NAME_FIELDS, OperationResult, format_object_block, get_object_name
 from nagios_parser import NagiosConfigParser
 from file_operations import (
     edit_object_in_file, delete_object_from_file,
@@ -19,16 +19,40 @@ from file_operations import (
 )
 from staging_manager import (
     parse_stable_key,
-    get_object_name,
     StagingState,
     StagingManager,
-    _normalize_edit_entry,
-    _normalize_move_entry,
-    _normalize_deletion_entry
+    _ensure_dict_format
 )
 from pathlib import Path
 import os
 import shutil
+
+
+def _iterate_entries(data):
+    """Iterate over staging entries regardless of dict or list format.
+
+    Handles both formats:
+    - Dict format {key: entry_data, ...}: adds key/globalIndex to entry_data
+    - List format [{entry_data}, ...]: returns entries directly
+
+    Args:
+        data: Dict or list of staging entries
+
+    Returns:
+        Iterable of entry dicts with key/globalIndex populated
+    """
+    if isinstance(data, dict):
+        for key, entry in data.items():
+            if isinstance(entry, dict):
+                if 'globalIndex' not in entry and 'key' not in entry:
+                    entry['globalIndex'] = key
+                    entry['key'] = key
+                yield entry
+            else:
+                yield entry
+    elif isinstance(data, list):
+        for entry in data:
+            yield entry
 
 
 class NagiosService:
@@ -558,7 +582,7 @@ class NagiosService:
             objects_to_delete = []
 
             for deletion_entry in staged_deletions:
-                normalized = _normalize_deletion_entry(deletion_entry)
+                normalized = _ensure_dict_format(deletion_entry)
                 source_file = normalized.get('source_file')
                 line_number = normalized.get('line_number')
                 obj_type = normalized.get('object_type')
@@ -755,8 +779,8 @@ class NagiosService:
             obj_type, attrs, and insert_position keys
         """
         moves = []
-        for entry in staged_moves:
-            move_data = _normalize_move_entry(entry)
+        for entry in _iterate_entries(staged_moves):
+            move_data = _ensure_dict_format(entry)
             target_file = move_data.get('targetFile')
             obj_info = move_data.get('object', {})
             source_file = obj_info.get('source_file')
@@ -901,8 +925,8 @@ class NagiosService:
 
         if pending_edits:
             p = self.parser
-            for edit_entry in pending_edits:
-                edit_data = _normalize_edit_entry(edit_entry)
+            for edit_entry in _iterate_entries(pending_edits):
+                edit_data = _ensure_dict_format(edit_entry)
                 global_index = edit_data.get('globalIndex')
 
                 edited_attrs = edit_data.get('edited', {})

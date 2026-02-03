@@ -1178,6 +1178,25 @@ All modules loaded after main.js can access `Explorer.state` and call `Explorer.
 
 ## Decision Log
 
+### 2026-02-03: Backward Compatibility Removal
+
+**Context**: The staging system supported two entry formats for `pendingEdits` and `stagedMoves`: legacy list format `[[key, data], ...]` and dict format `{key: data, ...}`. This dual-format support required normalization functions and added code complexity.
+
+**Decision**: Remove all backward compatibility code in a single release:
+- Remove `_normalize_edit_entry()`, `_normalize_move_entry()`, `_normalize_deletion_entry()` functions
+- Remove directory backup support (zip-only)
+- Remove logging config migration from `logging_config.json`
+- Frontend sends dict format only via `Object.fromEntries()`
+
+**Rationale**: Aggressive cleanup reduces code paths, simplifies debugging, and eliminates ~100 lines of normalization code. The staging system now has a single clear contract: frontend sends dicts, backend expects dicts.
+
+**Breaking Changes**:
+- Old list format `[[key, data], ...]` returns 400 error with clear message
+- Directory-based backups can no longer be restored (zip format only)
+- Legacy `logging_config.json` no longer migrated automatically
+
+**Migration**: Users must clear staging before upgrade. Users with directory backups must manually copy files or convert to zip format.
+
 ### 2026-01-27: multiprocessing.Lock over threading.Lock
 
 **Context**: NagiosService and GitService need locking to protect multi-step mutations (e.g., write file then reload parser, git add then commit).

@@ -1442,9 +1442,8 @@
         }
 
         // C-08: Check if there are staged object moves targeting this file
-        const movesToThisFile = state.stagedMoves.filter(move => {
-            const targetFile = move[1]?.targetFile || move.targetFile;
-            return targetFile === filePath;
+        const movesToThisFile = [...state.stagedMoves.entries()].filter(([key, move]) => {
+            return move?.targetFile === filePath;
         });
 
         if (movesToThisFile.length > 0) {
@@ -1461,10 +1460,9 @@
             }
 
             // Remove the staged moves targeting this file
-            state.stagedMoves = state.stagedMoves.filter(move => {
-                const targetFile = move[1]?.targetFile || move.targetFile;
-                return targetFile !== filePath;
-            });
+            state.stagedMoves = new Map([...state.stagedMoves.entries()].filter(([key, move]) => {
+                return move?.targetFile !== filePath;
+            }));
         }
 
         // Delete file immediately via API
@@ -1499,9 +1497,8 @@
         }
 
         // C-08: Check if there are staged object moves targeting files in this folder
-        const movesToThisFolder = state.stagedMoves.filter(move => {
-            const targetFile = move[1]?.targetFile || move.targetFile;
-            return targetFile && targetFile.startsWith(folderPath + '/');
+        const movesToThisFolder = [...state.stagedMoves.entries()].filter(([key, move]) => {
+            return move?.targetFile && move.targetFile.startsWith(folderPath + '/');
         });
 
         if (movesToThisFolder.length > 0) {
@@ -1518,10 +1515,9 @@
             }
 
             // Remove the staged moves targeting files in this folder
-            state.stagedMoves = state.stagedMoves.filter(move => {
-                const targetFile = move[1]?.targetFile || move.targetFile;
-                return !targetFile || !targetFile.startsWith(folderPath + '/');
-            });
+            state.stagedMoves = new Map([...state.stagedMoves.entries()].filter(([key, move]) => {
+                return !move?.targetFile || !move.targetFile.startsWith(folderPath + '/');
+            }));
         }
 
         // Remove any new files (staged only) that are inside this folder

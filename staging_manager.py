@@ -24,13 +24,28 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from nagios_model import OperationResult, get_object_name
+from nagios_model import OperationResult
 
 # Current schema version for migration support
 STAGING_SCHEMA_VERSION = 2
 
 # Set up structured logging
 logger = logging.getLogger('nagios_bulk_editor.staging')
+
+
+def _ensure_dict_format(entry):
+    """Ensure entry is dict format, logging warning for non-dict entries.
+
+    Args:
+        entry: Entry that should be a dict
+
+    Returns:
+        The entry if it's a dict, otherwise empty dict
+    """
+    if not isinstance(entry, dict):
+        logger.warning(f"Non-dict entry encountered in staging data: type={type(entry).__name__}, preview={str(entry)[:100]}")
+        return {}
+    return entry
 
 
 # =============================================================================
@@ -177,8 +192,6 @@ class StagingState:
         status = StagingStatus.EMPTY
         if 'status' in data:
             status = StagingStatus(data['status'])
-        elif data.get('restorePending'):
-            status = StagingStatus.RESTORE_PENDING
         elif data.get('sessionId'):
             status = StagingStatus.ACTIVE
 
@@ -279,7 +292,7 @@ class StagingManager:
             return True
 
         # Legacy fallback: files without 'status' field
-        if not data.get('status') and not data.get('sessionId') and not data.get('restorePending'):
+        if not data.get('status') and not data.get('sessionId'):
             return True
 
         return False
@@ -567,9 +580,7 @@ class StagingManager:
 
         # Determine status from content if not explicitly set by caller
         if data.get('status') == StagingStatus.EMPTY.value:
-            if data.get('restorePending'):
-                data['status'] = StagingStatus.RESTORE_PENDING.value
-            elif data.get('sessionId'):
+            if data.get('sessionId'):
                 data['status'] = StagingStatus.ACTIVE.value
 
         return data
@@ -1142,8 +1153,7 @@ class StagingManager:
             'status': data.get('status', ''),
             'counts': counts,
             'totalCount': total_count,
-            'undoCount': len(data.get('undoStack', [])),
-            'undoStackLength': len(data.get('undoStack', []))  # Alias for frontend compatibility
+            'undoCount': len(data.get('undoStack', []))
         }
 
         # Include timestamp if available
@@ -1204,9 +1214,6 @@ def parse_stable_key(key: str) -> Optional[Dict[str, str]]:
     }
 
 
-# get_object_name is imported from nagios_model and re-exported for backward compatibility
-
-
 def generate_stable_key_for_object(obj: Any) -> str:
     """Generate a stable key for a NagiosObject.
 
@@ -1216,71 +1223,9 @@ def generate_stable_key_for_object(obj: Any) -> str:
     Returns:
         Stable key string
     """
+    from nagios_model import get_object_name
     name = get_object_name(obj.object_type, obj.attributes)
     return generate_stable_key(obj.source_file, obj.object_type, name)
-
-
-# =============================================================================
-# Staging Entry Normalization
-# =============================================================================
-
-def _normalize_edit_entry(entry):
-    """Normalize edit entry to dict format.
-
-    Handles two staging entry formats for backward compatibility:
-    - list [key, attrs]: original API format
-    - dict {key: ..., attrs: ...}: newer API format
-    Both must be preserved until frontend migration complete.
-    See Decision Log 'Two staging entry formats'.
-    """
-    if isinstance(entry, list) and len(entry) >= 2:
-        data = entry[1]
-        return {
-            'globalIndex': entry[0],
-            'object': data.get('object', {}),
-            'original': data.get('original', {}),
-            'edited': data.get('edited', {}),
-            'originalAttributes': data.get('originalAttributes', {}),
-            'newAttributes': data.get('newAttributes', {})
-        }
-    elif isinstance(entry, dict):
-        return entry
-    else:
-        return {}
-
-
-def _normalize_move_entry(entry):
-    """Normalize move entry to dict format.
-
-    See _normalize_edit_entry for format rationale.
-    """
-    if isinstance(entry, list) and len(entry) >= 2:
-        result = {
-            'key': entry[0],
-            'object': entry[1].get('object', {}),
-            'originalFile': entry[1].get('originalFile'),
-            'targetFile': entry[1].get('targetFile')
-        }
-        if 'insertPosition' in entry[1]:
-            result['insertPosition'] = entry[1]['insertPosition']
-        return result
-    elif isinstance(entry, dict):
-        return entry
-    else:
-        return {}
-
-
-def _normalize_deletion_entry(entry):
-    """Normalize deletion entry to dict format.
-
-    See _normalize_edit_entry for format rationale.
-    """
-    if isinstance(entry, dict):
-        return entry
-    elif isinstance(entry, (str, int)):
-        return {'key': str(entry)}
-    else:
-        return {}
 
 
 # =============================================================================
@@ -1292,38 +1237,46 @@ class UndoKeyError(ValueError):
     pass
 
 
-def _filter_staged_entries(entries, target_key, normalize_fn):
+def _filter_staged_entries(entries, target_key):
     """Filter staged entries, keeping those that don't match target_key.
 
-    C-05 FIX: Raises UndoKeyError if target_key is empty/None instead of
-    silently returning all entries (which would make undo appear successful
-    while actually removing nothing).
+    Handles both formats:
+    - Dict format {key: data, ...}: removes key from dict
+    - List format [{...}, ...]: filters list entries
+
+    Raises UndoKeyError if target_key is empty/None (prevents silent no-op).
 
     Args:
-        entries: List of staged entries to filter
+        entries: Dict or list of staged entries to filter
         target_key: Key to match for removal
-        normalize_fn: Function to normalize entry format
 
     Returns:
-        List of entries that don't match target_key
+        Filtered entries (same type as input)
 
     Raises:
         UndoKeyError: If target_key is None or empty string
     """
     if entries is None:
-        return []
+        return {} if isinstance(entries, dict) else []
 
-    # C-05 FIX: Raise error instead of silently returning unmodified entries
     if target_key is None or target_key == '':
         raise UndoKeyError(
             "Cannot filter staged entries with empty target_key. "
             "This indicates corrupted undo data or a bug in undo entry creation."
         )
 
+    # Dict format: remove key directly
+    if isinstance(entries, dict):
+        result = dict(entries)  # Copy to avoid mutation
+        str_key = str(target_key)
+        if str_key in result:
+            del result[str_key]
+        return result
+
+    # List format: filter entries
     filtered = []
     for entry in entries:
-        normalized = normalize_fn(entry)
-        entry_key = str(normalized.get('key', '')) or str(normalized.get('globalIndex', ''))
+        entry_key = str(entry.get('key', '')) or str(entry.get('globalIndex', ''))
         if entry_key != str(target_key):
             filtered.append(entry)
     return filtered
@@ -1395,7 +1348,7 @@ def _undo_edit(staging, action_data):
     # Entries use either dict-format (with 'key' field) or list-format (with 'globalIndex')
     edit_key = str(action_data['key']) if 'key' in action_data else str(action_data.get('globalIndex', ''))
     pending_edits = staging.get('pendingEdits', [])
-    staging['pendingEdits'] = _filter_staged_entries(pending_edits, edit_key, _normalize_edit_entry)
+    staging['pendingEdits'] = _filter_staged_entries(pending_edits, edit_key)
     return f"Unstaged edit: {action_data.get('object', {}).get('name', 'unknown')}"
 
 
@@ -1404,7 +1357,7 @@ def _undo_move(staging, action_data):
     # F-02: Use explicit None check instead of `or` to handle globalIndex=0 correctly
     move_key = str(action_data['key']) if 'key' in action_data else str(action_data.get('globalIndex', ''))
     staged_moves = staging.get('stagedMoves', [])
-    staging['stagedMoves'] = _filter_staged_entries(staged_moves, move_key, _normalize_move_entry)
+    staging['stagedMoves'] = _filter_staged_entries(staged_moves, move_key)
     return f"Unstaged move: {action_data.get('object', {}).get('name', 'unknown')}"
 
 
@@ -1424,7 +1377,7 @@ def _undo_deletion(staging, action_data):
     # F-02: Use explicit None check instead of `or` to handle globalIndex=0 correctly
     deletion_key = str(action_data['key']) if 'key' in action_data else str(action_data.get('globalIndex', ''))
     staged_deletions = staging.get('stagedObjectDeletions', [])
-    staging['stagedObjectDeletions'] = _filter_staged_entries(staged_deletions, deletion_key, _normalize_deletion_entry)
+    staging['stagedObjectDeletions'] = _filter_staged_entries(staged_deletions, deletion_key)
     return f"Unstaged deletion: {action_data.get('deletion', {}).get('name', 'unknown')}"
 
 
@@ -1445,7 +1398,7 @@ def _undo_bulk_move(staging, action_data):
         move_key = str(item['key']) if 'key' in item else str(item.get('globalIndex', ''))
         staged_moves = staging.get('stagedMoves', [])
         before_len = len(staged_moves)
-        staging['stagedMoves'] = _filter_staged_entries(staged_moves, move_key, _normalize_move_entry)
+        staging['stagedMoves'] = _filter_staged_entries(staged_moves, move_key)
         if len(staging['stagedMoves']) < before_len:
             count += 1
     return f"Unstaged bulk move: {count} object(s)"
@@ -1460,7 +1413,7 @@ def _undo_bulk_edit(staging, action_data):
         edit_key = str(item['key']) if 'key' in item else str(item.get('globalIndex', ''))
         pending_edits = staging.get('pendingEdits', [])
         before_len = len(pending_edits)
-        staging['pendingEdits'] = _filter_staged_entries(pending_edits, edit_key, _normalize_edit_entry)
+        staging['pendingEdits'] = _filter_staged_entries(pending_edits, edit_key)
         if len(staging['pendingEdits']) < before_len:
             count += 1
     return f"Unstaged bulk edit: {count} object(s)"
@@ -1489,7 +1442,7 @@ def _undo_bulk_deletion(staging, action_data):
         deletion_key = str(item['key']) if 'key' in item else str(item.get('globalIndex', ''))
         staged_deletions = staging.get('stagedObjectDeletions', [])
         before_len = len(staged_deletions)
-        staging['stagedObjectDeletions'] = _filter_staged_entries(staged_deletions, deletion_key, _normalize_deletion_entry)
+        staging['stagedObjectDeletions'] = _filter_staged_entries(staged_deletions, deletion_key)
         if len(staging['stagedObjectDeletions']) < before_len:
             count += 1
     return f"Unstaged bulk deletion: {count} object(s)"
