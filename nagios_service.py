@@ -507,9 +507,9 @@ class NagiosService:
         for op in folder_creations:
             folder_path = op.get('path')
             if folder_path:
-                safe, err = is_safe_path_func(folder_path, self._config_path)
-                if not safe:
-                    errors.append(f"Unsafe folder path {folder_path}: {err}")
+                safe_result = is_safe_path_func(folder_path, self._config_path)
+                if not safe_result.success:
+                    errors.append(f"Unsafe folder path {folder_path}: {safe_result.error}")
                     continue
                 try:
                     os.makedirs(folder_path, exist_ok=True)
@@ -532,9 +532,9 @@ class NagiosService:
         for op in file_creations:
             file_path = op.get('path')
             if file_path:
-                safe, err = is_safe_path_func(file_path, self._config_path)
-                if not safe:
-                    errors.append(f"Unsafe file path {file_path}: {err}")
+                safe_result = is_safe_path_func(file_path, self._config_path)
+                if not safe_result.success:
+                    errors.append(f"Unsafe file path {file_path}: {safe_result.error}")
                     continue
                 try:
                     parent_dir = os.path.dirname(file_path)
@@ -551,9 +551,9 @@ class NagiosService:
         for file_path in new_files:
             if not os.path.isabs(file_path):
                 file_path = os.path.join(self._config_path, file_path)
-            safe, err = is_safe_path_func(file_path, self._config_path)
-            if not safe:
-                errors.append(f"Unsafe file path {file_path}: {err}")
+            safe_result = is_safe_path_func(file_path, self._config_path)
+            if not safe_result.success:
+                errors.append(f"Unsafe file path {file_path}: {safe_result.error}")
                 continue
             try:
                 parent_dir = os.path.dirname(file_path)
@@ -1037,13 +1037,13 @@ class NagiosService:
             source_path = op.get('sourcePath')
             target_path = op.get('targetPath')
             if source_path and target_path:
-                safe_src, err_src = is_safe_path_func(source_path, self._config_path)
-                safe_tgt, err_tgt = is_safe_path_func(target_path, self._config_path)
-                if not safe_src:
-                    errors.append(f"Unsafe source path {source_path}: {err_src}")
+                safe_src_result = is_safe_path_func(source_path, self._config_path)
+                safe_tgt_result = is_safe_path_func(target_path, self._config_path)
+                if not safe_src_result.success:
+                    errors.append(f"Unsafe source path {source_path}: {safe_src_result.error}")
                     continue
-                if not safe_tgt:
-                    errors.append(f"Unsafe target path {target_path}: {err_tgt}")
+                if not safe_tgt_result.success:
+                    errors.append(f"Unsafe target path {target_path}: {safe_tgt_result.error}")
                     continue
                 try:
                     target_dir = os.path.dirname(target_path)
@@ -1072,13 +1072,13 @@ class NagiosService:
             source_path = op.get('sourcePath')
             target_path = op.get('targetPath')
             if source_path and target_path:
-                safe_src, err_src = is_safe_path_func(source_path, self._config_path)
-                safe_tgt, err_tgt = is_safe_path_func(target_path, self._config_path)
-                if not safe_src:
-                    errors.append(f"Unsafe source path {source_path}: {err_src}")
+                safe_src_result = is_safe_path_func(source_path, self._config_path)
+                safe_tgt_result = is_safe_path_func(target_path, self._config_path)
+                if not safe_src_result.success:
+                    errors.append(f"Unsafe source path {source_path}: {safe_src_result.error}")
                     continue
-                if not safe_tgt:
-                    errors.append(f"Unsafe target path {target_path}: {err_tgt}")
+                if not safe_tgt_result.success:
+                    errors.append(f"Unsafe target path {target_path}: {safe_tgt_result.error}")
                     continue
                 try:
                     target_parent = os.path.dirname(target_path)
@@ -1106,9 +1106,9 @@ class NagiosService:
         for op in file_deletions:
             file_path = op.get('path')
             if file_path and os.path.isfile(file_path):
-                safe, err = is_safe_path_func(file_path, self._config_path)
-                if not safe:
-                    errors.append(f"Unsafe file path {file_path}: {err}")
+                safe_result = is_safe_path_func(file_path, self._config_path)
+                if not safe_result.success:
+                    errors.append(f"Unsafe file path {file_path}: {safe_result.error}")
                     continue
                 try:
                     os.remove(file_path)
@@ -1133,9 +1133,9 @@ class NagiosService:
         for op in folder_deletions:
             folder_path = op.get('path')
             if folder_path and os.path.isdir(folder_path):
-                safe, err = is_safe_path_func(folder_path, self._config_path)
-                if not safe:
-                    errors.append(f"Unsafe folder path {folder_path}: {err}")
+                safe_result = is_safe_path_func(folder_path, self._config_path)
+                if not safe_result.success:
+                    errors.append(f"Unsafe folder path {folder_path}: {safe_result.error}")
                     continue
                 try:
                     shutil.rmtree(folder_path)

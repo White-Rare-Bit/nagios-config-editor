@@ -245,15 +245,18 @@ function showToast(message, type = 'info', duration = 3000) {
                                lowerMessage.includes('cleared') ||
                                lowerMessage.includes('wiped') ||
                                lowerMessage.includes('configure') ||
-                               lowerMessage.includes('settings');
+                               lowerMessage.includes('settings') ||
+                               lowerMessage.includes('already exists') ||
+                               lowerMessage.includes('duplicate') ||
+                               lowerMessage.includes('cannot contain');
 
-    if (type === 'info' || type === 'warning') {
+    // Always show error and warning messages - they indicate something user should know
+    if (type === 'error' || type === 'warning') {
+        // Allow through
+    } else if (type === 'info' || type === 'success') {
         if (!isImportantMessage) {
             return null;
         }
-    }
-    if (type === 'success' && !isImportantMessage) {
-        return null;
     }
 
     const container = document.getElementById('toastContainer');
