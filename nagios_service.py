@@ -582,6 +582,13 @@ class NagiosService:
             objects_to_delete = []
 
             for deletion_entry in staged_deletions:
+                # Handle integer global_index directly (frontend sends Array.from(Set))
+                if isinstance(deletion_entry, int):
+                    if 0 <= deletion_entry < len(p.objects):
+                        obj = p.objects[deletion_entry]
+                        objects_to_delete.append((obj.source_file, obj.line_number, obj.object_type, obj))
+                    continue
+
                 normalized = _ensure_dict_format(deletion_entry)
                 source_file = normalized.get('source_file')
                 line_number = normalized.get('line_number')
