@@ -8,10 +8,4 @@ sample-config/
 logs/
 config/
 
-# Node modules and frontend test artifacts
-node_modules/
-coverage/
-.npm/
-*.log
-.coverage
 .claude/

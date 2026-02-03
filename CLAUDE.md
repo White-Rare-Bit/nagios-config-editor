@@ -12,24 +12,6 @@ pip install -r requirements.txt
 Dependencies:
 - `flask>=2.0.0,<4.0.0` - Web framework
 
-### Frontend Testing (Jest)
-
-```bash
-# Install Node.js dependencies
-npm install
-
-# Run tests with coverage
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-```
-
-Test configuration in `package.json`:
-- Test environment: jsdom
-- Coverage: `static/**/*.js`
-- Test files: `tests/frontend/**/*.test.js`
-
 ### Running the Application
 
 ```bash
@@ -45,16 +27,6 @@ python3 app.py
 - Click/interact using `ref`, not coordinates
 - NEVER take screenshots unless explicitly requested by the user
 
-```
-
-### Running Backend Tests
-
-```bash
-# Run pytest
-python3 -m pytest tests/ --tb=short -q
-
-# Run with coverage
-python3 -m pytest tests/ --cov=. --cov-report=term-missing
 ```
 
 ## Backend Architecture Patterns
@@ -982,60 +954,6 @@ if op_logger:
 ```
 
 Log levels: DEBUG (parser reload), INFO (successful operations), WARNING (retries, partial failures), ERROR (failures).
-
-## Testing Patterns
-
-### Isolated App Instances
-
-Each test gets fresh app instance:
-
-```python
-def test_feature():
-    app = create_app(config_path='./test-config')
-    with app.test_client() as client:
-        response = client.get('/api/objects')
-        assert response.status_code == 200
-```
-
-Services reinitialized per test, no shared state.
-
-### Parser Reload After Mutation
-
-Service automatically reloads parser after writes:
-
-```python
-def update_object(self, source_file, line_number, new_attrs, obj_type):
-    with self._lock:
-        result = edit_object_in_file(...)
-        # Automatic reload
-        self._parser = NagiosConfigParser(self._config_path)
-        self._parser.parse_all()
-        return OperationResult(True)
-```
-
-Tests see changes immediately without manual reload.
-
-### Fixture Patterns
-
-Common test fixtures:
-
-```python
-@pytest.fixture
-def app():
-    """Fresh app instance with test config."""
-    return create_app('./test-config')
-
-@pytest.fixture
-def client(app):
-    """Test client for making requests."""
-    return app.test_client()
-
-@pytest.fixture
-def parser(app):
-    """Parser for test config."""
-    with app.app_context():
-        return get_service().parser
-```
 
 ## Key Service Functions
 
