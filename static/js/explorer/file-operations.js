@@ -1611,6 +1611,14 @@
             return;
         }
 
+        // Validate for invalid filename characters (excluding trailing / for folders)
+        const nameToValidate = name.endsWith('/') ? name.slice(0, -1) : name;
+        const invalidChars = /[\/\\:*?"<>|]/;
+        if (invalidChars.test(nameToValidate)) {
+            showToast('Name cannot contain / \\ : * ? " < > |', 'error');
+            return;
+        }
+
         let basePath = state.configPath;
 
         const isFolder = name.endsWith('/');
@@ -1734,6 +1742,15 @@
 
     async function confirmInlineCreate(type, name, row) {
         if (!name) {
+            row.remove();
+            return;
+        }
+
+        // Validate for invalid filename characters
+        const nameToValidate = name.endsWith('/') ? name.slice(0, -1) : name;
+        const invalidChars = /[\/\\:*?"<>|]/;
+        if (invalidChars.test(nameToValidate)) {
+            showToast('Name cannot contain / \\ : * ? " < > |', 'error');
             row.remove();
             return;
         }

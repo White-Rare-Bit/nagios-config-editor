@@ -253,14 +253,26 @@ def api_create_object():
 
     # Security check - validate target_file is within config directory
     config_path = get_config_path()
-    is_safe, error_msg = is_safe_path(target_file, config_path)
-    if not is_safe:
-        return jsonify({'error': error_msg}), 400
+    safe_result = is_safe_path(target_file, config_path)
+    if not safe_result.success:
+        return jsonify({'error': safe_result.error}), 400
 
     # Validate template references match object type
     is_valid, tmpl_error = validate_template_references(object_type, attributes)
     if not is_valid:
         return jsonify({'error': tmpl_error}), 400
+
+    # Check for duplicate object names
+    name_field = NAME_FIELDS.get(object_type, 'name')
+    object_name = attributes.get(name_field, '').strip()
+    if object_name:
+        service = get_service()
+        for obj in service.get_objects():
+            if obj.object_type == object_type and obj.get_name() == object_name:
+                return jsonify({
+                    'error': f'{object_type.capitalize()} "{object_name}" already exists in {obj.source_file}',
+                    'duplicate': True
+                }), 409
 
     # Normalize the target_file path
     if not os.path.isabs(target_file):

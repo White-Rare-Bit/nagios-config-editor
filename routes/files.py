@@ -17,8 +17,12 @@ from file_operations import is_safe_path as file_ops_is_safe_path
 bp = Blueprint('files', __name__)
 
 
-def is_safe_path(path: str, base_dir: str = None) -> tuple:
-    """Wrapper that provides get_config_path() as default for base_dir."""
+def is_safe_path(path: str, base_dir: str = None):
+    """Wrapper that provides get_config_path() as default for base_dir.
+
+    Returns:
+        OperationResult with success=True if safe, success=False with error if unsafe.
+    """
     if base_dir is None:
         base_dir = get_config_path()
     return file_ops_is_safe_path(path, base_dir)
@@ -113,10 +117,16 @@ def api_create_file():
     if not file_path.endswith('.cfg'):
         file_path += '.cfg'
 
+    # Validate filename doesn't contain invalid characters (path separators in filename part)
+    filename = os.path.basename(file_path)
+    import re
+    if re.search(r'[\\:*?"<>|]', filename):
+        return jsonify({'error': 'Filename cannot contain \\ : * ? " < > |'}), 400
+
     # Security check - validate path is within config directory
-    is_safe, error_msg = is_safe_path(file_path)
-    if not is_safe:
-        return jsonify({'error': error_msg}), 400
+    safe_result = is_safe_path(file_path)
+    if not safe_result.success:
+        return jsonify({'error': safe_result.error}), 400
 
     # Normalize the path
     config_path = get_config_path()
@@ -163,6 +173,12 @@ def api_create_folder():
 
     if not folder_path:
         return jsonify({'error': 'path required'}), 400
+
+    # Validate folder name doesn't contain invalid characters
+    folder_name = os.path.basename(folder_path.rstrip('/'))
+    import re
+    if re.search(r'[\\:*?"<>|]', folder_name):
+        return jsonify({'error': 'Folder name cannot contain \\ : * ? " < > |'}), 400
 
     # Security: ensure path is within config directory
     config_path = get_config_path()

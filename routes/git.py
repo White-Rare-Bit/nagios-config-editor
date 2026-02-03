@@ -141,9 +141,9 @@ def api_git_diff():
     context_lines = data.get('contextLines')
 
     if filepath:
-        safe, msg = is_safe_path(filepath, config_path)
-        if not safe:
-            return jsonify({'error': msg}), 400
+        safe_result = is_safe_path(filepath, config_path)
+        if not safe_result.success:
+            return jsonify({'error': safe_result.error}), 400
 
     try:
         git_svc = get_git_service()
@@ -214,11 +214,11 @@ def api_git_commit():
         # Validate file paths if specific files given
         if files:
             for filepath in files:
-                safe, msg = is_safe_path(filepath, config_path)
-                if not safe:
+                safe_result = is_safe_path(filepath, config_path)
+                if not safe_result.success:
                     if op_log:
-                        op_log.warning('git', 'commit', params={'file': filepath}, error=f'path_validation_failed: {msg}')
-                    return jsonify({'error': f'Invalid file path: {msg}'}), 400
+                        op_log.warning('git', 'commit', params={'file': filepath}, error=f'path_validation_failed: {safe_result.error}')
+                    return jsonify({'error': f'Invalid file path: {safe_result.error}'}), 400
 
         git_svc = get_git_service()
 
@@ -330,11 +330,11 @@ def api_git_discard():
             }), 423
 
     # Security check
-    safe, msg = is_safe_path(filepath, config_path)
-    if not safe:
+    safe_result = is_safe_path(filepath, config_path)
+    if not safe_result.success:
         if op_log:
-            op_log.warning('git', 'discard_file', params={'file': filepath}, error=f'path_validation_failed: {msg}')
-        return jsonify({'error': msg}), 400
+            op_log.warning('git', 'discard_file', params={'file': filepath}, error=f'path_validation_failed: {safe_result.error}')
+        return jsonify({'error': safe_result.error}), 400
 
     try:
         git_svc = get_git_service()

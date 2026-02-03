@@ -22,6 +22,53 @@ def set_logger(logger):
     _op_logger = logger
 
 
+def _compute_checksum(content: str) -> str:
+    """Compute SHA256 checksum of content string."""
+    import hashlib
+    return hashlib.sha256(content.encode('utf-8')).hexdigest()
+
+
+def _normalize_block_spacing(before: str, middle: str, after: str) -> str:
+    """Join content sections with normalized spacing between define blocks.
+
+    Rules:
+    - 2 blank lines between blocks
+    - 1 trailing newline at EOF
+    - Strip excess whitespace from section boundaries
+
+    Args:
+        before: Content before the insertion/deletion point
+        middle: New block content (empty string for deletions)
+        after: Content after the insertion/deletion point
+
+    Returns:
+        Normalized content with proper spacing
+    """
+    before = before.rstrip('\n')
+    after = after.lstrip('\n')
+
+    if middle:
+        # Insertion or replacement
+        if before and after:
+            return f"{before}\n\n{middle}\n\n{after}"
+        elif before:
+            return f"{before}\n\n{middle}\n"
+        elif after:
+            return f"{middle}\n\n{after}"
+        else:
+            return f"{middle}\n"
+    else:
+        # Deletion
+        if before and after:
+            return f"{before}\n\n{after}"
+        elif before:
+            return f"{before}\n"
+        elif after:
+            return after
+        else:
+            return ''
+
+
 def find_block_range(content: str, target_line: int) -> Optional[Tuple[int, int]]:
     """Find the character range of a define block at or containing target_line.
 
@@ -124,8 +171,20 @@ def find_block_line_range(content: str, target_line: int) -> Optional[Tuple[int,
 
 
 def edit_object_in_file(file_path: str, line_number: int, new_attrs: Dict[str, str],
-                        obj_type: str) -> OperationResult:
-    """Edit an object in place in its file."""
+                        obj_type: str, expected_checksum: Optional[str] = None) -> OperationResult:
+    """Edit an object in place in its file.
+
+    Args:
+        file_path: Path to the file containing the object
+        line_number: Line number of the object to edit
+        new_attrs: New attributes for the object
+        obj_type: Type of the object (e.g., 'host', 'service')
+        expected_checksum: If provided, validates file hasn't changed since staging began.
+                          Returns conflict error if checksum doesn't match.
+
+    Returns:
+        OperationResult with success=True on success, or error details on failure
+    """
     if _op_logger:
         _op_logger.debug('file_op', 'edit_object_in_file', params={'file_path': file_path, 'line_number': line_number, 'obj_type': obj_type})
     path = Path(file_path)
@@ -134,6 +193,11 @@ def edit_object_in_file(file_path: str, line_number: int, new_attrs: Dict[str, s
 
     try:
         content = path.read_text()
+        if expected_checksum is not None:
+            actual_checksum = _compute_checksum(content)
+            if actual_checksum != expected_checksum:
+                return OperationResult(False,
+                    f"Conflict: {file_path} was modified externally. Aborting to prevent data loss.")
     except (IOError, OSError) as e:
         return OperationResult(False, f"Read error: {e}")
 
@@ -153,8 +217,19 @@ def edit_object_in_file(file_path: str, line_number: int, new_attrs: Dict[str, s
     return OperationResult(True)
 
 
-def delete_object_from_file(file_path: str, line_number: int) -> OperationResult:
-    """Delete an object from its file."""
+def delete_object_from_file(file_path: str, line_number: int,
+                            expected_checksum: Optional[str] = None) -> OperationResult:
+    """Delete an object from its file.
+
+    Args:
+        file_path: Path to the file containing the object
+        line_number: Line number of the object to delete
+        expected_checksum: If provided, validates file hasn't changed since staging began.
+                          Returns conflict error if checksum doesn't match.
+
+    Returns:
+        OperationResult with success=True on success, or error details on failure
+    """
     if _op_logger:
         _op_logger.debug('file_op', 'delete_object_from_file', params={'file_path': file_path, 'line_number': line_number})
     path = Path(file_path)
@@ -163,6 +238,11 @@ def delete_object_from_file(file_path: str, line_number: int) -> OperationResult
 
     try:
         content = path.read_text()
+        if expected_checksum is not None:
+            actual_checksum = _compute_checksum(content)
+            if actual_checksum != expected_checksum:
+                return OperationResult(False,
+                    f"Conflict: {file_path} was modified externally. Aborting to prevent data loss.")
     except (IOError, OSError) as e:
         return OperationResult(False, f"Read error: {e}")
 
@@ -171,18 +251,7 @@ def delete_object_from_file(file_path: str, line_number: int) -> OperationResult
         return OperationResult(False, f"Could not find define block at line {line_number} in {file_path}")
 
     start_char, end_char = block_range
-
-    before = content[:start_char].rstrip('\n')
-    after = content[end_char:].lstrip('\n')
-
-    if before and after:
-        new_content = before + '\n\n' + after
-    elif before:
-        new_content = before + '\n'
-    elif after:
-        new_content = after
-    else:
-        new_content = ''
+    new_content = _normalize_block_spacing(content[:start_char], '', content[end_char:])
 
     try:
         path.write_text(new_content)
@@ -193,14 +262,29 @@ def delete_object_from_file(file_path: str, line_number: int) -> OperationResult
 
 
 def add_object_to_file(file_path: str, obj_type: str, attrs: Dict[str, str],
-                       after_block_line: Optional[int] = None) -> OperationResult:
-    """Add a new object to a file, inserting after a specific block."""
+                       after_block_line: Optional[int] = None,
+                       expected_checksum: Optional[str] = None) -> OperationResult:
+    """Add a new object to a file, inserting after a specific block.
+
+    Args:
+        file_path: Path to the file to add the object to
+        obj_type: Type of the object (e.g., 'host', 'service')
+        attrs: Attributes for the new object
+        after_block_line: Line number of the block to insert after (0 = beginning, None = end)
+        expected_checksum: If provided, validates file hasn't changed since staging began.
+                          Returns conflict error if checksum doesn't match.
+                          Only applies to existing files.
+
+    Returns:
+        OperationResult with success=True on success, or error details on failure
+    """
     if _op_logger:
         _op_logger.debug('file_op', 'add_object_to_file', params={'file_path': file_path, 'obj_type': obj_type})
     path = Path(file_path)
     new_block = format_object_block(obj_type, attrs)
 
     if not path.exists():
+        # New file - no checksum validation needed
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(new_block + '\n')
@@ -210,15 +294,17 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: Dict[str, str],
 
     try:
         content = path.read_text()
+        if expected_checksum is not None:
+            actual_checksum = _compute_checksum(content)
+            if actual_checksum != expected_checksum:
+                return OperationResult(False,
+                    f"Conflict: {file_path} was modified externally. Aborting to prevent data loss.")
     except (IOError, OSError) as e:
         return OperationResult(False, f"Read error: {e}")
 
     if after_block_line == 0:
-        after = content.lstrip('\n')
-        if after:
-            new_content = new_block + '\n\n' + after
-        else:
-            new_content = new_block + '\n'
+        # Insert at beginning
+        new_content = _normalize_block_spacing('', new_block, content)
     elif after_block_line is not None and after_block_line > 0:
         block_range = find_block_range(content, after_block_line)
 
@@ -226,26 +312,14 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: Dict[str, str],
             start_char, end_char = block_range
             before = content[:end_char]
             after = content[end_char:]
-
-            before = before.rstrip('\n')
-            after = after.lstrip('\n')
-
-            if after:
-                new_content = before + '\n\n' + new_block + '\n\n' + after
-            else:
-                new_content = before + '\n\n' + new_block + '\n'
+            # Insert after the found block
+            new_content = _normalize_block_spacing(before, new_block, after)
         else:
-            content = content.rstrip('\n')
-            if content:
-                new_content = content + '\n\n' + new_block + '\n'
-            else:
-                new_content = new_block + '\n'
+            # Block not found, append to end
+            new_content = _normalize_block_spacing(content, new_block, '')
     else:
-        content = content.rstrip('\n')
-        if content:
-            new_content = content + '\n\n' + new_block + '\n'
-        else:
-            new_content = new_block + '\n'
+        # Append to end
+        new_content = _normalize_block_spacing(content, new_block, '')
 
     try:
         path.write_text(new_content)
@@ -311,6 +385,8 @@ def move_object_between_files(source_file: str, source_line: int,
         del_result = delete_object_from_file(source_file, source_line)
         if not del_result.success:
             # Rollback: remove the object we just added to target
+            rollback_failed = False
+            rollback_error = None
             try:
                 target_content = Path(target_file).read_text()
                 target_block = format_object_block(obj_type, attrs)
@@ -318,14 +394,26 @@ def move_object_between_files(source_file: str, source_line: int,
                     rollback_content = target_content.replace(target_block, '', 1)
                     rollback_content = re.sub(r'\n{3,}', '\n\n', rollback_content)
                     Path(target_file).write_text(rollback_content)
-            except (IOError, OSError):
-                pass
+                if _op_logger:
+                    _op_logger.info('file_op', 'move_rollback',
+                                   params={'target': target_file}, result='success')
+            except (IOError, OSError) as e:
+                rollback_failed = True
+                rollback_error = str(e)
+                if _op_logger:
+                    _op_logger.error('file_op', 'move_rollback',
+                                    params={'target': target_file}, error=rollback_error)
+
+            if rollback_failed:
+                return OperationResult(False,
+                    f"Failed to delete from source: {del_result.error}. "
+                    f"CRITICAL: Rollback failed, object may be duplicated in both files: {rollback_error}")
             return OperationResult(False, f"Failed to delete from source after add: {del_result.error}")
 
     return OperationResult(True)
 
 
-def is_safe_path(path: str, base_dir: Optional[str] = None) -> tuple[bool, str]:
+def is_safe_path(path: str, base_dir: Optional[str] = None) -> OperationResult:
     """
     Validate that a path is safe and within the allowed directory.
 
@@ -340,14 +428,14 @@ def is_safe_path(path: str, base_dir: Optional[str] = None) -> tuple[bool, str]:
         base_dir: The base directory paths must be within (required when called from file_operations)
 
     Returns:
-        Tuple of (is_safe, error_message). If safe, error_message is empty.
+        OperationResult with success=True if safe, success=False with error if unsafe.
     """
     if base_dir is None:
-        return False, "base_dir parameter is required"
+        return OperationResult(False, "base_dir parameter is required")
 
     # Check for null bytes
     if '\x00' in path:
-        return False, "Path contains null bytes"
+        return OperationResult(False, "Path contains null bytes")
 
     # Resolve the base directory to handle symlinked config directories (e.g., /tmp -> /private/tmp)
     base_dir_resolved = os.path.realpath(os.path.abspath(os.path.normpath(base_dir)))
@@ -381,12 +469,12 @@ def is_safe_path(path: str, base_dir: Optional[str] = None) -> tuple[bool, str]:
     try:
         common = os.path.commonpath([base_dir_resolved, resolved_normalized])
         if common != base_dir_resolved:
-            return False, "Path must be within config directory"
+            return OperationResult(False, "Path must be within config directory")
     except ValueError:
         # Different drives on Windows
-        return False, "Path must be within config directory"
+        return OperationResult(False, "Path must be within config directory")
 
-    return True, ""
+    return OperationResult(True)
 
 
 def generate_diff(old_content: str, new_content: str, filename: str = '') -> List[str]:

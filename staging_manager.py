@@ -235,6 +235,487 @@ class StagingState:
         ])
 
 
+# =============================================================================
+# Composed Manager Classes
+# =============================================================================
+
+class ChecksumManager:
+    """Manages file checksums and conflict detection.
+
+    Extracted from StagingManager to reduce class responsibilities.
+    Requires a reference to the parent StagingManager for staging data access.
+    """
+
+    def __init__(self, staging_manager: 'StagingManager'):
+        """Initialize with reference to parent staging manager.
+
+        Args:
+            staging_manager: Parent StagingManager instance for staging data access
+        """
+        self._sm = staging_manager
+
+    def compute_file_checksum(self, file_path: str) -> Optional[str]:
+        """Compute SHA256 checksum of a file.
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            Hex digest of SHA256 hash, or None if file doesn't exist
+        """
+        try:
+            path = Path(file_path)
+            if not path.exists():
+                return None
+            return hashlib.sha256(path.read_bytes()).hexdigest()
+        except (IOError, OSError) as e:
+            logger.warning(f"Failed to compute checksum for {file_path}: {e}")
+            return None
+
+    def compute_base_checksums(self, file_paths: Optional[List[str]] = None) -> Dict[str, str]:
+        """Compute and store checksums for files that will be modified.
+
+        This should be called when staging first begins to capture the
+        "base" state of files before modifications.
+
+        Args:
+            file_paths: List of file paths to checksum. If None, checksums
+                       all .cfg files in config directory.
+
+        Returns:
+            Dictionary of {path: checksum}
+        """
+        checksums = {}
+
+        if file_paths is None:
+            # Checksum all .cfg files in config directory
+            for cfg_file in self._sm.config_path.rglob('*.cfg'):
+                if '.staging' not in str(cfg_file):
+                    checksum = self.compute_file_checksum(str(cfg_file))
+                    if checksum:
+                        checksums[str(cfg_file)] = checksum
+        else:
+            for file_path in file_paths:
+                checksum = self.compute_file_checksum(file_path)
+                if checksum:
+                    checksums[file_path] = checksum
+
+        return checksums
+
+    def update_base_checksums(self, file_paths: List[str]) -> OperationResult:
+        """Update base checksums for specific files.
+
+        Called when a file is first staged for modification.
+
+        Args:
+            file_paths: Paths to update checksums for
+
+        Returns:
+            OperationResult with success status
+        """
+        staging = self._sm.get_staging()
+        if not staging:
+            return OperationResult(False, "No staging data")
+
+        staging = self._sm.migrate_staging_schema(staging)
+        base_checksums = staging.get('baseFileChecksums', {})
+
+        for file_path in file_paths:
+            # Only store checksum if we don't already have one for this file
+            # (preserve the original base state)
+            if file_path not in base_checksums:
+                checksum = self.compute_file_checksum(file_path)
+                if checksum:
+                    base_checksums[file_path] = checksum
+
+        staging['baseFileChecksums'] = base_checksums
+        return self._sm.save_staging(staging)
+
+    def detect_conflicts(self) -> List[Dict[str, Any]]:
+        """Detect files that have been modified externally since staging began.
+
+        Compares current file checksums against stored base checksums.
+
+        Returns:
+            List of conflict dictionaries: [{path, baseChecksum, currentChecksum}]
+        """
+        staging = self._sm.get_staging()
+        if not staging:
+            return []
+
+        base_checksums = staging.get('baseFileChecksums', {})
+        conflicts = []
+
+        for file_path, base_checksum in base_checksums.items():
+            current_checksum = self.compute_file_checksum(file_path)
+
+            # File was deleted externally
+            if current_checksum is None:
+                conflicts.append({
+                    'path': file_path,
+                    'baseChecksum': base_checksum,
+                    'currentChecksum': None,
+                    'type': 'deleted'
+                })
+            # File was modified externally
+            elif current_checksum != base_checksum:
+                conflicts.append({
+                    'path': file_path,
+                    'baseChecksum': base_checksum,
+                    'currentChecksum': current_checksum,
+                    'type': 'modified'
+                })
+
+        return conflicts
+
+
+class UndoStackManager:
+    """Manages the undo stack for staging operations.
+
+    Extracted from StagingManager to reduce class responsibilities.
+    Requires a reference to the parent StagingManager for staging data access.
+    """
+
+    def __init__(self, staging_manager: 'StagingManager'):
+        """Initialize with reference to parent staging manager.
+
+        Args:
+            staging_manager: Parent StagingManager instance for staging data access
+        """
+        self._sm = staging_manager
+
+    def add_to_undo_stack(self, action_type: str, data: Dict, description: str, staging: Optional[Dict] = None) -> Optional[str]:
+        """Add an action to the undo stack.
+
+        Args:
+            action_type: Type of action (e.g., 'edit', 'move', 'create', 'delete',
+                        'file_create', 'file_delete', 'file_move', etc.)
+            data: Data needed to reverse the action
+            description: Human-readable description of the action
+            staging: Optional staging dict to modify (if None, reads fresh and saves)
+
+        Returns:
+            The ID of the undo entry, or None if failed
+        """
+        save_after = False
+        if staging is None:
+            staging = self._sm.get_staging()
+            if not staging:
+                return None
+            staging = self._sm.migrate_staging_schema(staging)
+            save_after = True
+
+        undo_id = str(uuid.uuid4())[:8]
+        undo_entry = {
+            'id': undo_id,
+            'type': action_type,
+            'data': data,
+            'description': description,
+            'timestamp': time.time()
+        }
+
+        staging['undoStack'].append(undo_entry)
+
+        if save_after:
+            if self._sm.save_staging(staging).success:
+                logger.debug(f"Added undo entry: {action_type} - {description}")
+                return undo_id
+            return None
+        else:
+            logger.debug(f"Queued undo entry: {action_type} - {description}")
+            return undo_id
+
+    def peek_undo_stack(self) -> Optional[Dict]:
+        """Peek at the last action from the undo stack without removing it.
+
+        C-04 FIX: Used for atomic undo operations - peek first, then remove
+        only after successfully applying the reversal and saving.
+
+        Returns:
+            The undo entry, or None if stack is empty
+        """
+        staging = self._sm.get_staging()
+        if not staging:
+            return None
+
+        staging = self._sm.migrate_staging_schema(staging)
+        undo_stack = staging.get('undoStack', [])
+
+        if not undo_stack:
+            return None
+
+        return undo_stack[-1]
+
+    def pop_undo_stack(self) -> Optional[Dict]:
+        """Pop and return the last action from the undo stack.
+
+        NOTE: Prefer using peek_undo_stack() + manual removal in atomic operations
+        to avoid data loss if subsequent operations fail.
+
+        Returns:
+            The undo entry, or None if stack is empty or failed
+        """
+        staging = self._sm.get_staging()
+        if not staging:
+            return None
+
+        staging = self._sm.migrate_staging_schema(staging)
+        undo_stack = staging.get('undoStack', [])
+
+        if not undo_stack:
+            return None
+
+        undo_entry = undo_stack.pop()
+        staging['undoStack'] = undo_stack
+
+        if self._sm.save_staging(staging).success:
+            logger.debug(f"Popped undo entry: {undo_entry.get('type')} - {undo_entry.get('description')}")
+            return undo_entry
+        return None
+
+    def get_undo_stack_count(self) -> int:
+        """Get the number of items in the undo stack.
+
+        Returns:
+            Count of undoable actions
+        """
+        staging = self._sm.get_staging()
+        if not staging:
+            return 0
+        return len(staging.get('undoStack', []))
+
+    def clear_undo_stack(self) -> OperationResult:
+        """Clear the undo stack.
+
+        Returns:
+            OperationResult with success status
+        """
+        staging = self._sm.get_staging()
+        if not staging:
+            return OperationResult(True)
+
+        staging['undoStack'] = []
+        return self._sm.save_staging(staging)
+
+
+class FileOperationsStager:
+    """Manages staging of file and folder operations.
+
+    Extracted from StagingManager to reduce class responsibilities.
+    Requires a reference to the parent StagingManager for staging data access.
+    """
+
+    def __init__(self, staging_manager: 'StagingManager'):
+        """Initialize with reference to parent staging manager.
+
+        Args:
+            staging_manager: Parent StagingManager instance for staging data access
+        """
+        self._sm = staging_manager
+
+    def _stage_operation(
+        self,
+        op_type: str,
+        staging_field: str,
+        entry_data: Dict[str, Any],
+        undo_type: str,
+        undo_data: Dict[str, Any],
+        undo_description: str,
+        log_message: str,
+        checksum_paths: Optional[List[str]] = None
+    ) -> OperationResult:
+        """Common helper for staging file/folder operations.
+
+        Centralizes the 9-step staging pattern:
+        1. Log operation
+        2. Get staging
+        3. Check if staging exists
+        4. Migrate schema
+        5. (Optional) Update checksums for source files
+        6. Generate op_id and build entry
+        7. Append to staging array
+        8. Add to undo stack
+        9. Save staging and return result
+
+        Args:
+            op_type: Operation type for logging (e.g., 'stage_file_creation')
+            staging_field: Field name in staging dict (e.g., 'stagedFileCreations')
+            entry_data: Data for the staging entry (path, sourcePath, targetPath, etc.)
+            undo_type: Undo operation type (e.g., 'file_create')
+            undo_data: Data needed to reverse the operation
+            undo_description: Human-readable description for undo stack
+            log_message: Message to log on success
+            checksum_paths: Optional list of file paths to capture checksums for
+
+        Returns:
+            OperationResult with op_id in data field on success
+        """
+        if self._sm._op_logger:
+            self._sm._op_logger.info('staging', op_type, params=entry_data)
+
+        staging = self._sm.get_staging()
+        if not staging:
+            return OperationResult(False, "No staging data")
+
+        staging = self._sm.migrate_staging_schema(staging)
+
+        # Capture checksums for source files if needed
+        if checksum_paths:
+            self._sm.checksums.update_base_checksums(checksum_paths)
+
+        # Generate operation ID and build entry
+        op_id = str(uuid.uuid4())[:8]
+        entry = {
+            'id': op_id,
+            'timestamp': time.time(),
+            **entry_data
+        }
+        staging[staging_field].append(entry)
+
+        # Add undo data with op_id
+        undo_data_with_id = {**undo_data, 'op_id': op_id}
+        self._sm.undo.add_to_undo_stack(undo_type, undo_data_with_id, undo_description, staging)
+
+        result = self._sm.save_staging(staging)
+        if result.success:
+            logger.info(log_message)
+            return OperationResult(True, data=op_id)
+        return result
+
+    def stage_file_creation(self, file_path: str) -> OperationResult:
+        """Stage a file creation (doesn't create on disk yet)."""
+        return self._stage_operation(
+            op_type='stage_file_creation',
+            staging_field='stagedFileCreations',
+            entry_data={'path': file_path},
+            undo_type='file_create',
+            undo_data={'path': file_path},
+            undo_description=f"Create file {os.path.basename(file_path)}",
+            log_message=f"Staged file creation: {file_path}"
+        )
+
+    def stage_file_deletion(self, file_path: str) -> OperationResult:
+        """Stage a file deletion (doesn't delete from disk yet)."""
+        return self._stage_operation(
+            op_type='stage_file_deletion',
+            staging_field='stagedFileDeletions',
+            entry_data={'path': file_path},
+            undo_type='file_delete',
+            undo_data={'path': file_path},
+            undo_description=f"Delete file {os.path.basename(file_path)}",
+            log_message=f"Staged file deletion: {file_path}",
+            checksum_paths=[file_path]
+        )
+
+    def stage_file_move(self, source_path: str, target_path: str) -> OperationResult:
+        """Stage a file move (doesn't move on disk yet)."""
+        return self._stage_operation(
+            op_type='stage_file_move',
+            staging_field='stagedFileMoves',
+            entry_data={'sourcePath': source_path, 'targetPath': target_path},
+            undo_type='file_move',
+            undo_data={'sourcePath': source_path, 'targetPath': target_path},
+            undo_description=f"Move file {os.path.basename(source_path)} to {os.path.dirname(target_path)}",
+            log_message=f"Staged file move: {source_path} -> {target_path}",
+            checksum_paths=[source_path]
+        )
+
+    def stage_folder_creation(self, folder_path: str) -> OperationResult:
+        """Stage a folder creation (doesn't create on disk yet)."""
+        return self._stage_operation(
+            op_type='stage_folder_creation',
+            staging_field='stagedFolderCreations',
+            entry_data={'path': folder_path},
+            undo_type='folder_create',
+            undo_data={'path': folder_path},
+            undo_description=f"Create folder {os.path.basename(folder_path)}",
+            log_message=f"Staged folder creation: {folder_path}"
+        )
+
+    def stage_folder_deletion(self, folder_path: str) -> OperationResult:
+        """Stage a folder deletion (doesn't delete from disk yet)."""
+        # Compute checksum paths for all .cfg files in folder
+        folder = Path(folder_path)
+        checksum_paths = None
+        if folder.is_dir():
+            file_paths = [str(f) for f in folder.rglob('*.cfg')]
+            if file_paths:
+                checksum_paths = file_paths
+
+        return self._stage_operation(
+            op_type='stage_folder_deletion',
+            staging_field='stagedFolderDeletions',
+            entry_data={'path': folder_path},
+            undo_type='folder_delete',
+            undo_data={'path': folder_path},
+            undo_description=f"Delete folder {os.path.basename(folder_path)}",
+            log_message=f"Staged folder deletion: {folder_path}",
+            checksum_paths=checksum_paths
+        )
+
+    def stage_folder_move(self, source_path: str, target_path: str) -> OperationResult:
+        """Stage a folder move (doesn't move on disk yet)."""
+        # Compute checksum paths for all .cfg files in folder
+        folder = Path(source_path)
+        checksum_paths = None
+        if folder.is_dir():
+            file_paths = [str(f) for f in folder.rglob('*.cfg')]
+            if file_paths:
+                checksum_paths = file_paths
+
+        return self._stage_operation(
+            op_type='stage_folder_move',
+            staging_field='stagedFolderMoves',
+            entry_data={'sourcePath': source_path, 'targetPath': target_path},
+            undo_type='folder_move',
+            undo_data={'sourcePath': source_path, 'targetPath': target_path},
+            undo_description=f"Move folder {os.path.basename(source_path)} to {os.path.dirname(target_path)}",
+            log_message=f"Staged folder move: {source_path} -> {target_path}",
+            checksum_paths=checksum_paths
+        )
+
+    def unstage_operation(self, op_id: str, op_type: str) -> OperationResult:
+        """Remove a staged operation by its ID.
+
+        Args:
+            op_id: The operation ID to remove
+            op_type: Type of operation ('file_create', 'file_delete', etc.)
+
+        Returns:
+            OperationResult with success status
+        """
+        staging = self._sm.get_staging()
+        if not staging:
+            return OperationResult(False, "No staging data")
+
+        staging = self._sm.migrate_staging_schema(staging)
+
+        type_to_field = {
+            'file_create': 'stagedFileCreations',
+            'file_delete': 'stagedFileDeletions',
+            'file_move': 'stagedFileMoves',
+            'folder_create': 'stagedFolderCreations',
+            'folder_delete': 'stagedFolderDeletions',
+            'folder_move': 'stagedFolderMoves',
+        }
+
+        field = type_to_field.get(op_type)
+        if not field:
+            return OperationResult(False, f"Unknown operation type: {op_type}")
+
+        ops = staging.get(field, [])
+        original_len = len(ops)
+        staging[field] = [op for op in ops if op.get('id') != op_id]
+
+        if len(staging[field]) < original_len:
+            result = self._sm.save_staging(staging)
+            if result.success:
+                logger.info(f"Unstaged {op_type} operation: {op_id}")
+            return result
+
+        return OperationResult(False, f"Operation {op_id} not found")
+
+
 class StagingManager:
     """Manages staging state and locks for the Nagios Bulk Editor.
 
@@ -248,6 +729,15 @@ class StagingManager:
     6. Conflict detection - tracks base file checksums to detect external changes
 
     NO changes are written to disk until user clicks "Apply".
+
+    This class uses composition to delegate specialized operations:
+    - checksums: ChecksumManager for file checksums and conflict detection
+    - undo: UndoStackManager for undo stack operations
+    - file_ops: FileOperationsStager for file/folder staging operations
+
+    These sub-managers are exposed as public attributes for direct access,
+    and common methods are also available directly on StagingManager for
+    backward compatibility.
     """
 
     def __init__(self, config_path: str, op_logger=None):
@@ -261,6 +751,12 @@ class StagingManager:
         self.staging_dir = self.config_path / '.staging'
         self.staging_file = self.staging_dir / 'staging.json'
         self._op_logger = op_logger
+
+        # Initialize composed managers
+        self.checksums = ChecksumManager(self)
+        self.undo = UndoStackManager(self)
+        self.file_ops = FileOperationsStager(self)
+
         logger.debug(f"StagingManager initialized for {config_path}")
 
     def _ensure_staging_dir(self) -> None:
@@ -538,9 +1034,28 @@ class StagingManager:
         Returns:
             True if session has lock, False if locked by another session
 
-        Note:
-            This check is not atomic with subsequent operations. For atomic
-            lock validation + save, use save_staging_atomic() instead.
+        Warning:
+            RACE CONDITION: This check is NOT atomic with subsequent operations.
+            Between this check returning True and a subsequent save_staging() call,
+            another session could clear_staging() and acquire the lock, causing
+            the original session to write without holding the lock.
+
+            For atomic lock validation + save, use save_staging_atomic() instead,
+            which holds a lock during validation and write.
+
+        Example of UNSAFE usage::
+
+            # BAD: Race condition between check and save
+            if sm.validate_or_acquire_lock(session_id):
+                # Another session could clear_staging() here!
+                sm.save_staging(data)  # May write without lock
+
+        Example of SAFE usage::
+
+            # GOOD: Atomic lock validation + save
+            result = sm.save_staging_atomic(data, session_id, lock)
+            if not result.success:
+                # Handle lock conflict
         """
         owner = self.get_lock_owner()
 
@@ -621,492 +1136,80 @@ class StagingManager:
         return data
 
     # =========================================================================
-    # Undo Stack Management
+    # Undo Stack Management (delegates to UndoStackManager)
     # =========================================================================
 
     def add_to_undo_stack(self, action_type: str, data: Dict, description: str, staging: Optional[Dict] = None) -> Optional[str]:
-        """Add an action to the undo stack.
-
-        Args:
-            action_type: Type of action (e.g., 'edit', 'move', 'create', 'delete',
-                        'file_create', 'file_delete', 'file_move', etc.)
-            data: Data needed to reverse the action
-            description: Human-readable description of the action
-            staging: Optional staging dict to modify (if None, reads fresh and saves)
-
-        Returns:
-            The ID of the undo entry, or None if failed
-        """
-        save_after = False
-        if staging is None:
-            staging = self.get_staging()
-            if not staging:
-                return None
-            staging = self.migrate_staging_schema(staging)
-            save_after = True
-
-        undo_id = str(uuid.uuid4())[:8]
-        undo_entry = {
-            'id': undo_id,
-            'type': action_type,
-            'data': data,
-            'description': description,
-            'timestamp': time.time()
-        }
-
-        staging['undoStack'].append(undo_entry)
-
-        if save_after:
-            if self.save_staging(staging).success:
-                logger.debug(f"Added undo entry: {action_type} - {description}")
-                return undo_id
-            return None
-        else:
-            logger.debug(f"Queued undo entry: {action_type} - {description}")
-            return undo_id
+        """Add an action to the undo stack. Delegates to self.undo."""
+        return self.undo.add_to_undo_stack(action_type, data, description, staging)
 
     def peek_undo_stack(self) -> Optional[Dict]:
-        """Peek at the last action from the undo stack without removing it.
-
-        C-04 FIX: Used for atomic undo operations - peek first, then remove
-        only after successfully applying the reversal and saving.
-
-        Returns:
-            The undo entry, or None if stack is empty
-        """
-        staging = self.get_staging()
-        if not staging:
-            return None
-
-        staging = self.migrate_staging_schema(staging)
-        undo_stack = staging.get('undoStack', [])
-
-        if not undo_stack:
-            return None
-
-        return undo_stack[-1]
+        """Peek at the last action from the undo stack. Delegates to self.undo."""
+        return self.undo.peek_undo_stack()
 
     def pop_undo_stack(self) -> Optional[Dict]:
-        """Pop and return the last action from the undo stack.
-
-        NOTE: Prefer using peek_undo_stack() + manual removal in atomic operations
-        to avoid data loss if subsequent operations fail.
-
-        Returns:
-            The undo entry, or None if stack is empty or failed
-        """
-        staging = self.get_staging()
-        if not staging:
-            return None
-
-        staging = self.migrate_staging_schema(staging)
-        undo_stack = staging.get('undoStack', [])
-
-        if not undo_stack:
-            return None
-
-        undo_entry = undo_stack.pop()
-        staging['undoStack'] = undo_stack
-
-        if self.save_staging(staging).success:
-            logger.debug(f"Popped undo entry: {undo_entry.get('type')} - {undo_entry.get('description')}")
-            return undo_entry
-        return None
+        """Pop and return the last action from the undo stack. Delegates to self.undo."""
+        return self.undo.pop_undo_stack()
 
     def get_undo_stack_count(self) -> int:
-        """Get the number of items in the undo stack.
-
-        Returns:
-            Count of undoable actions
-        """
-        staging = self.get_staging()
-        if not staging:
-            return 0
-        return len(staging.get('undoStack', []))
+        """Get the number of items in the undo stack. Delegates to self.undo."""
+        return self.undo.get_undo_stack_count()
 
     def clear_undo_stack(self) -> OperationResult:
-        """Clear the undo stack.
-
-        Returns:
-            OperationResult with success status
-        """
-        staging = self.get_staging()
-        if not staging:
-            return OperationResult(True)
-
-        staging['undoStack'] = []
-        return self.save_staging(staging)
+        """Clear the undo stack. Delegates to self.undo."""
+        return self.undo.clear_undo_stack()
 
     # =========================================================================
-    # Checksum and Conflict Detection
+    # Checksum and Conflict Detection (delegates to ChecksumManager)
     # =========================================================================
 
     def compute_file_checksum(self, file_path: str) -> Optional[str]:
-        """Compute SHA256 checksum of a file.
-
-        Args:
-            file_path: Path to the file
-
-        Returns:
-            Hex digest of SHA256 hash, or None if file doesn't exist
-        """
-        try:
-            path = Path(file_path)
-            if not path.exists():
-                return None
-            return hashlib.sha256(path.read_bytes()).hexdigest()
-        except (IOError, OSError) as e:
-            logger.warning(f"Failed to compute checksum for {file_path}: {e}")
-            return None
+        """Compute SHA256 checksum of a file. Delegates to self.checksums."""
+        return self.checksums.compute_file_checksum(file_path)
 
     def compute_base_checksums(self, file_paths: Optional[List[str]] = None) -> Dict[str, str]:
-        """Compute and store checksums for files that will be modified.
-
-        This should be called when staging first begins to capture the
-        "base" state of files before modifications.
-
-        Args:
-            file_paths: List of file paths to checksum. If None, checksums
-                       all .cfg files in config directory.
-
-        Returns:
-            Dictionary of {path: checksum}
-        """
-        checksums = {}
-
-        if file_paths is None:
-            # Checksum all .cfg files in config directory
-            for cfg_file in self.config_path.rglob('*.cfg'):
-                if '.staging' not in str(cfg_file):
-                    checksum = self.compute_file_checksum(str(cfg_file))
-                    if checksum:
-                        checksums[str(cfg_file)] = checksum
-        else:
-            for file_path in file_paths:
-                checksum = self.compute_file_checksum(file_path)
-                if checksum:
-                    checksums[file_path] = checksum
-
-        return checksums
+        """Compute checksums for files. Delegates to self.checksums."""
+        return self.checksums.compute_base_checksums(file_paths)
 
     def update_base_checksums(self, file_paths: List[str]) -> OperationResult:
-        """Update base checksums for specific files.
-
-        Called when a file is first staged for modification.
-
-        Args:
-            file_paths: Paths to update checksums for
-
-        Returns:
-            OperationResult with success status
-        """
-        staging = self.get_staging()
-        if not staging:
-            return OperationResult(False, "No staging data")
-
-        staging = self.migrate_staging_schema(staging)
-        base_checksums = staging.get('baseFileChecksums', {})
-
-        for file_path in file_paths:
-            # Only store checksum if we don't already have one for this file
-            # (preserve the original base state)
-            if file_path not in base_checksums:
-                checksum = self.compute_file_checksum(file_path)
-                if checksum:
-                    base_checksums[file_path] = checksum
-
-        staging['baseFileChecksums'] = base_checksums
-        return self.save_staging(staging)
+        """Update base checksums for specific files. Delegates to self.checksums."""
+        return self.checksums.update_base_checksums(file_paths)
 
     def detect_conflicts(self) -> List[Dict[str, Any]]:
-        """Detect files that have been modified externally since staging began.
-
-        Compares current file checksums against stored base checksums.
-
-        Returns:
-            List of conflict dictionaries: [{path, baseChecksum, currentChecksum}]
-        """
-        staging = self.get_staging()
-        if not staging:
-            return []
-
-        base_checksums = staging.get('baseFileChecksums', {})
-        conflicts = []
-
-        for file_path, base_checksum in base_checksums.items():
-            current_checksum = self.compute_file_checksum(file_path)
-
-            # File was deleted externally
-            if current_checksum is None:
-                conflicts.append({
-                    'path': file_path,
-                    'baseChecksum': base_checksum,
-                    'currentChecksum': None,
-                    'type': 'deleted'
-                })
-            # File was modified externally
-            elif current_checksum != base_checksum:
-                conflicts.append({
-                    'path': file_path,
-                    'baseChecksum': base_checksum,
-                    'currentChecksum': current_checksum,
-                    'type': 'modified'
-                })
-
-        return conflicts
+        """Detect files modified externally since staging began. Delegates to self.checksums."""
+        return self.checksums.detect_conflicts()
 
     # =========================================================================
-    # File/Folder Staging Operations
+    # File/Folder Staging Operations (delegates to FileOperationsStager)
     # =========================================================================
 
     def stage_file_creation(self, file_path: str) -> OperationResult:
-        """Stage a file creation (doesn't create on disk yet)."""
-        if self._op_logger:
-            self._op_logger.info('staging', 'stage_file_creation', params={'file_path': file_path})
-        staging = self.get_staging()
-        if not staging:
-            return OperationResult(False, "No staging data")
-
-        staging = self.migrate_staging_schema(staging)
-
-        op_id = str(uuid.uuid4())[:8]
-        staging['stagedFileCreations'].append({
-            'id': op_id,
-            'path': file_path,
-            'timestamp': time.time()
-        })
-
-        # Add to undo stack (pass staging to avoid race condition)
-        self.add_to_undo_stack(
-            'file_create',
-            {'path': file_path, 'op_id': op_id},
-            f"Create file {os.path.basename(file_path)}",
-            staging
-        )
-
-        result = self.save_staging(staging)
-        if result.success:
-            logger.info(f"Staged file creation: {file_path}")
-            return OperationResult(True, data=op_id)
-        return result
+        """Stage a file creation. Delegates to self.file_ops."""
+        return self.file_ops.stage_file_creation(file_path)
 
     def stage_file_deletion(self, file_path: str) -> OperationResult:
-        """Stage a file deletion (doesn't delete from disk yet)."""
-        if self._op_logger:
-            self._op_logger.info('staging', 'stage_file_deletion', params={'file_path': file_path})
-        staging = self.get_staging()
-        if not staging:
-            return OperationResult(False, "No staging data")
-
-        staging = self.migrate_staging_schema(staging)
-
-        # Store checksum of file before staging deletion
-        self.update_base_checksums([file_path])
-
-        op_id = str(uuid.uuid4())[:8]
-        staging['stagedFileDeletions'].append({
-            'id': op_id,
-            'path': file_path,
-            'timestamp': time.time()
-        })
-
-        # Add to undo stack (pass staging to avoid race condition)
-        self.add_to_undo_stack(
-            'file_delete',
-            {'path': file_path, 'op_id': op_id},
-            f"Delete file {os.path.basename(file_path)}",
-            staging
-        )
-
-        result = self.save_staging(staging)
-        if result.success:
-            logger.info(f"Staged file deletion: {file_path}")
-            return OperationResult(True, data=op_id)
-        return result
+        """Stage a file deletion. Delegates to self.file_ops."""
+        return self.file_ops.stage_file_deletion(file_path)
 
     def stage_file_move(self, source_path: str, target_path: str) -> OperationResult:
-        """Stage a file move (doesn't move on disk yet)."""
-        if self._op_logger:
-            self._op_logger.info('staging', 'stage_file_move', params={'source_path': source_path, 'target_path': target_path})
-        staging = self.get_staging()
-        if not staging:
-            return OperationResult(False, "No staging data")
-
-        staging = self.migrate_staging_schema(staging)
-
-        # Store checksum of source file
-        self.update_base_checksums([source_path])
-
-        op_id = str(uuid.uuid4())[:8]
-        staging['stagedFileMoves'].append({
-            'id': op_id,
-            'sourcePath': source_path,
-            'targetPath': target_path,
-            'timestamp': time.time()
-        })
-
-        # Add to undo stack (pass staging to avoid race condition)
-        self.add_to_undo_stack(
-            'file_move',
-            {'sourcePath': source_path, 'targetPath': target_path, 'op_id': op_id},
-            f"Move file {os.path.basename(source_path)} to {os.path.dirname(target_path)}",
-            staging
-        )
-
-        result = self.save_staging(staging)
-        if result.success:
-            logger.info(f"Staged file move: {source_path} -> {target_path}")
-            return OperationResult(True, data=op_id)
-        return result
+        """Stage a file move. Delegates to self.file_ops."""
+        return self.file_ops.stage_file_move(source_path, target_path)
 
     def stage_folder_creation(self, folder_path: str) -> OperationResult:
-        """Stage a folder creation (doesn't create on disk yet)."""
-        if self._op_logger:
-            self._op_logger.info('staging', 'stage_folder_creation', params={'folder_path': folder_path})
-        staging = self.get_staging()
-        if not staging:
-            return OperationResult(False, "No staging data")
-
-        staging = self.migrate_staging_schema(staging)
-
-        op_id = str(uuid.uuid4())[:8]
-        staging['stagedFolderCreations'].append({
-            'id': op_id,
-            'path': folder_path,
-            'timestamp': time.time()
-        })
-
-        # Add to undo stack (pass staging to avoid race condition)
-        self.add_to_undo_stack(
-            'folder_create',
-            {'path': folder_path, 'op_id': op_id},
-            f"Create folder {os.path.basename(folder_path)}",
-            staging
-        )
-
-        result = self.save_staging(staging)
-        if result.success:
-            logger.info(f"Staged folder creation: {folder_path}")
-            return OperationResult(True, data=op_id)
-        return result
+        """Stage a folder creation. Delegates to self.file_ops."""
+        return self.file_ops.stage_folder_creation(folder_path)
 
     def stage_folder_deletion(self, folder_path: str) -> OperationResult:
-        """Stage a folder deletion (doesn't delete from disk yet)."""
-        if self._op_logger:
-            self._op_logger.info('staging', 'stage_folder_deletion', params={'folder_path': folder_path})
-        staging = self.get_staging()
-        if not staging:
-            return OperationResult(False, "No staging data")
-
-        staging = self.migrate_staging_schema(staging)
-
-        # Store checksums of all files in folder
-        folder = Path(folder_path)
-        if folder.is_dir():
-            file_paths = [str(f) for f in folder.rglob('*.cfg')]
-            if file_paths:
-                self.update_base_checksums(file_paths)
-
-        op_id = str(uuid.uuid4())[:8]
-        staging['stagedFolderDeletions'].append({
-            'id': op_id,
-            'path': folder_path,
-            'timestamp': time.time()
-        })
-
-        # Add to undo stack (pass staging to avoid race condition)
-        self.add_to_undo_stack(
-            'folder_delete',
-            {'path': folder_path, 'op_id': op_id},
-            f"Delete folder {os.path.basename(folder_path)}",
-            staging
-        )
-
-        result = self.save_staging(staging)
-        if result.success:
-            logger.info(f"Staged folder deletion: {folder_path}")
-            return OperationResult(True, data=op_id)
-        return result
+        """Stage a folder deletion. Delegates to self.file_ops."""
+        return self.file_ops.stage_folder_deletion(folder_path)
 
     def stage_folder_move(self, source_path: str, target_path: str) -> OperationResult:
-        """Stage a folder move (doesn't move on disk yet)."""
-        if self._op_logger:
-            self._op_logger.info('staging', 'stage_folder_move', params={'source_path': source_path, 'target_path': target_path})
-        staging = self.get_staging()
-        if not staging:
-            return OperationResult(False, "No staging data")
-
-        staging = self.migrate_staging_schema(staging)
-
-        # Store checksums of all files in folder
-        folder = Path(source_path)
-        if folder.is_dir():
-            file_paths = [str(f) for f in folder.rglob('*.cfg')]
-            if file_paths:
-                self.update_base_checksums(file_paths)
-
-        op_id = str(uuid.uuid4())[:8]
-        staging['stagedFolderMoves'].append({
-            'id': op_id,
-            'sourcePath': source_path,
-            'targetPath': target_path,
-            'timestamp': time.time()
-        })
-
-        # Add to undo stack (pass staging to avoid race condition)
-        self.add_to_undo_stack(
-            'folder_move',
-            {'sourcePath': source_path, 'targetPath': target_path, 'op_id': op_id},
-            f"Move folder {os.path.basename(source_path)} to {os.path.dirname(target_path)}",
-            staging
-        )
-
-        result = self.save_staging(staging)
-        if result.success:
-            logger.info(f"Staged folder move: {source_path} -> {target_path}")
-            return OperationResult(True, data=op_id)
-        return result
+        """Stage a folder move. Delegates to self.file_ops."""
+        return self.file_ops.stage_folder_move(source_path, target_path)
 
     def unstage_operation(self, op_id: str, op_type: str) -> OperationResult:
-        """Remove a staged operation by its ID.
-
-        Args:
-            op_id: The operation ID to remove
-            op_type: Type of operation ('file_create', 'file_delete', etc.)
-
-        Returns:
-            OperationResult with success status
-        """
-        staging = self.get_staging()
-        if not staging:
-            return OperationResult(False, "No staging data")
-
-        staging = self.migrate_staging_schema(staging)
-
-        type_to_field = {
-            'file_create': 'stagedFileCreations',
-            'file_delete': 'stagedFileDeletions',
-            'file_move': 'stagedFileMoves',
-            'folder_create': 'stagedFolderCreations',
-            'folder_delete': 'stagedFolderDeletions',
-            'folder_move': 'stagedFolderMoves',
-        }
-
-        field = type_to_field.get(op_type)
-        if not field:
-            return OperationResult(False, f"Unknown operation type: {op_type}")
-
-        ops = staging.get(field, [])
-        original_len = len(ops)
-        staging[field] = [op for op in ops if op.get('id') != op_id]
-
-        if len(staging[field]) < original_len:
-            result = self.save_staging(staging)
-            if result.success:
-                logger.info(f"Unstaged {op_type} operation: {op_id}")
-            return result
-
-        return OperationResult(False, f"Operation {op_id} not found")
+        """Remove a staged operation by its ID. Delegates to self.file_ops."""
+        return self.file_ops.unstage_operation(op_id, op_type)
 
     def get_total_staged_count(self) -> int:
         """Get total count of all staged operations.
@@ -1228,63 +1331,58 @@ def _filter_staged_entries(entries, target_key):
     return filtered
 
 
+def _remove_by_op_id(staging: Dict, field: str, op_id: str) -> int:
+    """Remove staged entry by operation ID.
+
+    Common helper for undo operations that filter by op_id.
+
+    Args:
+        staging: Staging data dict to modify
+        field: Field name containing the operation list (e.g., 'stagedFileCreations')
+        op_id: Operation ID to match for removal
+
+    Returns:
+        Number of entries removed
+    """
+    ops = staging.get(field, [])
+    original_len = len(ops)
+    staging[field] = [op for op in ops if op.get('id') != op_id]
+    return original_len - len(staging[field])
+
+
 def _undo_file_create(staging, action_data):
     """Remove staged file creation."""
-    op_id = action_data.get('op_id')
-    staging['stagedFileCreations'] = [
-        op for op in staging.get('stagedFileCreations', [])
-        if op.get('id') != op_id
-    ]
+    _remove_by_op_id(staging, 'stagedFileCreations', action_data.get('op_id'))
     return f"Unstaged file creation: {action_data.get('path')}"
 
 
 def _undo_file_delete(staging, action_data):
     """Remove staged file deletion."""
-    op_id = action_data.get('op_id')
-    staging['stagedFileDeletions'] = [
-        op for op in staging.get('stagedFileDeletions', [])
-        if op.get('id') != op_id
-    ]
+    _remove_by_op_id(staging, 'stagedFileDeletions', action_data.get('op_id'))
     return f"Unstaged file deletion: {action_data.get('path')}"
 
 
 def _undo_file_move(staging, action_data):
     """Remove staged file move."""
-    op_id = action_data.get('op_id')
-    staging['stagedFileMoves'] = [
-        op for op in staging.get('stagedFileMoves', [])
-        if op.get('id') != op_id
-    ]
+    _remove_by_op_id(staging, 'stagedFileMoves', action_data.get('op_id'))
     return f"Unstaged file move: {action_data.get('sourcePath')}"
 
 
 def _undo_folder_create(staging, action_data):
     """Remove staged folder creation."""
-    op_id = action_data.get('op_id')
-    staging['stagedFolderCreations'] = [
-        op for op in staging.get('stagedFolderCreations', [])
-        if op.get('id') != op_id
-    ]
+    _remove_by_op_id(staging, 'stagedFolderCreations', action_data.get('op_id'))
     return f"Unstaged folder creation: {action_data.get('path')}"
 
 
 def _undo_folder_delete(staging, action_data):
     """Remove staged folder deletion."""
-    op_id = action_data.get('op_id')
-    staging['stagedFolderDeletions'] = [
-        op for op in staging.get('stagedFolderDeletions', [])
-        if op.get('id') != op_id
-    ]
+    _remove_by_op_id(staging, 'stagedFolderDeletions', action_data.get('op_id'))
     return f"Unstaged folder deletion: {action_data.get('path')}"
 
 
 def _undo_folder_move(staging, action_data):
     """Remove staged folder move."""
-    op_id = action_data.get('op_id')
-    staging['stagedFolderMoves'] = [
-        op for op in staging.get('stagedFolderMoves', [])
-        if op.get('id') != op_id
-    ]
+    _remove_by_op_id(staging, 'stagedFolderMoves', action_data.get('op_id'))
     return f"Unstaged folder move: {action_data.get('sourcePath')}"
 
 

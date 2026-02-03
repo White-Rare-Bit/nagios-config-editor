@@ -379,6 +379,29 @@
         const nameField = getNewObjectNameField(state.editedObject.object_type);
         const name = state.editedObject.attributes[nameField] || '';
 
+        // C-06: Validate for duplicate object names
+        if (name) {
+            // Check against existing objects (use attributes directly since frontend objects don't have get_name())
+            const existingObj = state.allObjects.find(obj => {
+                if (obj.object_type !== state.editedObject.object_type) return false;
+                const objName = obj.attributes?.[nameField] || obj.attributes?.name || '';
+                return objName === name;
+            });
+            if (existingObj) {
+                showToast(`Warning: ${state.editedObject.object_type} "${name}" already exists in ${existingObj.source_file}`, 'warning');
+            }
+
+            // Check against other staged creations (excluding current one being edited)
+            const duplicateStagedIdx = state.stagedCreations.findIndex((c, idx) =>
+                idx !== state.newObjectStagedIndex &&
+                c.object_type === state.editedObject.object_type &&
+                c.displayName === name
+            );
+            if (duplicateStagedIdx !== -1) {
+                showToast(`Warning: Another staged ${state.editedObject.object_type} "${name}" already exists`, 'warning');
+            }
+        }
+
         const creation = {
             id: generateUniqueId(),
             object_type: state.editedObject.object_type,
