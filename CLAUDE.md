@@ -18,9 +18,9 @@ Dependencies: `flask>=2.0.0,<4.0.0`
 - Click/interact using `ref`, not coordinates
 - NEVER take screenshots unless explicitly requested by the user
 
-## Reference Documentation
+## Documentation Index
 
-Detailed docs available on-demand in `.claude/`:
+### Reference Documentation (.claude/)
 
 | File | Content |
 |------|---------|
@@ -31,6 +31,15 @@ Detailed docs available on-demand in `.claude/`:
 | FILE_OPS_REFERENCE.md | File operations, block detection, path safety |
 | TYPOGRAPHY_REFERENCE.md | Typography tokens, font system |
 | DECISION_LOG.md | Historical architecture decisions |
+
+### Module-Level Documentation
+
+| File | Content |
+|------|---------|
+| templates/CLAUDE.md | Template hierarchy, blocks, load order, global components |
+| static/css/CLAUDE.md | Design tokens, button system, dark theme, typography |
+| static/js/CLAUDE.md | Page-specific JS modules, dependency graph architecture |
+| static/js/explorer/CLAUDE.md | Explorer module architecture, state management |
 
 ## Backend Architecture Patterns
 
@@ -113,70 +122,32 @@ config = load_config()
 | operation_logger.py | Structured JSON logging | Log format |
 | audit_service.py | Audit log writer | Audit events |
 
-## Frontend Module Index
+## Frontend Modules
 
-### Core JavaScript
+**Core:** app.js (global utils), base.js (session/lock/toast/commit), api-client.js (fetch wrapper)
 
-| Module | What |
-|--------|------|
-| app.js | Global utilities: escapeHtml, formatDate, debounce, keyboard shortcuts |
-| js/base.js | Session/lock management, toast, commit dialog, staging state |
-| js/api-client.js | Fetch wrapper with error handling, staging headers |
+**Explorer:** See `static/js/explorer/CLAUDE.md` - main.js (state), app.js (tree), object-editor.js (center pane), file-operations.js (target pane), context-menu.js, dialogs.js, data-loading.js, state-management.js, drag-drop.js, analysis.js, ui-utils.js
 
-### Explorer Modules (static/js/explorer/)
+**Page-specific:** See `static/js/CLAUDE.md` - git.js, backups.js, audit-log.js, dependencies.js, settings.js, find-replace.js, bulk-rename.js, bulk-attributes.js, reorganize.js, smart-grouping.js, inheritance.js, validate.js, health-check.js
 
-| Module | What |
-|--------|------|
-| main.js | Namespace, shared state (allObjects, selections, staging maps) |
-| app.js | Tree rendering, filtering, selection, autocomplete, dependencies |
-| object-editor.js | Center pane attribute editor, validation, staging |
-| file-operations.js | Target pane (file tree), move/create operations |
-| context-menu.js | Right-click menus, dialogs, preview modal |
-| dialogs.js | Move/create/delete dialogs, bulk operations |
-| data-loading.js | Initial load, refresh, server sync |
-| state-management.js | State persistence, sync, refreshAfterObjectChange() |
-| drag-drop.js | Drag-and-drop for objects and files |
-| analysis.js | Template detection, inheritance, suggestions |
-| ui-utils.js | formatObjectName, buildBreadcrumb, badges |
+## Cross-Cutting Concerns
 
-### Page-Specific JS
+### Event Delegation Pattern
 
-git.js, backups.js, audit-log.js, dependencies.js, settings.js, find-replace.js, bulk-rename.js, bulk-attributes.js, reorganize.js, smart-grouping.js, inheritance.js, validate.js, health-check.js
-
-## Style Guides
-
-| Guide | What |
-|-------|------|
-| .claude/BUTTON_STYLE_GUIDE.md | Button styling: .nbe-btn variants, sizes, states |
-
-## Frontend Architecture Patterns
-
-### Event Delegation
-
-Uses `data-action` attributes for click handlers:
+Uses `data-action` attributes for click handlers. Add actions to `actionHandlers` map in base.js.
 
 ```javascript
-document.addEventListener('click', function(e) {
-    const actionEl = e.target.closest('[data-action]');
-    if (actionEl) {
-        const handler = actionHandlers[actionEl.dataset.action];
-        if (handler) handler(e);
-    }
-});
+<button data-action="reload-config">Reload</button>
 ```
-
-Add actions to `actionHandlers` map in base.js.
 
 ### ApiClient Pattern
 
+All API calls use `ApiClient.get/post()` returning `{success, data, error}`.
+
 ```javascript
-const result = await ApiClient.get('/api/endpoint', { silent: true });
+const result = await ApiClient.get('/api/endpoint');
 if (result.success) { /* use result.data */ }
-
-const result = await ApiClient.post('/api/endpoint', { key: 'value' });
 ```
-
-Features: automatic staging headers, `{success, data, error}` format, toast notifications.
 
 ### Global Functions
 
@@ -184,149 +155,74 @@ Features: automatic staging headers, `{success, data, error}` format, toast noti
 
 **base.js**: `showToast()`, `showConfirmDialog()`, `getSessionId()`, `getUserIdentity()`, `getStagingHeaders()`
 
-### Explorer State Management
+### Explorer State
 
-```javascript
-Explorer.state = {
-    allObjects: [],
-    selectedKeys: new Set(),
-    pendingEdits: new Map(),
-    stagedMoves: new Map(),
-    undoStack: [],
-    // ...
-};
-```
+See `static/js/explorer/CLAUDE.md` for complete details.
 
-### UI Refresh After Object Changes
+`Explorer.state` holds allObjects, selections, staging maps, undo stack. Call `Explorer.refreshAfterObjectChange(options)` after mutations.
 
-```javascript
-Explorer.refreshAfterObjectChange(options = {
-    skipTree: false,
-    skipCenter: false,
-    skipTarget: false,
-    skipSuggestions: false,
-    skipCommit: false
-});
-```
+### Reference Field Sync
 
-Call after ANY object mutation (delete, create, edit, move, undo).
-
-### Reference Field Synchronization
-
-Reference fields duplicated across 4 locations that must stay in sync:
+Reference fields duplicated across 4 locations. Only sync when adding Nagios reference fields (rare):
 
 | Location | Purpose |
 |----------|---------|
 | nagios_model.py:REFERENCE_FIELDS | Backend dependency analysis |
-| object-editor.js:ATTR_REFERENCE_MAP | Autocomplete hints (~line 43) |
-| main.js:referenceAttrs | Dependencies refresh triggers (~line 136) |
-| app.js:loadCenterReferences:referenceFields | Center pane deps (~line 2173) |
+| object-editor.js:ATTR_REFERENCE_MAP | Autocomplete hints |
+| main.js:referenceAttrs | Dependencies refresh triggers |
+| app.js:loadCenterReferences:referenceFields | Center pane deps |
 
-Each location has sync comments. Only sync when adding Nagios reference fields (rare).
+### Design System
 
-### Design Tokens (tokens.css)
+See `static/css/CLAUDE.md` for complete token reference. Use design tokens instead of hard-coded values:
 
 ```css
-var(--nbe-primary)      /* #006fcc */
-var(--nbe-success)      /* Green for create */
-var(--nbe-danger)       /* Red for delete */
-var(--nbe-warning)      /* Orange for move */
-var(--nbe-text-primary) /* #1f2937 */
-var(--nbe-bg-surface)   /* White */
-var(--nbe-space-md)     /* 12px */
-var(--nbe-radius-md)    /* 4px */
+var(--nbe-primary)         /* Semantic colors */
+var(--nbe-space-md)        /* Spacing */
+var(--nbe-typography-h1-*) /* Typography */
+var(--nbe-dark-bg-*)       /* Dark theme (explorer only) */
 ```
 
-Use tokens instead of hard-coded values.
+### Template System
 
-### Template Inheritance
+See `templates/CLAUDE.md` for complete details. All pages extend `base.html` with blocks: `title`, `extra_css`, `content`, `scripts`.
 
-```
-base.html (master)
-  ├─ navbar with commit button
-  ├─ lock banner
-  ├─ global dialogs
-  └─ blocks: title, extra_css, content, scripts
-```
+## Staging System
 
-Load order: Bootstrap CSS → tokens.css → style.css → page CSS → Bootstrap JS → app.js → api-client.js → base.js → page JS
+True staging: NO changes written to disk until "Apply". See `.claude/STAGING_REFERENCE.md` for complete details.
 
-## Staging System Overview
+**Lock management:** Session-based. First edit acquires lock. Check with `sm.can_modify(session_id)`.
 
-True staging: NO changes written to disk until "Apply".
+**Stable keys:** Objects identified by `"source_file|object_type|name"` instead of global_index.
 
-### Lock Management
-
-- Session-based: first edit acquires lock
-- Check with `sm.can_modify(session_id)`
-- Release on apply, discard, or clear
-
-### Staged Operations
-
-| Type | Field |
-|------|-------|
-| Object edits | pendingEdits |
-| Object moves | stagedMoves |
-| Object creates | stagedCreations |
-| Object deletes | stagedObjectDeletions |
-| File creates | stagedFileCreations |
-| File deletes | stagedFileDeletions |
-| File moves | stagedFileMoves |
-| Folder creates | stagedFolderCreations |
-| Folder deletes | stagedFolderDeletions |
-| Folder moves | stagedFolderMoves |
-
-### Stable Keys
-
-Objects identified by `"source_file|object_type|name"` instead of global_index.
-
-See `.claude/STAGING_REFERENCE.md` for apply phase order, undo stack, conflict detection.
+**Operations:** pendingEdits, stagedMoves, stagedCreations, stagedObjectDeletions, stagedFileCreations, stagedFileDeletions, stagedFileMoves, stagedFolderCreations, stagedFolderDeletions, stagedFolderMoves
 
 ## Error Handling
 
-### HTTP Status Codes
+**HTTP status codes:** 200 (success), 400 (invalid input), 404 (not found), 409 (staging conflicts), 423 (locked), 500 (internal error)
 
-| Code | Use Case |
-|------|----------|
-| 200 | Success |
-| 400 | Invalid input |
-| 404 | Not found |
-| 409 | Staging conflicts |
-| 423 | Locked by another session |
-| 500 | Internal error |
+**Backup on mutation:** All mutating operations create backup first via `bm.create_backup("pre_operation_name")`
 
-### Backup on Mutation
-
-All mutating operations create backup first:
-
-```python
-bm = get_backup_manager()
-backup_path = bm.create_backup("pre_operation_name")
-```
-
-## Key Conventions
+## Conventions
 
 ### Naming
 
-- **Python**: snake_case (session_id, user_name)
-- **JavaScript functions**: camelCase (showToast, escapeHtml)
-- **CSS classes**: kebab-case (commit-btn, toast-message)
+- **Python**: snake_case
+- **JavaScript**: camelCase
+- **CSS classes**: kebab-case
 - **CSS variables**: `--nbe-*` namespace
+- **API ↔ Frontend**: API returns snake_case; frontend preserves API field names in requests
 
-### Cross-Language (API ↔ Frontend)
+### State Storage
 
-API returns snake_case. Frontend uses camelCase locally but preserves API field names in requests.
-
-### State Management
-
-- **Explorer**: `Explorer.state`
+- **Explorer**: `Explorer.state` (in-memory)
 - **Session**: localStorage (`nagios_session_id`, `nagios_user_name`)
 - **Lock**: `baseState` in base.js, synced with `window.isEditingLocked`
 
 ### Keyboard Shortcuts
 
-- Global: Escape, Ctrl+Z, ?
-- Explorer: Space (preview), M (move), Delete
-- Selection: Ctrl+Click (toggle), Shift+Click (range)
+Global: Escape, Ctrl+Z, ?
+Explorer: Space (preview), M (move), Delete
+Selection: Ctrl+Click (toggle), Shift+Click (range)
 
-Add to `handleGlobalKeydown` in app.js.
+Add shortcuts to `handleGlobalKeydown` in app.js.

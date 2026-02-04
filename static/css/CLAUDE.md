@@ -123,6 +123,69 @@ The following tokens are theme-agnostic and shared across light/dark themes:
 
 **Pattern:** All light tokens (`--nbe-bg-*`, `--nbe-text-*`, `--nbe-border-*`) converted to `--nbe-dark-*` equivalents.
 
+## Button System
+
+All buttons use `.nbe-btn` base class with modifiers. Defined in `tokens.css` lines 648-960.
+
+### Base Usage
+
+```html
+<button class="nbe-btn">Default</button>
+<button class="nbe-btn nbe-btn--primary">Primary</button>
+<button class="nbe-btn nbe-btn--danger">Danger</button>
+```
+
+### Variants
+
+| Class | Use Case | Background |
+|-------|----------|------------|
+| `.nbe-btn` | Default/neutral actions | Light gray |
+| `.nbe-btn--primary` | Primary actions (save, apply) | `--nbe-primary` blue |
+| `.nbe-btn--secondary` | Secondary actions | White with border |
+| `.nbe-btn--danger` | Destructive actions (delete) | `--nbe-danger` red |
+| `.nbe-btn--info` | Informational actions | `--nbe-info` blue |
+| `.nbe-btn--ghost` | Minimal/inline actions | Transparent |
+
+### Sizes
+
+| Class | Padding | Font Size | Use Case |
+|-------|---------|-----------|----------|
+| `.nbe-btn--xs` | 2px 6px | 11px | Compact UI, table actions |
+| `.nbe-btn--sm` | 4px 10px | 12px | Secondary actions, toolbars |
+| (default) | 6px 14px | 13px | Standard buttons |
+| `.nbe-btn--lg` | 10px 20px | 15px | Primary page actions |
+
+### Modifiers
+
+| Class | Effect |
+|-------|--------|
+| `.nbe-btn--icon` | Square button for icons only (equal padding) |
+| `.nbe-btn--full` | Full width (`width: 100%`) |
+| `.nbe-btn-group` | Horizontal button group (removes gaps) |
+| `.nbe-btn-group--vertical` | Vertical button group |
+
+### States
+
+```html
+<!-- Disabled -->
+<button class="nbe-btn" disabled>Disabled</button>
+
+<!-- Loading (add via JS) -->
+<button class="nbe-btn nbe-btn--primary" data-loading="true">Saving...</button>
+```
+
+Loading state adds spinner via `::after` pseudo-element.
+
+### Dark Theme
+
+Add `.nbe-btn--dark` for dark backgrounds (explorer page):
+
+```html
+<button class="nbe-btn nbe-btn--dark nbe-btn--primary">Dark Primary</button>
+```
+
+Dark variants: `.nbe-btn--dark`, `.nbe-btn--dark.nbe-btn--primary`, `.nbe-btn--dark.nbe-btn--danger`, `.nbe-btn--dark.nbe-btn--ghost`
+
 ## Typography Token System
 
 Semantic typography tokens provide consistent type scaling and hierarchy across the application. All font-size values MUST use tokens (no hardcoded px or rem values).
