@@ -28,6 +28,33 @@ def _compute_checksum(content: str) -> str:
     return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
 
+def _read_file_content(file_path: str, expected_checksum: Optional[str] = None) -> OperationResult:
+    """Read file content with standard error handling and optional checksum validation.
+
+    Args:
+        file_path: Path to the file to read
+        expected_checksum: If provided, validates file hasn't changed since staging began.
+                          Returns conflict error if checksum doesn't match.
+
+    Returns:
+        OperationResult with success=True and data=content on success,
+        or success=False with error details on failure
+    """
+    path = Path(file_path)
+    if not path.exists():
+        return OperationResult(False, f"File not found: {file_path}")
+    try:
+        content = path.read_text()
+        if expected_checksum is not None:
+            actual_checksum = _compute_checksum(content)
+            if actual_checksum != expected_checksum:
+                return OperationResult(False,
+                    f"Conflict: {file_path} was modified externally. Aborting to prevent data loss.")
+        return OperationResult(True, data=content)
+    except (IOError, OSError) as e:
+        return OperationResult(False, f"Read error: {e}")
+
+
 def _normalize_block_spacing(before: str, middle: str, after: str) -> str:
     """Join content sections with normalized spacing between define blocks.
 
@@ -149,27 +176,6 @@ def find_block_range(content: str, target_line: int) -> Optional[Tuple[int, int]
     return (define_pos, pos)
 
 
-def find_block_line_range(content: str, target_line: int) -> Optional[Tuple[int, int]]:
-    """Find the line range (1-based, inclusive) of a define block.
-
-    Args:
-        content: The file content
-        target_line: 1-based line number pointing to or within the block
-
-    Returns:
-        Tuple of (start_line, end_line) or None if not found
-    """
-    char_range = find_block_range(content, target_line)
-    if not char_range:
-        return None
-
-    start_char, end_char = char_range
-    start_line = content[:start_char].count('\n') + 1
-    end_line = content[:end_char].count('\n') + 1
-
-    return (start_line, end_line)
-
-
 def edit_object_in_file(file_path: str, line_number: int, new_attrs: Dict[str, str],
                         obj_type: str, expected_checksum: Optional[str] = None) -> OperationResult:
     """Edit an object in place in its file.
@@ -187,19 +193,11 @@ def edit_object_in_file(file_path: str, line_number: int, new_attrs: Dict[str, s
     """
     if _op_logger:
         _op_logger.debug('file_op', 'edit_object_in_file', params={'file_path': file_path, 'line_number': line_number, 'obj_type': obj_type})
-    path = Path(file_path)
-    if not path.exists():
-        return OperationResult(False, f"File not found: {file_path}")
 
-    try:
-        content = path.read_text()
-        if expected_checksum is not None:
-            actual_checksum = _compute_checksum(content)
-            if actual_checksum != expected_checksum:
-                return OperationResult(False,
-                    f"Conflict: {file_path} was modified externally. Aborting to prevent data loss.")
-    except (IOError, OSError) as e:
-        return OperationResult(False, f"Read error: {e}")
+    read_result = _read_file_content(file_path, expected_checksum)
+    if not read_result.success:
+        return read_result
+    content = read_result.data
 
     block_range = find_block_range(content, line_number)
     if not block_range:
@@ -210,7 +208,7 @@ def edit_object_in_file(file_path: str, line_number: int, new_attrs: Dict[str, s
     new_content = content[:start_char] + new_block + content[end_char:]
 
     try:
-        path.write_text(new_content)
+        Path(file_path).write_text(new_content)
     except (IOError, OSError) as e:
         return OperationResult(False, f"Write error: {e}")
 
@@ -232,19 +230,11 @@ def delete_object_from_file(file_path: str, line_number: int,
     """
     if _op_logger:
         _op_logger.debug('file_op', 'delete_object_from_file', params={'file_path': file_path, 'line_number': line_number})
-    path = Path(file_path)
-    if not path.exists():
-        return OperationResult(False, f"File not found: {file_path}")
 
-    try:
-        content = path.read_text()
-        if expected_checksum is not None:
-            actual_checksum = _compute_checksum(content)
-            if actual_checksum != expected_checksum:
-                return OperationResult(False,
-                    f"Conflict: {file_path} was modified externally. Aborting to prevent data loss.")
-    except (IOError, OSError) as e:
-        return OperationResult(False, f"Read error: {e}")
+    read_result = _read_file_content(file_path, expected_checksum)
+    if not read_result.success:
+        return read_result
+    content = read_result.data
 
     block_range = find_block_range(content, line_number)
     if not block_range:
@@ -254,7 +244,7 @@ def delete_object_from_file(file_path: str, line_number: int,
     new_content = _normalize_block_spacing(content[:start_char], '', content[end_char:])
 
     try:
-        path.write_text(new_content)
+        Path(file_path).write_text(new_content)
     except (IOError, OSError) as e:
         return OperationResult(False, f"Write error: {e}")
 
@@ -295,15 +285,10 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: Dict[str, str],
         except (IOError, OSError) as e:
             return OperationResult(False, f"Failed to create file {file_path}: {e}")
 
-    try:
-        content = path.read_text()
-        if expected_checksum is not None:
-            actual_checksum = _compute_checksum(content)
-            if actual_checksum != expected_checksum:
-                return OperationResult(False,
-                    f"Conflict: {file_path} was modified externally. Aborting to prevent data loss.")
-    except (IOError, OSError) as e:
-        return OperationResult(False, f"Read error: {e}")
+    read_result = _read_file_content(file_path, expected_checksum)
+    if not read_result.success:
+        return read_result
+    content = read_result.data
 
     if after_block_line == 0:
         # Insert at beginning
@@ -373,8 +358,8 @@ def move_object_between_files(source_file: str, source_line: int,
 
     if source_real == target_real:
         # Same file reorder - delete first, then add
-        source_line_range = find_block_line_range(source_content, source_line)
-        source_start = source_line_range[0] if source_line_range else source_line
+        # Compute start line directly from char position (already have start_char from block_range)
+        source_start = source_content[:start_char].count('\n') + 1
 
         del_result = delete_object_from_file(source_file, source_line)
         if not del_result.success:

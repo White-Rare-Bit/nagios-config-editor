@@ -535,8 +535,19 @@ async function buildGlobalCommitDialogHtml(data, refData = null, isGitConfigured
     const stagedCreations = staging.stagedCreations || [];
     const stagedObjectDeletions = staging.stagedObjectDeletions || [];
 
-    const hasGuiStaging = Object.keys(pendingEdits).length > 0 || Object.keys(stagedMoves).length > 0 ||
+    // File/folder operations
+    const stagedFileCreations = staging.stagedFileCreations || [];
+    const stagedFileDeletions = staging.stagedFileDeletions || [];
+    const stagedFileMoves = staging.stagedFileMoves || [];
+    const stagedFolderCreations = staging.stagedFolderCreations || [];
+    const stagedFolderDeletions = staging.stagedFolderDeletions || [];
+    const stagedFolderMoves = staging.stagedFolderMoves || [];
+
+    const hasObjectChanges = Object.keys(pendingEdits).length > 0 || Object.keys(stagedMoves).length > 0 ||
                           stagedCreations.length > 0 || stagedObjectDeletions.length > 0;
+    const hasFileOps = stagedFileCreations.length > 0 || stagedFileDeletions.length > 0 || stagedFileMoves.length > 0 ||
+                       stagedFolderCreations.length > 0 || stagedFolderDeletions.length > 0 || stagedFolderMoves.length > 0;
+    const hasGuiStaging = hasObjectChanges || hasFileOps;
 
     if (!hasGuiStaging && hasGitChanges) {
         return await buildGitOnlyCommitDialogHtml(gitChanges, configPath, isGitConfigured);
@@ -587,7 +598,8 @@ async function buildGlobalCommitDialogHtml(data, refData = null, isGitConfigured
             </div>
         </div>
         <div class="commit-changes-list" id="globalCommitChangesList">
-            ${buildGlobalCommitChangesListHtml(fileChanges, configPath, existingFolders, allObjects)}
+            ${buildGlobalCommitChangesListHtml(fileChanges, configPath, existingFolders, allObjects, hasFileOps || hasExternalChanges)}
+            ${buildFileAndFolderOperationsHtml(stagedFolderCreations, stagedFolderDeletions, stagedFolderMoves, stagedFileCreations, stagedFileDeletions, stagedFileMoves, configPath)}
             ${externalChangesHtml}
         </div>
         ${refData && refData.hasNameChanges ? buildReferenceChangesSection(refData) : ''}
@@ -1036,6 +1048,65 @@ async function applyGitCommit() {
 // =============================================================================
 
 /**
+ * Tries to decode a stable key and return its parts.
+ * Stable keys are Base64-encoded "source_file|object_type|name" strings.
+ * @returns {Object|null} - {source_file, object_type, name} or null if not a valid stable key
+ */
+function decodeStableKey(key) {
+    if (typeof key !== 'string') return null;
+
+    // First check if it's already a decoded format (has pipes)
+    if (key.includes('|')) {
+        const parts = key.split('|');
+        if (parts.length === 3) {
+            return { source_file: parts[0], object_type: parts[1], name: parts[2] };
+        }
+    }
+
+    // Try to decode as Base64
+    try {
+        const decoded = atob(key);
+        if (decoded.includes('|')) {
+            const parts = decoded.split('|');
+            if (parts.length === 3) {
+                return { source_file: parts[0], object_type: parts[1], name: parts[2] };
+            }
+        }
+    } catch (e) {
+        // Not valid Base64, that's fine
+    }
+
+    return null;
+}
+
+/**
+ * Finds an object in allObjects by stable key or numeric index.
+ * @param {string|number} key - Either a stable key (Base64 or plain) or numeric global_index
+ * @param {Array} allObjects - Array of all Nagios objects
+ * @returns {Object|null} - Found object or null
+ */
+function findObjectByKey(key, allObjects) {
+    // Try stable key first
+    const stableKeyParts = decodeStableKey(key);
+    if (stableKeyParts) {
+        const { source_file, object_type, name } = stableKeyParts;
+        return allObjects.find(o =>
+            o.source_file === source_file &&
+            o.object_type === object_type &&
+            o.name === name
+        );
+    }
+
+    // Try numeric global_index
+    const numericIdx = typeof key === 'string' ? parseInt(key, 10) : key;
+    if (!isNaN(numericIdx)) {
+        return allObjects.find(o => o.global_index === numericIdx);
+    }
+
+    return null;
+}
+
+/**
  * Ensures a file entry exists in the fileChanges map with initialized arrays.
  */
 function ensureFileChange(fileChanges, filePath, configPath) {
@@ -1075,25 +1146,13 @@ function processStagedMove(moveEntry, allObjects, editsMap, fileChanges, configP
         move = moveEntry;
     }
 
-    // Find object by stable key (string like "file|type|name") or by global_index (number)
-    let obj = null;
-    if (typeof moveKey === 'string' && moveKey.includes('|')) {
-        // Stable key format: "source_file|object_type|name"
-        const [source_file, object_type, name] = moveKey.split('|');
-        obj = allObjects.find(o =>
-            o.source_file === source_file &&
-            o.object_type === object_type &&
-            o.name === name
-        );
-    } else {
-        // Numeric global_index
-        obj = allObjects.find(o => o.global_index === moveKey);
-    }
+    // Find object by stable key (Base64-encoded or plain) or by global_index
+    let obj = findObjectByKey(moveKey, allObjects);
 
     // Fallback: create object from move.object data
     if (!obj && move.object) {
         obj = {
-            global_index: move.object.global_index || -1,
+            global_index: move.object.global_index !== undefined ? move.object.global_index : -1,
             attributes: move.object.attributes || {},
             object_type: move.object.object_type,
             line_number: move.object.line_number,
@@ -1144,10 +1203,13 @@ function processPendingEdit(editEntry, allObjects, movedIndices, fileChanges, co
 
     if (movedIndices.has(editIdx)) return;
 
-    let obj = allObjects.find(o => o.global_index === editIdx);
+    // Find object by stable key (Base64-encoded or plain) or by global_index
+    let obj = findObjectByKey(editIdx, allObjects);
+
     if (!obj && edit.object) {
         obj = {
-            global_index: editIdx,
+            // Use null-check instead of || to handle global_index = 0
+            global_index: edit.object.global_index !== undefined ? edit.object.global_index : -1,
             attributes: edit.object.attributes || {},
             object_type: edit.object.object_type,
             line_number: edit.object.line_number,
@@ -1159,7 +1221,7 @@ function processPendingEdit(editEntry, allObjects, movedIndices, fileChanges, co
 
     const file = ensureFileChange(fileChanges, obj.source_file, configPath);
     file.modifications.push({
-        globalIndex: editIdx,
+        globalIndex: obj.global_index,
         object: obj,
         originalAttrs: { ...edit.original },
         finalAttrs: { ...edit.edited },
@@ -1215,22 +1277,13 @@ function buildGlobalFileBasedChanges(pendingEdits, stagedMoves, stagedCreations,
     // Need to convert stable keys to global indices for proper matching
     const movedIndices = new Set();
     for (const [moveKey, move] of Object.entries(stagedMoves)) {
-        // If stable key, find the object and use its global_index
-        if (typeof moveKey === 'string' && moveKey.includes('|')) {
-            const [source_file, object_type, name] = moveKey.split('|');
-            const obj = allObjects.find(o =>
-                o.source_file === source_file &&
-                o.object_type === object_type &&
-                o.name === name
-            );
-            if (obj) {
-                movedIndices.add(obj.global_index);
-            }
-            // Also add the key itself for matching against key-based edits
-            movedIndices.add(moveKey);
-        } else {
-            movedIndices.add(moveKey);
+        // Try to find the object using stable key or global_index
+        const obj = findObjectByKey(moveKey, allObjects);
+        if (obj) {
+            movedIndices.add(obj.global_index);
         }
+        // Also add the key itself for matching against key-based edits
+        movedIndices.add(moveKey);
     }
 
     // Process edits (skip objects that are being moved) - iterate over dict entries
@@ -1251,7 +1304,7 @@ function buildGlobalFileBasedChanges(pendingEdits, stagedMoves, stagedCreations,
     return fileChanges;
 }
 
-function buildGlobalCommitChangesListHtml(fileChanges, configPath, existingFolders, allObjects) {
+function buildGlobalCommitChangesListHtml(fileChanges, configPath, existingFolders, allObjects, hasOtherChanges = false) {
     let html = '';
 
     if (fileChanges.size > 0) {
@@ -1267,11 +1320,128 @@ function buildGlobalCommitChangesListHtml(fileChanges, configPath, existingFolde
         html += '</div>';
     }
 
-    if (html === '') {
+    // Only show "No changes" if there are no other changes (file/folder ops, external changes)
+    if (html === '' && !hasOtherChanges) {
         html = '<div class="commit-empty">No changes to display.</div>';
     }
 
     return html;
+}
+
+function buildFileAndFolderOperationsHtml(folderCreations, folderDeletions, folderMoves, fileCreations, fileDeletions, fileMoves, configPath) {
+    const totalOps = folderCreations.length + folderDeletions.length + folderMoves.length +
+                     fileCreations.length + fileDeletions.length + fileMoves.length;
+
+    if (totalOps === 0) {
+        return '';
+    }
+
+    // Helper to get relative path from config path
+    const getRelativePath = (fullPath) => {
+        if (fullPath.startsWith(configPath)) {
+            const rel = fullPath.slice(configPath.length);
+            return rel.startsWith('/') ? rel.slice(1) : rel;
+        }
+        return fullPath;
+    };
+
+    let itemsHtml = '';
+
+    // Folder creations
+    for (const op of folderCreations) {
+        const relPath = getRelativePath(op.path);
+        itemsHtml += `
+            <div class="commit-item file-op-item">
+                <div class="commit-item-header file-op-header">
+                    <i class="fa-solid fa-folder-plus file-op-icon file-op-create"></i>
+                    <span class="file-op-action">Create folder</span>
+                    <span class="file-op-path">${escapeHtml(relPath)}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    // Folder deletions
+    for (const op of folderDeletions) {
+        const relPath = getRelativePath(op.path);
+        itemsHtml += `
+            <div class="commit-item file-op-item">
+                <div class="commit-item-header file-op-header">
+                    <i class="fa-solid fa-folder-minus file-op-icon file-op-delete"></i>
+                    <span class="file-op-action">Delete folder</span>
+                    <span class="file-op-path">${escapeHtml(relPath)}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    // Folder moves
+    for (const op of folderMoves) {
+        const sourceRel = getRelativePath(op.sourcePath);
+        const targetRel = getRelativePath(op.targetPath);
+        itemsHtml += `
+            <div class="commit-item file-op-item">
+                <div class="commit-item-header file-op-header">
+                    <i class="fa-solid fa-folder-tree file-op-icon file-op-move"></i>
+                    <span class="file-op-action">Move folder</span>
+                    <span class="file-op-path">${escapeHtml(sourceRel)} <i class="fa-solid fa-arrow-right file-op-arrow"></i> ${escapeHtml(targetRel)}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    // File creations
+    for (const op of fileCreations) {
+        const relPath = getRelativePath(op.path);
+        itemsHtml += `
+            <div class="commit-item file-op-item">
+                <div class="commit-item-header file-op-header">
+                    <i class="fa-solid fa-file-circle-plus file-op-icon file-op-create"></i>
+                    <span class="file-op-action">Create file</span>
+                    <span class="file-op-path">${escapeHtml(relPath)}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    // File deletions
+    for (const op of fileDeletions) {
+        const relPath = getRelativePath(op.path);
+        itemsHtml += `
+            <div class="commit-item file-op-item">
+                <div class="commit-item-header file-op-header">
+                    <i class="fa-solid fa-file-circle-minus file-op-icon file-op-delete"></i>
+                    <span class="file-op-action">Delete file</span>
+                    <span class="file-op-path">${escapeHtml(relPath)}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    // File moves
+    for (const op of fileMoves) {
+        const sourceRel = getRelativePath(op.sourcePath);
+        const targetRel = op.targetFolder ? getRelativePath(op.targetFolder) : getRelativePath(op.targetPath);
+        itemsHtml += `
+            <div class="commit-item file-op-item">
+                <div class="commit-item-header file-op-header">
+                    <i class="fa-solid fa-file-export file-op-icon file-op-move"></i>
+                    <span class="file-op-action">Move file</span>
+                    <span class="file-op-path">${escapeHtml(sourceRel)} <i class="fa-solid fa-arrow-right file-op-arrow"></i> ${escapeHtml(targetRel)}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="commit-section commit-file-ops-section">
+            <div class="commit-section-title">
+                <i class="fa-solid fa-folder-open" style="margin-right: 6px;"></i>
+                File & Folder Operations <span class="badge">${totalOps}</span>
+            </div>
+            ${itemsHtml}
+        </div>
+    `;
 }
 
 function renderGlobalFileDiff(filePath, fileData, allObjects, configPath) {
@@ -1452,6 +1622,16 @@ function updateGlobalContextLines(value) {
         const stagedCreations = staging.stagedCreations || [];
         const stagedObjectDeletions = staging.stagedObjectDeletions || [];
 
+        // File/folder operations
+        const stagedFileCreations = staging.stagedFileCreations || [];
+        const stagedFileDeletions = staging.stagedFileDeletions || [];
+        const stagedFileMoves = staging.stagedFileMoves || [];
+        const stagedFolderCreations = staging.stagedFolderCreations || [];
+        const stagedFolderDeletions = staging.stagedFolderDeletions || [];
+        const stagedFolderMoves = staging.stagedFolderMoves || [];
+        const hasFileOps = stagedFileCreations.length > 0 || stagedFileDeletions.length > 0 || stagedFileMoves.length > 0 ||
+                           stagedFolderCreations.length > 0 || stagedFolderDeletions.length > 0 || stagedFolderMoves.length > 0;
+
         const expandedIndices = new Set();
         document.querySelectorAll('#globalCommitContent .commit-item.expanded').forEach((item, idx) => {
             expandedIndices.add(idx);
@@ -1460,7 +1640,9 @@ function updateGlobalContextLines(value) {
         const fileChanges = buildGlobalFileBasedChanges(pendingEdits, stagedMoves, stagedCreations, stagedObjectDeletions, allObjects, configPath);
         const changesList = document.getElementById('globalCommitChangesList');
         if (changesList) {
-            changesList.innerHTML = buildGlobalCommitChangesListHtml(fileChanges, configPath, existingFolders, allObjects);
+            let html = buildGlobalCommitChangesListHtml(fileChanges, configPath, existingFolders, allObjects, hasFileOps);
+            html += buildFileAndFolderOperationsHtml(stagedFolderCreations, stagedFolderDeletions, stagedFolderMoves, stagedFileCreations, stagedFileDeletions, stagedFileMoves, configPath);
+            changesList.innerHTML = html;
 
             document.querySelectorAll('#globalCommitContent .commit-item').forEach((item, idx) => {
                 if (expandedIndices.has(idx)) {

@@ -134,10 +134,11 @@ async function deleteAllBackups() {
     const result = await ApiClient.del('/api/backups/all', { silent: true });
 
     if (result.success) {
-        // Clear all backups
+        // Clear all backups from array and DOM
         allBackupRows = [];
+        const tbody = document.getElementById('backupTableBody');
+        if (tbody) tbody.innerHTML = '';
         updateBackupCount();
-        showEmptyState();
         showToast(`Deleted ${result.data.deleted_count} backup${result.data.deleted_count !== 1 ? 's' : ''}`, 'success');
     } else {
         showToast('Error: ' + (result.error || 'Unknown error'), 'error');

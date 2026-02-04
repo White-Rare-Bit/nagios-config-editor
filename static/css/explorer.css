@@ -208,6 +208,64 @@
     display: block;
 }
 
+/* File & Folder Operations Section */
+.commit-file-ops-section {
+    background: var(--nbe-dark-bg-secondary);
+}
+
+.file-op-item {
+    padding: 0;
+}
+
+.file-op-header {
+    display: flex;
+    align-items: center;
+    gap: var(--nbe-space-sm);
+    padding: var(--nbe-space-sm) var(--nbe-space-lg);
+    cursor: default;
+}
+
+.file-op-header:hover {
+    background: var(--nbe-dark-bg-hover);
+}
+
+.file-op-icon {
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.file-op-icon.file-op-create {
+    color: var(--nbe-success);
+}
+
+.file-op-icon.file-op-delete {
+    color: var(--nbe-danger);
+}
+
+.file-op-icon.file-op-move {
+    color: var(--nbe-warning);
+}
+
+.file-op-action {
+    font-size: var(--nbe-font-size-xs);
+    font-weight: 500;
+    color: var(--nbe-dark-text-secondary);
+    min-width: 85px;
+}
+
+.file-op-path {
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-font-size-xs);
+    color: var(--nbe-dark-text-primary);
+}
+
+.file-op-arrow {
+    color: var(--nbe-dark-text-muted);
+    margin: 0 var(--nbe-space-xs);
+    font-size: var(--nbe-font-size-3xs);
+}
+
 /* Inner wrapper ensures backgrounds extend to full scrollable width */
 .diff-content {
     display: inline-block;
@@ -5097,6 +5155,25 @@ body.editing-locked .commit-btn {
 /* =============================================================================
    STAGED OPERATIONS VISUAL INDICATORS
    ============================================================================= */
+
+/* Selected folder indicator */
+.workspace-tree-row.selected {
+    background: var(--nbe-dark-bg-elevated);
+    border-left: 2px solid var(--nbe-dark-accent-primary);
+}
+
+.workspace-tree-row.selected .tree-label {
+    color: var(--nbe-dark-accent-primary);
+}
+
+/* Root folder styling */
+.workspace-tree-row--root {
+    font-weight: 500;
+}
+
+.workspace-tree-row--root .tree-label--root {
+    font-weight: 600;
+}
 
 /* Staged row indicators */
 .workspace-tree-row.staged-new {

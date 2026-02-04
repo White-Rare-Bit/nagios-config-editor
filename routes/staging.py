@@ -964,6 +964,16 @@ def api_apply_staging():
 
     service = get_service()
 
+    # Create backup BEFORE applying any changes
+    bm = get_backup_manager()
+    if bm:
+        try:
+            user_name = staging_data.get('userName', '')
+            user_email = staging_data.get('userEmail', '')
+            bm.create_backup('pre-apply', user_name=user_name, user_email=user_email)
+        except Exception as e:
+            log.warning(f"Failed to create pre-apply backup: {e}")
+
     try:
         # Execute all phases, halting on first error
         applied_summary, all_details, errors, failed_phase = _execute_apply_phases(
@@ -1539,13 +1549,7 @@ def api_staging_commit():
     user_name = staging.get('userName', '') if staging else ''
     user_email = staging.get('userEmail', '') if staging else ''
 
-    # Create backup before finalizing
-    bm = get_backup_manager()
-    if bm:
-        try:
-            bm.create_backup('pre-commit', user_name=user_name, user_email=user_email)
-        except Exception as e:
-            print(f"Warning: Failed to create backup: {e}")
+    # Note: Backup is created in /api/staging/apply BEFORE changes are written to disk
 
     audit_log = {
         'timestamp': datetime.now().isoformat(),

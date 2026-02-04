@@ -475,9 +475,21 @@ class GitService:
             'git_changes': git_changes
         })
 
-    def _append_diff_entry(self, diffs, git_changes, diff_file_paths,
-                           rel_path, lines):
-        """Helper to append a parsed diff entry."""
+    def _append_diff_entry(self,
+                           diffs: List[dict],
+                           git_changes: List[dict],
+                           diff_file_paths: set,
+                           rel_path: str,
+                           lines: List[str]) -> None:
+        """Append a parsed diff entry to the provided collections (mutates in place).
+
+        Args:
+            diffs: List to append diff entry dict to (mutated)
+            git_changes: List to append git change dict to (mutated)
+            diff_file_paths: Set to add file path to (mutated)
+            rel_path: Relative path of the file
+            lines: Diff lines for this file
+        """
         additions = sum(1 for l in lines if l.startswith('+') and not l.startswith('+++'))
         deletions = sum(1 for l in lines if l.startswith('-') and not l.startswith('---'))
 
@@ -590,6 +602,25 @@ class GitService:
     # Mutation methods (hold lock for thread safety)
     # =========================================================================
 
+    def _extract_error(self, result: OperationResult, context: str = '') -> str:
+        """Extract error message from OperationResult with optional context.
+
+        Args:
+            result: OperationResult from _run_git
+            context: Optional context string (e.g., 'Failed to stage files')
+
+        Returns:
+            Formatted error message
+        """
+        if not result.success:
+            error = result.error
+        elif result.data:
+            error = result.data.stderr or result.data.stdout or 'Unknown error'
+        else:
+            error = 'Unknown error'
+
+        return f'{context}: {error}' if context else error
+
     def init_repo(self) -> OperationResult:
         """Initialize a git repository in config_path.
 
@@ -597,24 +628,30 @@ class GitService:
         Returns OperationResult with data=GitRunResult.
         """
         with self._lock:
-            result = self._run_git(['init'], timeout=TIMEOUT_MUTATE)
-            if not result.success:
-                return result
-            if result.data.returncode != 0:
-                return OperationResult(success=False,
-                                       error=f'Failed to initialize git: {result.data.stderr}')
+            return self._init_repo_impl()
 
-            # Create .gitignore
-            gitignore_path = os.path.join(self._config_path, '.gitignore')
-            if not os.path.exists(gitignore_path):
-                with open(gitignore_path, 'w') as f:
-                    f.write('# Nagios Bulk Editor - auto-generated .gitignore\n')
-                    f.write('backups/\n')
-                    f.write('.nagios_staging/\n')
-                    f.write('*.bak\n')
-                    f.write('*.tmp\n')
+    def _init_repo_impl(self) -> OperationResult:
+        """Implementation of repo initialization (lock must be held by caller).
 
-            return OperationResult(success=True, data=result.data)
+        Returns OperationResult with data=GitRunResult.
+        """
+        result = self._run_git(['init'], timeout=TIMEOUT_MUTATE)
+        if not result.success:
+            return result
+        if result.data.returncode != 0:
+            return OperationResult(success=False,
+                                   error=f'Failed to initialize git: {result.data.stderr}')
+
+        gitignore_path = os.path.join(self._config_path, '.gitignore')
+        if not os.path.exists(gitignore_path):
+            with open(gitignore_path, 'w') as f:
+                f.write('# Nagios Bulk Editor - auto-generated .gitignore\n')
+                f.write('backups/\n')
+                f.write('.nagios_staging/\n')
+                f.write('*.bak\n')
+                f.write('*.tmp\n')
+
+        return OperationResult(success=True, data=result.data)
 
     def commit(self, message: str, files: Optional[List[str]] = None,
                user_name: Optional[str] = None, user_email: Optional[str] = None,
@@ -644,7 +681,7 @@ class GitService:
 
             if not repo_exists:
                 if auto_init:
-                    init_result = self.init_repo.__wrapped__(self) if hasattr(self.init_repo, '__wrapped__') else self._init_repo_unlocked()
+                    init_result = self._init_repo_impl()
                     if not init_result.success:
                         return init_result
                     initialized = True
@@ -662,7 +699,7 @@ class GitService:
                 return stage_result
             if stage_result.data.returncode != 0:
                 return OperationResult(success=False,
-                                       error=f'Failed to stage files: {stage_result.data.stderr}')
+                                       error=self._extract_error(stage_result, 'Failed to stage files'))
 
             # Commit with user identity
             commit_cmd = ['-c', f'user.name={user_name}', '-c', f'user.email={user_email}',
@@ -696,25 +733,6 @@ class GitService:
                 'initialized': initialized
             })
 
-    def _init_repo_unlocked(self) -> OperationResult:
-        """Initialize repo without acquiring the lock (caller must hold lock)."""
-        result = self._run_git(['init'], timeout=TIMEOUT_MUTATE)
-        if not result.success:
-            return result
-        if result.data.returncode != 0:
-            return OperationResult(success=False,
-                                   error=f'Failed to initialize git: {result.data.stderr}')
-
-        gitignore_path = os.path.join(self._config_path, '.gitignore')
-        if not os.path.exists(gitignore_path):
-            with open(gitignore_path, 'w') as f:
-                f.write('# Nagios Bulk Editor - auto-generated .gitignore\n')
-                f.write('backups/\n')
-                f.write('.nagios_staging/\n')
-                f.write('*.bak\n')
-                f.write('*.tmp\n')
-
-        return OperationResult(success=True, data=result.data)
 
     def discard(self, filepath: str) -> OperationResult:
         """Discard changes to a specific file.
@@ -772,9 +790,8 @@ class GitService:
                 'output': (checkout_result.data.stdout or checkout_result.data.stderr) if checkout_result.success else checkout_result.error
             })
             if not checkout_result.success or checkout_result.data.returncode != 0:
-                error = checkout_result.error if not checkout_result.success else checkout_result.data.stderr
                 return OperationResult(success=False,
-                                       error=f'Failed to discard changes: {error}',
+                                       error=self._extract_error(checkout_result, 'Failed to discard changes'),
                                        data={'commands': commands_run})
 
             # Clean untracked files
@@ -785,128 +802,11 @@ class GitService:
                 'output': (clean_result.data.stdout or clean_result.data.stderr) if clean_result.success else clean_result.error
             })
             if not clean_result.success or clean_result.data.returncode != 0:
-                error = clean_result.error if not clean_result.success else clean_result.data.stderr
                 return OperationResult(success=False,
-                                       error=f'Failed to clean untracked files: {error}',
+                                       error=self._extract_error(clean_result, 'Failed to clean untracked files'),
                                        data={'commands': commands_run})
 
             return OperationResult(success=True, data={'commands': commands_run})
-
-    def _try_restore_stash(self, stashed: bool) -> Optional[str]:
-        """Attempt to restore stashed changes.
-
-        Args:
-            stashed: Whether changes were stashed
-
-        Returns:
-            Error message if stash pop failed, None if successful or no stash
-        """
-        if not stashed:
-            return None
-
-        pop_result = self._run_git(['stash', 'pop'], timeout=TIMEOUT_STATUS)
-        if not pop_result.success or pop_result.data.returncode != 0:
-            pop_err = pop_result.error if not pop_result.success else pop_result.data.stderr
-            logger.warning(f"Failed to restore stash: {pop_err}")
-            return pop_err
-        return None
-
-    def _build_restore_error_with_stash_info(
-        self,
-        base_error: str,
-        stashed: bool,
-        stash_pop_error: Optional[str]
-    ) -> str:
-        """Build error message with stash recovery info.
-
-        Args:
-            base_error: The base error message
-            stashed: Whether changes were stashed
-            stash_pop_error: Error from stash pop attempt, if any
-
-        Returns:
-            Error message with stash recovery instructions if applicable
-        """
-        if not stashed:
-            return base_error
-        if stash_pop_error:
-            return (
-                f"{base_error} Your uncommitted changes were stashed but could not be "
-                f"automatically restored (error: {stash_pop_error}). "
-                "Run 'git stash pop' manually to recover your work."
-            )
-        return f"{base_error} Your uncommitted changes have been restored from stash."
-
-    def _verify_commit(self, commit_hash: str) -> OperationResult:
-        """Verify that a commit exists and get its message.
-
-        Args:
-            commit_hash: The commit hash to verify
-
-        Returns:
-            OperationResult with data={'exists': bool, 'message': str}
-        """
-        verify_result = self._run_git(
-            ['cat-file', '-t', commit_hash], timeout=TIMEOUT_QUERY)
-
-        if verify_result.data is None:
-            return OperationResult(success=False, error=verify_result.error)
-
-        if verify_result.data.returncode != 0 or verify_result.data.stdout.strip() != 'commit':
-            return OperationResult(success=False, error='Commit not found')
-
-        # Get commit message
-        msg_result = self._run_git(
-            ['log', '-1', '--format=%s', commit_hash], timeout=TIMEOUT_QUERY)
-        commit_message = ''
-        if msg_result.success and msg_result.data and msg_result.data.returncode == 0:
-            commit_message = msg_result.data.stdout.strip()
-
-        return OperationResult(success=True, data={
-            'exists': True,
-            'message': commit_message
-        })
-
-    def _stash_changes_if_needed(self, has_changes: bool) -> bool:
-        """Stash uncommitted changes if present.
-
-        Args:
-            has_changes: Whether there are uncommitted changes
-
-        Returns:
-            True if changes were successfully stashed, False otherwise
-        """
-        if not has_changes:
-            return False
-
-        stash_result = self._run_git(
-            ['stash', 'push', '-m', 'Auto-stash before restore'],
-            timeout=TIMEOUT_MUTATE)
-        return stash_result.success and stash_result.data and stash_result.data.returncode == 0
-
-    def _get_file_set_for_commit(self, commit_ref: str) -> OperationResult:
-        """Get the set of files in a commit.
-
-        Args:
-            commit_ref: The commit reference (e.g., 'HEAD' or a hash)
-
-        Returns:
-            OperationResult with data=set of file paths
-        """
-        result = self._run_git(
-            ['ls-tree', '-r', '--name-only', commit_ref], timeout=TIMEOUT_MUTATE)
-
-        if result.data is None:
-            return OperationResult(success=False, error=result.error)
-
-        if result.data.returncode != 0:
-            return OperationResult(
-                success=False,
-                error=result.error or result.data.stderr
-            )
-
-        files = set(f.strip() for f in result.data.stdout.strip().split('\n') if f.strip())
-        return OperationResult(success=True, data=files)
 
     def _cleanup_extra_files(self, files_to_delete: List[str]) -> List[str]:
         """Delete files that don't exist in target commit and clean up empty directories.
@@ -963,52 +863,71 @@ class GitService:
             has_changes = bool(status_result.data.stdout.strip()) if status_result.data else False
 
             # Verify commit exists and get message
-            verify_result = self._verify_commit(commit_hash)
-            if not verify_result.success:
-                return verify_result
-            commit_message = verify_result.data.get('message', '')
+            verify_result = self._run_git(['cat-file', '-t', commit_hash], timeout=TIMEOUT_QUERY)
+            if verify_result.data is None:
+                return OperationResult(success=False, error=verify_result.error)
+            if verify_result.data.returncode != 0 or verify_result.data.stdout.strip() != 'commit':
+                return OperationResult(success=False, error='Commit not found')
+
+            msg_result = self._run_git(['log', '-1', '--format=%s', commit_hash], timeout=TIMEOUT_QUERY)
+            commit_message = (msg_result.data.stdout.strip() if (msg_result.success and
+                                                                 msg_result.data and
+                                                                 msg_result.data.returncode == 0) else '')
 
             # Stash uncommitted changes if present
-            stashed = self._stash_changes_if_needed(has_changes)
+            stashed = False
+            if has_changes:
+                stash_result = self._run_git(['stash', 'push', '-m', 'Auto-stash before restore'],
+                                           timeout=TIMEOUT_MUTATE)
+                stashed = stash_result.success and stash_result.data and stash_result.data.returncode == 0
+
+            # Helper function for error recovery
+            def handle_restore_error(base_error: str) -> OperationResult:
+                """Try to restore stash and build appropriate error message."""
+                stash_pop_error = None
+                if stashed:
+                    pop_result = self._run_git(['stash', 'pop'], timeout=TIMEOUT_STATUS)
+                    if not pop_result.success or pop_result.data.returncode != 0:
+                        stash_pop_error = (pop_result.error if not pop_result.success
+                                         else pop_result.data.stderr)
+                        logger.warning(f"Failed to restore stash: {stash_pop_error}")
+
+                if not stashed:
+                    error_msg = base_error
+                elif stash_pop_error:
+                    error_msg = (
+                        f"{base_error} Your uncommitted changes were stashed but could not be "
+                        f"automatically restored (error: {stash_pop_error}). "
+                        "Run 'git stash pop' manually to recover your work."
+                    )
+                else:
+                    error_msg = f"{base_error} Your uncommitted changes have been restored from stash."
+
+                return OperationResult(success=False, error=error_msg)
 
             # Get files in HEAD
-            head_result = self._get_file_set_for_commit('HEAD')
-            if not head_result.success:
-                stash_err = self._try_restore_stash(stashed)
-                return OperationResult(
-                    success=False,
-                    error=self._build_restore_error_with_stash_info(
-                        f'Failed to list HEAD files: {head_result.error}', stashed, stash_err
-                    )
-                )
-            head_files = head_result.data
+            head_result = self._run_git(['ls-tree', '-r', '--name-only', 'HEAD'],
+                                       timeout=TIMEOUT_MUTATE)
+            if head_result.data is None or head_result.data.returncode != 0:
+                return handle_restore_error(f'Failed to list HEAD files: {head_result.error}')
+            head_files = set(f.strip() for f in head_result.data.stdout.strip().split('\n') if f.strip())
 
             # Get files in target commit
-            target_result = self._get_file_set_for_commit(commit_hash)
-            if not target_result.success:
-                stash_err = self._try_restore_stash(stashed)
-                return OperationResult(
-                    success=False,
-                    error=self._build_restore_error_with_stash_info(
-                        f'Failed to list target commit files: {target_result.error}', stashed, stash_err
-                    )
-                )
-            target_files = target_result.data
+            target_result = self._run_git(['ls-tree', '-r', '--name-only', commit_hash],
+                                        timeout=TIMEOUT_MUTATE)
+            if target_result.data is None or target_result.data.returncode != 0:
+                return handle_restore_error(f'Failed to list target commit files: {target_result.error}')
+            target_files = set(f.strip() for f in target_result.data.stdout.strip().split('\n') if f.strip())
 
             files_to_delete = list(head_files - target_files)
 
             # Checkout files from target commit
-            restore_result = self._run_git(
-                ['checkout', commit_hash, '--', '.'], timeout=TIMEOUT_MUTATE)
+            restore_result = self._run_git(['checkout', commit_hash, '--', '.'],
+                                         timeout=TIMEOUT_MUTATE)
             if restore_result.data is None or restore_result.data.returncode != 0:
-                stash_err = self._try_restore_stash(stashed)
-                error = restore_result.error or (restore_result.data.stderr if restore_result.data else 'Unknown error')
-                return OperationResult(
-                    success=False,
-                    error=self._build_restore_error_with_stash_info(
-                        f'Failed to restore: {error}', stashed, stash_err
-                    )
-                )
+                error = (restore_result.error or
+                        (restore_result.data.stderr if restore_result.data else 'Unknown error'))
+                return handle_restore_error(f'Failed to restore: {error}')
 
             # Delete files that were added after the target commit
             deleted_files = self._cleanup_extra_files(files_to_delete)
@@ -1040,9 +959,8 @@ class GitService:
             # Initialize new repo
             init_result = self._run_git(['init'], timeout=TIMEOUT_STATUS)
             if not init_result.success or init_result.data.returncode != 0:
-                error = init_result.error if not init_result.success else init_result.data.stderr
                 return OperationResult(success=False,
-                                       error=f'Failed to initialize git: {error}')
+                                       error=self._extract_error(init_result, 'Failed to initialize git'))
 
             # Add all files
             self._run_git(['add', '-A'], timeout=TIMEOUT_MUTATE)
@@ -1054,9 +972,8 @@ class GitService:
                 timeout=TIMEOUT_MUTATE
             )
             if not commit_result.success or commit_result.data.returncode != 0:
-                error = commit_result.error if not commit_result.success else commit_result.data.stderr
                 return OperationResult(success=False,
-                                       error=f'Failed to create initial commit: {error}')
+                                       error=self._extract_error(commit_result, 'Failed to create initial commit'))
 
             return OperationResult(success=True, data={
                 'message': 'Git history cleared and reinitialized'

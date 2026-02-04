@@ -103,6 +103,15 @@
         } catch (e) {
             console.warn('Failed to restore expanded state:', e);
         }
+
+        // Default: expand root folder if nothing else is expanded
+        if (state.expandedFolders.size === 0 && state.configPath) {
+            state.expandedFolders.add(state.configPath);
+        }
+        // Default: select root folder if nothing selected
+        if (!state.selectedFolder && state.configPath) {
+            state.selectedFolder = state.configPath;
+        }
     }
 
     function saveExpandedState() {
@@ -258,8 +267,20 @@
             return current;
         }
 
-        // Add existing files to tree
+        // Add existing files to tree (skip files being moved to staged folders)
+        const filesBeingMovedToStagedFolders = new Set(
+            (state.stagedFileMoves || [])
+                .filter(m => (state.stagedFolderCreations || []).some(c =>
+                    c.path === m.targetFolder || m.targetFolder.startsWith(c.path + '/')
+                ))
+                .map(m => m.sourcePath)
+        );
+
         for (const file of files) {
+            // Skip files being moved to staged folders (they'll appear at target location)
+            if (filesBeingMovedToStagedFolders.has(file)) {
+                continue;
+            }
             const parts = file.split('/');
             const filename = parts.pop();
             const dir = parts.join('/') || state.configPath;
@@ -292,6 +313,19 @@
             }
         }
 
+        // Add staged file moves at their target locations
+        for (const move of (state.stagedFileMoves || [])) {
+            if (move.targetPath) {
+                const parts = move.targetPath.split('/');
+                const filename = parts.pop();
+                const dir = parts.join('/') || state.configPath;
+                const folder = ensureFolderPath(dir);
+                if (!folder.files.some(f => f.path === move.targetPath)) {
+                    folder.files.push({ path: move.targetPath, name: filename, isNew: false, isMovePending: true, originalPath: move.sourcePath });
+                }
+            }
+        }
+
         // Add new files (staged only, not yet on disk)
         for (const newFile of state.newFiles) {
             const parts = newFile.split('/');
@@ -317,6 +351,7 @@
         // Render folder row with new enterprise styling
         function renderFolder(folder, name, depth) {
             const isExpanded = state.expandedFolders.has(folder.path);
+            const isSelected = state.selectedFolder === folder.path;
             const subfolderNames = Object.keys(folder.folders).sort();
             const hasChildren = subfolderNames.length > 0 || folder.files.length > 0;
 
@@ -348,6 +383,7 @@
             // Determine row styling based on staged status
             let rowClasses = 'workspace-tree-row';
             if (isExpanded) rowClasses += ' expanded';
+            if (isSelected) rowClasses += ' selected';
             if (isStagedForDeletion) rowClasses += ' staged-deletion';
             if (isStagedForMove) rowClasses += ' staged-move';
             if (isStagedNew) rowClasses += ' staged-new';
@@ -370,7 +406,7 @@
 
             let html = `
             <div class="${rowClasses}" data-depth="${depth}" data-folder="${Explorer.escapeHtml(folder.path)}"
-                 onclick="Explorer.toggleFolderExpand('${Explorer.escapeJs(folder.path)}')"
+                 onclick="Explorer.selectFolder('${Explorer.escapeJs(folder.path)}')"
                  ondragover="Explorer.handleFolderDragOver(event, '${Explorer.escapeJs(folder.path)}')"
                  ondrop="Explorer.handleFolderDrop(event, '${Explorer.escapeJs(folder.path)}')"
                  ondragleave="Explorer.handleFolderDragLeave(event)"
@@ -404,7 +440,9 @@
 
         // Render file row with new enterprise styling
         function renderFileItem(file, depth = 0) {
-            const fileObjects = state.allObjects.filter(o => o.source_file === file.path);
+            // For files being moved, show objects from original path
+            const effectiveSourcePath = file.originalPath || file.path;
+            const fileObjects = state.allObjects.filter(o => o.source_file === effectiveSourcePath);
             const pendingObjects = [...state.stagedMoves.entries()].filter(([_, m]) => m.targetFile === file.path);
             const stagedCreationsForFile = state.stagedCreations
                 .map((creation, idx) => ({ creation, idx }))
@@ -418,6 +456,7 @@
             const isStagedForDeletion = (state.stagedFileDeletions || []).some(d => d.path === file.path);
             const isStagedForMove = (state.stagedFileMoves || []).some(m => m.sourcePath === file.path);
             const isStagedNew = (state.stagedFileCreations || []).some(c => c.path === file.path);
+            const isMovePending = file.isMovePending || false;
 
             const expandIcon = hasObjects ? Explorer.getIcon('chevron-right') : '';
             const fileIcon = file.isNew || isStagedNew ? Explorer.getIcon('file-plus') : Explorer.getIcon('file-text');
@@ -427,22 +466,27 @@
             let rowClasses = 'workspace-tree-row';
             if (isExpanded) rowClasses += ' expanded';
             if (isStagedForDeletion) rowClasses += ' staged-deletion';
-            if (isStagedForMove) rowClasses += ' staged-move';
+            if (isStagedForMove || isMovePending) rowClasses += ' staged-move';
             if (file.isNew || isStagedNew) rowClasses += ' staged-new';
 
             let actionHtml = '';
-            if (file.isNew || isStagedNew) {
+            if (isMovePending) {
+                // File is being moved TO this location - show undo button
+                actionHtml = `<button class="tree-action-btn" onclick="event.stopPropagation(); Explorer.unstageFileMove('${Explorer.escapeJs(file.originalPath)}', event)" title="Undo move">${Explorer.getIcon('x')}</button>`;
+            } else if (file.isNew || isStagedNew) {
                 actionHtml = `<button class="tree-action-btn" onclick="event.stopPropagation(); Explorer.undoNewFile('${Explorer.escapeJs(file.path)}', event)" title="Undo">${Explorer.getIcon('x')}</button>`;
             } else if (isStagedForDeletion) {
                 actionHtml = `<button class="tree-action-btn" onclick="event.stopPropagation(); Explorer.unstageFileDeletion('${Explorer.escapeJs(file.path)}', event)" title="Undo deletion">${Explorer.getIcon('x')}</button>`;
-            } else {
+            } else if (!isStagedForMove) {
+                // Only show delete button if file is not being moved out
                 actionHtml = `<button class="tree-action-btn tree-action-btn--danger" onclick="event.stopPropagation(); Explorer.stageDeleteFile('${Explorer.escapeJs(file.path)}', event)" title="Delete file">${deleteIcon}</button>`;
             }
 
             // Add visual indicator badge
             let indicatorHtml = '';
             if (isStagedForDeletion) indicatorHtml = '<span class="staged-indicator staged-indicator--delete" title="Staged for deletion">DEL</span>';
-            else if (isStagedForMove) indicatorHtml = '<span class="staged-indicator staged-indicator--move" title="Staged for move">MOV</span>';
+            else if (isStagedForMove) indicatorHtml = '<span class="staged-indicator staged-indicator--move" title="Staged to move out">MOV</span>';
+            else if (isMovePending) indicatorHtml = '<span class="staged-indicator staged-indicator--move" title="Staged to move here">MOV</span>';
             else if (file.isNew || isStagedNew) indicatorHtml = '<span class="staged-indicator staged-indicator--new" title="Staged for creation">NEW</span>';
 
             let html = `
@@ -470,22 +514,53 @@
             return html;
         }
 
-        // Build the tree HTML
+        // Build the tree HTML - show root folder as top-level item
         let html = '';
         const rootFolderNames = Object.keys(root.folders).sort();
+        const rootName = state.configPath.split('/').pop() || 'config';
+        const isRootExpanded = state.expandedFolders.has(state.configPath);
+        const isRootSelected = state.selectedFolder === state.configPath;
+        const hasRootChildren = rootFolderNames.length > 0 || root.files.length > 0;
 
-        if (rootFolderNames.length === 0 && root.files.length === 0) {
-            html = '<div class="workspace-empty-file">No configuration files yet. Click + to create one.</div>';
+        // Count total objects in root
+        let totalRootObjects = root.files.reduce((sum, f) => {
+            return sum + state.allObjects.filter(o => o.source_file === f.path).length;
+        }, 0);
+        for (const subName of rootFolderNames) {
+            totalRootObjects += countFolderObjects(root.folders[subName]);
+        }
+
+        const rootExpandIcon = hasRootChildren ? Explorer.getIcon('chevron-right') : '';
+        const rootFolderIcon = isRootExpanded ? Explorer.getIcon('folder-open') : Explorer.getIcon('folder');
+
+        // Render root folder row
+        html += `
+        <div class="workspace-tree-row workspace-tree-row--root${isRootExpanded ? ' expanded' : ''}${isRootSelected ? ' selected' : ''}" data-depth="0" data-folder="${Explorer.escapeHtml(state.configPath)}"
+             onclick="Explorer.selectFolder('${Explorer.escapeJs(state.configPath)}')"
+             ondragover="Explorer.handleFolderDragOver(event, '${Explorer.escapeJs(state.configPath)}')"
+             ondrop="Explorer.handleFolderDrop(event, '${Explorer.escapeJs(state.configPath)}')"
+             ondragleave="Explorer.handleFolderDragLeave(event)">
+            <button class="tree-expand-btn${isRootExpanded ? ' expanded' : ''}" onclick="event.stopPropagation(); Explorer.toggleFolderExpand('${Explorer.escapeJs(state.configPath)}')">${rootExpandIcon}</button>
+            <span class="tree-icon tree-icon--folder${isRootExpanded ? ' expanded' : ''}">${rootFolderIcon}</span>
+            <span class="tree-label tree-label--folder tree-label--root">${Explorer.escapeHtml(rootName)}</span>
+            <span class="tree-count">${totalRootObjects}</span>
+        </div>
+        <div class="tree-children${isRootExpanded ? ' expanded with-guides' : ''}">`;
+
+        if (!hasRootChildren) {
+            html += '<div class="workspace-empty-file">No configuration files yet. Click + to create one.</div>';
         } else {
-            // Render all subfolders at root level
+            // Render all subfolders
             for (const name of rootFolderNames) {
-                html += renderFolder(root.folders[name], name, 0);
+                html += renderFolder(root.folders[name], name, 1);
             }
             // Render files at root level
             for (const file of root.files.sort((a, b) => a.name.localeCompare(b.name))) {
-                html += renderFileItem(file, 0);
+                html += renderFileItem(file, 1);
             }
         }
+
+        html += '</div>';
 
         container.innerHTML = html;
     }
@@ -498,6 +573,16 @@
         }
         // Track selected folder for subfolder creation
         state.selectedFolder = folderPath;
+        renderTargetPane();
+    }
+
+    function selectFolder(folderPath) {
+        // Select folder without toggling expand (for creating items in selected folder)
+        state.selectedFolder = folderPath;
+        // Also expand it if not already
+        if (!state.expandedFolders.has(folderPath)) {
+            state.expandedFolders.add(folderPath);
+        }
         renderTargetPane();
     }
 
@@ -610,10 +695,14 @@
             `;
             }
 
-            // Drop zone after each item
-            html += `<div class="workspace-drop-zone" data-file="${Explorer.escapeHtml(filePath)}" data-position="${item.position + 0.5}"
+            // Drop zone after each item - use midpoint to next item to avoid position conflicts
+            const nextItem = items[i + 1];
+            const dropPosition = nextItem
+                ? (item.position + nextItem.position) / 2  // Midpoint between current and next
+                : item.position + 1;  // After last item, just add 1
+            html += `<div class="workspace-drop-zone" data-file="${Explorer.escapeHtml(filePath)}" data-position="${dropPosition}"
                      ondragover="Explorer.handleObjectDragOver(event)"
-                     ondrop="Explorer.handleObjectDrop(event, '${Explorer.escapeJs(filePath)}', ${item.position + 0.5})"
+                     ondrop="Explorer.handleObjectDrop(event, '${Explorer.escapeJs(filePath)}', ${dropPosition})"
                      ondragleave="Explorer.handleObjectDragLeave(event)"></div>`;
         }
 
@@ -1206,6 +1295,39 @@
                 return;
             }
 
+            // Check if this is a staged folder creation (not on disk yet)
+            const isStagedFolder = (state.stagedFolderCreations || []).some(c => c.path === sourcePath);
+            if (isStagedFolder) {
+                // Move staged folder creation to new parent
+                const newPath = effectiveTargetFolder + '/' + folderName;
+
+                // Update the staged folder creation path
+                const stagedFolder = state.stagedFolderCreations.find(c => c.path === sourcePath);
+                if (stagedFolder) {
+                    stagedFolder.path = newPath;
+                }
+
+                // Update any files/creations that reference this folder
+                for (const creation of state.stagedCreations) {
+                    if (creation.targetFile && creation.targetFile.startsWith(sourcePath + '/')) {
+                        creation.targetFile = newPath + creation.targetFile.substring(sourcePath.length);
+                    }
+                }
+                for (const newFile of [...state.newFiles]) {
+                    if (newFile.startsWith(sourcePath + '/')) {
+                        state.newFiles.delete(newFile);
+                        state.newFiles.add(newPath + newFile.substring(sourcePath.length));
+                    }
+                }
+
+                state.expandedFolders.add(effectiveTargetFolder);
+                Explorer.saveStagedChanges();
+                Explorer.updateCommitUI();
+                renderTargetPane();
+                showToast(`Moved new folder to ${effectiveTargetFolder.split('/').pop() || 'config'}/`, 'info');
+                return;
+            }
+
             moveFolderImmediate(sourcePath, effectiveTargetFolder);
             return;
         }
@@ -1245,6 +1367,39 @@
 
             if (sourceParent === effectiveTargetFolder) {
                 showToast('File is already in this folder', 'warning');
+                return;
+            }
+
+            // Check if target folder is a staged creation (not on disk yet)
+            const isTargetStagedFolder = (state.stagedFolderCreations || []).some(c =>
+                c.path === effectiveTargetFolder || effectiveTargetFolder.startsWith(c.path + '/')
+            );
+
+            if (isTargetStagedFolder) {
+                // Stage the file move locally - can't use API since folder doesn't exist yet
+                // We need to stage this as a file move that will be applied when folder is created
+                const existingMove = (state.stagedFileMoves || []).find(m => m.sourcePath === sourcePath);
+                if (existingMove) {
+                    // Update existing staged move
+                    existingMove.targetFolder = effectiveTargetFolder;
+                    existingMove.targetPath = newPath;
+                } else {
+                    // Create new staged file move
+                    if (!state.stagedFileMoves) state.stagedFileMoves = [];
+                    state.stagedFileMoves.push({
+                        sourcePath: sourcePath,
+                        targetFolder: effectiveTargetFolder,
+                        targetPath: newPath
+                    });
+                }
+
+                state.expandedFolders.add(effectiveTargetFolder);
+                Explorer.saveStagedChanges();
+                Explorer.updateCommitUI();
+                renderTargetPane();
+                Explorer.buildTree();
+                const displayName = effectiveTargetFolder.split('/').pop() || 'config';
+                showToast(`Staged file move to ${displayName}/. Commit to apply.`, 'info');
                 return;
             }
 
@@ -1572,6 +1727,22 @@
         showToast(`Unstaged deletion of "${filePath.split('/').pop()}"`, 'info');
     }
 
+    async function unstageFileMove(sourcePath, event) {
+        if (event) {
+            event.stopPropagation();
+        }
+
+        state.stagedFileMoves = (state.stagedFileMoves || []).filter(m => m.sourcePath !== sourcePath);
+
+        Explorer.saveStagedChanges();
+        await Explorer.loadStagedChanges(false);
+
+        Explorer.updateCommitUI();
+        renderTargetPane();
+        Explorer.buildTree();
+        showToast(`Unstaged move of "${sourcePath.split('/').pop()}"`, 'info');
+    }
+
     async function unstageFolderDeletion(folderPath, event) {
         if (event) {
             event.stopPropagation();
@@ -1840,6 +2011,7 @@
     Explorer.updateWorkspaceHeader = updateWorkspaceHeader;
     Explorer.renderTargetPane = renderTargetPane;
     Explorer.toggleFolderExpand = toggleFolderExpand;
+    Explorer.selectFolder = selectFolder;
     Explorer.renderFileObjects = renderFileObjects;
     Explorer.toggleFileExpand = toggleFileExpand;
     Explorer.handleFileDragOver = handleFileDragOver;
@@ -1865,6 +2037,7 @@
     Explorer.stageDeleteFile = stageDeleteFile;
     Explorer.stageDeleteFolder = stageDeleteFolder;
     Explorer.unstageFileDeletion = unstageFileDeletion;
+    Explorer.unstageFileMove = unstageFileMove;
     Explorer.unstageFolderDeletion = unstageFolderDeletion;
     Explorer.unstageFolderCreation = unstageFolderCreation;
     Explorer.createNewItem = createNewItem;
