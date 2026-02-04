@@ -117,12 +117,12 @@ def api_update_settings():
         if path:
             # Security: Verify the binary is actually Nagios before saving
             # This prevents command injection via malicious binary paths
-            is_valid, message, version = verify_nagios_binary(path)
-            if is_valid:
+            result = verify_nagios_binary(path)
+            if result.success:
                 server_config.paths.nagios_bin = path
                 updated.append('nagios_bin')
             else:
-                errors.append(f'Invalid Nagios binary: {message}')
+                errors.append(f'Invalid Nagios binary: {result.error}')
         else:
             # Allow clearing the path
             server_config.paths.nagios_bin = path

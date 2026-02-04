@@ -61,7 +61,10 @@ def api_validate_check():
     verify_message = exists_message
 
     if exists:
-        verified, verify_message, version = validator.verify_binary()
+        result = validator.verify_binary()
+        verified = result.success
+        version = result.data
+        verify_message = result.error if result.error else "Valid Nagios binary"
 
     return jsonify({
         'available': exists,
