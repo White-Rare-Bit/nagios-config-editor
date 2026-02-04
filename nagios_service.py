@@ -13,6 +13,7 @@ from typing import Dict, List, Optional
 from nagios_model import NagiosObject, NAME_FIELDS, OperationResult, get_object_name
 from nagios_parser import NagiosConfigParser
 from file_operations import (
+    is_safe_path,
     edit_object_in_file, delete_object_from_file,
     add_object_to_file, move_object_between_files
 )
@@ -27,31 +28,6 @@ import os
 import shutil
 
 
-def _iterate_entries(data):
-    """Iterate over staging entries regardless of dict or list format.
-
-    Handles both formats:
-    - Dict format {key: entry_data, ...}: adds key/globalIndex to entry_data
-    - List format [{entry_data}, ...]: returns entries directly
-
-    Args:
-        data: Dict or list of staging entries
-
-    Returns:
-        Iterable of entry dicts with key/globalIndex populated
-    """
-    if isinstance(data, dict):
-        for key, entry in data.items():
-            if isinstance(entry, dict):
-                if 'globalIndex' not in entry and 'key' not in entry:
-                    entry['globalIndex'] = key
-                    entry['key'] = key
-                yield entry
-            else:
-                yield entry
-    elif isinstance(data, list):
-        for entry in data:
-            yield entry
 
 
 class NagiosService:
@@ -103,6 +79,71 @@ class NagiosService:
             if self._op_logger:
                 self._op_logger.debug('parser', 'reload', params={'config_path': self._config_path})
             return self._parser
+
+    def _validate_path_safety(self, path: str, path_type: str) -> tuple[bool, Optional[str]]:
+        """Path validation wrapper preventing path traversal attacks.
+
+        Used by 7 apply methods (folder/file creations, deletions, moves)
+        to ensure consistent path safety validation.
+
+        Args:
+            path: Path to validate
+            path_type: Type of path ("file" or "folder") for error messages
+
+        Returns:
+            Tuple of (is_safe, error_message). error_message is None if safe.
+        """
+        safe_result = is_safe_path(path, self._config_path)
+        if not safe_result.success:
+            return (False, f"Unsafe {path_type} path {path}: {safe_result.error}")
+        return (True, None)
+
+    def _build_apply_result(self, operation: str, count: int, errors: list, details: list = None) -> dict:
+        """Construct result dict with consistent structure for apply operations.
+
+        op_logger provides structured logging for error tracking.
+
+        Args:
+            operation: Operation name (e.g., "folder_creations", "object_deletions")
+            count: Number of items successfully processed
+            errors: List of error messages
+            details: Optional list of detail dicts about processed items
+
+        Returns:
+            Dict with success=True, count, errors, and optional details
+        """
+        result = {'success': True, f'{operation}_count': count, 'errors': errors}
+        if details is not None:
+            result['details'] = details
+        return result
+
+    def _find_object_by_entry(self, entry: dict, lookup_type: str) -> Optional[NagiosObject]:
+        """Find object by globalIndex from entry dict.
+
+        Frontend sends globalIndex for edits (validated: Object.fromEntries
+        produces dict with globalIndex as key).
+
+        Args:
+            entry: Entry dict with globalIndex field
+            lookup_type: Operation type ("edit") for logging
+
+        Returns:
+            Found NagiosObject or None
+
+        Note:
+            Caller must hold self._lock to prevent race conditions during iteration.
+        """
+        p = self.parser
+        raw_index = entry.get('globalIndex')
+        if raw_index is not None:
+            global_index = int(raw_index)
+            if 0 <= global_index < len(p.objects):
+                return p.objects[global_index]
+
+        if self._op_logger:
+            self._op_logger.warning('service', f'find_object_for_{lookup_type}',
+                                    params={'entry': str(entry)}, result='not_found')
+        return None
 
     @contextmanager
     def modification_context(self):
@@ -493,7 +534,7 @@ class NagiosService:
         else:
             self._op_logger.debug('service', phase, params={'count': 0}, result='noop')
 
-    def apply_folder_creations(self, staging_data: dict, is_safe_path_func) -> OperationResult:
+    def apply_folder_creations(self, staging_data: dict) -> OperationResult:
         """Create staged folders."""
         if self._op_logger:
             self._op_logger.debug('service', 'apply_folder_creations', result='started')
@@ -506,9 +547,9 @@ class NagiosService:
         for op in folder_creations:
             folder_path = op.get('path')
             if folder_path:
-                safe_result = is_safe_path_func(folder_path, self._config_path)
-                if not safe_result.success:
-                    errors.append(f"Unsafe folder path {folder_path}: {safe_result.error}")
+                is_safe, error_msg = self._validate_path_safety(folder_path, "folder")
+                if not is_safe:
+                    errors.append(error_msg)
                     continue
                 try:
                     os.makedirs(folder_path, exist_ok=True)
@@ -517,10 +558,11 @@ class NagiosService:
                 except Exception as e:
                     errors.append(f"Failed to create folder {folder_path}: {e}")
 
+        result = self._build_apply_result('folder_creations', count, errors, details)
         self._log_apply_result('apply_folder_creations', count, errors)
-        return OperationResult(True, data={'count': count, 'errors': errors, 'details': details})
+        return OperationResult(True, data=result)
 
-    def apply_file_creations(self, staging_data: dict, is_safe_path_func) -> OperationResult:
+    def apply_file_creations(self, staging_data: dict) -> OperationResult:
         """Create staged files."""
         if self._op_logger:
             self._op_logger.debug('service', 'apply_file_creations', result='started')
@@ -531,9 +573,9 @@ class NagiosService:
         for op in file_creations:
             file_path = op.get('path')
             if file_path:
-                safe_result = is_safe_path_func(file_path, self._config_path)
-                if not safe_result.success:
-                    errors.append(f"Unsafe file path {file_path}: {safe_result.error}")
+                is_safe, error_msg = self._validate_path_safety(file_path, "file")
+                if not is_safe:
+                    errors.append(error_msg)
                     continue
                 try:
                     parent_dir = os.path.dirname(file_path)
@@ -550,9 +592,9 @@ class NagiosService:
         for file_path in new_files:
             if not os.path.isabs(file_path):
                 file_path = os.path.join(self._config_path, file_path)
-            safe_result = is_safe_path_func(file_path, self._config_path)
-            if not safe_result.success:
-                errors.append(f"Unsafe file path {file_path}: {safe_result.error}")
+            is_safe, error_msg = self._validate_path_safety(file_path, "file")
+            if not is_safe:
+                errors.append(error_msg)
                 continue
             try:
                 parent_dir = os.path.dirname(file_path)
@@ -564,8 +606,9 @@ class NagiosService:
             except Exception as e:
                 errors.append(f"Failed to create file {file_path}: {e}")
 
+        result = self._build_apply_result('file_creations', count, errors)
         self._log_apply_result('apply_file_creations', count, errors)
-        return OperationResult(True, data={'count': count, 'errors': errors})
+        return OperationResult(True, data=result)
 
     def apply_object_deletions(self, staging_data: dict) -> OperationResult:
         """Delete staged objects."""
@@ -576,57 +619,40 @@ class NagiosService:
         errors = []
         details = []
 
-        if staged_deletions:
-            p = self.parser
-            objects_to_delete = []
+        if not staged_deletions:
+            result = self._build_apply_result('object_deletions', count, errors, details)
+            self._log_apply_result('apply_object_deletions', count, errors)
+            return OperationResult(True, data=result)
 
-            for deletion_entry in staged_deletions:
-                # Handle integer global_index directly (frontend sends Array.from(Set))
-                if isinstance(deletion_entry, int):
-                    if 0 <= deletion_entry < len(p.objects):
-                        obj = p.objects[deletion_entry]
-                        objects_to_delete.append((obj.source_file, obj.line_number, obj.object_type, obj))
-                    continue
+        p = self.parser
+        objects_to_delete = []
 
-                normalized = _ensure_dict_format(deletion_entry)
-                source_file = normalized.get('source_file')
-                line_number = normalized.get('line_number')
-                obj_type = normalized.get('object_type')
+        for deletion_entry in staged_deletions:
+            # Frontend sends Array.from(Set) which produces integer array
+            if isinstance(deletion_entry, int):
+                if 0 <= deletion_entry < len(p.objects):
+                    obj = p.objects[deletion_entry]
+                    objects_to_delete.append((obj.source_file, obj.line_number, obj.object_type, obj))
 
-                if source_file and line_number:
-                    for obj in p.objects:
-                        if (obj.source_file == source_file and
-                            obj.line_number == line_number and
-                            obj.object_type == obj_type):
-                            objects_to_delete.append((source_file, line_number, obj_type, obj))
-                            break
-                elif normalized.get('key'):
-                    try:
-                        global_index = int(normalized['key'])
-                        if 0 <= global_index < len(p.objects):
-                            obj = p.objects[global_index]
-                            objects_to_delete.append((obj.source_file, obj.line_number, obj.object_type, obj))
-                    except (ValueError, KeyError):
-                        pass
+        objects_to_delete.sort(key=lambda x: (x[0], -x[1]))
+        for source_file, line_number, obj_type, obj in objects_to_delete:
+            name_field = NAME_FIELDS.get(obj_type)
+            obj_name = obj.attributes.get(name_field, '') if name_field else ''
+            result = self.delete_object(source_file, line_number)
+            if result.success:
+                count += 1
+                details.append({
+                    'object_type': obj_type,
+                    'object_name': obj_name,
+                    'file': source_file
+                })
+                p = self.parser
+            elif result.error:
+                errors.append(f"Failed to delete object at {source_file}:{line_number}: {result.error}")
 
-            objects_to_delete.sort(key=lambda x: (x[0], -x[1]))
-            for source_file, line_number, obj_type, obj in objects_to_delete:
-                name_field = NAME_FIELDS.get(obj_type)
-                obj_name = obj.attributes.get(name_field, '') if name_field else ''
-                result = self.delete_object(source_file, line_number)
-                if result.success:
-                    count += 1
-                    details.append({
-                        'object_type': obj_type,
-                        'object_name': obj_name,
-                        'file': source_file
-                    })
-                    p = self.parser
-                elif result.error:
-                    errors.append(f"Failed to delete object at {source_file}:{line_number}: {result.error}")
-
+        result = self._build_apply_result('object_deletions', count, errors, details)
         self._log_apply_result('apply_object_deletions', count, errors)
-        return OperationResult(True, data={'count': count, 'errors': errors, 'details': details})
+        return OperationResult(True, data=result)
 
     def _normalize_staged_moves(self, staged_moves: List[dict]) -> List[dict]:
         """Normalize staged move entries into a consistent format.
@@ -639,8 +665,12 @@ class NagiosService:
             obj_type, attrs, and insert_position keys
         """
         moves = []
-        for entry in _iterate_entries(staged_moves):
+        # Frontend sends dict via Object.fromEntries
+        for key, entry in staged_moves.items():
             move_data = _ensure_dict_format(entry)
+            if 'globalIndex' not in move_data and 'key' not in move_data:
+                move_data['globalIndex'] = key
+                move_data['key'] = key
             target_file = move_data.get('targetFile')
             obj_info = move_data.get('object', {})
             source_file = obj_info.get('source_file')
@@ -732,12 +762,15 @@ class NagiosService:
 
         # Process each move individually using surgical operations
         for move in moves:
-            # Reload parser to get current line numbers (may have changed from prior moves)
+            # Line numbers shift as objects are deleted from source files. Without reload between moves,
+            # stale line numbers corrupt target files.
             self._parser = NagiosConfigParser(self._config_path)
             self._parser.parse_all()
             p = self.parser
 
-            # Find the object by matching file + type + attributes
+            # Attribute matching required for same-file reordering: line numbers shift as objects are moved
+            # within a file, making line-number lookup unreliable. Full attribute comparison ensures correct
+            # object identification regardless of intermediate line number changes.
             source_real = os.path.realpath(move['source_file'])
             target_obj = None
             for obj in p.objects:
@@ -787,8 +820,9 @@ class NagiosService:
         self._parser = NagiosConfigParser(self._config_path)
         self._parser.parse_all()
 
+        result = self._build_apply_result('object_moves', count, errors, details)
         self._log_apply_result('apply_object_moves', count, errors)
-        return OperationResult(True, data={'count': count, 'errors': errors, 'details': details})
+        return OperationResult(True, data=result)
 
     def apply_object_edits(self, staging_data: dict) -> OperationResult:
         """Edit staged objects."""
@@ -799,65 +833,59 @@ class NagiosService:
         errors = []
         details = []
 
-        if pending_edits:
-            p = self.parser
-            for edit_entry in _iterate_entries(pending_edits):
-                edit_data = _ensure_dict_format(edit_entry)
-                raw_index = edit_data.get('globalIndex')
-                global_index = int(raw_index) if raw_index is not None else None
+        if not pending_edits:
+            result = self._build_apply_result('object_edits', count, errors, details)
+            self._log_apply_result('apply_object_edits', count, errors)
+            return OperationResult(True, data=result)
 
-                edited_attrs = edit_data.get('edited', {})
-                if not edited_attrs:
-                    continue
+        p = self.parser
+        # Frontend sends dict via Object.fromEntries
+        for key, entry in pending_edits.items():
+            edit_data = _ensure_dict_format(entry)
+            if 'globalIndex' not in edit_data and 'key' not in edit_data:
+                edit_data['globalIndex'] = key
+                edit_data['key'] = key
 
-                obj_info = edit_data.get('object', {})
-                target_obj = None
+            edited_attrs = edit_data.get('edited', {})
+            if not edited_attrs:
+                continue
 
-                if obj_info.get('source_file') and obj_info.get('line_number'):
-                    for obj in p.objects:
-                        if (obj.source_file == obj_info['source_file'] and
-                            obj.line_number == obj_info['line_number']):
-                            target_obj = obj
-                            break
+            target_obj = self._find_object_by_entry(edit_data, "edit")
 
-                if not target_obj and global_index is not None and 0 <= global_index < len(p.objects):
-                    target_obj = p.objects[global_index]
+            if target_obj:
+                old_attrs = dict(target_obj.attributes)
+                merged_attrs = dict(target_obj.attributes)
+                merged_attrs.update(edited_attrs)
+                result = self.update_object(target_obj.source_file, target_obj.line_number,
+                                            merged_attrs, target_obj.object_type)
+                if result.success:
+                    count += 1
+                    changes = []
+                    for key, new_val in edited_attrs.items():
+                        old_val = old_attrs.get(key)
+                        if old_val is None:
+                            changes.append({'type': 'add', 'key': key, 'value': new_val})
+                        elif old_val != new_val:
+                            changes.append({'type': 'modify', 'key': key, 'from': old_val, 'to': new_val})
+                    name_field = NAME_FIELDS.get(target_obj.object_type)
+                    obj_name = old_attrs.get(name_field, '') if name_field else ''
+                    detail_entry = {
+                        'object_type': target_obj.object_type,
+                        'object_name': obj_name,
+                        'changes': changes
+                    }
+                    if name_field and name_field in edited_attrs:
+                        new_name = edited_attrs.get(name_field)
+                        if new_name and new_name != obj_name:
+                            detail_entry['renamed_to'] = new_name
+                    details.append(detail_entry)
+                    p = self.parser
+                elif result.error:
+                    errors.append(f"Failed to edit object: {result.error}")
 
-                if target_obj:
-                    old_attrs = dict(target_obj.attributes)
-                    merged_attrs = dict(target_obj.attributes)
-                    merged_attrs.update(edited_attrs)
-                    result = self.update_object(target_obj.source_file, target_obj.line_number,
-                                                merged_attrs, target_obj.object_type)
-                    if result.success:
-                        count += 1
-                        changes = []
-                        for key, new_val in edited_attrs.items():
-                            old_val = old_attrs.get(key)
-                            if old_val is None:
-                                changes.append({'type': 'add', 'key': key, 'value': new_val})
-                            elif old_val != new_val:
-                                changes.append({'type': 'modify', 'key': key, 'from': old_val, 'to': new_val})
-                        name_field = NAME_FIELDS.get(target_obj.object_type)
-                        obj_name = old_attrs.get(name_field, '') if name_field else ''
-                        # C-11: Include both old and new names when name changes for audit trail
-                        detail_entry = {
-                            'object_type': target_obj.object_type,
-                            'object_name': obj_name,
-                            'changes': changes
-                        }
-                        # Check if name field was changed and record new name
-                        if name_field and name_field in edited_attrs:
-                            new_name = edited_attrs.get(name_field)
-                            if new_name and new_name != obj_name:
-                                detail_entry['renamed_to'] = new_name
-                        details.append(detail_entry)
-                        p = self.parser
-                    elif result.error:
-                        errors.append(f"Failed to edit object: {result.error}")
-
+        result = self._build_apply_result('object_edits', count, errors, details)
         self._log_apply_result('apply_object_edits', count, errors)
-        return OperationResult(True, data={'count': count, 'errors': errors, 'details': details})
+        return OperationResult(True, data=result)
 
     def apply_object_creations(self, staging_data: dict) -> OperationResult:
         """Create staged objects."""
@@ -868,33 +896,38 @@ class NagiosService:
         errors = []
         details = []
 
-        if staged_creations:
-            for creation in staged_creations:
-                object_type = creation.get('object_type')
-                attributes = creation.get('attributes', {})
-                target_file = creation.get('targetFile')
+        if not staged_creations:
+            result = self._build_apply_result('object_creations', count, errors, details)
+            self._log_apply_result('apply_object_creations', count, errors)
+            return OperationResult(True, data=result)
 
-                if object_type and target_file:
-                    if not os.path.isabs(target_file):
-                        target_file = os.path.join(self._config_path, target_file)
+        for creation in staged_creations:
+            object_type = creation.get('object_type')
+            attributes = creation.get('attributes', {})
+            target_file = creation.get('targetFile')
 
-                    result = self.create_object(target_file, object_type, attributes)
-                    if result.success:
-                        count += 1
-                        name_field = NAME_FIELDS.get(object_type)
-                        obj_name = attributes.get(name_field, '') if name_field else ''
-                        details.append({
-                            'object_type': object_type,
-                            'object_name': obj_name,
-                            'file': target_file
-                        })
-                    elif result.error:
-                        errors.append(f"Failed to create object: {result.error}")
+            if object_type and target_file:
+                if not os.path.isabs(target_file):
+                    target_file = os.path.join(self._config_path, target_file)
 
+                result = self.create_object(target_file, object_type, attributes)
+                if result.success:
+                    count += 1
+                    name_field = NAME_FIELDS.get(object_type)
+                    obj_name = attributes.get(name_field, '') if name_field else ''
+                    details.append({
+                        'object_type': object_type,
+                        'object_name': obj_name,
+                        'file': target_file
+                    })
+                elif result.error:
+                    errors.append(f"Failed to create object: {result.error}")
+
+        result = self._build_apply_result('object_creations', count, errors, details)
         self._log_apply_result('apply_object_creations', count, errors)
-        return OperationResult(True, data={'count': count, 'errors': errors, 'details': details})
+        return OperationResult(True, data=result)
 
-    def apply_file_moves(self, staging_data: dict, is_safe_path_func) -> OperationResult:
+    def apply_file_moves(self, staging_data: dict) -> OperationResult:
         """Move staged files."""
         if self._op_logger:
             self._op_logger.debug('service', 'apply_file_moves', result='started')
@@ -907,13 +940,13 @@ class NagiosService:
             source_path = op.get('sourcePath')
             target_path = op.get('targetPath')
             if source_path and target_path:
-                safe_src_result = is_safe_path_func(source_path, self._config_path)
-                safe_tgt_result = is_safe_path_func(target_path, self._config_path)
-                if not safe_src_result.success:
-                    errors.append(f"Unsafe source path {source_path}: {safe_src_result.error}")
+                is_safe_src, error_src = self._validate_path_safety(source_path, "file")
+                is_safe_tgt, error_tgt = self._validate_path_safety(target_path, "file")
+                if not is_safe_src:
+                    errors.append(error_src)
                     continue
-                if not safe_tgt_result.success:
-                    errors.append(f"Unsafe target path {target_path}: {safe_tgt_result.error}")
+                if not is_safe_tgt:
+                    errors.append(error_tgt)
                     continue
                 try:
                     target_dir = os.path.dirname(target_path)
@@ -926,10 +959,11 @@ class NagiosService:
                 except Exception as e:
                     errors.append(f"Failed to move file {source_path}: {e}")
 
+        result = self._build_apply_result('file_moves', count, errors, details)
         self._log_apply_result('apply_file_moves', count, errors)
-        return OperationResult(True, data={'count': count, 'errors': errors, 'details': details})
+        return OperationResult(True, data=result)
 
-    def apply_folder_moves(self, staging_data: dict, is_safe_path_func) -> OperationResult:
+    def apply_folder_moves(self, staging_data: dict) -> OperationResult:
         """Move staged folders."""
         if self._op_logger:
             self._op_logger.debug('service', 'apply_folder_moves', result='started')
@@ -942,13 +976,13 @@ class NagiosService:
             source_path = op.get('sourcePath')
             target_path = op.get('targetPath')
             if source_path and target_path:
-                safe_src_result = is_safe_path_func(source_path, self._config_path)
-                safe_tgt_result = is_safe_path_func(target_path, self._config_path)
-                if not safe_src_result.success:
-                    errors.append(f"Unsafe source path {source_path}: {safe_src_result.error}")
+                is_safe_src, error_src = self._validate_path_safety(source_path, "folder")
+                is_safe_tgt, error_tgt = self._validate_path_safety(target_path, "folder")
+                if not is_safe_src:
+                    errors.append(error_src)
                     continue
-                if not safe_tgt_result.success:
-                    errors.append(f"Unsafe target path {target_path}: {safe_tgt_result.error}")
+                if not is_safe_tgt:
+                    errors.append(error_tgt)
                     continue
                 try:
                     target_parent = os.path.dirname(target_path)
@@ -961,10 +995,11 @@ class NagiosService:
                 except Exception as e:
                     errors.append(f"Failed to move folder {source_path}: {e}")
 
+        result = self._build_apply_result('folder_moves', count, errors, details)
         self._log_apply_result('apply_folder_moves', count, errors)
-        return OperationResult(True, data={'count': count, 'errors': errors, 'details': details})
+        return OperationResult(True, data=result)
 
-    def apply_file_deletions(self, staging_data: dict, is_safe_path_func) -> OperationResult:
+    def apply_file_deletions(self, staging_data: dict) -> OperationResult:
         """Delete staged files."""
         if self._op_logger:
             self._op_logger.debug('service', 'apply_file_deletions', result='started')
@@ -976,9 +1011,9 @@ class NagiosService:
         for op in file_deletions:
             file_path = op.get('path')
             if file_path and os.path.isfile(file_path):
-                safe_result = is_safe_path_func(file_path, self._config_path)
-                if not safe_result.success:
-                    errors.append(f"Unsafe file path {file_path}: {safe_result.error}")
+                is_safe, error_msg = self._validate_path_safety(file_path, "file")
+                if not is_safe:
+                    errors.append(error_msg)
                     continue
                 try:
                     os.remove(file_path)
@@ -987,10 +1022,11 @@ class NagiosService:
                 except Exception as e:
                     errors.append(f"Failed to delete file {file_path}: {e}")
 
+        result = self._build_apply_result('file_deletions', count, errors, details)
         self._log_apply_result('apply_file_deletions', count, errors)
-        return OperationResult(True, data={'count': count, 'errors': errors, 'details': details})
+        return OperationResult(True, data=result)
 
-    def apply_folder_deletions(self, staging_data: dict, is_safe_path_func) -> OperationResult:
+    def apply_folder_deletions(self, staging_data: dict) -> OperationResult:
         """Delete staged folders."""
         if self._op_logger:
             self._op_logger.debug('service', 'apply_folder_deletions', result='started')
@@ -1003,9 +1039,9 @@ class NagiosService:
         for op in folder_deletions:
             folder_path = op.get('path')
             if folder_path and os.path.isdir(folder_path):
-                safe_result = is_safe_path_func(folder_path, self._config_path)
-                if not safe_result.success:
-                    errors.append(f"Unsafe folder path {folder_path}: {safe_result.error}")
+                is_safe, error_msg = self._validate_path_safety(folder_path, "folder")
+                if not is_safe:
+                    errors.append(error_msg)
                     continue
                 try:
                     shutil.rmtree(folder_path)
@@ -1014,5 +1050,6 @@ class NagiosService:
                 except Exception as e:
                     errors.append(f"Failed to delete folder {folder_path}: {e}")
 
+        result = self._build_apply_result('folder_deletions', count, errors, details)
         self._log_apply_result('apply_folder_deletions', count, errors)
-        return OperationResult(True, data={'count': count, 'errors': errors, 'details': details})
+        return OperationResult(True, data=result)

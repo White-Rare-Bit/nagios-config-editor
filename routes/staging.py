@@ -727,29 +727,28 @@ def _validate_apply_preconditions(sm, session_id, op_log):
     return None, staging_data
 
 
-def _execute_apply_phases(service, staging_data, is_safe_path_func):
+def _execute_apply_phases(service, staging_data):
     """Execute all apply phases, halting on first error.
 
     Args:
         service: NagiosService instance
         staging_data: Staging data dict
-        is_safe_path_func: Path safety validation function
 
     Returns:
         Tuple of (applied_summary, all_details, phase_errors, failed_phase)
         failed_phase is None if all phases succeeded
     """
     phases = [
-        ('folderCreations', lambda: service.apply_folder_creations(staging_data, is_safe_path_func)),
-        ('fileCreations', lambda: service.apply_file_creations(staging_data, is_safe_path_func)),
+        ('folderCreations', lambda: service.apply_folder_creations(staging_data)),
+        ('fileCreations', lambda: service.apply_file_creations(staging_data)),
         ('objectDeletions', lambda: service.apply_object_deletions(staging_data)),
         ('objectMoves', lambda: service.apply_object_moves(staging_data)),
         ('objectEdits', lambda: service.apply_object_edits(staging_data)),
         ('objectCreations', lambda: service.apply_object_creations(staging_data)),
-        ('fileMoves', lambda: service.apply_file_moves(staging_data, is_safe_path_func)),
-        ('folderMoves', lambda: service.apply_folder_moves(staging_data, is_safe_path_func)),
-        ('fileDeletions', lambda: service.apply_file_deletions(staging_data, is_safe_path_func)),
-        ('folderDeletions', lambda: service.apply_folder_deletions(staging_data, is_safe_path_func)),
+        ('fileMoves', lambda: service.apply_file_moves(staging_data)),
+        ('folderMoves', lambda: service.apply_folder_moves(staging_data)),
+        ('fileDeletions', lambda: service.apply_file_deletions(staging_data)),
+        ('folderDeletions', lambda: service.apply_folder_deletions(staging_data)),
     ]
 
     applied_summary = {}
@@ -977,7 +976,7 @@ def api_apply_staging():
     try:
         # Execute all phases, halting on first error
         applied_summary, all_details, errors, failed_phase = _execute_apply_phases(
-            service, staging_data, is_safe_path
+            service, staging_data
         )
 
         if failed_phase:
