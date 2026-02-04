@@ -1,34 +1,35 @@
 # CLAUDE.md
 
-## Overview
+## Core Modules
 
-Page-specific JavaScript modules for Nagios Bulk Editor UI.
+| File | What | When |
+| ---- | ---- | ---- |
+| `api-client.js` | Fetch wrapper with error handling, staging headers, {success, data, error} format | Changing API patterns or error handling |
+| `base.js` | Session/lock management, toast notifications, commit dialog, git operations UI, DebugLogger | Modifying lock UI, commit workflow, or notifications |
 
-## Index
+## Page-Specific Modules
 
-| File | Contents (WHAT) | Read When (WHEN) |
-| ---- | --------------- | ---------------- |
-| `api-client.js` | Centralized fetch wrapper with error handling, staging headers, toast integration | Changing API call patterns or error handling |
-| `audit-log.js` | Audit log filtering, pagination, event type display | Modifying audit log UI or filters |
-| `backups.js` | Backup page list/restore/delete UI, modal dialogs | Adding backup management features |
-| `base.js` | Session/lock management, toast notifications, global commit dialog, staging state, git operations UI | Modifying lock UI, commit workflow, or toast behavior |
-| `bulk-attributes.js` | Bulk attribute editing multi-select, batch updates | Modifying bulk attribute operations |
-| `bulk-rename.js` | Bulk rename pattern-based renaming, preview | Changing bulk rename UI |
-| `dependencies.js` | D3 dependency graph, edge categories, quick view presets, zoom/pan, legend, object type filtering | Changing graph visualization, adding relationship types, or modifying presets |
-| `find-replace.js` | Find/replace search, preview, bulk replacement | Modifying search or replace logic |
-| `git.js` | Git page file list, diff viewer, commit/discard UI, tab switching | Modifying git page UI or diff display |
-| `health-check.js` | Config health checks display (orphans, circular deps) | Adding health check rules |
-| `inheritance.js` | Inheritance tree visualization, template hierarchy | Changing inheritance display |
-| `objects.js` | Legacy object browser search, syntax highlighting, edit modal | Maintaining legacy object browser page |
-| `reorganize.js` | File/folder restructuring page UI | Changing reorganization UI |
-| `settings.js` | Settings page identity config, git preferences, config path management | Adding settings fields or validation |
-| `smart-grouping.js` | Smart grouping auto-suggest based on patterns | Modifying grouping logic |
-| `validate.js` | Nagios validation (nagios -v) output display | Modifying validation UI |
-| `README.md` | Dependency graph edge category system, quick view expansion rules architecture (forward/backward/atType/stopAt), adding new presets | Understanding graph relationship mapping, adding new Nagios relationship types, or creating quick view presets |
+| File | What | When |
+| ---- | ---- | ---- |
+| `audit-log.js` | Audit log filtering, pagination | Modifying audit log page |
+| `backups.js` | Backup list/restore/delete UI | Modifying backup page |
+| `bulk-attributes.js` | Bulk attribute editing, batch updates | Modifying bulk attribute page |
+| `bulk-rename.js` | Pattern-based bulk rename, preview | Modifying bulk rename page |
+| `dependencies.js` | D3 graph visualization, edge categories, quick view presets | Modifying dependency graph page (see README.md) |
+| `find-replace.js` | Search, preview, bulk replacement | Modifying find/replace page |
+| `git.js` | File list, diff viewer, commit/discard UI | Modifying git page |
+| `health-check.js` | Config health checks (orphans, circular deps) | Modifying health check page |
+| `inheritance.js` | Inheritance tree visualization | Modifying inheritance page |
+| `objects.js` | Legacy object browser, syntax highlighting | Maintaining legacy objects page |
+| `reorganize.js` | File/folder restructuring UI | Modifying reorganize page |
+| `settings.js` | Identity config, git preferences, config paths | Modifying settings page |
+| `smart-grouping.js` | Auto-suggest grouping patterns | Modifying smart grouping page |
+| `validate.js` | Nagios -v output display | Modifying validate page |
 
-## Dependency Graph Documentation
+## Explorer Modules
 
-See `README.md` for complete architecture documentation:
-- Edge category system (relationship fields → edge categories → presets)
-- Quick view expansion rules (declarative rule structure for type-aware traversal)
-- Adding new Nagios relationship types or quick view presets
+See `explorer/CLAUDE.md` for modular explorer architecture (tree, editor, file panes, staging).
+
+## Additional Documentation
+
+`README.md` - Dependency graph edge category system, quick view expansion rules

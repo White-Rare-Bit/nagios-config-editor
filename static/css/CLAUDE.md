@@ -10,7 +10,7 @@ Design tokens, component styles, and page-specific CSS for the Nagios Bulk Edito
 | ----------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | `tokens.css`            | Design system tokens (light + dark themes), component variants (.nbe-btn, .nbe-tabs), color palettes | Changing design tokens, adding theme variants, styling components |
 | `explorer.css`          | Three-pane explorer layout (tree, editor, workspace), dark theme unified styling                     | Modifying explorer UI, changing pane layouts, fixing dark theme  |
-| `style.css`             | Global component styles (cards, tables, buttons), object rows, code highlighting                     | Styling app-wide components, fixing cross-page UI                |
+| `forms.css`             | Shared form styles (form-section, form-group), extracted from sidebar forms                          | Styling forms, input elements                                    |
 | `git.css`               | Git page: file list, diff viewer, staging preview                                                    | Modifying git page styles, changing diff display                 |
 | `backups.css`           | Backup list, restore modal                                                                           | Styling backup page, changing backup UI                          |
 | `dependencies.css`      | Graph view: legend, zoom controls, node/edge styles                                                  | Modifying dependency graph visualization                         |
@@ -24,7 +24,6 @@ Design tokens, component styles, and page-specific CSS for the Nagios Bulk Edito
 | `smart-grouping.css`    | Smart grouping suggestions page                                                                      | Styling smart grouping UI                                        |
 | `validate.css`          | Validation page styling                                                                              | Styling validation output display                                |
 | `health-check.css`      | Health check page styling                                                                            | Styling health check results                                     |
-| `forms.css`             | Form component styles                                                                                | Styling forms, input elements                                    |
 
 ## Dark Theme System
 
@@ -125,15 +124,7 @@ The following tokens are theme-agnostic and shared across light/dark themes:
 
 ## Button System
 
-All buttons use `.nbe-btn` base class with modifiers. Defined in `tokens.css` lines 648-960.
-
-### Base Usage
-
-```html
-<button class="nbe-btn">Default</button>
-<button class="nbe-btn nbe-btn--primary">Primary</button>
-<button class="nbe-btn nbe-btn--danger">Danger</button>
-```
+All buttons use `.nbe-btn` base class with modifiers. Defined in `tokens.css` starting line 648.
 
 ### Variants
 
@@ -166,105 +157,63 @@ All buttons use `.nbe-btn` base class with modifiers. Defined in `tokens.css` li
 
 ### States
 
-```html
-<!-- Disabled -->
-<button class="nbe-btn" disabled>Disabled</button>
-
-<!-- Loading (add via JS) -->
-<button class="nbe-btn nbe-btn--primary" data-loading="true">Saving...</button>
-```
-
-Loading state adds spinner via `::after` pseudo-element.
+- **Disabled**: Add `disabled` attribute
+- **Loading**: Set `data-loading="true"` via JS (adds spinner via `::after`)
 
 ### Dark Theme
 
-Add `.nbe-btn--dark` for dark backgrounds (explorer page):
-
-```html
-<button class="nbe-btn nbe-btn--dark nbe-btn--primary">Dark Primary</button>
-```
-
-Dark variants: `.nbe-btn--dark`, `.nbe-btn--dark.nbe-btn--primary`, `.nbe-btn--dark.nbe-btn--danger`, `.nbe-btn--dark.nbe-btn--ghost`
+Add `.nbe-btn--dark` for dark backgrounds (explorer page). Variants: `.nbe-btn--dark`, `.nbe-btn--dark.nbe-btn--primary`, `.nbe-btn--dark.nbe-btn--danger`, `.nbe-btn--dark.nbe-btn--ghost`
 
 ## Typography Token System
 
-Semantic typography tokens provide consistent type scaling and hierarchy across the application. All font-size values MUST use tokens (no hardcoded px or rem values).
+Semantic typography tokens provide consistent type scaling and hierarchy. All font-size values MUST use tokens (no hardcoded px or rem).
 
 ### Semantic Typography Token Groups
 
-Composite tokens combining size, weight, and line-height for common text roles:
+Composite tokens combining size, weight, and line-height:
 
 | Token Group | Size | Weight | Line Height | Use Case |
 |-------------|------|--------|-------------|----------|
-| `--nbe-typography-h1-*` | 20px | 600 | 1.2 (tight) | Page titles, dialog headings |
-| `--nbe-typography-h2-*` | 16px | 600 | 1.2 (tight) | Section headings |
-| `--nbe-typography-h3-*` | 14px | 600 | 1.5 (normal) | Subsection headings |
-| `--nbe-typography-label-*` | 12px | 600 | 1.5 (normal) | Form labels, tree labels |
-| `--nbe-typography-body-*` | 13px | 400 | 1.5 (normal) | Body text, paragraphs |
-| `--nbe-typography-secondary-*` | 12px | 400 | 1.5 (normal) | Secondary text, captions |
-| `--nbe-typography-muted-*` | 10px | 400 | 1.5 (normal) | Muted text, placeholders |
-| `--nbe-typography-code-*` | 12px | 400 | 1.6 (relaxed) | Code blocks, monospace |
-| `--nbe-typography-badge-*` | 10px | 600 | 1.2 (tight) | Badges, status indicators |
+| `--nbe-typography-h1-*` | 20px | 600 | 1.2 | Page titles, dialog headings |
+| `--nbe-typography-h2-*` | 16px | 600 | 1.2 | Section headings |
+| `--nbe-typography-h3-*` | 14px | 600 | 1.5 | Subsection headings |
+| `--nbe-typography-label-*` | 12px | 600 | 1.5 | Form labels, tree labels |
+| `--nbe-typography-body-*` | 13px | 400 | 1.5 | Body text, paragraphs |
+| `--nbe-typography-secondary-*` | 12px | 400 | 1.5 | Secondary text, captions |
+| `--nbe-typography-muted-*` | 10px | 400 | 1.5 | Muted text, placeholders |
+| `--nbe-typography-code-*` | 12px | 400 | 1.6 | Code blocks, monospace |
+| `--nbe-typography-badge-*` | 10px | 600 | 1.2 | Badges, status indicators |
 | `--nbe-typography-button-*` | 13px | 500 | 1 | Standard buttons |
 | `--nbe-typography-button-sm-*` | 12px | 500 | 1 | Small buttons |
-| `--nbe-typography-input-*` | 13px | 400 | 1.5 (normal) | Form inputs, textareas |
+| `--nbe-typography-input-*` | 13px | 400 | 1.5 | Form inputs, textareas |
 
-**Usage pattern:**
-```css
-.dialog-title {
-    font-size: var(--nbe-typography-h1-size);
-    font-weight: var(--nbe-typography-h1-weight);
-    line-height: var(--nbe-typography-h1-line-height);
-}
-```
+Each group has `-size`, `-weight`, `-line-height` variants (e.g., `--nbe-typography-h1-size`).
 
 ### Font Size Scale
 
-Individual size tokens for precise control (use semantic tokens above when possible):
+Prefer semantic tokens above. Individual sizes for precise control:
 
-| Token | Value | Use Case |
-|-------|-------|----------|
-| `--nbe-font-size-3xs` | 8px | Font Awesome icons |
-| `--nbe-font-size-2xs` | 9px | Micro text, compact badges |
-| `--nbe-font-size-xs` | 10px | Muted text (use `--nbe-typography-muted-*` semantically) |
-| `--nbe-font-size-xs-plus` | 11px | Intermediate size |
-| `--nbe-font-size-sm` | 12px | Small text (use `--nbe-typography-label-*` semantically) |
-| `--nbe-font-size-base` | 13px | Body text (use `--nbe-typography-body-*` semantically) |
-| `--nbe-font-size-md` | 14px | Subsection headings (use `--nbe-typography-h3-*` semantically) |
-| `--nbe-font-size-lg` | 16px | Section headings (use `--nbe-typography-h2-*` semantically) |
-| `--nbe-font-size-xl` | 18px | Large text |
-| `--nbe-font-size-2xl` | 20px | Page titles (use `--nbe-typography-h1-*` semantically) |
+| Token | Value | Token | Value |
+|-------|-------|-------|-------|
+| `--nbe-font-size-3xs` | 8px | `--nbe-font-size-md` | 14px |
+| `--nbe-font-size-2xs` | 9px | `--nbe-font-size-lg` | 16px |
+| `--nbe-font-size-xs` | 10px | `--nbe-font-size-xl` | 18px |
+| `--nbe-font-size-xs-plus` | 11px | `--nbe-font-size-2xl` | 20px |
+| `--nbe-font-size-sm` | 12px | | |
+| `--nbe-font-size-base` | 13px | | |
 
-**Icon sizes** (decorative elements, empty states):
-- `--nbe-font-size-icon-sm` (24px)
-- `--nbe-font-size-icon-md` (32px)
-- `--nbe-font-size-icon-lg` (48px)
-- `--nbe-font-size-icon-xl` (64px)
+Icon sizes: `--nbe-font-size-icon-{sm|md|lg|xl}` (24px, 32px, 48px, 64px)
 
-### Line Height Scale
+### Line Height & Letter Spacing
 
-| Token | Value | Use Case |
-|-------|-------|----------|
-| `--nbe-line-height-tight` | 1.2 | Headings, compact text |
-| `--nbe-line-height-normal` | 1.5 | Body text, labels |
-| `--nbe-line-height-relaxed` | 1.6 | Code blocks |
-| `--nbe-line-height-loose` | 1.8 | Long-form content |
-
-### Letter Spacing Scale
-
-| Token | Value | Use Case |
-|-------|-------|----------|
-| `--nbe-letter-spacing-tight` | -0.02em | Headings |
-| `--nbe-letter-spacing-normal` | 0 | Body text |
-| `--nbe-letter-spacing-wide` | 0.02em | Uppercase labels |
+| Token | Value | Token | Value |
+|-------|-------|-------|-------|
+| `--nbe-line-height-tight` | 1.2 | `--nbe-letter-spacing-tight` | -0.02em |
+| `--nbe-line-height-normal` | 1.5 | `--nbe-letter-spacing-normal` | 0 |
+| `--nbe-line-height-relaxed` | 1.6 | `--nbe-letter-spacing-wide` | 0.02em |
+| `--nbe-line-height-loose` | 1.8 | | |
 
 ### Bundled Fonts
 
-Application uses bundled web fonts for cross-platform consistency:
-
-- **UI Font**: Inter (static/vendor/fonts/Inter-*.woff2) - system fallback to -apple-system, BlinkMacSystemFont, "Segoe UI", etc.
-- **Code Font**: JetBrains Mono (static/vendor/fonts/JetBrainsMono-*.woff2) - system fallback to "SFMono-Regular", Consolas, "Liberation Mono", etc.
-
-Font stack tokens:
-- `--nbe-font-sans`: Inter with system fallbacks
-- `--nbe-font-mono`: JetBrains Mono with system fallbacks
+- **`--nbe-font-sans`**: Inter (bundled woff2) with system fallbacks (-apple-system, BlinkMacSystemFont, "Segoe UI")
+- **`--nbe-font-mono`**: JetBrains Mono (bundled woff2) with system fallbacks ("SFMono-Regular", Consolas, "Liberation Mono")
