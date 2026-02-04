@@ -388,7 +388,8 @@
                 return objName === name;
             });
             if (existingObj) {
-                showToast(`Warning: ${state.editedObject.object_type} "${name}" already exists in ${existingObj.source_file}`, 'warning');
+                showToast(`Error: ${state.editedObject.object_type} "${name}" already exists in ${existingObj.source_file}`, 'error');
+                return;
             }
 
             // Check against other staged creations (excluding current one being edited)
@@ -398,7 +399,8 @@
                 c.displayName === name
             );
             if (duplicateStagedIdx !== -1) {
-                showToast(`Warning: Another staged ${state.editedObject.object_type} "${name}" already exists`, 'warning');
+                showToast(`Error: Another staged ${state.editedObject.object_type} "${name}" already exists`, 'error');
+                return;
             }
         }
 

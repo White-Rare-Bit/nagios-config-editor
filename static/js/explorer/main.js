@@ -53,6 +53,7 @@ Explorer.state = {
     contextTarget: null,
     hoveredIndex: null,
     externalChangePending: false,
+    selectedFolder: null,           // Track selected folder for subfolder creation
 
     // Center pane state
     infoPanelObject: null,

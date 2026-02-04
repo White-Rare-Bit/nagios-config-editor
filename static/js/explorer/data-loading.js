@@ -151,10 +151,14 @@
             const result = await ApiClient.post('/api/staging', data, { silent: true });
 
             if (result.success) {
-                // Update timestamp
+                // Update timestamp and undo count
                 const infoResult = await ApiClient.get('/api/staging/info', { silent: true });
                 if (infoResult.success) {
                     lastStagingTimestamp = infoResult.data.lastModified;
+                    // Sync undo count with backend
+                    if (typeof updateUndoButton === 'function') {
+                        updateUndoButton(infoResult.data.undoCount || 0);
+                    }
                 }
 
                 if (typeof checkPendingChanges === 'function') {

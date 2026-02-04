@@ -162,6 +162,20 @@
         if (onConfirm) {
             confirmBtn.onclick = onConfirm;
             confirmBtn.style.display = '';
+            // Reset button text based on dialog title
+            if (title.includes('Rename')) {
+                confirmBtn.textContent = 'Rename';
+            } else if (title.includes('Clone')) {
+                confirmBtn.textContent = 'Clone';
+            } else if (title.includes('Move')) {
+                confirmBtn.textContent = 'Move';
+            } else if (title.includes('Set Attribute') || title.includes('Add to Group')) {
+                confirmBtn.textContent = 'Confirm';
+            } else {
+                confirmBtn.textContent = 'OK';
+            }
+            // Reset button classes
+            confirmBtn.classList.remove('btn-danger');
             cancelBtn.textContent = 'Cancel';
         } else {
             // No confirm action - hide confirm button and show just Close
@@ -169,7 +183,18 @@
             cancelBtn.textContent = 'Close';
         }
 
-        document.getElementById('dialogOverlay').classList.add('visible');
+        const dialogOverlay = document.getElementById('dialogOverlay');
+        dialogOverlay.classList.add('visible');
+
+        // Add Escape key handler for dialog
+        const escapeHandler = (e) => {
+            if (e.key === 'Escape') {
+                closeDialog();
+            }
+        };
+        dialogOverlay.addEventListener('keydown', escapeHandler);
+        // Store handler reference for cleanup
+        dialogOverlay._escapeHandler = escapeHandler;
 
         // Focus first input and position cursor at end
         setTimeout(() => {
@@ -184,7 +209,13 @@
     }
 
     function closeDialog() {
-        document.getElementById('dialogOverlay').classList.remove('visible');
+        const dialogOverlay = document.getElementById('dialogOverlay');
+        dialogOverlay.classList.remove('visible');
+        // Remove Escape key handler
+        if (dialogOverlay._escapeHandler) {
+            dialogOverlay.removeEventListener('keydown', dialogOverlay._escapeHandler);
+            dialogOverlay._escapeHandler = null;
+        }
         // Reset dialog styles for next use
         const dialog = document.getElementById('dialog');
         dialog.classList.remove('commit-dialog');

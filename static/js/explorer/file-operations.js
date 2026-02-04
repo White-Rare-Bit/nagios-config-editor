@@ -496,6 +496,8 @@
         } else {
             state.expandedFolders.add(folderPath);
         }
+        // Track selected folder for subfolder creation
+        state.selectedFolder = folderPath;
         renderTargetPane();
     }
 
@@ -1619,7 +1621,7 @@
             return;
         }
 
-        let basePath = state.configPath;
+        let basePath = state.selectedFolder || state.configPath;
 
         const isFolder = name.endsWith('/');
 
@@ -1755,7 +1757,7 @@
             return;
         }
 
-        const basePath = state.configPath;
+        const basePath = state.selectedFolder || state.configPath;
 
         if (type === 'folder') {
             if (name.endsWith('/')) {

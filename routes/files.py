@@ -120,8 +120,8 @@ def api_create_file():
     # Validate filename doesn't contain invalid characters (path separators in filename part)
     filename = os.path.basename(file_path)
     import re
-    if re.search(r'[\\:*?"<>|]', filename):
-        return jsonify({'error': 'Filename cannot contain \\ : * ? " < > |'}), 400
+    if re.search(r'[/\\:*?"<>|]', filename):
+        return jsonify({'error': 'Filename cannot contain / \\ : * ? " < > |'}), 400
 
     # Security check - validate path is within config directory
     safe_result = is_safe_path(file_path)
