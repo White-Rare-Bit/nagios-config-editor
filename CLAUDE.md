@@ -36,6 +36,7 @@ Dependencies: `flask>=2.0.0,<4.0.0`
 
 | File | Content |
 |------|---------|
+| routes/CLAUDE.md | Flask blueprints, helper utilities, route patterns |
 | templates/CLAUDE.md | Template hierarchy, blocks, load order, global components |
 | static/css/CLAUDE.md | Design tokens, button system, dark theme, typography |
 | static/js/CLAUDE.md | Page-specific JS modules, dependency graph architecture |
