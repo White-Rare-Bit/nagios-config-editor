@@ -10,12 +10,11 @@ import multiprocessing
 from contextlib import contextmanager
 from typing import Dict, List, Optional
 
-from nagios_model import NagiosObject, NAME_FIELDS, OperationResult, format_object_block, get_object_name
+from nagios_model import NagiosObject, NAME_FIELDS, OperationResult, get_object_name
 from nagios_parser import NagiosConfigParser
 from file_operations import (
     edit_object_in_file, delete_object_from_file,
-    add_object_to_file, move_object_between_files,
-    find_block_range
+    add_object_to_file, move_object_between_files
 )
 from staging_manager import (
     parse_stable_key,
@@ -629,152 +628,6 @@ class NagiosService:
         self._log_apply_result('apply_object_deletions', count, errors)
         return OperationResult(True, data={'count': count, 'errors': errors, 'details': details})
 
-    def _group_moves_by_target(self, moves: List[dict]) -> dict:
-        """Group moves by target file realpath.
-
-        Args:
-            moves: List of normalized move dictionaries
-
-        Returns:
-            Dict mapping target realpath to list of moves for that target
-        """
-        from collections import defaultdict
-        by_target = defaultdict(list)
-        for move in moves:
-            by_target[os.path.realpath(move['target_file'])].append(move)
-        return by_target
-
-    def _compute_moved_out_by_file(self, moves: List[dict]) -> dict:
-        """Compute which objects are being moved out of each file.
-
-        Args:
-            moves: List of normalized move dictionaries
-
-        Returns:
-            Dict mapping source realpath to set of (obj_type, attrs_tuple) being moved out
-        """
-        from collections import defaultdict
-        moved_out_by_file = defaultdict(set)
-        for move in moves:
-            source_real = os.path.realpath(move['source_file'])
-            attrs_key = (move['obj_type'], tuple(sorted(move['attrs'].items())))
-            # Object is removed from source (whether cross-file move or same-file reorder)
-            moved_out_by_file[source_real].add(attrs_key)
-        return moved_out_by_file
-
-    def _compute_target_file_order(self, target_moves: List[dict], existing_objects: list,
-                                   removed_from_here: set) -> List[dict]:
-        """Compute final object order for a target file.
-
-        Args:
-            target_moves: Moves targeting this file
-            existing_objects: Current objects in file (sorted by line_number)
-            removed_from_here: Set of (obj_type, attrs_tuple) being moved out
-
-        Returns:
-            Sorted list of item dicts with position, obj_type, attrs, line_number
-        """
-        items = []
-
-        # Existing objects that stay in place
-        for obj in existing_objects:
-            attrs_key = (obj.object_type, tuple(sorted(obj.attributes.items())))
-            if attrs_key not in removed_from_here:
-                items.append({
-                    'position': obj.line_number,
-                    'obj_type': obj.object_type,
-                    'attrs': obj.attributes,
-                    'line_number': obj.line_number,
-                })
-
-        # Add incoming/reordered objects at their insertPositions
-        for move in target_moves:
-            pos = float(move['insert_position']) if move['insert_position'] is not None else float('inf')
-            items.append({
-                'position': pos,
-                'obj_type': move['obj_type'],
-                'attrs': move['attrs'],
-                'line_number': None,  # No existing line (will be formatted fresh)
-            })
-
-        # Sort by position to get final order
-        items.sort(key=lambda x: x['position'])
-        return items
-
-    def _rewrite_target_file(self, target_path: str, items: List[dict],
-                             content: str) -> Optional[str]:
-        """Rewrite target file with computed object order.
-
-        Args:
-            target_path: Path to target file
-            items: Sorted list of items to write
-            content: Current file content (for extracting existing blocks)
-
-        Returns:
-            Error message on failure, None on success
-        """
-        # Extract blocks: for existing objects, preserve original formatting
-        blocks = []
-        for item in items:
-            if item['line_number'] is not None:
-                block_range = find_block_range(content, item['line_number'])
-                if block_range:
-                    start, end = block_range
-                    blocks.append(content[start:end].strip())
-                else:
-                    blocks.append(format_object_block(item['obj_type'], item['attrs']))
-            else:
-                blocks.append(format_object_block(item['obj_type'], item['attrs']))
-
-        # Preserve file header (comments/whitespace before first define block)
-        first_define = content.find('define ')
-        header = content[:first_define].rstrip('\n') if first_define > 0 else ''
-
-        # Build new content
-        if blocks:
-            if header:
-                new_content = header + '\n\n' + '\n\n'.join(blocks) + '\n'
-            else:
-                new_content = '\n\n'.join(blocks) + '\n'
-        else:
-            new_content = header + '\n' if header else ''
-
-        try:
-            Path(target_path).write_text(new_content)
-            return None
-        except (IOError, OSError) as e:
-            return f"Failed to write {target_path}: {e}"
-
-    def _cleanup_source_only_files(self, source_only_removals: dict, errors: list) -> None:
-        """Delete moved-out objects from source-only files.
-
-        Args:
-            source_only_removals: Dict mapping source realpath to list of moves
-            errors: List to append error messages to
-        """
-        for source_real, source_moves in source_only_removals.items():
-            source_path = source_moves[0]['source_file']
-            # Reload parser to get current line numbers
-            self._parser = NagiosConfigParser(self._config_path)
-            self._parser.parse_all()
-            p = self.parser
-
-            # Find objects to delete (process in reverse line order)
-            to_delete = []
-            for move in source_moves:
-                for obj in p.objects:
-                    if (os.path.realpath(obj.source_file) == source_real and
-                        obj.object_type == move['obj_type'] and
-                        obj.attributes == move['attrs']):
-                        to_delete.append(obj.line_number)
-                        break
-
-            to_delete.sort(reverse=True)
-            for line_num in to_delete:
-                result = delete_object_from_file(source_path, line_num)
-                if not result.success:
-                    errors.append(f"Failed to remove from source: {result.error}")
-
     def _normalize_staged_moves(self, staged_moves: List[dict]) -> List[dict]:
         """Normalize staged move entries into a consistent format.
 
@@ -804,73 +657,61 @@ class NagiosService:
                 })
         return moves
 
-    def _process_target_file_moves(
-        self,
-        target_real: str,
-        target_moves: List[dict],
-        moved_out_by_file: dict,
-        parser_objects: list,
-        errors: list,
-        details: list
-    ) -> int:
-        """Process moves for a single target file.
+    def _resolve_insert_position(self, target_file: str, insert_position,
+                                  parser_objects: list, exclude_obj=None) -> Optional[int]:
+        """Convert virtual insertPosition to actual line number to insert after.
+
+        The frontend uses insertPosition as a virtual ordering value that's compared
+        against existing objects' line numbers. This finds the object whose line_number
+        is highest but still <= insert_position, and returns that line number.
 
         Args:
-            target_real: Realpath of the target file
-            target_moves: List of moves targeting this file
-            moved_out_by_file: Dict of objects being moved out by file
+            target_file: Target file path
+            insert_position: Virtual position (compared against line numbers) or None
             parser_objects: Current parser objects list
-            errors: List to append errors to
-            details: List to append details to
+            exclude_obj: Object to exclude (the one being moved, for same-file moves)
 
         Returns:
-            Number of successful moves
+            Line number to insert after, or None for end of file, or 0 for beginning
         """
-        target_path = target_moves[0]['target_file']
-        count = 0
+        if insert_position is None:
+            return None  # Append to end
 
-        # Get existing objects in this file from the parser
-        existing_objects = [o for o in parser_objects
-                           if os.path.realpath(o.source_file) == target_real]
-        existing_objects.sort(key=lambda o: o.line_number)
+        target_real = os.path.realpath(target_file)
 
-        # Compute final order
-        removed_from_here = moved_out_by_file.get(target_real, set())
-        items = self._compute_target_file_order(target_moves, existing_objects, removed_from_here)
+        # Get objects in target file, sorted by line number
+        target_objects = [o for o in parser_objects
+                         if os.path.realpath(o.source_file) == target_real]
 
-        # Read the current file content
-        try:
-            content = Path(target_path).read_text()
-        except (IOError, OSError) as e:
-            errors.append(f"Failed to read {target_path}: {e}")
-            return 0
+        # Exclude the object being moved (for same-file reordering)
+        if exclude_obj is not None:
+            target_objects = [o for o in target_objects
+                             if not (o.line_number == exclude_obj.line_number and
+                                    o.object_type == exclude_obj.object_type)]
 
-        # Rewrite the file
-        write_error = self._rewrite_target_file(target_path, items, content)
-        if write_error:
-            errors.append(write_error)
-            return 0
+        target_objects.sort(key=lambda o: o.line_number)
 
-        # Record details for audit log
-        for move in target_moves:
-            count += 1
-            name_field = NAME_FIELDS.get(move['obj_type'])
-            obj_name = move['attrs'].get(name_field, '') if name_field else ''
-            details.append({
-                'object_type': move['obj_type'],
-                'object_name': obj_name,
-                'from_file': move['source_file'],
-                'to_file': move['target_file']
-            })
+        if not target_objects:
+            return None  # Empty file or only contains the moved object
 
-        return count
+        # Find the object whose line_number is highest but still <= insert_position
+        insert_after_obj = None
+        for obj in target_objects:
+            if obj.line_number <= insert_position:
+                insert_after_obj = obj
+            else:
+                break
+
+        if insert_after_obj is None:
+            return 0  # Insert at beginning (before first object)
+
+        return insert_after_obj.line_number
 
     def apply_object_moves(self, staging_data: dict) -> OperationResult:
-        """Move staged objects by computing final file order and rewriting atomically.
+        """Move staged objects using surgical file operations.
 
-        Instead of processing moves one-by-one with fragile line-number adjustments,
-        this computes the desired final order for each target file (mirroring the
-        frontend's virtual tree) and rewrites it in one pass.
+        Uses move_object_between_files() for each move, which preserves
+        comments and formatting in both source and target files.
         """
         if self._op_logger:
             self._op_logger.debug('service', 'apply_object_moves', result='started')
@@ -889,30 +730,58 @@ class NagiosService:
             self._log_apply_result('apply_object_moves', count, errors)
             return OperationResult(True, data={'count': count, 'errors': errors, 'details': details})
 
-        # Group moves by target file and compute what's being moved out
-        by_target = self._group_moves_by_target(moves)
-        all_target_reals = set(by_target.keys())
-        moved_out_by_file = self._compute_moved_out_by_file(moves)
-        p = self.parser
-
-        # Process each target file: compute desired order and rewrite
-        for target_real, target_moves in by_target.items():
-            file_count = self._process_target_file_moves(
-                target_real, target_moves, moved_out_by_file,
-                p.objects, errors, details
-            )
-            count += file_count
-
-        # Delete moved-out objects from source-only files (files not rewritten above)
-        from collections import defaultdict
-        source_only_removals = defaultdict(list)
+        # Process each move individually using surgical operations
         for move in moves:
-            source_real = os.path.realpath(move['source_file'])
-            target_real = os.path.realpath(move['target_file'])
-            if source_real != target_real and source_real not in all_target_reals:
-                source_only_removals[source_real].append(move)
+            # Reload parser to get current line numbers (may have changed from prior moves)
+            self._parser = NagiosConfigParser(self._config_path)
+            self._parser.parse_all()
+            p = self.parser
 
-        self._cleanup_source_only_files(source_only_removals, errors)
+            # Find the object by matching file + type + attributes
+            source_real = os.path.realpath(move['source_file'])
+            target_obj = None
+            for obj in p.objects:
+                if (os.path.realpath(obj.source_file) == source_real and
+                    obj.object_type == move['obj_type'] and
+                    obj.attributes == move['attrs']):
+                    target_obj = obj
+                    break
+
+            if not target_obj:
+                errors.append(f"Could not find object to move: {move['obj_type']} in {move['source_file']}")
+                continue
+
+            # Resolve virtual insertPosition to actual line number
+            # For same-file moves, exclude the object being moved from position calculation
+            insert_line = self._resolve_insert_position(
+                move['target_file'],
+                move['insert_position'],
+                p.objects,
+                exclude_obj=target_obj
+            )
+
+            # Perform the move using surgical operation
+            result = move_object_between_files(
+                target_obj.source_file,
+                target_obj.line_number,
+                move['target_file'],
+                move['obj_type'],
+                move['attrs'],
+                insert_line
+            )
+
+            if result.success:
+                count += 1
+                name_field = NAME_FIELDS.get(move['obj_type'])
+                obj_name = move['attrs'].get(name_field, '') if name_field else ''
+                details.append({
+                    'object_type': move['obj_type'],
+                    'object_name': obj_name,
+                    'from_file': move['source_file'],
+                    'to_file': move['target_file']
+                })
+            else:
+                errors.append(f"Move failed: {result.error}")
 
         # Final parser reload
         self._parser = NagiosConfigParser(self._config_path)
@@ -934,7 +803,8 @@ class NagiosService:
             p = self.parser
             for edit_entry in _iterate_entries(pending_edits):
                 edit_data = _ensure_dict_format(edit_entry)
-                global_index = edit_data.get('globalIndex')
+                raw_index = edit_data.get('globalIndex')
+                global_index = int(raw_index) if raw_index is not None else None
 
                 edited_attrs = edit_data.get('edited', {})
                 if not edited_attrs:

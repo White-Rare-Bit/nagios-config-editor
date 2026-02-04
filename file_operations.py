@@ -263,7 +263,8 @@ def delete_object_from_file(file_path: str, line_number: int,
 
 def add_object_to_file(file_path: str, obj_type: str, attrs: Dict[str, str],
                        after_block_line: Optional[int] = None,
-                       expected_checksum: Optional[str] = None) -> OperationResult:
+                       expected_checksum: Optional[str] = None,
+                       raw_block: Optional[str] = None) -> OperationResult:
     """Add a new object to a file, inserting after a specific block.
 
     Args:
@@ -274,6 +275,8 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: Dict[str, str],
         expected_checksum: If provided, validates file hasn't changed since staging began.
                           Returns conflict error if checksum doesn't match.
                           Only applies to existing files.
+        raw_block: If provided, use this exact block text instead of formatting from attrs.
+                   This preserves original formatting, indentation, and inline comments.
 
     Returns:
         OperationResult with success=True on success, or error details on failure
@@ -281,7 +284,7 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: Dict[str, str],
     if _op_logger:
         _op_logger.debug('file_op', 'add_object_to_file', params={'file_path': file_path, 'obj_type': obj_type})
     path = Path(file_path)
-    new_block = format_object_block(obj_type, attrs)
+    new_block = raw_block if raw_block else format_object_block(obj_type, attrs)
 
     if not path.exists():
         # New file - no checksum validation needed
@@ -332,25 +335,46 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: Dict[str, str],
 def move_object_between_files(source_file: str, source_line: int,
                               target_file: str, obj_type: str, attrs: Dict[str, str],
                               insert_line: Optional[int] = None) -> OperationResult:
-    """Move an object from one file to another."""
+    """Move an object from one file to another, preserving original formatting.
+
+    This uses surgical operations: extract block from source, delete from source,
+    insert into target. Comments and formatting in both files are preserved.
+
+    Args:
+        source_file: Path to the file containing the object
+        source_line: Line number of the object to move
+        target_file: Path to the destination file
+        obj_type: Type of the object (e.g., 'host', 'service')
+        attrs: Attributes of the object (used as fallback if block extraction fails)
+        insert_line: Line number to insert after in target (None = end of file)
+
+    Returns:
+        OperationResult with success=True on success, or error details on failure
+    """
     if _op_logger:
-        _op_logger.debug('file_op', 'move_object_between_files', params={'source_file': source_file, 'target_file': target_file, 'obj_type': obj_type})
+        _op_logger.debug('file_op', 'move_object_between_files',
+                        params={'source_file': source_file, 'target_file': target_file, 'obj_type': obj_type})
+
+    # Read source file and extract raw block (preserves original formatting)
+    try:
+        source_content = Path(source_file).read_text()
+    except (IOError, OSError) as e:
+        return OperationResult(False, f"Read error on source: {e}")
+
+    block_range = find_block_range(source_content, source_line)
+    if not block_range:
+        return OperationResult(False, f"Could not find source block at line {source_line}")
+
+    start_char, end_char = block_range
+    raw_block = source_content[start_char:end_char].strip()
 
     source_real = os.path.realpath(source_file)
     target_real = os.path.realpath(target_file)
 
     if source_real == target_real:
         # Same file reorder - delete first, then add
-        try:
-            content = Path(source_file).read_text()
-        except (IOError, OSError) as e:
-            return OperationResult(False, f"Read error on source: {e}")
-
-        source_line_range = find_block_line_range(content, source_line)
-        if not source_line_range:
-            return OperationResult(False, f"Could not find source block at line {source_line}")
-
-        source_start, source_end = source_line_range
+        source_line_range = find_block_line_range(source_content, source_line)
+        source_start = source_line_range[0] if source_line_range else source_line
 
         del_result = delete_object_from_file(source_file, source_line)
         if not del_result.success:
@@ -364,20 +388,20 @@ def move_object_between_files(source_file: str, source_line: int,
             except (IOError, OSError) as e:
                 return OperationResult(False, f"Read error after delete: {e}")
             new_total_lines = len(new_content.split('\n'))
-            old_total_lines = len(content.split('\n'))
+            old_total_lines = len(source_content.split('\n'))
             actual_shift = old_total_lines - new_total_lines
             adjusted_insert_line = insert_line - actual_shift
             if adjusted_insert_line < 1:
                 adjusted_insert_line = None
 
-        add_result = add_object_to_file(target_file, obj_type, attrs, adjusted_insert_line)
+        add_result = add_object_to_file(target_file, obj_type, attrs, adjusted_insert_line, raw_block=raw_block)
         if not add_result.success:
             # Try to re-add at original position (best effort recovery)
-            add_object_to_file(source_file, obj_type, attrs, source_line)
+            add_object_to_file(source_file, obj_type, attrs, source_line, raw_block=raw_block)
             return OperationResult(False, f"Failed to re-add after delete: {add_result.error}")
     else:
         # Different files - add first to prevent data loss
-        add_result = add_object_to_file(target_file, obj_type, attrs, insert_line)
+        add_result = add_object_to_file(target_file, obj_type, attrs, insert_line, raw_block=raw_block)
         if not add_result.success:
             return add_result
 
@@ -389,9 +413,9 @@ def move_object_between_files(source_file: str, source_line: int,
             rollback_error = None
             try:
                 target_content = Path(target_file).read_text()
-                target_block = format_object_block(obj_type, attrs)
-                if target_block in target_content:
-                    rollback_content = target_content.replace(target_block, '', 1)
+                # Use the raw_block for rollback matching
+                if raw_block in target_content:
+                    rollback_content = target_content.replace(raw_block, '', 1)
                     rollback_content = re.sub(r'\n{3,}', '\n\n', rollback_content)
                     Path(target_file).write_text(rollback_content)
                 if _op_logger:
