@@ -15,12 +15,12 @@ async function loadObjects() {
         return;
     }
 
-    try {
-        const response = await fetch(`/api/inheritance/list/${objectType}`);
-        allObjects = await response.json();
+    const result = await ApiClient.get(`/api/inheritance/list/${objectType}`);
+    if (result.success) {
+        allObjects = result.data;
         displayObjectList(allObjects);
-    } catch (error) {
-        console.error('Error loading objects:', error);
+    } else {
+        console.error('Error loading objects:', result.error);
     }
 }
 
@@ -71,21 +71,15 @@ async function selectObject(name) {
         }
     });
 
-    try {
-        const response = await fetch(`/api/inheritance/${objectType}/${encodeURIComponent(name)}`);
-        const result = await response.json();
+    const result = await ApiClient.get(`/api/inheritance/${objectType}/${encodeURIComponent(name)}`);
 
-        if (result.error) {
-            showToast('Error: ' + result.error, 'error');
-            return;
-        }
-
-        displayInheritanceChain(result.chain);
-        displayResolvedAttributes(result.resolved_attributes, result.chain.name);
-
-    } catch (error) {
-        console.error('Error loading inheritance:', error);
+    if (!result.success) {
+        showToast(result.error || 'Failed to load inheritance', 'error');
+        return;
     }
+
+    displayInheritanceChain(result.data.chain);
+    displayResolvedAttributes(result.data.resolved_attributes, result.data.chain.name);
 }
 
 function displayInheritanceChain(chain) {
