@@ -239,8 +239,9 @@
     color: var(--nbe-dark-text-primary);
 }
 
-/* Empty state */
-.health-empty {
+/* Empty and loading states */
+.health-empty,
+.health-loading {
     text-align: center;
     padding: var(--nbe-space-2xl);
     color: var(--nbe-dark-text-secondary);

@@ -1,12 +1,24 @@
 // Health Check page JavaScript
 // Extracted from health_check.html
 
+// Severity badge HTML templates
+const SEVERITY_BADGES = {
+    error: '<span class="health-filter-badge health-filter-badge--error">Error</span>',
+    warning: '<span class="health-filter-badge health-filter-badge--warning">Warning</span>',
+    info: '<span class="health-filter-badge health-filter-badge--info">Info</span>'
+};
+
 let allIssues = [];
 
 async function runHealthCheck() {
     const btn = document.getElementById('runBtn');
+    const container = document.getElementById('issuesContainer');
+
     btn.disabled = true;
     btn.textContent = 'Analyzing...';
+
+    // Show loading state in issues container
+    container.innerHTML = '<div class="health-loading">Analyzing configuration...</div>';
 
     const result = await ApiClient.get('/api/health-check');
 
@@ -72,11 +84,7 @@ function displayIssues(issues) {
     }
 
     const html = issues.map(issue => {
-        const severityBadge = {
-            'error': '<span class="health-filter-badge health-filter-badge--error">Error</span>',
-            'warning': '<span class="health-filter-badge health-filter-badge--warning">Warning</span>',
-            'info': '<span class="health-filter-badge health-filter-badge--info">Info</span>'
-        }[issue.severity] || '';
+        const severityBadge = SEVERITY_BADGES[issue.severity] || '';
 
         return `
             <div class="issue-item severity-${issue.severity}"
