@@ -12,6 +12,26 @@
     const GROUP_TYPE_MAP = { host: 'hostgroup', service: 'servicegroup', contact: 'contactgroup' };
     const VIEWPORT_PADDING = 10;
 
+    /**
+     * Get or initialize pending edit data for an object
+     * Handles the common pattern of checking for existing edit and falling back to object attrs
+     * @param {Object} obj - The object to get/create pending edit for
+     * @returns {{original: Object, edited: Object}} Original and edited attributes
+     */
+    function getOrCreatePendingEdit(obj) {
+        const existingEdit = state.pendingEdits.get(obj.global_index);
+        if (existingEdit) {
+            return {
+                original: existingEdit.original,
+                edited: {...existingEdit.edited}
+            };
+        }
+        return {
+            original: {...obj.attributes},
+            edited: {...obj.attributes}
+        };
+    }
+
     // Context Menu
     function handleContextMenu(event, index) {
         event.preventDefault();
@@ -345,8 +365,8 @@
         }
 
         const nameField = Explorer.getNameFieldForObject(obj);
-        const existingEdit = state.pendingEdits.get(state.contextTarget);
-        const currentName = existingEdit ? (existingEdit.edited[nameField] || '') : (obj.attributes[nameField] || '');
+        const { original: originalAttrs, edited: editedAttrs } = getOrCreatePendingEdit(obj);
+        const currentName = editedAttrs[nameField] || '';
 
         if (newName === currentName) {
             closeDialog();
@@ -354,8 +374,6 @@
             return;
         }
 
-        const originalAttrs = existingEdit ? existingEdit.original : {...obj.attributes};
-        const editedAttrs = existingEdit ? {...existingEdit.edited} : {...obj.attributes};
         editedAttrs[nameField] = newName;
 
         state.pendingEdits.set(state.contextTarget, {
@@ -468,24 +486,25 @@
             const obj = state.allObjects.find(o => o.global_index === idx);
             if (!obj) continue;
 
-            const existingEdit = state.pendingEdits.get(idx);
-            const originalAttrs = existingEdit ? existingEdit.original : {...obj.attributes};
-            const editedAttrs = existingEdit ? {...existingEdit.edited} : {...obj.attributes};
+            const { original: originalAttrs, edited: editedAttrs } = getOrCreatePendingEdit(obj);
+            let madeChange = false;
 
             if (action === 'remove') {
                 if (name in editedAttrs) {
                     delete editedAttrs[name];
+                    madeChange = true;
                     updatedCount++;
                 }
             } else {
                 // Set value
                 if (editedAttrs[name] !== value) {
                     editedAttrs[name] = value;
+                    madeChange = true;
                     updatedCount++;
                 }
             }
 
-            if (updatedCount > 0 || existingEdit) {
+            if (madeChange) {
                 state.pendingEdits.set(idx, {
                     original: originalAttrs,
                     edited: editedAttrs,
@@ -684,9 +703,7 @@
         let updatedCount = 0;
         for (const obj of eligibleObjects) {
             const groupAttr = GROUP_ATTR_MAP[obj.object_type];
-            const existingEdit = state.pendingEdits.get(obj.global_index);
-            const originalAttrs = existingEdit ? existingEdit.original : {...obj.attributes};
-            const editedAttrs = existingEdit ? {...existingEdit.edited} : {...obj.attributes};
+            const { original: originalAttrs, edited: editedAttrs } = getOrCreatePendingEdit(obj);
 
             // Parse existing groups and add new one
             const currentGroups = (editedAttrs[groupAttr] || '').split(',').map(g => g.trim()).filter(g => g);
@@ -710,8 +727,8 @@
         }
 
         Explorer.saveStagedChanges();
-        Explorer.Explorer.updateCommitUI();
-        Explorer.Explorer.buildTree();
+        Explorer.updateCommitUI();
+        Explorer.buildTree();
 
         // If the currently displayed object in center panel was updated, refresh it
         if (state.editedObject && state.editedObject.global_index !== -1) {
