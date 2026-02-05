@@ -120,3 +120,17 @@
     color: var(--nbe-text-secondary);
     font-style: italic;
 }
+
+/* Resolved attributes scrollable container */
+.resolved-attrs-scroll {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* Resolved attributes header row */
+.resolved-attrs-header {
+    background: var(--nbe-bg-secondary);
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+}
