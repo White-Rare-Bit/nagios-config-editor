@@ -7,6 +7,11 @@
     const constants = Explorer.constants;
     const typeLabels = constants.typeLabels;
 
+    // C-01: Extracted constants for add-to-group functionality
+    const GROUP_ATTR_MAP = { host: 'hostgroups', service: 'servicegroups', contact: 'contactgroups' };
+    const GROUP_TYPE_MAP = { host: 'hostgroup', service: 'servicegroup', contact: 'contactgroup' };
+    const VIEWPORT_PADDING = 10;
+
     // Context Menu
     function handleContextMenu(event, index) {
         event.preventDefault();
@@ -14,8 +19,8 @@
 
         if (!Explorer.isSelectedByIndex(index)) {
             Explorer.clearSelection();
-            selectObjectByIndex(index);
-            updateSelection();
+            Explorer.selectObjectByIndex(index);
+            Explorer.updateSelection();
         }
 
         state.contextTarget = index;
@@ -67,19 +72,19 @@
         let left = event.clientX;
         let top = event.clientY;
 
-        // Check right edge
-        if (left + menuRect.width > viewportWidth - 10) {
-            left = viewportWidth - menuRect.width - 10;
+        // Check right edge (C-01: use extracted constant)
+        if (left + menuRect.width > viewportWidth - VIEWPORT_PADDING) {
+            left = viewportWidth - menuRect.width - VIEWPORT_PADDING;
         }
 
         // Check bottom edge
-        if (top + menuRect.height > viewportHeight - 10) {
-            top = viewportHeight - menuRect.height - 10;
+        if (top + menuRect.height > viewportHeight - VIEWPORT_PADDING) {
+            top = viewportHeight - menuRect.height - VIEWPORT_PADDING;
         }
 
         // Ensure not off left or top
-        left = Math.max(10, left);
-        top = Math.max(10, top);
+        left = Math.max(VIEWPORT_PADDING, left);
+        top = Math.max(VIEWPORT_PADDING, top);
 
         menu.style.left = left + 'px';
         menu.style.top = top + 'px';
@@ -96,7 +101,7 @@
 
         // Helper to get current name (respecting pending edits and templates)
         function getCurrentName(obj) {
-            const nameField = getNameFieldForObject(obj);
+            const nameField = Explorer.getNameFieldForObject(obj);
             const pendingEdit = state.pendingEdits.get(obj.global_index);
             if (pendingEdit) {
                 return pendingEdit.edited[nameField] || obj.display_name || obj.name || 'unnamed';
@@ -237,7 +242,7 @@
 
         if (action === 'delete') {
             // Stage deletions instead of immediate delete
-            stageObjectDeletions();
+            Explorer.stageObjectDeletions();
         } else if (action === 'move') {
             const files = [...new Set(state.allObjects.map(o => o.source_file))];
             showDialog('Move to File', `
@@ -311,8 +316,8 @@
         }
 
         Explorer.saveStagedChanges();
-        updateCommitUI();
-        buildTree();
+        Explorer.updateCommitUI();
+        Explorer.buildTree();
         closeDialog();
 
         if (staged > 0) {
@@ -339,7 +344,7 @@
             return;
         }
 
-        const nameField = getNameFieldForObject(obj);
+        const nameField = Explorer.getNameFieldForObject(obj);
         const existingEdit = state.pendingEdits.get(state.contextTarget);
         const currentName = existingEdit ? (existingEdit.edited[nameField] || '') : (obj.attributes[nameField] || '');
 
@@ -366,20 +371,20 @@
         });
 
         Explorer.saveStagedChanges();
-        updateCommitUI();
-        invalidateOrphanCache();
-        computeStagedIssues();
-        buildTree();
-        renderTargetPane();
+        Explorer.updateCommitUI();
+        Explorer.invalidateOrphanCache();
+        Explorer.computeStagedIssues();
+        Explorer.buildTree();
+        Explorer.renderTargetPane();
         closeDialog();
 
         // Refresh center pane if this object is currently displayed
         if (state.editedObject && state.editedObject.global_index === state.contextTarget) {
-            showCenterPaneObject(obj);
+            Explorer.showCenterPaneObject(obj);
         } else if (state.editedObject) {
             // Refresh Impact & Relationships even if a different object is displayed
             // since the rename might affect what references it or its inheritance chain
-            loadImpactAndRelationships(state.editedObject);
+            Explorer.loadImpactAndRelationships(state.editedObject);
         }
 
         showToast('Rename staged. Commit to apply.', 'info');
@@ -403,7 +408,7 @@
             const obj = state.allObjects.find(o => o.global_index === idx);
             if (!obj) continue;
 
-            const nameField = getNameFieldForObject(obj);
+            const nameField = Explorer.getNameFieldForObject(obj);
             // Use pending edit attributes if available (clone includes staged changes)
             const pendingEdit = state.pendingEdits.get(idx);
             const sourceAttrs = pendingEdit ? pendingEdit.edited : obj.attributes;
@@ -429,9 +434,9 @@
         }
 
         Explorer.saveStagedChanges();
-        updateCommitUI();
-        buildTree();
-        renderTargetPane();
+        Explorer.updateCommitUI();
+        Explorer.buildTree();
+        Explorer.renderTargetPane();
         closeDialog();
         showToast(`Staged ${clonedCount} cloned object(s). Commit to apply.`, 'info');
     }
@@ -496,8 +501,8 @@
         }
 
         Explorer.saveStagedChanges();
-        updateCommitUI();
-        buildTree();
+        Explorer.updateCommitUI();
+        Explorer.buildTree();
         closeDialog();
 
         if (updatedCount > 0) {
@@ -509,86 +514,11 @@
     }
 
     function applyAddToGroup() {
+        // C-02: Delegate to consolidated addToGroup implementation
         const groupName = document.getElementById('groupName').value.trim();
         if (!groupName) return;
-
-        // Map object types to their group attribute and group object type
-        const groupAttrMap = {
-            'host': 'hostgroups',
-            'service': 'servicegroups',
-            'contact': 'contactgroups'
-        };
-        const groupTypeMap = {
-            'host': 'hostgroup',
-            'service': 'servicegroup',
-            'contact': 'contactgroup'
-        };
-
-        // Get selected objects that can have groups
-        const eligibleObjects = Array.from(Explorer.getSelectedIndices())
-            .map(i => state.allObjects.find(o => o.global_index === i))
-            .filter(o => o && groupAttrMap[o.object_type]);
-
-        if (eligibleObjects.length === 0) {
-            showToast('Please select hosts, services, or contacts', 'warning');
-            return;
-        }
-
-        // Validate that the group exists
-        const requiredGroupTypes = [...new Set(eligibleObjects.map(o => groupTypeMap[o.object_type]))];
-        const existingGroups = state.allObjects
-            .filter(o => requiredGroupTypes.includes(o.object_type))
-            .map(o => o.name || o.display_name);
-
-        if (!existingGroups.includes(groupName)) {
-            showToast(`Group "${groupName}" does not exist`, 'error');
-            return;
-        }
-
-        // Update each object's group attribute by appending the new group
-        let updatedCount = 0;
-        for (const obj of eligibleObjects) {
-            const groupAttr = groupAttrMap[obj.object_type];
-            const existingEdit = state.pendingEdits.get(obj.global_index);
-            const originalAttrs = existingEdit ? existingEdit.original : {...obj.attributes};
-            const editedAttrs = existingEdit ? {...existingEdit.edited} : {...obj.attributes};
-
-            // Parse existing groups and add new one
-            const currentGroups = (editedAttrs[groupAttr] || '').split(',').map(g => g.trim()).filter(g => g);
-            if (!currentGroups.includes(groupName)) {
-                currentGroups.push(groupName);
-                editedAttrs[groupAttr] = currentGroups.join(',');
-
-                state.pendingEdits.set(obj.global_index, {
-                    original: originalAttrs,
-                    edited: editedAttrs,
-                    object: {
-                        source_file: obj.source_file,
-                        line_number: obj.line_number,
-                        object_type: obj.object_type,
-                        name: obj.name,
-                        display_name: obj.display_name
-                    }
-                });
-                updatedCount++;
-            }
-        }
-
-        Explorer.saveStagedChanges();
-        updateCommitUI();
-        buildTree();
-
-        // If the currently displayed object in center panel was updated, refresh it
-        if (state.editedObject && state.editedObject.global_index !== -1) {
-            const pendingEdit = state.pendingEdits.get(state.editedObject.global_index);
-            if (pendingEdit) {
-                state.editedObject.attributes = {...pendingEdit.edited};
-                renderCenterAttributes();
-            }
-        }
-
-        closeDialog();
-        showToast(`Staged adding "${groupName}" to ${updatedCount} object(s). Commit to apply.`, 'info');
+        Explorer.closeDialog();
+        addToGroup(groupName);
     }
 
     function showAddToGroupDialog() {
@@ -720,30 +650,19 @@
     }
 
     function addToGroup(groupName) {
-        hideContextMenu();
-        closeDialog();
+        Explorer.hideContextMenu();
+        Explorer.closeDialog();
 
         if (!groupName) {
             showToast('Invalid group name', 'error');
             return;
         }
 
-        // Map object types to their group attribute and group object type
-        const groupAttrMap = {
-            'host': 'hostgroups',
-            'service': 'servicegroups',
-            'contact': 'contactgroups'
-        };
-        const groupTypeMap = {
-            'host': 'hostgroup',
-            'service': 'servicegroup',
-            'contact': 'contactgroup'
-        };
-
+        // C-01: Use extracted constants
         // Get selected objects that can have groups
         const eligibleObjects = Array.from(Explorer.getSelectedIndices())
             .map(i => state.allObjects.find(o => o.global_index === i))
-            .filter(o => o && groupAttrMap[o.object_type]);
+            .filter(o => o && GROUP_ATTR_MAP[o.object_type]);
 
         if (eligibleObjects.length === 0) {
             showToast('Please select hosts, services, or contacts', 'warning');
@@ -751,7 +670,7 @@
         }
 
         // Validate that the group exists
-        const requiredGroupTypes = [...new Set(eligibleObjects.map(o => groupTypeMap[o.object_type]))];
+        const requiredGroupTypes = [...new Set(eligibleObjects.map(o => GROUP_TYPE_MAP[o.object_type]))];
         const existingGroups = state.allObjects
             .filter(o => requiredGroupTypes.includes(o.object_type))
             .map(o => o.name || o.display_name);
@@ -764,7 +683,7 @@
         // Update each object's group attribute by appending the new group
         let updatedCount = 0;
         for (const obj of eligibleObjects) {
-            const groupAttr = groupAttrMap[obj.object_type];
+            const groupAttr = GROUP_ATTR_MAP[obj.object_type];
             const existingEdit = state.pendingEdits.get(obj.global_index);
             const originalAttrs = existingEdit ? existingEdit.original : {...obj.attributes};
             const editedAttrs = existingEdit ? {...existingEdit.edited} : {...obj.attributes};
@@ -791,15 +710,15 @@
         }
 
         Explorer.saveStagedChanges();
-        updateCommitUI();
-        buildTree();
+        Explorer.Explorer.updateCommitUI();
+        Explorer.Explorer.buildTree();
 
         // If the currently displayed object in center panel was updated, refresh it
         if (state.editedObject && state.editedObject.global_index !== -1) {
             const pendingEdit = state.pendingEdits.get(state.editedObject.global_index);
             if (pendingEdit) {
                 state.editedObject.attributes = {...pendingEdit.edited};
-                renderCenterAttributes();
+                Explorer.renderCenterAttributes();
             }
         }
 
@@ -816,8 +735,8 @@
         // If clicking on unselected item, select just that one
         if (!Explorer.isSelectedByIndex(index)) {
             Explorer.clearSelection();
-            selectObjectByIndex(index);
-            updateSelection();
+            Explorer.selectObjectByIndex(index);
+            Explorer.updateSelection();
         }
 
         // SIMPLE: Get selected objects by their stable keys, then look them up fresh
@@ -888,7 +807,7 @@
         document.body.classList.add('dragging-objects');
 
         // Switch to Files tab and highlight it
-        switchRightTab('files');
+        Explorer.switchRightTab('files');
     }
 
     function handleDragEnd(event) {
@@ -929,7 +848,7 @@
             });
             if (moved > 0) {
                 Explorer.saveStagedChanges();
-                buildTree();
+                Explorer.buildTree();
                 showToast(`Moved ${moved} new object(s) to ${targetFile.split('/').pop()}`, 'info');
             }
             return;
@@ -966,8 +885,8 @@
         if (staged > 0) {
             Explorer.saveStagedChanges();
             showToast(`Staged ${staged} object(s) to move. Use Commit to apply.`, 'info');
-            updateCommitUI();
-            buildTree();
+            Explorer.updateCommitUI();
+            Explorer.buildTree();
         }
     }
 
@@ -1082,7 +1001,7 @@
         const renderRefItem = (r, showAttr = true) => `
             <div class="ref-item" onclick="Explorer.navigateToObjectByIndex(${r.object.global_index})">
                 <span class="ref-type-badge type-${r.object.object_type}">${r.object.object_type}</span>
-                <span class="ref-name" title="${Explorer.escapeHtml(getStagedDisplayName(r.object))}">${Explorer.escapeHtml(getStagedDisplayName(r.object))}</span>
+                <span class="ref-name" title="${Explorer.escapeHtml(Explorer.getStagedDisplayName(r.object))}">${Explorer.escapeHtml(Explorer.getStagedDisplayName(r.object))}</span>
                 ${showAttr && r.field ? `<span class="ref-attr">${fieldLabels[r.field] || r.field}</span>` : ''}
             </div>
         `;
@@ -1216,7 +1135,7 @@
         const renderMemberItem = (m, showAttr = true) => `
             <div class="ref-item" onclick="Explorer.navigateToObjectByIndex(${m.object.global_index})">
                 <span class="ref-type-badge type-${m.object.object_type}">${m.object.object_type}</span>
-                <span class="ref-name" title="${Explorer.escapeHtml(getStagedDisplayName(m.object))}">${Explorer.escapeHtml(getStagedDisplayName(m.object))}</span>
+                <span class="ref-name" title="${Explorer.escapeHtml(Explorer.getStagedDisplayName(m.object))}">${Explorer.escapeHtml(Explorer.getStagedDisplayName(m.object))}</span>
                 ${showAttr && m.via ? `<span class="ref-attr">${Explorer.escapeHtml(m.via)}</span>` : ''}
             </div>
         `;
@@ -1294,63 +1213,6 @@
         }
 
         container.innerHTML = html;
-    }
-
-    // Internal helper functions that reference other modules
-    function selectObjectByIndex(index) {
-        Explorer.selectObjectByIndex(index);
-    }
-
-    function updateSelection() {
-        Explorer.updateSelection();
-    }
-
-    function stageObjectDeletions() {
-        Explorer.stageObjectDeletions();
-    }
-
-    function updateCommitUI() {
-        Explorer.updateCommitUI();
-    }
-
-    function buildTree() {
-        Explorer.buildTree();
-    }
-
-    function renderTargetPane() {
-        Explorer.renderTargetPane();
-    }
-
-    function getNameFieldForObject(obj) {
-        return Explorer.getNameFieldForObject(obj);
-    }
-
-    function invalidateOrphanCache() {
-        Explorer.invalidateOrphanCache();
-    }
-
-    function computeStagedIssues() {
-        Explorer.computeStagedIssues();
-    }
-
-    function showCenterPaneObject(obj) {
-        Explorer.showCenterPaneObject(obj);
-    }
-
-    function loadImpactAndRelationships(obj) {
-        Explorer.loadImpactAndRelationships(obj);
-    }
-
-    function renderCenterAttributes() {
-        Explorer.renderCenterAttributes();
-    }
-
-    function switchRightTab(tabName) {
-        Explorer.switchRightTab(tabName);
-    }
-
-    function getStagedDisplayName(obj) {
-        return Explorer.getStagedDisplayName(obj);
     }
 
     // Export all functions
