@@ -73,10 +73,10 @@ function switchSuggestionsSubtab(subtab) {
 
 async function loadAllSuggestions(forceRefresh = false) {
     await Promise.all([
-        loadIssues(),
-        loadTemplateSuggestions(forceRefresh),
-        loadTemplateIssues(forceRefresh),
-        loadGroupingSuggestions(forceRefresh),
+        Explorer.loadIssues(),
+        Explorer.loadTemplateSuggestions(forceRefresh),
+        Explorer.loadTemplateIssues(forceRefresh),
+        Explorer.loadGroupingSuggestions(forceRefresh),
         loadCleanupSuggestions(forceRefresh),
         loadNotificationSuggestions(forceRefresh)
     ]);
@@ -442,7 +442,7 @@ function handleSuggestionClick(id, event) {
         // For missing objects, navigate to the first referencing object
         const firstIssue = s.data.issues[0];
         if (firstIssue.object && firstIssue.object_type) {
-            navigateToIssue(firstIssue.object, firstIssue.object_type);
+            Explorer.navigateToIssue(firstIssue.object, firstIssue.object_type);
         }
     }
 }
@@ -462,7 +462,7 @@ function handleSuggestionAction(id, event) {
             if (s.data && state.groupedErrors) {
                 const idx = state.groupedErrors.indexOf(s.data);
                 if (idx !== -1) {
-                    resolveGroupedError(idx);
+                    Explorer.resolveGroupedError(idx);
                 }
             }
             break;
