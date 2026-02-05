@@ -1,5 +1,9 @@
 // Browse Objects page JavaScript
 // Extracted from objects.html
+//
+// DEPRECATED: This module is superseded by the Object Explorer (explorer.html).
+// Kept for backwards compatibility but no longer actively maintained.
+//
 // Note: Requires `objects` array to be set before loading this file
 
 let currentEditIndex = -1;
@@ -156,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Search input with debounced filtering
     const searchInput = document.getElementById('objectSearch');
     if (searchInput) {
-        searchInput.addEventListener('keyup', filterObjects);
+        searchInput.addEventListener('keyup', debounce(filterObjects, 150));
     }
 
     // Event delegation for data-action elements
