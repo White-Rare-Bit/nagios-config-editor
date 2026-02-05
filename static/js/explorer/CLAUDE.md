@@ -16,7 +16,12 @@ Modular architecture for Nagios config explorer: shared namespace, three-pane UI
 | `dialogs.js` | Create/delete/rename dialogs, validation. Helpers: `buildWarningBox()`, `buildTypeDropdown()` | Dialog UI |
 | `data-loading.js` | API calls, staging sync/polling, initial load. Helpers: `handleApiError()`, `toDisplayPath()` | Data loading or sync |
 | `drag-drop.js` | Unified drag-drop handler (objects and files), drop zones, visual feedback | Drag-drop behavior |
-| `analysis.js` | Suggestions tab: template detection, cleanup, validation errors. Utilities: `stripPrefix()`, `filterActiveSuggestions()` | Analysis features |
+| `analysis.js` | Suggestions tab: template detection, validation errors. Utilities: `stripPrefix()`, `filterActiveSuggestions()` | Analysis features |
+| `analysis-cleanup.js` | Cleanup analysis: unused templates/commands/contacts, duplicates, orphans, empty groups | Cleanup suggestions |
+| `badge-issues.js` | Issue badge rendering and counts for tree nodes | Issue indicators |
+| `orphan-detection.js` | Orphan object analysis and cache building | Orphan detection |
+| `relations-loader.js` | Reference and inheritance loading for center pane | Object relationships |
+| `impact-section.js` | Impact analysis UI in center pane | Impact display |
 | `ui-utils.js` | Icons, formatting (formatObjectName, buildBreadcrumb), tab switching | UI utilities |
 
 ## State Management
