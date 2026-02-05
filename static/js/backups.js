@@ -1,5 +1,8 @@
 // Backups page JavaScript
-// Converted to table layout with sortable columns
+// Table layout with sortable columns and pagination
+//
+// NOTE: Pagination rendering logic (renderBackupPagination) is similar to
+// audit-log.js and git.js. Consider extracting to shared/pagination.js.
 
 // Sort state
 let currentSortColumn = 'date';
