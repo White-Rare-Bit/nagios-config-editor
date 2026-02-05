@@ -219,7 +219,17 @@
     };
 
     /**
-     * Find object by attributes (for idempotent operations)
+     * Find object by attributes (for idempotent operations).
+     * Used when we need to find an object after reload when global_index may have changed.
+     * First tries exact match by source_file + object_type + all attributes,
+     * then falls back to source_file + object_type + name match.
+     *
+     * @param {Object} objMeta - Object metadata to search for
+     * @param {string} objMeta.source_file - Source file path
+     * @param {string} objMeta.object_type - Nagios object type
+     * @param {Object} objMeta.attributes - Object attributes to match
+     * @param {string} [objMeta.name] - Object name for fallback matching
+     * @returns {Object|null} Matching object from allObjects, or null if not found
      */
     Explorer.findObjectByAttributes = function(objMeta) {
         if (!objMeta || !objMeta.source_file || !objMeta.attributes) return null;
