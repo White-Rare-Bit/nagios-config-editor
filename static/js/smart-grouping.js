@@ -1,51 +1,10 @@
 // Smart Grouping page JavaScript
-// Extracted from smart_grouping.html
 
 let allSuggestions = [];
 let currentMembers = [];
 
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('minMembers').addEventListener('input', function() {
-        document.getElementById('minMembersValue').textContent = this.value;
-    });
-
-    // Event delegation for data-action elements
-    document.addEventListener('click', function(e) {
-        const actionEl = e.target.closest('[data-action]');
-        if (!actionEl) return;
-
-        const action = actionEl.dataset.action;
-        if (action === 'analyzeHosts') {
-            analyzeHosts();
-        } else if (action === 'createGroup') {
-            createGroup();
-        } else if (action === 'showCreateModal') {
-            const index = actionEl.dataset.index;
-            if (index !== undefined) showCreateModal(parseInt(index));
-        } else if (action === 'showAllMembers') {
-            const index = actionEl.dataset.index;
-            if (index !== undefined) showAllMembers(parseInt(index));
-        } else if (action === 'removeMember') {
-            const member = actionEl.dataset.member;
-            if (member) removeMember(member);
-        }
-    });
-
-    // Handle change events for filter checkboxes
-    document.addEventListener('change', function(e) {
-        const actionEl = e.target.closest('[data-action]');
-        if (actionEl && actionEl.dataset.action === 'filterSuggestions') {
-            filterSuggestions();
-        }
-    });
-
-    // Handle input events for search/slider
-    document.addEventListener('input', function(e) {
-        const actionEl = e.target.closest('[data-action]');
-        if (actionEl && actionEl.dataset.action === 'filterSuggestions') {
-            filterSuggestions();
-        }
-    });
+document.getElementById('minMembers').addEventListener('input', function() {
+    document.getElementById('minMembersValue').textContent = this.value;
 });
 
 async function analyzeHosts() {
@@ -163,10 +122,10 @@ function displaySuggestions(suggestions) {
                     </div>
                 </div>
                 <div class="suggestion-actions">
-                    <button class="nbe-btn nbe-btn--primary nbe-btn--sm" onclick="showCreateModal(${idx})">
+                    <button class="nbe-btn nbe-btn--primary nbe-btn--sm" data-action="showCreateModal" data-index="${idx}">
                         Create Hostgroup
                     </button>
-                    <button class="nbe-btn nbe-btn--secondary nbe-btn--sm" onclick="showAllMembers(${idx})">
+                    <button class="nbe-btn nbe-btn--secondary nbe-btn--sm" data-action="showAllMembers" data-index="${idx}">
                         View All Members
                     </button>
                 </div>
@@ -174,7 +133,7 @@ function displaySuggestions(suggestions) {
         `;
     }).join('');
 
-    container.innerHTML = `<div style="max-height: 700px; overflow-y: auto;">${html}</div>`;
+    container.innerHTML = `<div class="suggestions-scroll">${html}</div>`;
 }
 
 function showCreateModal(idx) {
@@ -195,7 +154,7 @@ function renderMembersList() {
     container.innerHTML = currentMembers.map(m => `
         <div class="d-flex justify-content-between align-items-center mb-1">
             <span>${escapeHtml(m)}</span>
-            <button class="nbe-btn nbe-btn--danger nbe-btn--sm" onclick="removeMember('${escapeJs(m)}')">&times;</button>
+            <button class="nbe-btn nbe-btn--danger nbe-btn--sm" data-action="removeMember" data-member="${escapeHtml(m)}">&times;</button>
         </div>
     `).join('');
     document.getElementById('createMemberCount').textContent = currentMembers.length;
@@ -254,9 +213,54 @@ function showAllMembers(idx) {
     const membersList = suggestion.members.map(m => `<li>${escapeHtml(m)}</li>`).join('');
     showConfirmDialog({
         title: `Members of "${suggestion.name}"`,
-        message: `<ul style="max-height: 300px; overflow-y: auto; text-align: left;">${membersList}</ul>`,
+        message: `<ul class="members-dialog-scroll">${membersList}</ul>`,
         confirmText: 'Close',
         type: 'info',
         showCancel: false
     });
 }
+
+// Event delegation for data-action attributes
+document.addEventListener('click', function(e) {
+    const actionEl = e.target.closest('[data-action]');
+    if (!actionEl) return;
+
+    const action = actionEl.dataset.action;
+    switch (action) {
+        case 'analyzeHosts':
+            analyzeHosts();
+            break;
+        case 'createGroup':
+            createGroup();
+            break;
+        case 'showCreateModal':
+            showCreateModal(parseInt(actionEl.dataset.index));
+            break;
+        case 'showAllMembers':
+            showAllMembers(parseInt(actionEl.dataset.index));
+            break;
+        case 'removeMember':
+            removeMember(actionEl.dataset.member);
+            break;
+    }
+});
+
+document.addEventListener('change', function(e) {
+    const actionEl = e.target.closest('[data-action]');
+    if (!actionEl) return;
+
+    const action = actionEl.dataset.action;
+    if (action === 'filterSuggestions') {
+        filterSuggestions();
+    }
+});
+
+document.addEventListener('input', function(e) {
+    const actionEl = e.target.closest('[data-action]');
+    if (!actionEl) return;
+
+    const action = actionEl.dataset.action;
+    if (action === 'filterSuggestions') {
+        filterSuggestions();
+    }
+});
