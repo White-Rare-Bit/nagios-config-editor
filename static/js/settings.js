@@ -1,9 +1,12 @@
 // Settings page JavaScript
 // Extracted from settings.html
 
-let browseTargetField = null;
-let browseMode = 'dir';
-let currentBrowsePath = '/';
+(function() {
+    'use strict';
+
+    let browseTargetField = null;
+    let browseMode = 'dir';
+    let currentBrowsePath = '/';
 
 // Path field configuration - used for validation and real-time feedback
 const PATH_FIELDS = [
@@ -118,6 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const actionEl = e.target.closest('[data-action]');
         if (!actionEl) return;
 
+        e.preventDefault();
         const action = actionEl.dataset.action;
         if (action === 'browseDir') {
             const target = actionEl.dataset.target;
@@ -142,6 +146,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (action === 'switchTab') {
             const tab = actionEl.dataset.tab;
             if (tab) switchTab(tab);
+        } else if (action === 'loadDirectory') {
+            const path = actionEl.dataset.path;
+            if (path) loadDirectory(path);
+        } else if (action === 'selectFile') {
+            const path = actionEl.dataset.path;
+            if (path) selectFile(path);
         }
     });
 });
@@ -327,11 +337,16 @@ function openBrowser(path) {
 }
 
 async function loadDirectory(path) {
+    const container = document.getElementById('browseContent');
+
+    // Show loading state
+    container.innerHTML = '<p class="text-muted p-3">Loading...</p>';
+
     const result = await ApiClient.post('/api/settings/browse', { path }, { silent: true });
 
     if (!result.success || result.data?.error) {
-        document.getElementById('browseContent').innerHTML =
-            `<p class="text-danger">${escapeHtml(result.data?.error || result.error)}</p>`;
+        container.innerHTML =
+            `<p class="text-danger p-3">${escapeHtml(result.data?.error || result.error)}</p>`;
         return;
     }
 
@@ -342,7 +357,7 @@ async function loadDirectory(path) {
 
     if (result.data.parent) {
         html += `
-            <a href="#" class="list-group-item list-group-item-action" onclick="loadDirectory('${escapeJs(result.data.parent)}'); return false;">
+            <a href="#" class="list-group-item list-group-item-action" data-action="loadDirectory" data-path="${escapeHtml(result.data.parent)}">
                 <i class="text-muted">..</i> (parent directory)
             </a>
         `;
@@ -351,13 +366,13 @@ async function loadDirectory(path) {
     for (const entry of result.data.entries) {
         if (entry.is_dir) {
             html += `
-                <a href="#" class="list-group-item list-group-item-action" onclick="loadDirectory('${escapeJs(entry.path)}'); return false;">
+                <a href="#" class="list-group-item list-group-item-action" data-action="loadDirectory" data-path="${escapeHtml(entry.path)}">
                     <strong>${escapeHtml(entry.name)}/</strong>
                 </a>
             `;
         } else if (browseMode === 'file') {
             html += `
-                <a href="#" class="list-group-item list-group-item-action" onclick="selectFile('${escapeJs(entry.path)}'); return false;">
+                <a href="#" class="list-group-item list-group-item-action" data-action="selectFile" data-path="${escapeHtml(entry.path)}">
                     ${escapeHtml(entry.name)}
                 </a>
             `;
@@ -369,7 +384,7 @@ async function loadDirectory(path) {
     }
 
     html += '</div>';
-    document.getElementById('browseContent').innerHTML = html;
+    container.innerHTML = html;
 }
 
 function navigateTo() {
@@ -467,3 +482,8 @@ async function saveLoggingSettings() {
 function downloadLog() {
     window.location.href = '/api/logs/operations/download';
 }
+
+    // Export functions that need to be accessible externally
+    // onLockCleared is called by base.js when lock is broken
+    window.onLockCleared = onLockCleared;
+})();
