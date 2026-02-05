@@ -5,6 +5,14 @@
 
     const state = Explorer.state;
 
+    // A-01: Shared utilities extracted from duplicated patterns
+
+    // Severity order for consistent sorting across suggestion types
+    const SEVERITY_ORDER = { error: 0, warning: 1, info: 2 };
+
+    // Strip +/! prefixes from Nagios additive/exclusion syntax
+    const stripPrefix = s => s.trim().replace(/^[+!]+/, '').trim();
+
 async function analyzeAll() {
     try {
         await loadAllSuggestions(true);
@@ -259,11 +267,10 @@ function collectAllSuggestions() {
         }
     }
 
-    // Sort by severity: error > warning > info
-    const severityOrder = { error: 0, warning: 1, info: 2 };
+    // Sort by severity: error > warning > info (A-01: use shared constant)
     suggestions.sort((a, b) => {
-        const aSev = severityOrder[a.severity] ?? 3;
-        const bSev = severityOrder[b.severity] ?? 3;
+        const aSev = SEVERITY_ORDER[a.severity] ?? 3;
+        const bSev = SEVERITY_ORDER[b.severity] ?? 3;
         if (aSev !== bSev) return aSev - bSev;
         // Within same severity, sort by type then name
         if (a.type !== b.type) return a.type.localeCompare(b.type);
@@ -1359,7 +1366,8 @@ function findEmptyGroups() {
             let hasIndirectMembers = false;
             for (const obj of state.allObjects) {
                 if (obj.attributes[gt.memberOf]) {
-                    const memberOfGroups = obj.attributes[gt.memberOf].split(',').map(s => s.trim().replace(/^[+!]+/, '').trim());
+                    // A-01: use shared stripPrefix utility
+                    const memberOfGroups = obj.attributes[gt.memberOf].split(',').map(stripPrefix);
                     if (memberOfGroups.includes(groupName)) {
                         hasIndirectMembers = true;
                         break;
@@ -1468,7 +1476,7 @@ function findUnusedContacts() {
     const suggestions = [];
     const contacts = state.allObjects.filter(o => o.object_type === 'contact');
     const usedContacts = new Set();
-    const stripPrefix = s => s.trim().replace(/^[+!]+/, '').trim();
+    // A-01: use shared stripPrefix utility (defined at module top)
 
     for (const obj of state.allObjects) {
         if (obj.attributes.contacts) {
@@ -1505,7 +1513,7 @@ function findUnusedContactgroups() {
     const contactgroups = state.allObjects.filter(o => o.object_type === 'contactgroup');
     const contacts = state.allObjects.filter(o => o.object_type === 'contact');
     const usedContactgroups = new Set();
-    const stripPrefix = s => s.trim().replace(/^[+!]+/, '').trim();
+    // A-01: use shared stripPrefix utility (defined at module top)
 
     for (const obj of state.allObjects) {
         if (obj.attributes.contact_groups) {
@@ -1545,7 +1553,7 @@ function findUnusedTimeperiods() {
     const suggestions = [];
     const timeperiods = state.allObjects.filter(o => o.object_type === 'timeperiod');
     const usedTimeperiods = new Set();
-    const stripPrefix = s => s.trim().replace(/^[+!]+/, '').trim();
+    // A-01: use shared stripPrefix utility (defined at module top)
     const timeperiodAttrs = ['check_period', 'notification_period', 'host_notification_period',
                              'service_notification_period', 'dependency_period', 'exclude'];
 
@@ -1617,10 +1625,9 @@ function analyzeCleanupIssues() {
     suggestions.push(...findUnusedTimeperiods());
     suggestions.push(...findHealthCheckWarnings());
 
-    // Sort: errors first, then warnings, then info, then by type
-    const severityOrder = { error: 0, warning: 1, info: 2 };
+    // Sort: errors first, then warnings, then info, then by type (A-01: use shared constant)
     suggestions.sort((a, b) => {
-        const severityDiff = severityOrder[a.severity] - severityOrder[b.severity];
+        const severityDiff = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
         if (severityDiff !== 0) return severityDiff;
         return a.type.localeCompare(b.type);
     });
