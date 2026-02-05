@@ -6,8 +6,11 @@
 //
 // Note: Requires `objects` array to be set before loading this file
 
-let currentEditIndex = -1;
-let editedAttributes = {};
+(function() {
+    'use strict';
+
+    let currentEditIndex = -1;
+    let editedAttributes = {};
 
 function filterObjects() {
     const search = document.getElementById('objectSearch').value.toLowerCase();
@@ -201,3 +204,5 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+})();
