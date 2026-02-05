@@ -912,31 +912,31 @@ async function loadGroupingSuggestions(forceRefresh = false) {
         container.innerHTML = '<div class="tab-placeholder">Loading suggestions...</div>';
     }
 
-    try {
-        const response = await fetch('/api/smart-grouping/suggest');
-        const result = await response.json();
+    const result = await ApiClient.get('/api/smart-grouping/suggest', { silent: true });
 
-        state.allGroupingSuggestions = result.suggestions || [];
-
-        if (state.allGroupingSuggestions.length === 0) {
-            if (container) {
-                container.innerHTML = '<div class="empty-state empty-state-success"><span class="empty-icon"><i class="fa-solid fa-circle-check"></i></span><div class="empty-title">No suggestions</div><div class="empty-desc">Your hosts are well organized!</div></div>';
-            }
-            if (badge) badge.style.display = 'none';
-            return;
-        }
-
-        if (badge) {
-            badge.textContent = state.allGroupingSuggestions.length;
-            badge.style.display = 'inline-flex';
-        }
-
-        filterGroupingSuggestions();
-    } catch (error) {
+    if (!result.success) {
         if (container) {
-            container.innerHTML = `<div class="tab-placeholder">Error: ${Explorer.escapeHtml(error.message)}</div>`;
+            container.innerHTML = `<div class="tab-placeholder">Error: ${Explorer.escapeHtml(result.error)}</div>`;
         }
+        return;
     }
+
+    state.allGroupingSuggestions = result.data?.suggestions || [];
+
+    if (state.allGroupingSuggestions.length === 0) {
+        if (container) {
+            container.innerHTML = '<div class="empty-state empty-state-success"><span class="empty-icon"><i class="fa-solid fa-circle-check"></i></span><div class="empty-title">No suggestions</div><div class="empty-desc">Your hosts are well organized!</div></div>';
+        }
+        if (badge) badge.style.display = 'none';
+        return;
+    }
+
+    if (badge) {
+        badge.textContent = state.allGroupingSuggestions.length;
+        badge.style.display = 'inline-flex';
+    }
+
+    filterGroupingSuggestions();
 }
 
 function filterGroupingSuggestions() {
@@ -2344,27 +2344,27 @@ async function loadIssues() {
         container.innerHTML = '<div class="tab-placeholder">Loading issues...</div>';
     }
 
-    try {
-        const response = await fetch('/api/health-check');
-        const result = await response.json();
+    const result = await ApiClient.get('/api/health-check', { silent: true });
 
-        state.allIssues = result.issues || [];
-
-        // Build grouped errors and render
-        filterIssues();
-
-        // Update badge with grouped error count
-        if (badge) {
-            badge.textContent = state.groupedErrors.length;
-            badge.style.display = state.groupedErrors.length > 0 ? 'inline-flex' : 'none';
-        }
-
-        updateSuggestionsBadge();
-    } catch (error) {
+    if (!result.success) {
         if (container) {
-            container.innerHTML = `<div class="tab-placeholder">Error: ${Explorer.escapeHtml(error.message)}</div>`;
+            container.innerHTML = `<div class="tab-placeholder">Error: ${Explorer.escapeHtml(result.error)}</div>`;
         }
+        return;
     }
+
+    state.allIssues = result.data?.issues || [];
+
+    // Build grouped errors and render
+    filterIssues();
+
+    // Update badge with grouped error count
+    if (badge) {
+        badge.textContent = state.groupedErrors.length;
+        badge.style.display = state.groupedErrors.length > 0 ? 'inline-flex' : 'none';
+    }
+
+    updateSuggestionsBadge();
 }
 
 // Store grouped errors for resolve functionality
