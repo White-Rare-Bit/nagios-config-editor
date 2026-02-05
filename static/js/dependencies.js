@@ -20,6 +20,21 @@ console.log('dependencies.js loaded');
 
     const MAX_NODES = Infinity;  // No limit on nodes in graph
 
+    // Layout configuration - centralized constants for all layout algorithms
+    const LAYOUT_CONFIG = {
+        // Tree layouts (hierarchical/hierarchicalLR)
+        nodeWidth: 120,           // Minimum width per node in tree
+        tierSpacingVertical: 150, // Vertical spacing between tiers
+        tierSpacingHorizontal: 200, // Horizontal spacing between tiers (LR layout)
+
+        // Cluster/satellite layouts (static)
+        clusterDistance: 600,     // Distance from center to cluster center
+        clusterRadius: 100,       // Base radius of nodes within cluster
+        clusterRadiusStep: 90,    // Additional radius per ring of nodes
+        nodesPerRing: 8,          // Max nodes in inner ring
+        orbitGap: 150             // Gap between parent cluster and orbiting cluster
+    };
+
     // Edge categories for filtering - maps edge labels to semantic categories
     const edgeCategories = {
         // Dependencies: network topology and monitoring logic
@@ -1346,20 +1361,20 @@ console.log('dependencies.js loaded');
 
         // Calculate subtree widths (how much space each subtree needs)
         const subtreeWidth = {};
-        const NODE_WIDTH = 120;  // Minimum width per node
+        const { nodeWidth } = LAYOUT_CONFIG;
 
         function calcSubtreeWidth(nodeId) {
             const childIds = children[nodeId];
             if (childIds.length === 0) {
-                subtreeWidth[nodeId] = NODE_WIDTH;
-                return NODE_WIDTH;
+                subtreeWidth[nodeId] = nodeWidth;
+                return nodeWidth;
             }
 
             let total = 0;
             for (const childId of childIds) {
                 total += calcSubtreeWidth(childId);
             }
-            subtreeWidth[nodeId] = Math.max(NODE_WIDTH, total);
+            subtreeWidth[nodeId] = Math.max(nodeWidth, total);
             return subtreeWidth[nodeId];
         }
 
@@ -1368,7 +1383,9 @@ console.log('dependencies.js loaded');
         }
 
         // Position nodes based on layout type
-        const TIER_SPACING = layoutType === 'hierarchicalLR' ? 200 : 150;
+        const tierSpacing = layoutType === 'hierarchicalLR'
+            ? LAYOUT_CONFIG.tierSpacingHorizontal
+            : LAYOUT_CONFIG.tierSpacingVertical;
 
         if (layoutType === 'hierarchical') {
             // Top-down tree layout
@@ -1386,7 +1403,7 @@ console.log('dependencies.js loaded');
 
                 // Position children centered under this node
                 let childX = xCenter - totalChildWidth / 2;
-                const childY = y + TIER_SPACING;
+                const childY = y + tierSpacing;
 
                 for (const childId of childIds) {
                     const childWidth = subtreeWidth[childId];
@@ -1403,12 +1420,12 @@ console.log('dependencies.js loaded');
             // Position disconnected nodes at the bottom
             if (disconnected.length > 0) {
                 const maxDepth = Math.max(...Object.values(depth).filter(d => d < 999));
-                const disconnectedY = (maxDepth + 2) * TIER_SPACING;
-                const totalWidth = disconnected.length * NODE_WIDTH;
+                const disconnectedY = (maxDepth + 2) * tierSpacing;
+                const totalWidth = disconnected.length * nodeWidth;
                 let x = -totalWidth / 2;
                 for (const nodeId of disconnected) {
-                    positions[nodeId] = { x: x + NODE_WIDTH / 2, y: disconnectedY };
-                    x += NODE_WIDTH;
+                    positions[nodeId] = { x: x + nodeWidth / 2, y: disconnectedY };
+                    x += nodeWidth;
                 }
             }
 
@@ -1428,7 +1445,7 @@ console.log('dependencies.js loaded');
 
                 // Position children centered beside this node
                 let childY = yCenter - totalChildHeight / 2;
-                const childX = x + TIER_SPACING;
+                const childX = x + tierSpacing;
 
                 for (const childId of childIds) {
                     const childHeight = subtreeWidth[childId];
@@ -1445,12 +1462,12 @@ console.log('dependencies.js loaded');
             // Position disconnected nodes at the right
             if (disconnected.length > 0) {
                 const maxDepth = Math.max(...Object.values(depth).filter(d => d < 999));
-                const disconnectedX = (maxDepth + 2) * TIER_SPACING;
-                const totalHeight = disconnected.length * NODE_WIDTH;
+                const disconnectedX = (maxDepth + 2) * tierSpacing;
+                const totalHeight = disconnected.length * nodeWidth;
                 let y = -totalHeight / 2;
                 for (const nodeId of disconnected) {
-                    positions[nodeId] = { x: disconnectedX, y: y + NODE_WIDTH / 2 };
-                    y += NODE_WIDTH;
+                    positions[nodeId] = { x: disconnectedX, y: y + nodeWidth / 2 };
+                    y += nodeWidth;
                 }
             }
 
@@ -1553,12 +1570,14 @@ console.log('dependencies.js loaded');
             // Position center node
             positions[centerNodeId] = { x: 0, y: 0 };
 
-            // Position each cluster
-            const CLUSTER_DISTANCE = 600;      // Distance from center to cluster center
-            const CLUSTER_RADIUS = 100;        // Radius of nodes within cluster
-            const CLUSTER_RADIUS_STEP = 90;    // Additional radius per ring of nodes
-            const NODES_PER_RING = 8;          // Max nodes in inner ring
-            const ORBIT_GAP = 150;             // Gap between parent cluster and orbiting cluster
+            // Position each cluster - use centralized config
+            const {
+                clusterDistance,
+                clusterRadius,
+                clusterRadiusStep,
+                nodesPerRing,
+                orbitGap
+            } = LAYOUT_CONFIG;
 
             // Track cluster bounds for orbiting calculations
             const clusterBounds = {};  // clusterName -> { centerX, centerY, maxRadius }
@@ -1579,11 +1598,11 @@ console.log('dependencies.js loaded');
                     maxRadius = 0;
                 } else {
                     nodeList.forEach((nodeId, i) => {
-                        const ringIndex = Math.floor(i / NODES_PER_RING);
-                        const posInRing = i % NODES_PER_RING;
-                        const nodesInThisRing = Math.min(NODES_PER_RING, nodeList.length - ringIndex * NODES_PER_RING);
+                        const ringIndex = Math.floor(i / nodesPerRing);
+                        const posInRing = i % nodesPerRing;
+                        const nodesInThisRing = Math.min(nodesPerRing, nodeList.length - ringIndex * nodesPerRing);
 
-                        const nodeRadius = CLUSTER_RADIUS + ringIndex * CLUSTER_RADIUS_STEP;
+                        const nodeRadius = clusterRadius + ringIndex * clusterRadiusStep;
                         maxRadius = Math.max(maxRadius, nodeRadius);
 
                         const angleStep = (2 * Math.PI) / nodesInThisRing;
@@ -1627,8 +1646,8 @@ console.log('dependencies.js loaded');
                 if (!def.orbitsAround) {
                     // Root cluster - position at its angle from center
                     const clusterAngle = def.angle;
-                    const clusterCenterX = Math.cos(clusterAngle) * CLUSTER_DISTANCE;
-                    const clusterCenterY = Math.sin(clusterAngle) * CLUSTER_DISTANCE;
+                    const clusterCenterX = Math.cos(clusterAngle) * clusterDistance;
+                    const clusterCenterY = Math.sin(clusterAngle) * clusterDistance;
 
                     const maxRadius = positionClusterNodes(clusterName, nodeList, clusterCenterX, clusterCenterY, clusterAngle);
 
@@ -1647,8 +1666,8 @@ console.log('dependencies.js loaded');
                     if (!parentBounds) {
                         const parentDef = clusterDefs[parentName];
                         const fallbackAngle = parentDef ? parentDef.angle : def.angle;
-                        const fallbackX = Math.cos(fallbackAngle) * CLUSTER_DISTANCE;
-                        const fallbackY = Math.sin(fallbackAngle) * CLUSTER_DISTANCE;
+                        const fallbackX = Math.cos(fallbackAngle) * clusterDistance;
+                        const fallbackY = Math.sin(fallbackAngle) * clusterDistance;
                         parentBounds = {
                             centerX: fallbackX,
                             centerY: fallbackY,
@@ -1659,7 +1678,7 @@ console.log('dependencies.js loaded');
                     }
 
                     // Position this cluster as a ring outside the parent's outer radius
-                    const orbitRadius = parentBounds.outerRadius + ORBIT_GAP;
+                    const orbitRadius = parentBounds.outerRadius + orbitGap;
 
                     // Calculate nodes per ring for this orbit
                     const circumference = 2 * Math.PI * orbitRadius;
@@ -1720,8 +1739,8 @@ console.log('dependencies.js loaded');
             // Position disconnected nodes
             if (disconnected.length > 0) {
                 const disconnectedAngle = Math.PI * 7/8;
-                const dcX = Math.cos(disconnectedAngle) * CLUSTER_DISTANCE;
-                const dcY = Math.sin(disconnectedAngle) * CLUSTER_DISTANCE;
+                const dcX = Math.cos(disconnectedAngle) * clusterDistance;
+                const dcY = Math.sin(disconnectedAngle) * clusterDistance;
 
                 if (disconnected.length === 1) {
                     positions[disconnected[0]] = { x: dcX, y: dcY };
@@ -1730,8 +1749,8 @@ console.log('dependencies.js loaded');
                     disconnected.forEach((nodeId, i) => {
                         const angle = i * angleStep;
                         positions[nodeId] = {
-                            x: dcX + Math.cos(angle) * CLUSTER_RADIUS,
-                            y: dcY + Math.sin(angle) * CLUSTER_RADIUS
+                            x: dcX + Math.cos(angle) * clusterRadius,
+                            y: dcY + Math.sin(angle) * clusterRadius
                         };
                     });
                 }
