@@ -13,9 +13,12 @@ async function analyzeHosts() {
     btn.textContent = 'Analyzing...';
 
     try {
-        const response = await fetch('/api/smart-grouping/suggest');
-        const result = await response.json();
-
+        const response = await ApiClient.get('/api/smart-grouping/suggest');
+        if (!response.success) {
+            showToast('Error analyzing hosts: ' + response.error, 'error');
+            return;
+        }
+        const result = response.data;
         allSuggestions = result.suggestions;
 
         document.getElementById('summaryCard').innerHTML = `
@@ -180,23 +183,18 @@ async function createGroup() {
     }
 
     try {
-        const response = await fetch('/api/smart-grouping/create', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                name: groupName,
-                alias: alias,
-                members: currentMembers
-            })
+        const response = await ApiClient.post('/api/smart-grouping/create', {
+            name: groupName,
+            alias: alias,
+            members: currentMembers
         });
 
-        const result = await response.json();
-
-        if (result.error) {
-            showToast('Error: ' + result.error, 'error');
+        if (!response.success) {
+            showToast('Error: ' + response.error, 'error');
             return;
         }
 
+        const result = response.data;
         bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
         showToast(`Created hostgroup "${groupName}" with ${result.members_count} members`, 'success');
 
