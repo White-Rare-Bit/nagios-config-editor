@@ -7,6 +7,23 @@
     const constants = Explorer.constants;
     const toDisplayPath = Explorer.toDisplayPath;
 
+    // Data transfer types for drag-drop operations
+    const DATA_TYPES = {
+        OBJECTS: 'text/plain',
+        FILE_MOVE: 'application/x-file-move',
+        FOLDER_MOVE: 'application/x-folder-move'
+    };
+
+    /**
+     * Extract filename from path
+     * @param {string} path - File or folder path
+     * @param {string} fallback - Fallback if path is empty
+     * @returns {string} The filename/foldername
+     */
+    function extractFileName(path, fallback = 'config') {
+        return path ? path.split('/').pop() || fallback : fallback;
+    }
+
     // ============================================================================
     // Navigation
     // ============================================================================
@@ -215,7 +232,7 @@
     function updateWorkspaceHeader() {
         const rootName = document.getElementById('workspaceRootName');
         const rootMeta = document.getElementById('workspaceRootMeta');
-        const configRootName = state.configPath.split('/').pop() || 'config';
+        const configRootName = extractFileName(state.configPath);
         const totalObjects = state.allObjects.length;
 
         if (rootName) rootName.textContent = configRootName;
@@ -517,7 +534,7 @@
         // Build the tree HTML - show root folder as top-level item
         let html = '';
         const rootFolderNames = Object.keys(root.folders).sort();
-        const rootName = state.configPath.split('/').pop() || 'config';
+        const rootName = extractFileName(state.configPath);
         const isRootExpanded = state.expandedFolders.has(state.configPath);
         const isRootSelected = state.selectedFolder === state.configPath;
         const hasRootChildren = rootFolderNames.length > 0 || root.files.length > 0;
@@ -808,7 +825,7 @@
             }
         }
 
-        event.dataTransfer.setData('text/plain', JSON.stringify(dragData));
+        event.dataTransfer.setData(DATA_TYPES.OBJECTS, JSON.stringify(dragData));
         event.dataTransfer.effectAllowed = 'move';
     }
 
@@ -824,7 +841,7 @@
         // Clean up all drag state
         Explorer.cleanupDragState();
 
-        const dataStr = event.dataTransfer.getData('text/plain');
+        const dataStr = event.dataTransfer.getData(DATA_TYPES.OBJECTS);
         if (!dataStr) return;
 
         let data;
@@ -854,7 +871,7 @@
             renderTargetPane();
             Explorer.buildTree();
             if (moved > 0) {
-                showToast(`Moved ${moved} new object(s) to ${targetFile.split('/').pop()}`, 'info');
+                showToast(`Moved ${moved} new object(s) to ${extractFileName(targetFile)}`, 'info');
             }
             return;
         }
@@ -919,7 +936,7 @@
                     renderTargetPane();
                     Explorer.buildTree();
                     if (sourceFile !== targetFile) {
-                        showToast(`Moved pending object to ${targetFile.split('/').pop()}`, 'info');
+                        showToast(`Moved pending object to ${extractFileName(targetFile)}`, 'info');
                     }
                 }
             } else if (itemType === 'creation') {
@@ -933,7 +950,7 @@
                     renderTargetPane();
                     Explorer.buildTree();
                     if (wasInDifferentFile) {
-                        showToast(`Moved new object to ${targetFile.split('/').pop()}`, 'info');
+                        showToast(`Moved new object to ${extractFileName(targetFile)}`, 'info');
                     }
                 }
             }
@@ -988,7 +1005,7 @@
         // Clean up all drag state
         Explorer.cleanupDragState();
 
-        const dataStr = event.dataTransfer.getData('text/plain');
+        const dataStr = event.dataTransfer.getData(DATA_TYPES.OBJECTS);
         if (!dataStr) return;
 
         let data;
@@ -1036,11 +1053,11 @@
             renderTargetPane();
             Explorer.buildTree();
             if (moved > 0 && alreadyInFile > 0) {
-                showToast(`Moved ${moved} new object(s) to ${targetFile.split('/').pop()}. ${alreadyInFile} already in file.`, 'info');
+                showToast(`Moved ${moved} new object(s) to ${extractFileName(targetFile)}. ${alreadyInFile} already in file.`, 'info');
             } else if (moved > 0) {
-                showToast(`Moved ${moved} new object(s) to ${targetFile.split('/').pop()}`, 'info');
+                showToast(`Moved ${moved} new object(s) to ${extractFileName(targetFile)}`, 'info');
             } else if (alreadyInFile > 0) {
-                showToast(`${alreadyInFile === 1 ? 'Object' : 'All ' + alreadyInFile + ' objects'} already in ${targetFile.split('/').pop()}`, 'info');
+                showToast(`${alreadyInFile === 1 ? 'Object' : 'All ' + alreadyInFile + ' objects'} already in ${extractFileName(targetFile)}`, 'info');
             }
             return;
         }
@@ -1115,7 +1132,7 @@
         } else if (staged > 0) {
             showToast(`Staged ${staged} object(s) to move. Use Commit to apply.`, 'info');
         } else if (alreadyInFile > 0) {
-            const msg = `${alreadyInFile === 1 ? 'Object' : 'All ' + alreadyInFile + ' objects'} already in ${targetFile.split('/').pop()}`;
+            const msg = `${alreadyInFile === 1 ? 'Object' : 'All ' + alreadyInFile + ' objects'} already in ${extractFileName(targetFile)}`;
             showToast(msg, 'info');
         }
     }
@@ -1239,7 +1256,7 @@
         state.expandedFolders.add(targetFolder);
         Explorer.updateCommitUI();
         renderTargetPane();
-        const displayName = targetFolder.split('/').pop() || 'config';
+        const displayName = extractFileName(targetFolder);
         showToast(`Moved file to ${displayName}/`, 'success');
     }
 
@@ -1255,7 +1272,7 @@
         state.expandedFolders.add(targetFolder);
         Explorer.updateCommitUI();
         renderTargetPane();
-        const displayName = targetFolder.split('/').pop() || 'config';
+        const displayName = extractFileName(targetFolder);
         showToast(`Moved folder to ${displayName}/`, 'success');
     }
 
@@ -1267,9 +1284,9 @@
         // Clean up all drag state
         Explorer.cleanupDragState();
 
-        const data = event.dataTransfer.getData('text/plain');
-        const fileData = event.dataTransfer.getData('application/x-file-move');
-        const folderData = event.dataTransfer.getData('application/x-folder-move');
+        const data = event.dataTransfer.getData(DATA_TYPES.OBJECTS);
+        const fileData = event.dataTransfer.getData(DATA_TYPES.FILE_MOVE);
+        const folderData = event.dataTransfer.getData(DATA_TYPES.FOLDER_MOVE);
 
         const effectiveTargetFolder = targetFolder;
 
@@ -1324,7 +1341,7 @@
                 Explorer.saveStagedChanges();
                 Explorer.updateCommitUI();
                 renderTargetPane();
-                showToast(`Moved new folder to ${effectiveTargetFolder.split('/').pop() || 'config'}/`, 'info');
+                showToast(`Moved new folder to ${extractFileName(effectiveTargetFolder)}/`, 'info');
                 return;
             }
 
@@ -1360,7 +1377,7 @@
                 Explorer.saveStagedChanges();
                 Explorer.updateCommitUI();
                 renderTargetPane();
-                const displayName = effectiveTargetFolder.split('/').pop() || 'config';
+                const displayName = extractFileName(effectiveTargetFolder);
                 showToast(`Moved new file to ${displayName}/`, 'info');
                 return;
             }
@@ -1398,7 +1415,7 @@
                 Explorer.updateCommitUI();
                 renderTargetPane();
                 Explorer.buildTree();
-                const displayName = effectiveTargetFolder.split('/').pop() || 'config';
+                const displayName = extractFileName(effectiveTargetFolder);
                 showToast(`Staged file move to ${displayName}/. Commit to apply.`, 'info');
                 return;
             }
@@ -1462,7 +1479,7 @@
                     renderTargetPane();
                     Explorer.buildTree();
                     if (moved > 0) {
-                        showToast(`Moved ${moved} new object(s) to ${targetFile.split('/').pop()}`, 'info');
+                        showToast(`Moved ${moved} new object(s) to ${extractFileName(targetFile)}`, 'info');
                     }
                     return;
                 }
@@ -1499,7 +1516,7 @@
                     }
 
                     if (staged > 0) {
-                        showToast(`Created ${newFile.split('/').pop()} and staged ${staged} object(s). Commit to apply.`, 'info');
+                        showToast(`Created ${extractFileName(newFile)} and staged ${staged} object(s). Commit to apply.`, 'info');
                         Explorer.saveStagedChanges();
                         Explorer.updateCommitUI();
                     }
@@ -1526,7 +1543,7 @@
                         }
                     }
                     if (staged > 0) {
-                        showToast(`Staged ${staged} object(s) to ${targetFile.split('/').pop()}. Commit to apply.`, 'info');
+                        showToast(`Staged ${staged} object(s) to ${extractFileName(targetFile)}. Commit to apply.`, 'info');
                         Explorer.saveStagedChanges();
                         Explorer.updateCommitUI();
                     }
@@ -1550,7 +1567,7 @@
         if (state.newFiles.has(filePath)) {
             event.dataTransfer.setData('application/x-new-file-move', filePath);
         }
-        event.dataTransfer.setData('application/x-file-move', filePath);
+        event.dataTransfer.setData(DATA_TYPES.FILE_MOVE, filePath);
         event.dataTransfer.effectAllowed = 'move';
 
         target.style.opacity = '0.5';
@@ -1568,7 +1585,7 @@
 
         const target = event.currentTarget || event.target;
         if (!target) return;
-        event.dataTransfer.setData('application/x-folder-move', folderPath);
+        event.dataTransfer.setData(DATA_TYPES.FOLDER_MOVE, folderPath);
         event.dataTransfer.effectAllowed = 'move';
 
         target.style.opacity = '0.5';
@@ -1640,7 +1657,7 @@
         await Explorer.loadStagedChanges(false);
         Explorer.updateCommitUI();
         renderTargetPane();
-        showToast(`Staged deletion of "${filePath.split('/').pop()}"`, 'info');
+        showToast(`Staged deletion of "${extractFileName(filePath)}"`, 'info');
     }
 
     async function stageDeleteFolder(folderPath, event) {
@@ -1709,7 +1726,7 @@
         await Explorer.loadStagedChanges(false);
         Explorer.updateCommitUI();
         renderTargetPane();
-        showToast(`Staged deletion of "${folderPath.split('/').pop()}/"`, 'info');
+        showToast(`Staged deletion of "${extractFileName(folderPath)}/"`, 'info');
     }
 
     async function unstageFileDeletion(filePath, event) {
@@ -1724,7 +1741,7 @@
 
         Explorer.updateCommitUI();
         renderTargetPane();
-        showToast(`Unstaged deletion of "${filePath.split('/').pop()}"`, 'info');
+        showToast(`Unstaged deletion of "${extractFileName(filePath)}"`, 'info');
     }
 
     async function unstageFileMove(sourcePath, event) {
@@ -1740,7 +1757,7 @@
         Explorer.updateCommitUI();
         renderTargetPane();
         Explorer.buildTree();
-        showToast(`Unstaged move of "${sourcePath.split('/').pop()}"`, 'info');
+        showToast(`Unstaged move of "${extractFileName(sourcePath)}"`, 'info');
     }
 
     async function unstageFolderDeletion(folderPath, event) {
@@ -1755,7 +1772,7 @@
 
         Explorer.updateCommitUI();
         renderTargetPane();
-        showToast(`Unstaged deletion of "${folderPath.split('/').pop()}/"`, 'info');
+        showToast(`Unstaged deletion of "${extractFileName(folderPath)}/"`, 'info');
     }
 
     async function unstageFolderCreation(folderPath, event) {
@@ -1770,7 +1787,7 @@
 
         Explorer.updateCommitUI();
         renderTargetPane();
-        showToast(`Unstaged folder "${folderPath.split('/').pop()}/"`, 'info');
+        showToast(`Unstaged folder "${extractFileName(folderPath)}/"`, 'info');
     }
 
     // ============================================================================
