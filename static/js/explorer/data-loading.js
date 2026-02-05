@@ -58,48 +58,6 @@
     };
 
     // =============================================================================
-    // Path Utilities
-    // =============================================================================
-
-    /**
-     * Convert path to display path with config folder prefix
-     */
-    Explorer.toDisplayPath = function(path) {
-        if (!path) return '';
-        const configPath = Explorer.state.configPath;
-        const configRootName = Explorer.getConfigRootName();
-
-        if (path.startsWith(configPath + '/')) {
-            return configRootName + '/' + path.substring(configPath.length + 1);
-        } else if (path === configPath) {
-            return configRootName;
-        }
-        if (!path.startsWith('/')) {
-            return configRootName + '/' + path;
-        }
-        return path;
-    };
-
-    /**
-     * Convert display path back to absolute path
-     */
-    Explorer.toAbsolutePath = function(displayPath) {
-        if (!displayPath) return '';
-        const configPath = Explorer.state.configPath;
-        const configRootName = Explorer.getConfigRootName();
-
-        if (displayPath.startsWith(configRootName + '/')) {
-            return configPath + '/' + displayPath.substring(configRootName.length + 1);
-        } else if (displayPath === configRootName) {
-            return configPath;
-        }
-        if (displayPath.startsWith('/')) {
-            return displayPath;
-        }
-        return configPath + '/' + displayPath;
-    };
-
-    // =============================================================================
     // Staging API
     // =============================================================================
 
@@ -196,7 +154,7 @@
         const state = Explorer.state;
 
         if (!result.success) {
-            console.error('Failed to load staged changes:', result.error);
+            Explorer.handleApiError('Failed to load staged changes', result.error);
             return;
         }
 
@@ -284,7 +242,7 @@
             Explorer.updateEditingLockedUI();
             Explorer.updateCommitUI();
         } else {
-            console.error('Failed to clear staged changes:', result.error);
+            Explorer.handleApiError('Failed to clear staged changes', result.error);
         }
     };
 
@@ -457,7 +415,7 @@
                 conflicts: result.data.conflicts || []
             };
         }
-        console.error('Failed to check conflicts:', result.error);
+        Explorer.handleApiError('Failed to check conflicts', result.error);
         return { hasConflicts: false, conflicts: [] };
     };
 
@@ -470,7 +428,7 @@
         if (result.success) {
             return result.data;
         }
-        console.error('Failed to get extended staging info:', result.error);
+        Explorer.handleApiError('Failed to get extended staging info', result.error);
         return null;
     };
 

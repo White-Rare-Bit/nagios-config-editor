@@ -88,4 +88,67 @@
         window.showToast(message, type, duration);
     };
 
+    // =============================================================================
+    // Path Utilities
+    // =============================================================================
+
+    /**
+     * Convert absolute path to display path with config folder prefix
+     * @param {string} path - Absolute path
+     * @returns {string} Display path with config root name
+     */
+    Explorer.toDisplayPath = function(path) {
+        if (!path) return '';
+        const configPath = Explorer.state.configPath;
+        const configRootName = Explorer.getConfigRootName();
+
+        if (path.startsWith(configPath + '/')) {
+            return configRootName + '/' + path.substring(configPath.length + 1);
+        } else if (path === configPath) {
+            return configRootName;
+        }
+        if (!path.startsWith('/')) {
+            return configRootName + '/' + path;
+        }
+        return path;
+    };
+
+    /**
+     * Convert display path back to absolute path
+     * @param {string} displayPath - Display path with config root name
+     * @returns {string} Absolute path
+     */
+    Explorer.toAbsolutePath = function(displayPath) {
+        if (!displayPath) return '';
+        const configPath = Explorer.state.configPath;
+        const configRootName = Explorer.getConfigRootName();
+
+        if (displayPath.startsWith(configRootName + '/')) {
+            return configPath + '/' + displayPath.substring(configRootName.length + 1);
+        } else if (displayPath === configRootName) {
+            return configPath;
+        }
+        if (displayPath.startsWith('/')) {
+            return displayPath;
+        }
+        return configPath + '/' + displayPath;
+    };
+
+    // =============================================================================
+    // Error Handling
+    // =============================================================================
+
+    /**
+     * Centralized API error handler
+     * @param {string} context - Description of what operation failed
+     * @param {string} error - Error message
+     * @param {boolean} showToast - Whether to show a toast notification
+     */
+    Explorer.handleApiError = function(context, error, showToast = false) {
+        console.error(`${context}:`, error);
+        if (showToast) {
+            Explorer.showToast(`${context}: ${error}`, 'error');
+        }
+    };
+
 })(window.Explorer);
