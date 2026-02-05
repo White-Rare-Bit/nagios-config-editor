@@ -123,7 +123,7 @@
         const fileEl = document.getElementById('centerCardFile');
         if (fileEl) fileEl.textContent = fileName;
 
-        renderCenterAttributes();
+        Explorer.renderCenterAttributes();
 
         // Load Impact & Relationships section (will show inheritance if use attribute exists)
         Explorer.loadImpactAndRelationships(state.editedObject);
@@ -243,7 +243,7 @@
         state.editedObject.object_type = newType;
 
         // Re-render center pane to show new attributes
-        renderCenterAttributes();
+        Explorer.renderCenterAttributes();
         stageNewObjectChanges();
     }
 
@@ -261,26 +261,13 @@
         }
 
         // Re-render attributes to show the updated name field
-        renderCenterAttributes();
+        Explorer.renderCenterAttributes();
         stageNewObjectChanges();
     }
 
     function getNewObjectNameField(objectType) {
-        const nameFields = {
-            'host': 'host_name',
-            'hostgroup': 'hostgroup_name',
-            'service': 'service_description',
-            'servicegroup': 'servicegroup_name',
-            'contact': 'contact_name',
-            'contactgroup': 'contactgroup_name',
-            'command': 'command_name',
-            'timeperiod': 'timeperiod_name',
-            'servicedependency': 'service_description',
-            'hostdependency': 'host_name',
-            'serviceescalation': 'service_description',
-            'hostescalation': 'host_name'
-        };
-        return nameFields[objectType] || 'name';
+        // D-01: Delegate to centralized nameFields constant (sync with nagios_model.py:NAME_FIELDS)
+        return constants.nameFields[objectType] || 'name';
     }
 
     function getDefaultAttributes(objectType) {
@@ -422,7 +409,7 @@
         }
 
         // Handle linked service update for hostgroup creation from cleanup
-        handleHostgroupServiceLink();
+        Explorer.handleHostgroupServiceLink();
 
         // Centralized refresh ensures all UI components stay in sync
         // Skip center pane sync since we're about to show the new object
@@ -609,7 +596,7 @@
             confirmBtn.textContent = 'Delete Anyway';
             confirmBtn.classList.add('btn-danger');
             confirmBtn.onclick = () => {
-                closeDialog();
+                Explorer.closeDialog();
                 onConfirm();
             };
         }
@@ -698,14 +685,14 @@
     // ============================================================================
 
     function showBulkRenameDialog() {
-        hideContextMenu();
-        closeActionsMenu();
+        Explorer.hideContextMenu();
+        Explorer.closeActionsMenu();
         if (state.selectedKeys.size === 0) {
             showToast('Please select objects first', 'warning');
             return;
         }
 
-        showDialog('Bulk Rename', `
+        Explorer.showDialog('Bulk Rename', `
             <label>Find</label>
             <input type="text" id="renameFind" placeholder="Text to find...">
             <label>Replace with</label>
@@ -762,7 +749,7 @@
             Explorer.invalidateOrphanCache();
             Explorer.computeStagedIssues();
             Explorer.refreshAfterObjectChange();
-            closeDialog();
+            Explorer.closeDialog();
 
             // Refresh center pane if displayed object was renamed
             if (centerPaneNeedsRefresh && state.editedObject) {
@@ -770,7 +757,7 @@
                 if (obj) Explorer.showCenterPaneObject(obj);
             } else if (state.editedObject && renamedCount > 0) {
                 // Refresh Impact & Relationships since renames might affect this object
-                loadImpactAndRelationships(state.editedObject);
+                Explorer.loadImpactAndRelationships(state.editedObject);
             }
 
             if (renamedCount > 0) {
@@ -782,8 +769,8 @@
     }
 
     function showEditAttributesDialog() {
-        hideContextMenu();
-        closeActionsMenu();
+        Explorer.hideContextMenu();
+        Explorer.closeActionsMenu();
 
         // Collect all unique attribute names from selected objects
         const scope = state.selectedKeys.size > 0 ? Array.from(Explorer.getSelectedIndices()) : state.allObjects.map(o => o.global_index);
@@ -797,7 +784,7 @@
         }
         const sortedFields = [...availableFields].sort();
 
-        showDialog('Edit Attributes', `
+        Explorer.showDialog('Edit Attributes', `
             <label>Action</label>
             <select id="editAttrAction" class="dialog-select u-mb-md">
                 <option value="findreplace">Find & Replace</option>
@@ -929,7 +916,7 @@
             Explorer.invalidateOrphanCache();
             Explorer.computeStagedIssues();
             Explorer.refreshAfterObjectChange();
-            closeDialog();
+            Explorer.closeDialog();
 
             // Refresh center pane if needed
             if (state.editedObject && !state.isNewObject && scope.includes(state.editedObject.global_index)) {
@@ -1017,21 +1004,21 @@
     // ============================================================================
 
     function selectAllVisible() {
-        closeActionsMenu();
+        Explorer.closeActionsMenu();
         const items = document.querySelectorAll('.tree-item:not([style*="display: none"])');
         items.forEach(item => {
             const idx = parseInt(item.dataset.index);
-            if (!isNaN(idx)) selectObjectByIndex(idx);
+            if (!isNaN(idx)) Explorer.selectObjectByIndex(idx);
         });
         Explorer.updateSelection();
         showToast(`Selected ${state.selectedKeys.size} objects`, 'info');
     }
 
     function selectByType() {
-        closeActionsMenu();
+        Explorer.closeActionsMenu();
         const types = [...new Set(state.allObjects.map(o => o.object_type))].sort();
 
-        showDialog('Select by Type', `
+        Explorer.showDialog('Select by Type', `
             <label>Object type</label>
             <div class="dialog-type-list">
                 ${types.map(t => {
@@ -1047,10 +1034,10 @@
             const type = document.getElementById('selectType').value;
             Explorer.clearSelection();
             state.allObjects.filter(o => o.object_type === type).forEach(o => {
-                selectObjectByIndex(o.global_index);
+                Explorer.selectObjectByIndex(o.global_index);
             });
             Explorer.updateSelection();
-            closeDialog();
+            Explorer.closeDialog();
             showToast(`Selected ${state.selectedKeys.size} ${type} objects`, 'info');
         });
 
@@ -1068,9 +1055,9 @@
     }
 
     function selectByPattern() {
-        closeActionsMenu();
+        Explorer.closeActionsMenu();
 
-        showDialog('Select by Pattern', `
+        Explorer.showDialog('Select by Pattern', `
             <label>Name pattern (regex)</label>
             <input type="text" id="selectPattern" placeholder="e.g., ^web-.*">
         `, () => {
@@ -1081,10 +1068,10 @@
                 const regex = new RegExp(pattern, 'i');
                 Explorer.clearSelection();
                 state.allObjects.filter(o => regex.test(o.display_name)).forEach(o => {
-                    selectObjectByIndex(o.global_index);
+                    Explorer.selectObjectByIndex(o.global_index);
                 });
                 Explorer.updateSelection();
-                closeDialog();
+                Explorer.closeDialog();
                 showToast(`Selected ${state.selectedKeys.size} matching objects`, 'info');
             } catch (e) {
                 showToast('Invalid regex pattern', 'error');
@@ -1097,8 +1084,8 @@
     // ============================================================================
 
     async function runValidation() {
-        closeActionsMenu();
-        switchRightTab('validation');
+        Explorer.closeActionsMenu();
+        Explorer.switchRightTab('validation');
         runValidationFull();
     }
 
@@ -1160,6 +1147,12 @@
     }
 
     function removeStagedCreation(idx) {
+        // D-02: Add bounds check to prevent runtime errors
+        if (idx < 0 || idx >= state.stagedCreations.length) {
+            DebugLogger.warn('removeStagedCreation called with invalid index', { idx, length: state.stagedCreations.length });
+            return;
+        }
+
         // Check if this is the currently displayed new object
         if (state.isNewObject && state.newObjectStagedIndex === idx) {
             // Clear center pane
@@ -1182,46 +1175,6 @@
         state.stagedCreations.splice(idx, 1);
         Explorer.saveStagedChanges();
         Explorer.refreshAfterObjectChange();
-    }
-
-    // ============================================================================
-    // Cross-module function delegates (defined in other modules, accessed via Explorer namespace)
-    // ============================================================================
-
-    function renderCenterAttributes() {
-        Explorer.renderCenterAttributes();
-    }
-
-    function handleHostgroupServiceLink() {
-        Explorer.handleHostgroupServiceLink();
-    }
-
-    function hideContextMenu() {
-        Explorer.hideContextMenu();
-    }
-
-    function closeActionsMenu() {
-        Explorer.closeActionsMenu();
-    }
-
-    function showDialog(title, bodyHtml, onConfirm) {
-        Explorer.showDialog(title, bodyHtml, onConfirm);
-    }
-
-    function closeDialog() {
-        Explorer.closeDialog();
-    }
-
-    function switchRightTab(tabName) {
-        Explorer.switchRightTab(tabName);
-    }
-
-    function selectObjectByIndex(index) {
-        Explorer.selectObjectByIndex(index);
-    }
-
-    function loadImpactAndRelationships(obj) {
-        Explorer.loadImpactAndRelationships(obj);
     }
 
     // ============================================================================
