@@ -226,13 +226,16 @@ document.addEventListener('change', function(e) {
     }
 });
 
+// Debounced filter for input events
+const debouncedFilter = debounce(filterDisplayedObjects, 150);
+
 document.addEventListener('input', function(e) {
     const actionEl = e.target.closest('[data-action]');
     if (!actionEl) return;
 
     const action = actionEl.dataset.action;
     if (action === 'filterDisplayedObjects') {
-        filterDisplayedObjects();
+        debouncedFilter();
     }
 });
 

@@ -76,10 +76,11 @@ async function runValidation() {
     btn.disabled = true;
     btn.textContent = 'Validating...';
 
+    let timeoutId;
     try {
         // Race between API call and timeout
         const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('TIMEOUT')), CONFIG.TIMEOUT_MS);
+            timeoutId = setTimeout(() => reject(new Error('TIMEOUT')), CONFIG.TIMEOUT_MS);
         });
 
         const result = await Promise.race([
@@ -100,6 +101,7 @@ async function runValidation() {
             showToast('Error: ' + error.message, 'error');
         }
     } finally {
+        clearTimeout(timeoutId);
         btn.disabled = false;
         btn.textContent = 'Run Validation';
     }
