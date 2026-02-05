@@ -1,6 +1,39 @@
 // Bulk Rename page JavaScript
 // Extracted from bulk_rename.html
 
+// Store preview data for apply confirmation
+let lastPreviewResult = null;
+
+/**
+ * Collect form data from rename form fields
+ * @param {boolean} includeUpdateReferences - Whether to include the updateReferences checkbox
+ * @returns {Object} Form data object
+ */
+function getFormData(includeUpdateReferences = false) {
+    const data = {
+        type: document.getElementById('objectType').value,
+        find: document.getElementById('findPattern').value,
+        replace: document.getElementById('replaceWith').value,
+        regex: document.getElementById('useRegex').checked,
+        prefix: document.getElementById('addPrefix').value,
+        suffix: document.getElementById('addSuffix').value
+    };
+    if (includeUpdateReferences) {
+        data.updateReferences = document.getElementById('updateReferences').checked;
+    }
+    return data;
+}
+
+/**
+ * Calculate total references from preview result
+ * @param {Object} previewResult - Preview result with changes array
+ * @returns {number} Total reference count
+ */
+function calculateTotalReferences(previewResult) {
+    if (!previewResult || !previewResult.changes) return 0;
+    return previewResult.changes.reduce((sum, c) => sum + c.references, 0);
+}
+
 // Event delegation for data-action buttons
 document.addEventListener('click', function(e) {
     const actionEl = e.target.closest('[data-action]');
@@ -16,28 +49,19 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// Store preview data for apply confirmation
-let lastPreviewResult = null;
-
 async function previewRename() {
-    const data = {
-        type: document.getElementById('objectType').value,
-        find: document.getElementById('findPattern').value,
-        replace: document.getElementById('replaceWith').value,
-        regex: document.getElementById('useRegex').checked,
-        prefix: document.getElementById('addPrefix').value,
-        suffix: document.getElementById('addSuffix').value
-    };
+    const data = getFormData();
 
     if (!data.type) {
         showToast('Please select an object type', 'warning');
         return;
     }
 
-    const result = await ApiClient.post('/api/preview-rename', data);
+    const result = await ApiClient.post('/api/preview-rename', data, {
+        errorPrefix: 'Preview failed'
+    });
 
     if (!result.success) {
-        showToast(result.error || 'Preview failed', 'error');
         return;
     }
 
@@ -45,7 +69,7 @@ async function previewRename() {
     lastPreviewResult = result.data;
 
     // Calculate total references
-    const totalRefs = result.data.changes.reduce((sum, c) => sum + c.references, 0);
+    const totalRefs = calculateTotalReferences(result.data);
 
     document.getElementById('previewCount').textContent = result.data.total;
     document.getElementById('applyBtn').disabled = result.data.total === 0;
@@ -95,9 +119,7 @@ async function applyRename() {
 
     // Build detailed confirmation message with impact
     const totalObjects = lastPreviewResult ? lastPreviewResult.total : 0;
-    const totalRefs = lastPreviewResult
-        ? lastPreviewResult.changes.reduce((sum, c) => sum + c.references, 0)
-        : 0;
+    const totalRefs = calculateTotalReferences(lastPreviewResult);
 
     let confirmMsg = '';
     if (updateRefs) {
@@ -122,20 +144,13 @@ async function applyRename() {
     });
     if (!confirmed) return;
 
-    const data = {
-        type: document.getElementById('objectType').value,
-        find: document.getElementById('findPattern').value,
-        replace: document.getElementById('replaceWith').value,
-        regex: document.getElementById('useRegex').checked,
-        prefix: document.getElementById('addPrefix').value,
-        suffix: document.getElementById('addSuffix').value,
-        updateReferences: updateRefs
-    };
+    const data = getFormData(true);
 
-    const result = await ApiClient.post('/api/apply-rename', data);
+    const result = await ApiClient.post('/api/apply-rename', data, {
+        errorPrefix: 'Rename failed'
+    });
 
     if (!result.success) {
-        showToast(result.error || 'Rename failed', 'error');
         return;
     }
 
@@ -144,19 +159,13 @@ async function applyRename() {
 }
 
 async function showDiff() {
-    const data = {
-        type: document.getElementById('objectType').value,
-        find: document.getElementById('findPattern').value,
-        replace: document.getElementById('replaceWith').value,
-        regex: document.getElementById('useRegex').checked,
-        prefix: document.getElementById('addPrefix').value,
-        suffix: document.getElementById('addSuffix').value
-    };
+    const data = getFormData();
 
-    const result = await ApiClient.post('/api/diff/rename', data);
+    const result = await ApiClient.post('/api/diff/rename', data, {
+        errorPrefix: 'Failed to generate diff'
+    });
 
     if (!result.success) {
-        showToast(result.error || 'Failed to generate diff', 'error');
         return;
     }
 
