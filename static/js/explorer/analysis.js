@@ -961,14 +961,14 @@ function resolveCleanupIssue(idx) {
 
 function fixDuplicate(idx) {
     const s = state.allCleanupSuggestions[idx];
-    if (!s || s.type !== 'duplicate' || !s.objects) return;
+    if (!s || s.type !== 'duplicate' || !s.duplicateGroup) return;
 
     // Find differences between duplicates
-    const differences = findDuplicateDifferences(s.objects);
+    const differences = findDuplicateDifferences(s.duplicateGroup);
     const hasDifferences = differences.length > 0;
 
     // Build list of duplicates with "Keep" buttons
-    const objectList = s.objects.map((o, i) => {
+    const objectList = s.duplicateGroup.map((o, i) => {
         const file = o.source_file.split('/').pop();
 
         // Show differing attributes for this object
@@ -1035,11 +1035,11 @@ function findDuplicateDifferences(objects) {
 
 function keepDuplicateAndDeleteOthers(suggestionIdx, keepIdx) {
     const s = state.allCleanupSuggestions[suggestionIdx];
-    if (!s || !s.objects) return;
+    if (!s || !s.duplicateGroup) return;
 
     // Stage deletion of all except the one to keep
     let deletedCount = 0;
-    s.objects.forEach((obj, i) => {
+    s.duplicateGroup.forEach((obj, i) => {
         if (i !== keepIdx) {
             state.stagedObjectDeletions.add(obj.global_index);
             deletedCount++;
