@@ -1532,8 +1532,7 @@ function selectObjectByIndex(index) {
     const obj = state.allObjects.find(o => o.global_index === index);
     if (obj) {
         state.selectedKeys.add(Explorer.getObjectKey(obj));
-        Explorer.updateSelectionCount && Explorer.updateSelectionCount();
-    }
+            }
 }
 
 /**
@@ -1586,8 +1585,7 @@ function updateSelection() {
     });
 
     // Update selection count indicator
-    Explorer.updateSelectionCount && Explorer.updateSelectionCount();
-
+    
     // Update center pane based on selection
     if (state.selectedKeys.size === 1) {
         const key = Array.from(state.selectedKeys)[0];

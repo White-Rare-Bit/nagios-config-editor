@@ -154,8 +154,7 @@
         const key = Explorer.getObjectKeyByIndex(index);
         if (key) {
             state.selectedKeys.add(key);
-            Explorer.updateSelectionCount && Explorer.updateSelectionCount();
-            return true;
+                        return true;
         }
         return false;
     };
@@ -167,8 +166,7 @@
         const key = Explorer.getObjectKeyByIndex(index);
         if (key) {
             state.selectedKeys.delete(key);
-            Explorer.updateSelectionCount && Explorer.updateSelectionCount();
-            return true;
+                        return true;
         }
         return false;
     };
@@ -178,8 +176,7 @@
      */
     Explorer.clearSelection = function() {
         state.selectedKeys.clear();
-        Explorer.updateSelectionCount && Explorer.updateSelectionCount();
-    };
+            };
 
     /**
      * Get count of selected items
