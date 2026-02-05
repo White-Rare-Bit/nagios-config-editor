@@ -776,7 +776,7 @@ function renderCleanupSuggestions() {
             } else if (s.type === 'long_host_list') {
                 buttons = `<button class="cleanup-action-btn cleanup-fix-btn" onclick="event.stopPropagation(); Explorer.fixLongHostList(${i})">Create Hostgroup</button>`;
             } else if (s.issueData) {
-                const resolveInfo = getIssueResolveInfo(s.issueData);
+                const resolveInfo = Explorer.getIssueResolveInfo(s.issueData);
                 if (resolveInfo) {
                     buttons = `<button class="cleanup-action-btn cleanup-fix-btn" onclick="event.stopPropagation(); Explorer.resolveCleanupIssue(${i})">Create ${resolveInfo.objectType}</button>`;
                 }
@@ -948,7 +948,7 @@ function resolveCleanupIssue(idx) {
     if (!s.issueData) return;
 
     const issue = s.issueData;
-    const resolveInfo = getIssueResolveInfo(issue);
+    const resolveInfo = Explorer.getIssueResolveInfo(issue);
     if (!resolveInfo) return;
 
     // Find the source file of the object that has the issue
@@ -956,7 +956,7 @@ function resolveCleanupIssue(idx) {
     const targetFile = sourceObj ? sourceObj.source_file : null;
 
     // Open create object dialog with pre-filled values
-    openCreateObjectForIssue(resolveInfo.objectType, resolveInfo.missingName, targetFile, issue);
+    Explorer.openCreateObjectForIssue(resolveInfo.objectType, resolveInfo.missingName, targetFile, issue);
 }
 
 function fixDuplicate(idx) {
