@@ -2,6 +2,12 @@
  * Nagios Bulk Editor - State Management Module
  *
  * Handles stable key operations, pending edits, and deletion tracking.
+ *
+ * Dependencies:
+ * - window.Explorer (from main.js)
+ * - Explorer.state (shared state object)
+ * - Explorer.findObjectByKey (from main.js)
+ * - Explorer.getObjectKeyByIndex (from main.js)
  */
 
 (function(Explorer) {
@@ -10,41 +16,52 @@
     const state = Explorer.state;
 
     // =============================================================================
-    // Stable Key Helpers
+    // Private Helpers
+    // =============================================================================
+
+    /**
+     * Resolve various input types to a global_index
+     * @param {string|number|Object} objOrKeyOrIndex - Stable key, global_index, or object
+     * @returns {number|null} The global_index or null if not resolvable
+     */
+    function resolveToGlobalIndex(objOrKeyOrIndex) {
+        if (typeof objOrKeyOrIndex === 'string') {
+            const obj = Explorer.findObjectByKey(objOrKeyOrIndex);
+            return obj ? obj.global_index : null;
+        }
+        if (typeof objOrKeyOrIndex === 'number') {
+            return objOrKeyOrIndex;
+        }
+        if (objOrKeyOrIndex && typeof objOrKeyOrIndex === 'object') {
+            return objOrKeyOrIndex.global_index;
+        }
+        return null;
+    }
+
+    // =============================================================================
+    // Pending Edit Operations
     // =============================================================================
 
     /**
      * Get pending edit using either stable key, global_index, or object
+     * @param {string|number|Object} objOrKeyOrIndex
+     * @returns {Object|undefined} The pending edit data
      */
     Explorer.getPendingEdit = function(objOrKeyOrIndex) {
-        if (typeof objOrKeyOrIndex === 'string') {
-            const obj = Explorer.findObjectByKey(objOrKeyOrIndex);
-            return obj ? state.pendingEdits.get(obj.global_index) : undefined;
-        } else if (typeof objOrKeyOrIndex === 'number') {
-            return state.pendingEdits.get(objOrKeyOrIndex);
-        } else if (objOrKeyOrIndex && typeof objOrKeyOrIndex === 'object') {
-            return state.pendingEdits.get(objOrKeyOrIndex.global_index);
-        }
-        return undefined;
+        const index = resolveToGlobalIndex(objOrKeyOrIndex);
+        return index !== null ? state.pendingEdits.get(index) : undefined;
     };
 
     /**
      * Set pending edit using either stable key, global_index, or object
+     * @param {string|number|Object} objOrKeyOrIndex
+     * @param {Object} editData - The edit data to store
+     * @returns {boolean} True if set successfully
      */
     Explorer.setPendingEdit = function(objOrKeyOrIndex, editData) {
-        let globalIndex;
-
-        if (typeof objOrKeyOrIndex === 'string') {
-            const obj = Explorer.findObjectByKey(objOrKeyOrIndex);
-            globalIndex = obj ? obj.global_index : null;
-        } else if (typeof objOrKeyOrIndex === 'number') {
-            globalIndex = objOrKeyOrIndex;
-        } else if (objOrKeyOrIndex && typeof objOrKeyOrIndex === 'object') {
-            globalIndex = objOrKeyOrIndex.global_index;
-        }
-
-        if (globalIndex !== null && globalIndex !== undefined) {
-            state.pendingEdits.set(globalIndex, editData);
+        const index = resolveToGlobalIndex(objOrKeyOrIndex);
+        if (index !== null) {
+            state.pendingEdits.set(index, editData);
             return true;
         }
         return false;
@@ -52,62 +69,41 @@
 
     /**
      * Delete pending edit
+     * @param {string|number|Object} objOrKeyOrIndex
+     * @returns {boolean} True if deleted successfully
      */
     Explorer.deletePendingEdit = function(objOrKeyOrIndex) {
-        let globalIndex;
-
-        if (typeof objOrKeyOrIndex === 'string') {
-            const obj = Explorer.findObjectByKey(objOrKeyOrIndex);
-            globalIndex = obj ? obj.global_index : null;
-        } else if (typeof objOrKeyOrIndex === 'number') {
-            globalIndex = objOrKeyOrIndex;
-        } else if (objOrKeyOrIndex && typeof objOrKeyOrIndex === 'object') {
-            globalIndex = objOrKeyOrIndex.global_index;
-        }
-
-        if (globalIndex !== null && globalIndex !== undefined) {
-            state.pendingEdits.delete(globalIndex);
+        const index = resolveToGlobalIndex(objOrKeyOrIndex);
+        if (index !== null) {
+            state.pendingEdits.delete(index);
             return true;
         }
         return false;
     };
 
+    // =============================================================================
+    // Deletion Tracking
+    // =============================================================================
+
     /**
      * Check if object is marked for deletion
+     * @param {string|number|Object} objOrKeyOrIndex
+     * @returns {boolean}
      */
     Explorer.isObjectMarkedForDeletion = function(objOrKeyOrIndex) {
-        let globalIndex;
-
-        if (typeof objOrKeyOrIndex === 'string') {
-            const obj = Explorer.findObjectByKey(objOrKeyOrIndex);
-            globalIndex = obj ? obj.global_index : null;
-        } else if (typeof objOrKeyOrIndex === 'number') {
-            globalIndex = objOrKeyOrIndex;
-        } else if (objOrKeyOrIndex && typeof objOrKeyOrIndex === 'object') {
-            globalIndex = objOrKeyOrIndex.global_index;
-        }
-
-        return globalIndex !== null && globalIndex !== undefined &&
-               state.stagedObjectDeletions.has(globalIndex);
+        const index = resolveToGlobalIndex(objOrKeyOrIndex);
+        return index !== null && state.stagedObjectDeletions.has(index);
     };
 
     /**
      * Mark object for deletion
+     * @param {string|number|Object} objOrKeyOrIndex
+     * @returns {boolean} True if marked successfully
      */
     Explorer.markObjectForDeletion = function(objOrKeyOrIndex) {
-        let globalIndex;
-
-        if (typeof objOrKeyOrIndex === 'string') {
-            const obj = Explorer.findObjectByKey(objOrKeyOrIndex);
-            globalIndex = obj ? obj.global_index : null;
-        } else if (typeof objOrKeyOrIndex === 'number') {
-            globalIndex = objOrKeyOrIndex;
-        } else if (objOrKeyOrIndex && typeof objOrKeyOrIndex === 'object') {
-            globalIndex = objOrKeyOrIndex.global_index;
-        }
-
-        if (globalIndex !== null && globalIndex !== undefined) {
-            state.stagedObjectDeletions.add(globalIndex);
+        const index = resolveToGlobalIndex(objOrKeyOrIndex);
+        if (index !== null) {
+            state.stagedObjectDeletions.add(index);
             return true;
         }
         return false;
@@ -115,21 +111,13 @@
 
     /**
      * Unmark object for deletion
+     * @param {string|number|Object} objOrKeyOrIndex
+     * @returns {boolean} True if unmarked successfully
      */
     Explorer.unmarkObjectForDeletion = function(objOrKeyOrIndex) {
-        let globalIndex;
-
-        if (typeof objOrKeyOrIndex === 'string') {
-            const obj = Explorer.findObjectByKey(objOrKeyOrIndex);
-            globalIndex = obj ? obj.global_index : null;
-        } else if (typeof objOrKeyOrIndex === 'number') {
-            globalIndex = objOrKeyOrIndex;
-        } else if (objOrKeyOrIndex && typeof objOrKeyOrIndex === 'object') {
-            globalIndex = objOrKeyOrIndex.global_index;
-        }
-
-        if (globalIndex !== null && globalIndex !== undefined) {
-            state.stagedObjectDeletions.delete(globalIndex);
+        const index = resolveToGlobalIndex(objOrKeyOrIndex);
+        if (index !== null) {
+            state.stagedObjectDeletions.delete(index);
             return true;
         }
         return false;
@@ -154,7 +142,7 @@
         const key = Explorer.getObjectKeyByIndex(index);
         if (key) {
             state.selectedKeys.add(key);
-                        return true;
+            return true;
         }
         return false;
     };
@@ -166,7 +154,7 @@
         const key = Explorer.getObjectKeyByIndex(index);
         if (key) {
             state.selectedKeys.delete(key);
-                        return true;
+            return true;
         }
         return false;
     };
@@ -176,7 +164,7 @@
      */
     Explorer.clearSelection = function() {
         state.selectedKeys.clear();
-            };
+    };
 
     /**
      * Get count of selected items
@@ -197,6 +185,7 @@
                state.stagedMoves.size > 0 ||
                state.stagedCreations.length > 0 ||
                state.stagedObjectDeletions.size > 0 ||
+               state.stagedCreationDeletions.size > 0 ||
                state.newFiles.size > 0 ||
                // File/folder operations
                state.stagedFileCreations.length > 0 ||
