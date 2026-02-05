@@ -1,7 +1,51 @@
 // Reorganize page JavaScript
 // Extracted from reorganize.html
 
-let allObjects = [];
+(function() {
+    'use strict';
+
+    let allObjects = [];
+
+    /**
+     * Common bulk operation handler - validates selection, confirms, calls API, handles result
+     * @param {Object} options
+     * @param {string} options.operationName - Name for messages (e.g., 'move', 'clone', 'delete')
+     * @param {string} options.endpoint - API endpoint to call
+     * @param {Function} options.getPayload - Function(indices) returning request payload
+     * @param {Function} options.getSuccessMessage - Function(result.data) returning success message
+     * @param {Object} options.confirm - Confirmation dialog options {title, message, type}
+     * @param {Function} [options.preValidate] - Optional additional validation, returns false to abort
+     */
+    async function performBulkOperation(options) {
+        const indices = getSelectedIndices();
+        if (indices.length === 0) {
+            showToast(`Please select at least one object to ${options.operationName}`, 'warning');
+            return;
+        }
+
+        // Optional pre-validation (e.g., checking for prefix/suffix in clone)
+        if (options.preValidate && !(await options.preValidate(indices))) {
+            return;
+        }
+
+        const confirmed = await showConfirmDialog({
+            title: options.confirm.title,
+            message: options.confirm.message.replace('{count}', indices.length),
+            confirmText: options.confirm.confirmText || options.operationName.charAt(0).toUpperCase() + options.operationName.slice(1),
+            type: options.confirm.type || 'warning'
+        });
+        if (!confirmed) return;
+
+        const result = await ApiClient.post(options.endpoint, options.getPayload(indices));
+
+        if (!result.success) {
+            showToast(result.error || `${options.operationName.charAt(0).toUpperCase() + options.operationName.slice(1)} failed`, 'error');
+            return;
+        }
+
+        showToast(options.getSuccessMessage(result.data), 'success');
+        location.reload();
+    }
 
 document.addEventListener('DOMContentLoaded', () => {
     loadObjects();
@@ -78,118 +122,73 @@ function getSelectedIndices() {
 }
 
 async function moveSelected() {
-    const indices = getSelectedIndices();
-    if (indices.length === 0) {
-        showToast('Please select at least one object to move', 'warning');
-        return;
-    }
-
     let targetFile = document.getElementById('targetFile').value;
     const newFile = document.getElementById('newFile').value.trim();
-
-    if (newFile) {
-        targetFile = newFile;
-    }
+    if (newFile) targetFile = newFile;
 
     if (!targetFile) {
         showToast('Please select a target file or enter a new filename', 'warning');
         return;
     }
 
-    const confirmed = await showConfirmDialog({
-        title: 'Move Objects',
-        message: `Move ${indices.length} objects to ${targetFile}? A backup will be created first.`,
-        confirmText: 'Move',
-        type: 'warning'
+    await performBulkOperation({
+        operationName: 'move',
+        endpoint: '/api/move-objects',
+        getPayload: (indices) => ({ objects: indices, target_file: targetFile }),
+        getSuccessMessage: (data) => `Moved ${data.moved} objects. Backup: ${data.backup}`,
+        confirm: {
+            title: 'Move Objects',
+            message: `Move {count} objects to ${targetFile}? A backup will be created first.`,
+            confirmText: 'Move',
+            type: 'warning'
+        }
     });
-    if (!confirmed) return;
-
-    const result = await ApiClient.post('/api/move-objects', {
-        objects: indices,
-        target_file: targetFile
-    });
-
-    if (!result.success) {
-        showToast(result.error || 'Move failed', 'error');
-        return;
-    }
-
-    showToast(`Moved ${result.data.moved} objects. Backup: ${result.data.backup}`, 'success');
-    location.reload();
 }
 
 async function cloneSelected() {
-    const indices = getSelectedIndices();
-    if (indices.length === 0) {
-        showToast('Please select at least one object to clone', 'warning');
-        return;
-    }
-
     const prefix = document.getElementById('clonePrefix').value;
     const suffix = document.getElementById('cloneSuffix').value;
 
-    if (!prefix && !suffix) {
-        const useCopy = await showConfirmDialog({
-            title: 'No Prefix/Suffix',
-            message: 'No prefix or suffix specified. Objects will be cloned with "_copy" suffix. Continue?',
-            confirmText: 'Continue',
-            type: 'info'
-        });
-        if (!useCopy) return;
-    }
-
-    const confirmed = await showConfirmDialog({
-        title: 'Clone Objects',
-        message: `Clone ${indices.length} objects? A backup will be created first.`,
-        confirmText: 'Clone',
-        type: 'warning'
+    await performBulkOperation({
+        operationName: 'clone',
+        endpoint: '/api/clone-objects',
+        getPayload: (indices) => ({ objects: indices, prefix, suffix }),
+        getSuccessMessage: (data) => `Cloned ${data.cloned} objects. Backup: ${data.backup}`,
+        preValidate: async () => {
+            if (!prefix && !suffix) {
+                return await showConfirmDialog({
+                    title: 'No Prefix/Suffix',
+                    message: 'No prefix or suffix specified. Objects will be cloned with "_copy" suffix. Continue?',
+                    confirmText: 'Continue',
+                    type: 'info'
+                });
+            }
+            return true;
+        },
+        confirm: {
+            title: 'Clone Objects',
+            message: 'Clone {count} objects? A backup will be created first.',
+            confirmText: 'Clone',
+            type: 'warning'
+        }
     });
-    if (!confirmed) return;
-
-    const result = await ApiClient.post('/api/clone-objects', {
-        objects: indices,
-        prefix: prefix,
-        suffix: suffix
-    });
-
-    if (!result.success) {
-        showToast(result.error || 'Clone failed', 'error');
-        return;
-    }
-
-    showToast(`Cloned ${result.data.cloned} objects. Backup: ${result.data.backup}`, 'success');
-    location.reload();
 }
 
 async function deleteSelected() {
-    const indices = getSelectedIndices();
-    if (indices.length === 0) {
-        showToast('Please select at least one object to delete', 'warning');
-        return;
-    }
-
     const cleanRefs = document.getElementById('cleanReferences').checked;
 
-    const confirmed = await showConfirmDialog({
-        title: 'Delete Objects',
-        message: `DELETE ${indices.length} objects? This cannot be easily undone! A backup will be created first.`,
-        confirmText: 'Delete',
-        type: 'danger'
+    await performBulkOperation({
+        operationName: 'delete',
+        endpoint: '/api/delete-objects',
+        getPayload: (indices) => ({ objects: indices, update_references: cleanRefs }),
+        getSuccessMessage: (data) => `Deleted ${data.deleted} objects. References cleaned: ${data.references_cleaned}`,
+        confirm: {
+            title: 'Delete Objects',
+            message: 'DELETE {count} objects? This cannot be easily undone! A backup will be created first.',
+            confirmText: 'Delete',
+            type: 'danger'
+        }
     });
-    if (!confirmed) return;
-
-    const result = await ApiClient.post('/api/delete-objects', {
-        objects: indices,
-        update_references: cleanRefs
-    });
-
-    if (!result.success) {
-        showToast(result.error || 'Delete failed', 'error');
-        return;
-    }
-
-    showToast(`Deleted ${result.data.deleted} objects. References cleaned: ${result.data.references_cleaned}`, 'success');
-    location.reload();
 }
 
 // Event delegation for data-action attributes
@@ -236,3 +235,5 @@ document.addEventListener('input', function(e) {
         filterDisplayedObjects();
     }
 });
+
+})();
