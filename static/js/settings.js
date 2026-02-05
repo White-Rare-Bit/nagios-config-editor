@@ -5,6 +5,14 @@ let browseTargetField = null;
 let browseMode = 'dir';
 let currentBrowsePath = '/';
 
+// Path field configuration - used for validation and real-time feedback
+const PATH_FIELDS = [
+    { id: 'nagiosConfigPath', name: 'Nagios Config Path' },
+    { id: 'backupPath', name: 'Backup Path' },
+    { id: 'nagiosBin', name: 'Nagios Binary' },
+    { id: 'nagiosCfg', name: 'Nagios Config File' }
+];
+
 // =============================================================================
 // Path Validation (C-03: Client-side feedback for invalid paths)
 // =============================================================================
@@ -63,14 +71,7 @@ function validatePath(path, fieldName) {
 function validateAllPaths() {
     const errors = [];
 
-    const pathFields = [
-        { id: 'nagiosConfigPath', name: 'Nagios Config Path' },
-        { id: 'backupPath', name: 'Backup Path' },
-        { id: 'nagiosBin', name: 'Nagios Binary' },
-        { id: 'nagiosCfg', name: 'Nagios Config File' }
-    ];
-
-    for (const field of pathFields) {
+    for (const field of PATH_FIELDS) {
         const el = document.getElementById(field.id);
         if (el) {
             const result = validatePath(el.value, field.name);
@@ -94,22 +95,13 @@ document.addEventListener('DOMContentLoaded', () => {
     restoreActiveTab();
 
     // C-03: Real-time path validation as user types
-    const pathFields = ['nagiosConfigPath', 'backupPath', 'nagiosBin', 'nagiosCfg'];
-    const fieldNames = {
-        'nagiosConfigPath': 'Nagios Config Path',
-        'backupPath': 'Backup Path',
-        'nagiosBin': 'Nagios Binary',
-        'nagiosCfg': 'Nagios Config File'
-    };
-
-    pathFields.forEach(fieldId => {
-        const el = document.getElementById(fieldId);
+    PATH_FIELDS.forEach(field => {
+        const el = document.getElementById(field.id);
         if (el) {
             el.addEventListener('input', function() {
-                const result = validatePath(this.value, fieldNames[fieldId]);
+                const result = validatePath(this.value, field.name);
                 if (!result.valid) {
                     this.classList.add('is-invalid');
-                    // Show inline error if there's a feedback element
                     const feedback = this.nextElementSibling;
                     if (feedback && feedback.classList.contains('invalid-feedback')) {
                         feedback.textContent = result.error;
@@ -441,7 +433,10 @@ async function loadGitIdentity() {
 
 async function loadLoggingSettings() {
     const result = await ApiClient.get('/api/settings/logging', { silent: true });
-    if (!result.success) return;
+    if (!result.success) {
+        console.warn('Failed to load logging settings:', result.error);
+        return;
+    }
 
     const data = result.data;
     document.getElementById('loggingEnabled').checked = data.enabled;
