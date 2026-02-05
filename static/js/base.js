@@ -1576,65 +1576,6 @@ function showGitResultPanel(message, success, result, showRetryOption = false) {
     });
 }
 
-function showGitRunningPanel(title, command) {
-    const overlay = document.getElementById('gitResultOverlay');
-    const icon = document.getElementById('gitResultIcon');
-    const titleEl = document.getElementById('gitResultTitle');
-    const commandEl = document.getElementById('gitResultCommand');
-    const output = document.getElementById('gitResultOutput');
-
-    baseState.gitResultNeedsReload = false;
-
-    icon.className = 'git-result-icon running';
-    icon.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-    titleEl.textContent = title;
-    commandEl.textContent = command;
-    output.className = 'git-result-output running';
-    output.innerHTML = 'Running...';
-
-    overlay.classList.add('visible');
-}
-
-function showGitOperationResult(title, command, success, message) {
-    const overlay = document.getElementById('gitResultOverlay');
-    const icon = document.getElementById('gitResultIcon');
-    const titleEl = document.getElementById('gitResultTitle');
-    const commandEl = document.getElementById('gitResultCommand');
-    const output = document.getElementById('gitResultOutput');
-
-    baseState.gitResultNeedsReload = true;
-
-    commandEl.textContent = command;
-
-    if (success) {
-        icon.className = 'git-result-icon success';
-        icon.innerHTML = '<i class="fa-solid fa-check"></i>';
-        titleEl.textContent = title;
-        output.className = 'git-result-output';
-        output.innerHTML = `<span class="success-text">${escapeHtml(message)}</span>`;
-    } else {
-        icon.className = 'git-result-icon error';
-        icon.innerHTML = '<i class="fa-solid fa-xmark"></i>';
-        titleEl.textContent = title + ' Failed';
-        output.className = 'git-result-output';
-        output.innerHTML = `<span class="error-text">${escapeHtml(message)}</span>`;
-    }
-
-    overlay.classList.add('visible');
-}
-
-function closeGitResultPanel() {
-    const icon = document.getElementById('gitResultIcon');
-    if (icon.classList.contains('running')) {
-        return;
-    }
-    document.getElementById('gitResultOverlay').classList.remove('visible');
-    if (baseState.gitResultNeedsReload) {
-        baseState.gitResultNeedsReload = false;
-        window.location.reload();
-    }
-}
-
 // =============================================================================
 // Nav Commit Button
 // =============================================================================
