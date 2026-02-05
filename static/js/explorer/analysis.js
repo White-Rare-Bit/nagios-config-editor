@@ -491,14 +491,14 @@ function handleSuggestionAction(id, event) {
         case 'create_template':
             // Create template from opportunity
             if (s.templateIndex !== undefined) {
-                showCreateTemplateDialog(s.templateIndex);
+                Explorer.showCreateTemplateDialog(s.templateIndex);
             }
             break;
 
         case 'create_hostgroup_pattern':
             // Create hostgroup from pattern
             if (s.groupingIndex !== undefined) {
-                showCreateGroupDialog(s.groupingIndex);
+                Explorer.showCreateGroupDialog(s.groupingIndex);
             }
             break;
 
