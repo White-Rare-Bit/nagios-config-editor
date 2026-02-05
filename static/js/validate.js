@@ -14,33 +14,32 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function checkNagiosAvailable() {
-    try {
-        const response = await fetch('/api/validate/check');
-        const result = await response.json();
+    const statusDiv = document.getElementById('nagiosStatus');
+    const validateBtn = document.getElementById('validateBtn');
 
-        const statusDiv = document.getElementById('nagiosStatus');
-        const validateBtn = document.getElementById('validateBtn');
+    const result = await ApiClient.get('/api/validate/check');
 
-        if (result.available) {
-            statusDiv.className = 'nagios-status available';
-            statusDiv.innerHTML = `
-                <strong>Nagios binary found</strong><br>
-                <small>${escapeHtml(result.nagios_bin)}</small>
-            `;
-            validateBtn.disabled = false;
-        } else {
-            statusDiv.className = 'nagios-status unavailable';
-            statusDiv.innerHTML = `
-                <strong>Nagios binary not found</strong><br>
-                <small>${escapeHtml(result.message)}</small><br>
-                <small class="dialog-info-text">Set NAGIOS_BIN environment variable to specify location.</small>
-            `;
-            validateBtn.disabled = true;
-        }
-    } catch (error) {
-        const statusDiv = document.getElementById('nagiosStatus');
+    if (!result.success) {
         statusDiv.className = 'nagios-status unavailable';
-        statusDiv.innerHTML = `Error checking Nagios: ${escapeHtml(error.message)}`;
+        statusDiv.innerHTML = `Error checking Nagios: ${escapeHtml(result.error)}`;
+        return;
+    }
+
+    if (result.data.available) {
+        statusDiv.className = 'nagios-status available';
+        statusDiv.innerHTML = `
+            <strong>Nagios binary found</strong><br>
+            <small>${escapeHtml(result.data.nagios_bin)}</small>
+        `;
+        validateBtn.disabled = false;
+    } else {
+        statusDiv.className = 'nagios-status unavailable';
+        statusDiv.innerHTML = `
+            <strong>Nagios binary not found</strong><br>
+            <small>${escapeHtml(result.data.message)}</small><br>
+            <small class="dialog-info-text">Set NAGIOS_BIN environment variable to specify location.</small>
+        `;
+        validateBtn.disabled = true;
     }
 }
 
@@ -49,24 +48,25 @@ async function runValidation() {
     btn.disabled = true;
     btn.textContent = 'Validating...';
 
-    // Add timeout for long-running requests
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
-
     try {
-        const response = await fetch('/api/validate', {
-            method: 'POST',
-            signal: controller.signal
+        // Race between API call and 60-second timeout
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('TIMEOUT')), 60000);
         });
-        clearTimeout(timeoutId);
 
-        if (!response.ok) {
-            throw new Error(`Server error: ${response.status}`);
+        const result = await Promise.race([
+            ApiClient.post('/api/validate'),
+            timeoutPromise
+        ]);
+
+        if (!result.success) {
+            showToast(result.error || 'Validation failed', 'error');
+            return;
         }
-        const result = await response.json();
-        displayValidationResult(result);
+
+        displayValidationResult(result.data);
     } catch (error) {
-        if (error.name === 'AbortError') {
+        if (error.message === 'TIMEOUT') {
             showToast('Validation timed out. The server may be busy.', 'warning');
         } else {
             showToast('Error: ' + error.message, 'error');
