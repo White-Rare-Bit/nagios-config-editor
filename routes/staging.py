@@ -4,7 +4,7 @@ import os
 import time
 import uuid
 import logging
-import threading
+import multiprocessing
 from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app
 from nagios_model import NAME_FIELDS
@@ -29,7 +29,8 @@ bp = Blueprint('staging', __name__)
 logger = logging.getLogger('nagios_bulk_editor')
 
 # Serialize staging operations to prevent race conditions
-staging_operation_lock = threading.Lock()
+# Uses multiprocessing.Lock because WSGI servers may use multiple processes
+staging_operation_lock = multiprocessing.Lock()
 
 
 def _iterate_entries(data):
@@ -445,17 +446,17 @@ def _validate_staging_format(data):
     Returns:
         None if valid, error message string if invalid
     """
-    # Check pendingEdits - validate all entries, not just first
+    # Check pendingEdits - must be array of dicts, not array of [key, value] pairs
     pending_edits = data.get('pendingEdits')
     if pending_edits is not None and isinstance(pending_edits, list):
         if any(isinstance(e, list) for e in pending_edits):
-            return "pendingEdits must be dict format {key: data}, not list format [[key, data]]"
+            return "pendingEdits must be array of dicts, not array of [key, value] pairs"
 
-    # Check stagedMoves - validate all entries, not just first
+    # Check stagedMoves - must be array of dicts, not array of [key, value] pairs
     staged_moves = data.get('stagedMoves')
     if staged_moves is not None and isinstance(staged_moves, list):
         if any(isinstance(e, list) for e in staged_moves):
-            return "stagedMoves must be dict format {key: data}, not list format [[key, data]]"
+            return "stagedMoves must be array of dicts, not array of [key, value] pairs"
 
     # stagedObjectDeletions should be list of dicts, no special validation needed
     return None

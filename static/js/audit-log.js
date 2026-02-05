@@ -85,20 +85,20 @@ async function refreshAuditLog() {
     const container = document.getElementById('auditLogContainer');
     container.innerHTML = '<div class="audit-loading">Loading audit log...</div>';
 
-    try {
-        const response = await fetch('/api/audit-log');
-        const data = await response.json();
+    const result = await ApiClient.get('/api/audit-log', { silent: true });
 
-        if (data.error) {
-            container.innerHTML = `<div class="empty-state empty-state--dark empty-state--flex">Error: ${escapeHtml(data.error)}</div>`;
-            return;
-        }
-
-        allEntries = (data.entries || []).reverse();
-        renderEntries();
-    } catch (error) {
-        container.innerHTML = `<div class="empty-state empty-state--dark empty-state--flex">Error loading audit log: ${escapeHtml(error.message)}</div>`;
+    if (!result.success) {
+        container.innerHTML = `<div class="empty-state empty-state--dark empty-state--flex">Error: ${escapeHtml(result.error)}</div>`;
+        return;
     }
+
+    if (result.data.error) {
+        container.innerHTML = `<div class="empty-state empty-state--dark empty-state--flex">Error: ${escapeHtml(result.data.error)}</div>`;
+        return;
+    }
+
+    allEntries = (result.data.entries || []).reverse();
+    renderEntries();
 }
 
 function renderEntries() {
@@ -639,18 +639,11 @@ async function confirmClearLog() {
 }
 
 async function clearAuditLog() {
-    try {
-        const response = await fetch('/api/audit-log/clear', { method: 'POST' });
-        const result = await response.json();
+    const result = await ApiClient.post('/api/audit-log/clear', {}, { errorPrefix: 'Clear log' });
 
-        if (result.error) {
-            showToast('Error clearing log: ' + result.error, 'error');
-        } else {
-            showToast('Audit log cleared', 'success');
-            refreshAuditLog();
-        }
-    } catch (error) {
-        showToast('Error clearing log: ' + error.message, 'error');
+    if (result.success) {
+        showToast('Audit log cleared', 'success');
+        refreshAuditLog();
     }
 }
 
@@ -660,50 +653,44 @@ async function loadArchivesList() {
 
     loadingEl.style.display = 'block';
 
-    try {
-        const response = await fetch('/api/audit-log/archives');
-        const data = await response.json();
+    const result = await ApiClient.get('/api/audit-log/archives', { silent: true });
 
-        if (data.error) {
-            console.error('Error loading archives:', data.error);
-            loadingEl.style.display = 'none';
-            return;
+    if (!result.success || result.data.error) {
+        console.error('Error loading archives:', result.error || result.data.error);
+        loadingEl.style.display = 'none';
+        return;
+    }
+
+    // Build archives list HTML
+    let html = `
+        <div class="archive-item ${currentArchive === 'current' ? 'active' : ''}"
+             data-archive="current" onclick="loadCurrentLog()">
+            <span class="archive-name">Current Log</span>
+        </div>
+    `;
+
+    (result.data.archives || []).forEach(archive => {
+        // Parse date from filename: audit_log_YYYYMMDD_HHMMSS.json
+        const match = archive.filename.match(/audit_log_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})\.json/);
+        let displayDate = archive.filename;
+        if (match) {
+            const date = new Date(match[1], match[2] - 1, match[3], match[4], match[5], match[6]);
+            displayDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         }
 
-        // Build archives list HTML
-        let html = `
-            <div class="archive-item ${currentArchive === 'current' ? 'active' : ''}"
-                 data-archive="current" onclick="loadCurrentLog()">
-                <span class="archive-name">Current Log</span>
+        const sizeKB = (archive.size / 1024).toFixed(1);
+        html += `
+            <div class="archive-item ${currentArchive === archive.filename ? 'active' : ''}"
+                 data-archive="${escapeHtml(archive.filename)}"
+                 onclick="loadArchive('${escapeJs(archive.filename)}')">
+                <span class="archive-name">${escapeHtml(displayDate)}</span>
+                <span class="archive-size">${sizeKB} KB</span>
             </div>
         `;
+    });
 
-        (data.archives || []).forEach(archive => {
-            // Parse date from filename: audit_log_YYYYMMDD_HHMMSS.json
-            const match = archive.filename.match(/audit_log_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})\.json/);
-            let displayDate = archive.filename;
-            if (match) {
-                const date = new Date(match[1], match[2] - 1, match[3], match[4], match[5], match[6]);
-                displayDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            }
-
-            const sizeKB = (archive.size / 1024).toFixed(1);
-            html += `
-                <div class="archive-item ${currentArchive === archive.filename ? 'active' : ''}"
-                     data-archive="${escapeHtml(archive.filename)}"
-                     onclick="loadArchive('${escapeJs(archive.filename)}')">
-                    <span class="archive-name">${escapeHtml(displayDate)}</span>
-                    <span class="archive-size">${sizeKB} KB</span>
-                </div>
-            `;
-        });
-
-        listEl.innerHTML = html;
-        loadingEl.style.display = 'none';
-    } catch (error) {
-        console.error('Error loading archives:', error);
-        loadingEl.style.display = 'none';
-    }
+    listEl.innerHTML = html;
+    loadingEl.style.display = 'none';
 }
 
 function loadCurrentLog() {
@@ -719,20 +706,20 @@ async function loadArchive(filename) {
     const container = document.getElementById('auditLogContainer');
     container.innerHTML = '<div class="audit-loading">Loading archive...</div>';
 
-    try {
-        const response = await fetch(`/api/audit-log/archives/${encodeURIComponent(filename)}`);
-        const data = await response.json();
+    const result = await ApiClient.get(`/api/audit-log/archives/${encodeURIComponent(filename)}`, { silent: true });
 
-        if (data.error) {
-            container.innerHTML = `<div class="empty-state empty-state--dark empty-state--flex">Error: ${escapeHtml(data.error)}</div>`;
-            return;
-        }
-
-        allEntries = (data.entries || []).reverse();
-        renderEntries();
-    } catch (error) {
-        container.innerHTML = `<div class="empty-state empty-state--dark empty-state--flex">Error loading archive: ${escapeHtml(error.message)}</div>`;
+    if (!result.success) {
+        container.innerHTML = `<div class="empty-state empty-state--dark empty-state--flex">Error: ${escapeHtml(result.error)}</div>`;
+        return;
     }
+
+    if (result.data.error) {
+        container.innerHTML = `<div class="empty-state empty-state--dark empty-state--flex">Error: ${escapeHtml(result.data.error)}</div>`;
+        return;
+    }
+
+    allEntries = (result.data.entries || []).reverse();
+    renderEntries();
 }
 
 function updateArchiveSelection() {

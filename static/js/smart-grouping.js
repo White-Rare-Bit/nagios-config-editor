@@ -119,22 +119,22 @@ function displaySuggestions(suggestions) {
     }
 
     const typeColors = {
-        'hostname_prefix': 'primary',
-        'hostname_suffix': 'info',
-        'ip_subnet': 'success',
-        'common_services': 'warning',
-        'check_command': 'secondary',
-        'network_parent': 'dark',
+        'hostname-prefix': 'primary',
+        'hostname-suffix': 'info',
+        'ip-subnet': 'success',
+        'common-services': 'warning',
+        'check-command': 'secondary',
+        'network-parent': 'dark',
         'ungrouped': 'danger'
     };
 
     const typeLabels = {
-        'hostname_prefix': 'Hostname Prefix',
-        'hostname_suffix': 'Hostname Suffix',
-        'ip_subnet': 'IP Subnet',
-        'common_services': 'Common Services',
-        'check_command': 'Check Command',
-        'network_parent': 'Network Parent',
+        'hostname-prefix': 'Hostname Prefix',
+        'hostname-suffix': 'Hostname Suffix',
+        'ip-subnet': 'IP Subnet',
+        'common-services': 'Common Services',
+        'check-command': 'Check Command',
+        'network-parent': 'Network Parent',
         'ungrouped': 'Ungrouped'
     };
 

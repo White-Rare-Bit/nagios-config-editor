@@ -6,11 +6,12 @@ Manages audit log persistence, rotation, and retrieval.
 
 import os
 import json
-import threading
+import multiprocessing
 from datetime import datetime
 
-# C-09: Module-level lock for thread-safe audit log writes
-_audit_lock = threading.Lock()
+# C-09: Module-level lock for process-safe audit log writes
+# Uses multiprocessing.Lock because WSGI servers may use multiple processes
+_audit_lock = multiprocessing.Lock()
 
 
 AUDIT_LOG_DIR = None

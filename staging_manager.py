@@ -17,7 +17,7 @@ import json
 import logging
 import os
 import tempfile
-import threading
+import multiprocessing
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -858,7 +858,7 @@ class StagingManager:
             logger.error(f"Failed to save staging: {e}")
             return OperationResult(False, f"Failed to save staging: {e}")
 
-    def save_staging_atomic(self, data: Dict, session_id: str, lock: 'threading.Lock') -> OperationResult:
+    def save_staging_atomic(self, data: Dict, session_id: str, lock: 'multiprocessing.Lock') -> OperationResult:
         """Save staging data with atomic lock validation.
 
         This method ensures the lock check and save operation are atomic,
@@ -930,11 +930,11 @@ class StagingManager:
         counts = {}
 
         # Object operations
-        pending_edits = data.get('pendingEdits', {})
+        pending_edits = data.get('pendingEdits', [])
         if pending_edits:
             counts['edits'] = len(pending_edits)
 
-        staged_moves = data.get('stagedMoves', {})
+        staged_moves = data.get('stagedMoves', [])
         if staged_moves:
             counts['moves'] = len(staged_moves)
 

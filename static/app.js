@@ -10,17 +10,9 @@
  * Reload Nagios configuration from disk
  */
 async function reloadConfig() {
-    try {
-        const response = await fetch('/api/reload', {method: 'POST'});
-        const result = await response.json();
-
-        if (result.success) {
-            location.reload();
-        } else {
-            showToast('Error reloading configuration', 'error');
-        }
-    } catch (error) {
-        showToast('Error: ' + error.message, 'error');
+    const result = await ApiClient.post('/api/reload', {}, { errorPrefix: 'Reload' });
+    if (result.success) {
+        location.reload();
     }
 }
 
@@ -31,21 +23,14 @@ async function createBackup() {
     const description = prompt('Enter a description for this backup (optional):');
     if (description === null) return; // Cancelled
 
-    try {
-        const response = await fetch('/api/backups', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({description: description || 'Manual backup'})
-        });
-        const result = await response.json();
+    const result = await ApiClient.post('/api/backups', {
+        description: description || 'Manual backup'
+    }, { silent: true });
 
-        if (result.success) {
-            alert('Backup created successfully!\n\nPath: ' + result.path);
-        } else {
-            alert('Error creating backup');
-        }
-    } catch (error) {
-        alert('Error: ' + error.message);
+    if (result.success) {
+        alert('Backup created successfully!\n\nPath: ' + result.data.path);
+    } else {
+        alert('Error creating backup: ' + (result.error || 'Unknown error'));
     }
 }
 

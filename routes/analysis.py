@@ -336,7 +336,7 @@ def api_smart_grouping_suggest():
             suggested_name = f"subnet-{subnet.replace('.', '-')}"
             if suggested_name.lower() not in existing_groups:
                 suggestions.append({
-                    'type': 'ip_subnet',
+                    'type': 'ip-subnet',
                     'name': suggested_name,
                     'description': f'Hosts in {subnet}.0/24 subnet',
                     'members': sorted(members),
@@ -356,7 +356,7 @@ def api_smart_grouping_suggest():
             suggested_name = f"{prefix}-servers"
             if suggested_name.lower() not in existing_groups:
                 suggestions.append({
-                    'type': 'hostname_prefix',
+                    'type': 'hostname-prefix',
                     'name': suggested_name,
                     'description': f'Hosts with prefix "{prefix}-"',
                     'members': sorted(members),
@@ -376,7 +376,7 @@ def api_smart_grouping_suggest():
             suggested_name = f"{suffix}-systems"
             if suggested_name.lower() not in existing_groups:
                 suggestions.append({
-                    'type': 'hostname_suffix',
+                    'type': 'hostname-suffix',
                     'name': suggested_name,
                     'description': f'Hosts with suffix "-{suffix}"',
                     'members': sorted(members),
@@ -397,7 +397,7 @@ def api_smart_grouping_suggest():
             suggested_name = f"{cmd.replace('check_', '').replace('check-', '')}-checked"
             if suggested_name.lower() not in existing_groups:
                 suggestions.append({
-                    'type': 'check_command',
+                    'type': 'check-command',
                     'name': suggested_name,
                     'description': f'Hosts using check command "{cmd}"',
                     'members': sorted(members),
@@ -420,7 +420,7 @@ def api_smart_grouping_suggest():
             suggested_name = f"behind-{parent}"
             if suggested_name.lower() not in existing_groups:
                 suggestions.append({
-                    'type': 'network_parent',
+                    'type': 'network-parent',
                     'name': suggested_name,
                     'description': f'Hosts behind "{parent}"',
                     'members': sorted(members),
@@ -456,12 +456,12 @@ def api_smart_grouping_suggest():
         })
 
     type_weights = {
-        'ip_subnet': 1.5,
-        'hostname_prefix': 1.3,
-        'hostname_suffix': 1.2,
-        'network_parent': 1.4,
-        'check_command': 1.0,
-        'common_services': 0.9,
+        'ip-subnet': 1.5,
+        'hostname-prefix': 1.3,
+        'hostname-suffix': 1.2,
+        'network-parent': 1.4,
+        'check-command': 1.0,
+        'common-services': 0.9,
         'ungrouped': 0.5,
     }
 
