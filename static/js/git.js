@@ -1,6 +1,23 @@
 // Git page JavaScript
 // Extracted from git.html
 
+// Constants
+const GIT_CONFIG = {
+    HISTORY_PAGE_SIZE: 25,
+    HISTORY_LIMIT: 100
+};
+
+// Helper to build consistent empty state HTML
+function buildEmptyState(title, message, icon = 'fa-folder-open') {
+    return `
+        <div class="empty-state empty-state--dark empty-state--flex">
+            <div class="empty-icon"><i class="fa-solid ${icon}"></i></div>
+            <h3>${title}</h3>
+            <p>${message}</p>
+        </div>
+    `;
+}
+
 let gitStatus = null;
 let selectedGitFile = null;
 let gitHistory = null;
@@ -13,7 +30,7 @@ let historySortDirection = 'desc';
 
 // Pagination state
 let historyCurrentPage = 1;
-let historyPageSize = 25;
+let historyPageSize = GIT_CONFIG.HISTORY_PAGE_SIZE;
 
 async function loadGitStatus(forceRefresh = false) {
     const content = document.getElementById('gitContent');
@@ -34,7 +51,7 @@ async function loadGitStatus(forceRefresh = false) {
     // Only show error if we have no data at all (network error)
     if (!statusResult.data) {
         console.error('Failed to load git status:', statusResult.error);
-        content.innerHTML = '<div class="empty-state empty-state--dark empty-state--flex"><h3>Error</h3><p>Failed to load git status</p></div>';
+        content.innerHTML = buildEmptyState('Error', 'Failed to load git status', 'fa-exclamation-triangle');
         return;
     }
 
@@ -44,23 +61,20 @@ async function loadGitStatus(forceRefresh = false) {
     if (data.error && !data.is_repo) {
         branchDisplay.style.display = 'none';
         repoStatus.innerHTML = `
-            <p class="sidebar-info-text" style="color: #e65100;">Not a git repository</p>
+            <p class="sidebar-info-text" style="color: var(--nbe-warning, #e65100);">Not a git repository</p>
             <p class="sidebar-info-text">Make changes and use the Commit button in the navbar to initialize git.</p>
         `;
-        content.innerHTML = `
-            <div class="empty-state empty-state--dark empty-state--flex">
-                <div class="empty-icon"><i class="fa-solid fa-folder-open"></i></div>
-                <h3>Not a Git Repository</h3>
-                <p>Use the Commit button in the navbar to initialize git<br>and create your first commit.</p>
-            </div>
-        `;
+        content.innerHTML = buildEmptyState(
+            'Not a Git Repository',
+            'Use the Commit button in the navbar to initialize git<br>and create your first commit.'
+        );
         updateChangesBadge(0);
         return;
     }
 
     if (data.error) {
         repoStatus.innerHTML = `<p class="sidebar-info-text" style="color: var(--color-delete);">${data.error}</p>`;
-        content.innerHTML = `<div class="empty-state empty-state--dark empty-state--flex"><h3>Error</h3><p>${escapeHtml(data.error)}</p></div>`;
+        content.innerHTML = buildEmptyState('Error', escapeHtml(data.error), 'fa-exclamation-triangle');
         return;
     }
 
@@ -73,7 +87,7 @@ async function loadGitStatus(forceRefresh = false) {
     if (data.has_changes) {
         repoStatus.innerHTML = `<p class="sidebar-info-text">${data.files.length} file${data.files.length !== 1 ? 's' : ''} with uncommitted changes</p>`;
     } else {
-        repoStatus.innerHTML = `<p class="sidebar-info-text" style="color: #4caf50;">Working directory clean</p>`;
+        repoStatus.innerHTML = `<p class="sidebar-info-text" style="color: var(--nbe-success, #4caf50);">Working directory clean</p>`;
     }
 
     updateChangesBadge(data.files.length);
@@ -367,42 +381,24 @@ async function loadGitHistory(forceRefresh = false) {
 
     container.innerHTML = '<div class="git-loading">Loading history...</div>';
 
-    const result = await ApiClient.get('/api/git/log?limit=100', { silent: true });
+    const result = await ApiClient.get(`/api/git/log?limit=${GIT_CONFIG.HISTORY_LIMIT}`, { silent: true });
 
     // Only show error if we have no data at all (network error)
     if (!result.data) {
         console.error('Failed to load git history:', result.error);
-        container.innerHTML = `
-            <div class="empty-state empty-state--dark empty-state--flex">
-                <div class="empty-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
-                <h3>Error</h3>
-                <p>Failed to load history</p>
-            </div>
-        `;
+        container.innerHTML = buildEmptyState('Error', 'Failed to load history', 'fa-circle-exclamation');
         return;
     }
 
     const data = result.data;
 
     if (!data.is_repo) {
-        container.innerHTML = `
-            <div class="empty-state empty-state--dark empty-state--flex">
-                <div class="empty-icon"><i class="fa-solid fa-folder-open"></i></div>
-                <h3>Not a Git Repository</h3>
-                <p>Initialize git to start tracking history</p>
-            </div>
-        `;
+        container.innerHTML = buildEmptyState('Not a Git Repository', 'Initialize git to start tracking history');
         return;
     }
 
     if (data.error) {
-        container.innerHTML = `
-            <div class="empty-state empty-state--dark empty-state--flex">
-                <div class="empty-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
-                <h3>Error</h3>
-                <p>${escapeHtml(data.error)}</p>
-            </div>
-        `;
+        container.innerHTML = buildEmptyState('Error', escapeHtml(data.error), 'fa-circle-exclamation');
         return;
     }
 
