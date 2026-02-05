@@ -227,70 +227,22 @@ function renderEntries() {
     let html = pageEntries.map(entry => renderAuditEntry(entry)).join('');
 
     // Add pagination if needed
-    if (totalPages > 1 || totalItems > 25) {
-        html += renderAuditPagination(totalItems, totalPages, startIdx, endIdx);
+    const paginationHtml = renderAuditPagination(totalItems);
+    if (paginationHtml) {
+        html += paginationHtml;
     }
 
     container.innerHTML = html;
 }
 
-function renderAuditPagination(totalItems, totalPages, startIdx, endIdx) {
-    let pagesHtml = '';
-
-    // Previous button
-    pagesHtml += `<button class="nbe-pagination-btn nbe-pagination-nav" data-action="audit-page" data-page="${auditCurrentPage - 1}" ${auditCurrentPage === 1 ? 'disabled' : ''}>
-        <i class="fa-solid fa-chevron-left"></i>
-    </button>`;
-
-    // Page numbers
-    const maxVisible = 5;
-    let startPage = Math.max(1, auditCurrentPage - Math.floor(maxVisible / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
-    if (endPage - startPage + 1 < maxVisible) {
-        startPage = Math.max(1, endPage - maxVisible + 1);
-    }
-
-    if (startPage > 1) {
-        pagesHtml += `<button class="nbe-pagination-btn" data-action="audit-page" data-page="1">1</button>`;
-        if (startPage > 2) {
-            pagesHtml += `<span class="nbe-pagination-ellipsis">...</span>`;
-        }
-    }
-
-    for (let i = startPage; i <= endPage; i++) {
-        pagesHtml += `<button class="nbe-pagination-btn${i === auditCurrentPage ? ' active' : ''}" data-action="audit-page" data-page="${i}">${i}</button>`;
-    }
-
-    if (endPage < totalPages) {
-        if (endPage < totalPages - 1) {
-            pagesHtml += `<span class="nbe-pagination-ellipsis">...</span>`;
-        }
-        pagesHtml += `<button class="nbe-pagination-btn" data-action="audit-page" data-page="${totalPages}">${totalPages}</button>`;
-    }
-
-    // Next button
-    pagesHtml += `<button class="nbe-pagination-btn nbe-pagination-nav" data-action="audit-page" data-page="${auditCurrentPage + 1}" ${auditCurrentPage === totalPages ? 'disabled' : ''}>
-        <i class="fa-solid fa-chevron-right"></i>
-    </button>`;
-
-    return `
-        <div class="nbe-pagination" style="margin-top: var(--nbe-space-lg); border-radius: var(--nbe-radius-lg);">
-            <div class="nbe-pagination-info">
-                <span class="nbe-pagination-showing">Showing ${startIdx + 1}-${endIdx} of ${totalItems}</span>
-                <div class="nbe-pagination-page-size">
-                    <span>Per page:</span>
-                    <select data-action="audit-page-size">
-                        <option value="25" ${auditPageSize === 25 ? 'selected' : ''}>25</option>
-                        <option value="50" ${auditPageSize === 50 ? 'selected' : ''}>50</option>
-                        <option value="100" ${auditPageSize === 100 ? 'selected' : ''}>100</option>
-                    </select>
-                </div>
-            </div>
-            <div class="nbe-pagination-controls">
-                ${pagesHtml}
-            </div>
-        </div>
-    `;
+function renderAuditPagination(totalItems) {
+    return renderPagination({
+        currentPage: auditCurrentPage,
+        totalItems,
+        pageSize: auditPageSize,
+        actionPrefix: 'audit',
+        extraStyle: 'margin-top: var(--nbe-space-lg); border-radius: var(--nbe-radius-lg);'
+    });
 }
 
 function setAuditPage(page) {

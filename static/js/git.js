@@ -490,8 +490,9 @@ function renderGitHistory() {
     html += '</tbody></table>';
 
     // Add pagination controls if more than one page
-    if (totalPages > 1 || totalItems > 25) {
-        html += renderHistoryPagination(totalItems, totalPages, startIdx, endIdx);
+    const paginationHtml = renderHistoryPagination(totalItems);
+    if (paginationHtml) {
+        html += paginationHtml;
     }
 
     container.innerHTML = html;
@@ -500,63 +501,13 @@ function renderGitHistory() {
     updateHistorySortIndicators();
 }
 
-function renderHistoryPagination(totalItems, totalPages, startIdx, endIdx) {
-    let pagesHtml = '';
-
-    // Previous button
-    pagesHtml += `<button class="nbe-pagination-btn nbe-pagination-nav" data-action="history-page" data-page="${historyCurrentPage - 1}" ${historyCurrentPage === 1 ? 'disabled' : ''}>
-        <i class="fa-solid fa-chevron-left"></i>
-    </button>`;
-
-    // Page numbers
-    const maxVisible = 5;
-    let startPage = Math.max(1, historyCurrentPage - Math.floor(maxVisible / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
-    if (endPage - startPage + 1 < maxVisible) {
-        startPage = Math.max(1, endPage - maxVisible + 1);
-    }
-
-    if (startPage > 1) {
-        pagesHtml += `<button class="nbe-pagination-btn" data-action="history-page" data-page="1">1</button>`;
-        if (startPage > 2) {
-            pagesHtml += `<span class="nbe-pagination-ellipsis">...</span>`;
-        }
-    }
-
-    for (let i = startPage; i <= endPage; i++) {
-        pagesHtml += `<button class="nbe-pagination-btn${i === historyCurrentPage ? ' active' : ''}" data-action="history-page" data-page="${i}">${i}</button>`;
-    }
-
-    if (endPage < totalPages) {
-        if (endPage < totalPages - 1) {
-            pagesHtml += `<span class="nbe-pagination-ellipsis">...</span>`;
-        }
-        pagesHtml += `<button class="nbe-pagination-btn" data-action="history-page" data-page="${totalPages}">${totalPages}</button>`;
-    }
-
-    // Next button
-    pagesHtml += `<button class="nbe-pagination-btn nbe-pagination-nav" data-action="history-page" data-page="${historyCurrentPage + 1}" ${historyCurrentPage === totalPages ? 'disabled' : ''}>
-        <i class="fa-solid fa-chevron-right"></i>
-    </button>`;
-
-    return `
-        <div class="nbe-pagination">
-            <div class="nbe-pagination-info">
-                <span class="nbe-pagination-showing">Showing ${startIdx + 1}-${endIdx} of ${totalItems}</span>
-                <div class="nbe-pagination-page-size">
-                    <span>Per page:</span>
-                    <select data-action="history-page-size">
-                        <option value="25" ${historyPageSize === 25 ? 'selected' : ''}>25</option>
-                        <option value="50" ${historyPageSize === 50 ? 'selected' : ''}>50</option>
-                        <option value="100" ${historyPageSize === 100 ? 'selected' : ''}>100</option>
-                    </select>
-                </div>
-            </div>
-            <div class="nbe-pagination-controls">
-                ${pagesHtml}
-            </div>
-        </div>
-    `;
+function renderHistoryPagination(totalItems) {
+    return renderPagination({
+        currentPage: historyCurrentPage,
+        totalItems,
+        pageSize: historyPageSize,
+        actionPrefix: 'history'
+    });
 }
 
 function setHistoryPage(page) {
