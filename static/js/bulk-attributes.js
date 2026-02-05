@@ -5,6 +5,9 @@ let allObjects = [];
 let commonAttributes = new Set();
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Load attributes when object type changes
+    document.getElementById('objectType').addEventListener('change', loadAttributes);
+
     document.getElementById('action').addEventListener('change', function() {
         const action = this.value;
         const newValueGroup = document.getElementById('newValueGroup');
