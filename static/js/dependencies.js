@@ -2544,6 +2544,27 @@ console.log('dependencies.js loaded');
     window.openNodeInExplorer = openNodeInExplorer;
     window.fitGraph = fitGraph;
     window.toggleEdgeLabels = toggleEdgeLabels;
+
+    // Namespaced exports for testing (avoids global pollution)
+    window.DepsModule = {
+        // Layout functions
+        calculateOrganizedPositions,
+        // Expansion functions
+        expandWithRules,
+        _expandWithRulesImpl,
+        // Graph state accessors (for testing)
+        getState: () => ({
+            allNodes,
+            allEdges,
+            addedNodeIds: new Set(addedNodeIds),
+            focusNodeId,
+            selectedNodeId
+        }),
+        // Formatting utilities
+        formatEdgeLabel,
+        getEdgeColor,
+        getNodeImageUrl
+    };
     } catch (e) {
         console.error('dependencies.js IIFE error:', e);
     }
