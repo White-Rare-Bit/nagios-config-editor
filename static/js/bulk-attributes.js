@@ -41,44 +41,40 @@ async function loadAttributes() {
     }
     currentLoadController = new AbortController();
 
-    try {
-        const response = await fetch(`/api/objects?type=${objectType}`, {
-            signal: currentLoadController.signal
-        });
+    const result = await ApiClient.get(`/api/objects?type=${objectType}`, {
+        signal: currentLoadController.signal,
+        silent: true
+    });
 
-        if (!response.ok) {
-            throw new Error(`Server error: ${response.status}`);
-        }
+    if (result.aborted) return;
 
-        allObjects = await response.json();
-
-        // Collect all unique attributes
-        commonAttributes = new Set();
-        allObjects.forEach(obj => {
-            Object.keys(obj.attributes).forEach(attr => commonAttributes.add(attr));
-        });
-
-        // Populate dropdowns
-        const sortedAttrs = Array.from(commonAttributes).sort();
-
-        const filterField = document.getElementById('filterField');
-        filterField.innerHTML = '<option value="">No filter</option>';
-        sortedAttrs.forEach(attr => {
-            filterField.innerHTML += `<option value="${escapeHtml(attr)}">${escapeHtml(attr)}</option>`;
-        });
-
-        const targetField = document.getElementById('targetField');
-        targetField.innerHTML = '<option value="">Select attribute...</option>';
-        sortedAttrs.forEach(attr => {
-            targetField.innerHTML += `<option value="${escapeHtml(attr)}">${escapeHtml(attr)}</option>`;
-        });
-
-    } catch (error) {
-        // Ignore abort errors (expected when user changes selection rapidly)
-        if (error.name !== 'AbortError') {
-            console.error('Error loading attributes:', error);
-        }
+    if (!result.success) {
+        showToast('Error loading attributes: ' + result.error, 'error');
+        return;
     }
+
+    allObjects = result.data;
+
+    // Collect all unique attributes
+    commonAttributes = new Set();
+    allObjects.forEach(obj => {
+        Object.keys(obj.attributes).forEach(attr => commonAttributes.add(attr));
+    });
+
+    // Populate dropdowns
+    const sortedAttrs = Array.from(commonAttributes).sort();
+
+    const filterField = document.getElementById('filterField');
+    filterField.innerHTML = '<option value="">No filter</option>';
+    sortedAttrs.forEach(attr => {
+        filterField.innerHTML += `<option value="${escapeHtml(attr)}">${escapeHtml(attr)}</option>`;
+    });
+
+    const targetField = document.getElementById('targetField');
+    targetField.innerHTML = '<option value="">Select attribute...</option>';
+    sortedAttrs.forEach(attr => {
+        targetField.innerHTML += `<option value="${escapeHtml(attr)}">${escapeHtml(attr)}</option>`;
+    });
 }
 
 function getTargetField() {
@@ -87,52 +83,41 @@ function getTargetField() {
     return custom || selected;
 }
 
-async function previewChanges() {
-    const objectType = document.getElementById('objectType').value;
-    const targetField = getTargetField();
+function getFormData() {
+    return {
+        type: document.getElementById('objectType').value,
+        filter_field: document.getElementById('filterField').value,
+        filter_value: document.getElementById('filterValue').value,
+        target_field: getTargetField(),
+        new_value: document.getElementById('newValue').value,
+        action: document.getElementById('action').value
+    };
+}
 
-    if (!objectType) {
+async function previewChanges() {
+    const data = getFormData();
+
+    if (!data.type) {
         showToast('Please select an object type', 'warning');
         return;
     }
-    if (!targetField) {
+    if (!data.target_field) {
         showToast('Please select or enter a target attribute', 'warning');
         return;
     }
 
-    const data = {
-        type: objectType,
-        filter_field: document.getElementById('filterField').value,
-        filter_value: document.getElementById('filterValue').value,
-        target_field: targetField,
-        new_value: document.getElementById('newValue').value,
-        action: document.getElementById('action').value
-    };
-
     document.getElementById('previewStatus').textContent = 'Loading...';
 
-    try {
-        const response = await fetch('/api/bulk-attributes/preview', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data)
-        });
+    const result = await ApiClient.post('/api/bulk-attributes/preview', data, { silent: true });
+    document.getElementById('previewStatus').textContent = '';
 
-        const result = await response.json();
-
-        if (result.error) {
-            showToast('Error: ' + result.error, 'error');
-            return;
-        }
-
-        displayPreview(result.matches);
-        document.getElementById('applyBtn').disabled = result.matches.length === 0;
-
-    } catch (error) {
-        showToast('Error: ' + error.message, 'error');
-    } finally {
-        document.getElementById('previewStatus').textContent = '';
+    if (!result.success) {
+        showToast('Error: ' + result.error, 'error');
+        return;
     }
+
+    displayPreview(result.data.matches);
+    document.getElementById('applyBtn').disabled = result.data.matches.length === 0;
 }
 
 function displayPreview(matches) {
@@ -170,8 +155,6 @@ function displayPreview(matches) {
 }
 
 async function applyChanges() {
-    const objectType = document.getElementById('objectType').value;
-    const targetField = getTargetField();
     const matchCount = document.getElementById('matchCount').textContent;
 
     const confirmed = await showConfirmDialog({
@@ -182,42 +165,22 @@ async function applyChanges() {
     });
     if (!confirmed) return;
 
-    const data = {
-        type: objectType,
-        filter_field: document.getElementById('filterField').value,
-        filter_value: document.getElementById('filterValue').value,
-        target_field: targetField,
-        new_value: document.getElementById('newValue').value,
-        action: document.getElementById('action').value
-    };
+    const result = await ApiClient.post('/api/bulk-attributes/apply', getFormData(), { silent: true });
 
-    try {
-        const response = await fetch('/api/bulk-attributes/apply', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data)
-        });
-
-        const result = await response.json();
-
-        if (result.error) {
-            showToast('Error: ' + result.error, 'error');
-            return;
-        }
-
-        showToast(`Updated ${result.updated} objects. Backup: ${result.backup}`, 'success');
-
-        // Reset preview
-        document.getElementById('previewEmpty').style.display = 'block';
-        document.getElementById('previewEmpty').textContent = 'Changes applied. Configure new options to make more changes.';
-        document.getElementById('previewResults').style.display = 'none';
-        document.getElementById('matchCount').textContent = '0';
-        document.getElementById('applyBtn').disabled = true;
-
-        // Reload objects to get fresh data
-        loadAttributes();
-
-    } catch (error) {
-        showToast('Error: ' + error.message, 'error');
+    if (!result.success) {
+        showToast('Error: ' + result.error, 'error');
+        return;
     }
+
+    showToast(`Updated ${result.data.updated} objects. Backup: ${result.data.backup}`, 'success');
+
+    // Reset preview
+    document.getElementById('previewEmpty').style.display = 'block';
+    document.getElementById('previewEmpty').textContent = 'Changes applied. Configure new options to make more changes.';
+    document.getElementById('previewResults').style.display = 'none';
+    document.getElementById('matchCount').textContent = '0';
+    document.getElementById('applyBtn').disabled = true;
+
+    // Reload objects to get fresh data
+    loadAttributes();
 }
