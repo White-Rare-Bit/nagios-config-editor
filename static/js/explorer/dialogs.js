@@ -1144,7 +1144,7 @@
 
         container.innerHTML = html;
 
-        if (result.valid) {
+        if (result.success) {
             showToast('Configuration is valid!', 'success');
         } else {
             showToast(`Validation failed: ${result.errors?.length || 0} errors`, 'error');
