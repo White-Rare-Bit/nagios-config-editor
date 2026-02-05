@@ -7,11 +7,11 @@ let lastSearchTerm = '';
 
 // Load all objects on page load for fast client-side searching
 document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        const response = await fetch('/api/objects');
-        allObjects = await response.json();
-    } catch (error) {
-        console.error('Failed to load objects:', error);
+    const result = await ApiClient.get('/api/objects');
+    if (result.success) {
+        allObjects = result.data;
+    } else {
+        console.error('Failed to load objects:', result.error);
     }
 
     // Set up input listeners
@@ -171,47 +171,43 @@ async function findMatches() {
 
     document.getElementById('searchStatus').textContent = 'Searching...';
 
-    try {
-        const response = await fetch('/api/preview-replace', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data)
-        });
-        const result = await response.json();
+    const result = await ApiClient.post('/api/preview-replace', data);
 
-        document.getElementById('matchCount').textContent = result.total;
-        document.getElementById('replaceBtn').disabled = result.total === 0;
-        document.getElementById('searchStatus').textContent = '';
-
-        if (result.total === 0) {
-            document.getElementById('matchesEmpty').style.display = 'block';
-            document.getElementById('matchesEmpty').textContent = 'No matches found.';
-            document.getElementById('matchesResults').style.display = 'none';
-        } else {
-            document.getElementById('matchesEmpty').style.display = 'none';
-            document.getElementById('matchesResults').style.display = 'block';
-
-            const container = document.getElementById('matchesResults');
-            container.innerHTML = result.matches.map(match => `
-                <div class="match-item">
-                    <div class="match-item-header">
-                        <div>
-                            <span class="match-item-type">${escapeHtml(match.object.object_type)}</span>
-                            <span class="match-item-name">${escapeHtml(match.object.display_name)}</span>
-                        </div>
-                        <span class="match-item-file">${escapeHtml(match.object.source_file)}</span>
-                    </div>
-                    <div class="match-item-detail">
-                        ${match.matched_fields.map(f => `
-                            <div><span class="match-field">${escapeHtml(f.field)}</span>: ${highlightMatch(f.value, data.find, data.regex)}</div>
-                        `).join('')}
-                    </div>
-                </div>
-            `).join('');
-        }
-    } catch (error) {
-        showToast('Error: ' + error.message, 'error');
+    if (!result.success) {
+        showToast(result.error || 'Search failed', 'error');
         document.getElementById('searchStatus').textContent = 'Error';
+        return;
+    }
+
+    document.getElementById('matchCount').textContent = result.data.total;
+    document.getElementById('replaceBtn').disabled = result.data.total === 0;
+    document.getElementById('searchStatus').textContent = '';
+
+    if (result.data.total === 0) {
+        document.getElementById('matchesEmpty').style.display = 'block';
+        document.getElementById('matchesEmpty').textContent = 'No matches found.';
+        document.getElementById('matchesResults').style.display = 'none';
+    } else {
+        document.getElementById('matchesEmpty').style.display = 'none';
+        document.getElementById('matchesResults').style.display = 'block';
+
+        const container = document.getElementById('matchesResults');
+        container.innerHTML = result.data.matches.map(match => `
+            <div class="match-item">
+                <div class="match-item-header">
+                    <div>
+                        <span class="match-item-type">${escapeHtml(match.object.object_type)}</span>
+                        <span class="match-item-name">${escapeHtml(match.object.display_name)}</span>
+                    </div>
+                    <span class="match-item-file">${escapeHtml(match.object.source_file)}</span>
+                </div>
+                <div class="match-item-detail">
+                    ${match.matched_fields.map(f => `
+                        <div><span class="match-field">${escapeHtml(f.field)}</span>: ${highlightMatch(f.value, data.find, data.regex)}</div>
+                    `).join('')}
+                </div>
+            </div>
+        `).join('');
     }
 }
 
@@ -234,24 +230,15 @@ async function applyReplace() {
         regex: document.getElementById('useRegex').checked
     };
 
-    try {
-        const response = await fetch('/api/apply-replace', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data)
-        });
-        const result = await response.json();
+    const result = await ApiClient.post('/api/apply-replace', data);
 
-        if (result.error) {
-            showToast('Error: ' + result.error, 'error');
-            return;
-        }
-
-        showToast(`Made ${result.replacements} replacements. Backup: ${result.backup}`, 'success');
-        location.reload();
-    } catch (error) {
-        showToast('Error: ' + error.message, 'error');
+    if (!result.success) {
+        showToast(result.error || 'Replace failed', 'error');
+        return;
     }
+
+    showToast(`Made ${result.data.replacements} replacements. Backup: ${result.data.backup}`, 'success');
+    location.reload();
 }
 
 function highlightMatch(text, find, isRegex) {
