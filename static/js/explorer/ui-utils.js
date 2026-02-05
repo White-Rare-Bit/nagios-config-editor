@@ -93,6 +93,31 @@
     // =============================================================================
 
     /**
+     * Extract filename from path
+     * @param {string} path - File or folder path
+     * @param {string} fallback - Fallback if path is empty
+     * @returns {string} The filename/foldername
+     */
+    Explorer.extractFileName = function(path, fallback = 'config') {
+        return path ? path.split('/').pop() || fallback : fallback;
+    };
+
+    /**
+     * Convert absolute path to relative path from configPath
+     * @param {string} absPath - Absolute path
+     * @returns {string} Relative path from configPath
+     */
+    Explorer.toRelativePath = function(absPath) {
+        const configPath = Explorer.state.configPath;
+        if (absPath.startsWith(configPath + '/')) {
+            return absPath.substring(configPath.length + 1);
+        } else if (absPath === configPath) {
+            return '';
+        }
+        return absPath;
+    };
+
+    /**
      * Convert absolute path to display path with config folder prefix
      * @param {string} path - Absolute path
      * @returns {string} Display path with config root name

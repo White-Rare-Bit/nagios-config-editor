@@ -6,6 +6,8 @@
     const state = Explorer.state;
     const constants = Explorer.constants;
     const toDisplayPath = Explorer.toDisplayPath;
+    const toRelativePath = Explorer.toRelativePath;
+    const extractFileName = Explorer.extractFileName;
 
     // Data transfer types for drag-drop operations
     const DATA_TYPES = {
@@ -13,16 +15,6 @@
         FILE_MOVE: 'application/x-file-move',
         FOLDER_MOVE: 'application/x-folder-move'
     };
-
-    /**
-     * Extract filename from path
-     * @param {string} path - File or folder path
-     * @param {string} fallback - Fallback if path is empty
-     * @returns {string} The filename/foldername
-     */
-    function extractFileName(path, fallback = 'config') {
-        return path ? path.split('/').pop() || fallback : fallback;
-    }
 
     /**
      * Update UI after staging changes. Consolidates the common pattern:
@@ -266,16 +258,6 @@
 
         // Build a nested folder tree structure starting from config root
         const root = { folders: {}, files: [], path: state.configPath, isNew: false };
-
-        // Helper to convert absolute path to relative path from state.configPath
-        function toRelativePath(absPath) {
-            if (absPath.startsWith(state.configPath + '/')) {
-                return absPath.substring(state.configPath.length + 1);
-            } else if (absPath === state.configPath) {
-                return '';
-            }
-            return absPath;
-        }
 
         // Helper to ensure folder path exists in tree
         function ensureFolderPath(absPath) {
