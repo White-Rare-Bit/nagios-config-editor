@@ -111,43 +111,6 @@ const DebugLogger = (function() {
 })();
 
 // =============================================================================
-// Session & Identity Management
-// =============================================================================
-
-function getSessionId() {
-    let sessionId = localStorage.getItem('nagios_session_id');
-    if (!sessionId) {
-        sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-        localStorage.setItem('nagios_session_id', sessionId);
-    }
-    return sessionId;
-}
-
-function getUserIdentity() {
-    return {
-        userName: localStorage.getItem('nagios_user_name') || '',
-        userEmail: localStorage.getItem('nagios_user_email') || ''
-    };
-}
-
-function setUserIdentity(name, email) {
-    localStorage.setItem('nagios_user_name', name);
-    localStorage.setItem('nagios_user_email', email);
-}
-
-function hasUserIdentity() {
-    const identity = getUserIdentity();
-    return !!(identity.userName && identity.userEmail);
-}
-
-function getStagingHeaders() {
-    return {
-        'Content-Type': 'application/json',
-        'X-Session-Id': getSessionId()
-    };
-}
-
-// =============================================================================
 // Lock Status Management
 // =============================================================================
 
