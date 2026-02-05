@@ -1963,12 +1963,6 @@ function renderCenterInheritance(chain, obj) {
         return nodeName; // Fallback to original name
     }
 
-    // Helper to get effective attributes respecting pending edits
-    function getEffectiveAttrs(o) {
-        const edit = state.pendingEdits.get(o.global_index);
-        return edit ? edit.edited : o.attributes;
-    }
-
     // Flatten the inheritance chain into an array, from current object to root ancestors
     function flattenChain(node, path = []) {
         path.push(node);
@@ -2047,54 +2041,6 @@ function renderCenterInheritance(chain, obj) {
             obj: hostObj,
             parents: parentNodes
         };
-    }
-
-    // Render parent hosts tree (shows parents above, current below)
-    function renderParentHostsTree(node, isCurrent = false, depth = 0) {
-        const nodeClass = isCurrent ? 'current' : (node.missing ? 'missing' : (node.circular ? 'missing' : ''));
-        const clickable = !node.missing && !node.circular && node.obj;
-        const connector = depth > 0 ? '<span class="dep-tree-connector">↳</span>' : '';
-
-        let html = '';
-
-        // Render parents first (they appear above)
-        if (node.parents && node.parents.length > 0) {
-            for (const parent of node.parents) {
-                html += renderParentHostsTree(parent, false, depth);
-            }
-        }
-
-        // Then render current node
-        html += `
-            <div class="ref-item ${nodeClass} ${clickable ? 'ref-item-clickable' : ''}" ${clickable ? `onclick="Explorer.navigateToObjectByIndex(${node.obj.global_index})"` : ''}>
-                ${connector}
-                <span class="ref-type-badge type-host">host</span>
-                <span class="ref-name" title="${Explorer.escapeHtml(node.name)}">${Explorer.escapeHtml(node.name)}</span>
-                ${node.missing ? '<span class="error-marker"><i class="fa-solid fa-xmark"></i> not found</span>' : ''}
-                ${node.circular ? '<span class="error-marker"><i class="fa-solid fa-xmark"></i> circular</span>' : ''}
-                ${isCurrent ? '<span class="current-marker">current</span>' : ''}
-            </div>
-        `;
-
-        return html;
-    }
-
-    // Render parent hosts as nested tree (parents contain children)
-    function renderParentHostsNested(node, isCurrent = false) {
-        const nodeClass = isCurrent ? 'current' : (node.missing ? 'missing' : (node.circular ? 'missing' : ''));
-        const clickable = !node.missing && !node.circular && node.obj;
-
-        let html = `
-            <div class="ref-item ${nodeClass} ${clickable ? 'ref-item-clickable' : ''}" ${clickable ? `onclick="Explorer.navigateToObjectByIndex(${node.obj.global_index})"` : ''}>
-                <span class="ref-type-badge type-host">host</span>
-                <span class="ref-name" title="${Explorer.escapeHtml(node.name)}">${Explorer.escapeHtml(node.name)}</span>
-                ${node.missing ? '<span class="error-marker"><i class="fa-solid fa-xmark"></i> not found</span>' : ''}
-                ${node.circular ? '<span class="error-marker"><i class="fa-solid fa-xmark"></i> circular</span>' : ''}
-                ${isCurrent ? '<span class="current-marker">current</span>' : ''}
-            </div>
-        `;
-
-        return html;
     }
 
     // Recursively render from root parents down to current
@@ -2605,12 +2551,6 @@ function renderCenterReferences(refs) {
     const dependentsContainer = document.getElementById('dependentsContent');
     const { outgoing = [], incoming = [] } = refs;
 
-    // Helper to get effective attributes
-    function getEffectiveAttrs(o) {
-        const edit = state.pendingEdits.get(o.global_index);
-        return edit ? edit.edited : o.attributes;
-    }
-
     // Build parent group chain for a group object
     function getParentGroups(groupObj, visited = new Set()) {
         if (visited.has(groupObj.global_index)) return [];
@@ -2862,12 +2802,6 @@ function loadCenterMembers(obj) {
     const objName = getEffectiveName(obj);
     const objEffectiveAttrs = getEffectiveAttributes(obj);
     const members = [];
-
-    // Helper to get effective attributes (respecting pending edits)
-    function getEffectiveAttrs(o) {
-        const edit = state.pendingEdits.get(o.global_index);
-        return edit ? edit.edited : o.attributes;
-    }
 
     // Recursive helper to get hosts from a hostgroup, including nested hostgroup_members
     function getHostgroupHosts(hostgroup, visited = new Set(), viaLabel = 'members') {
