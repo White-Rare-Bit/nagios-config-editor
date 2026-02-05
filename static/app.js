@@ -50,9 +50,12 @@ function escapeHtml(text) {
 
 /**
  * Escape special regex characters
+ * @param {*} str - String to escape (handles null/undefined)
+ * @returns {string} Escaped string safe for use in RegExp
  */
 function escapeRegex(str) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -122,16 +125,32 @@ function formatDate(dateStr, useRelative = true) {
 }
 
 /**
- * Show a loading indicator on a button
+ * Set loading state on a button
+ * @param {HTMLElement|string} buttonOrSelector - Button element or CSS selector
+ * @param {boolean} isLoading - Whether to show loading state
+ * @param {string} [loadingText] - Optional text to show while loading
  */
-function setButtonLoading(button, loading) {
-    if (loading) {
+function setButtonLoading(buttonOrSelector, isLoading, loadingText = null) {
+    const button = typeof buttonOrSelector === 'string'
+        ? document.querySelector(buttonOrSelector)
+        : buttonOrSelector;
+
+    if (!button) return;
+
+    if (isLoading) {
+        button.classList.add('loading');
         button.disabled = true;
-        button.dataset.originalText = button.textContent;
-        button.textContent = 'Loading...';
+        if (loadingText) {
+            button.dataset.originalText = button.textContent;
+            button.textContent = loadingText;
+        }
     } else {
+        button.classList.remove('loading');
         button.disabled = false;
-        button.textContent = button.dataset.originalText || button.textContent;
+        if (button.dataset.originalText) {
+            button.textContent = button.dataset.originalText;
+            delete button.dataset.originalText;
+        }
     }
 }
 

@@ -292,11 +292,7 @@ function showToast(message, type = 'info', duration = 3000) {
 // =============================================================================
 
 // escapeHtml() is defined in app.js (loaded first) - use that global function
-
-function escapeRegex(str) {
-    if (str === null || str === undefined) return '';
-    return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+// escapeRegex() is defined in app.js (loaded first) - use that global function
 
 function escapeJs(text) {
     if (text === null || text === undefined) return '';
@@ -306,6 +302,18 @@ function escapeJs(text) {
         .replace(/"/g, '\\"')
         .replace(/\n/g, '\\n')
         .replace(/\r/g, '\\r');
+}
+
+/**
+ * Pluralize a word based on count
+ * @param {number} count - The count to check
+ * @param {string} singular - Singular form of the word
+ * @param {string} [plural] - Plural form (defaults to singular + 's')
+ * @returns {string} Formatted string like "3 items" or "1 item"
+ */
+function pluralize(count, singular, plural) {
+    const word = count === 1 ? singular : (plural || singular + 's');
+    return `${count} ${word}`;
 }
 
 // =============================================================================
@@ -397,35 +405,7 @@ function showConfirmDialog(options = {}) {
 // Loading State Utilities
 // =============================================================================
 
-/**
- * Set loading state on a button
- * @param {HTMLElement|string} buttonOrSelector - Button element or CSS selector
- * @param {boolean} isLoading - Whether to show loading state
- * @param {string} [loadingText] - Optional text to show while loading
- */
-function setButtonLoading(buttonOrSelector, isLoading, loadingText = null) {
-    const button = typeof buttonOrSelector === 'string'
-        ? document.querySelector(buttonOrSelector)
-        : buttonOrSelector;
-
-    if (!button) return;
-
-    if (isLoading) {
-        button.classList.add('loading');
-        button.disabled = true;
-        if (loadingText) {
-            button.dataset.originalText = button.textContent;
-            button.textContent = loadingText;
-        }
-    } else {
-        button.classList.remove('loading');
-        button.disabled = false;
-        if (button.dataset.originalText) {
-            button.textContent = button.dataset.originalText;
-            delete button.dataset.originalText;
-        }
-    }
-}
+// setButtonLoading() is defined in app.js (loaded first) - use that global function
 
 /**
  * Show a loading state in a container
@@ -445,21 +425,6 @@ function showLoadingState(containerOrSelector, message = 'Loading...') {
             <div class="loading-state-text">${escapeHtml(message)}</div>
         </div>
     `;
-}
-
-/**
- * Simple POST wrapper for API calls
- * @param {string} url - API endpoint
- * @param {Object} data - Data to send
- * @returns {Promise<Object>} Response data
- */
-async function apiPost(url, data = {}) {
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: getStagingHeaders(),
-        body: JSON.stringify(data)
-    });
-    return response.json();
 }
 
 /**
@@ -569,7 +534,7 @@ async function buildGlobalCommitDialogHtml(data, refData = null, isGitConfigured
     // Build external changes section with actual diffs (not just a warning)
     let externalChangesHtml = '';
     if (hasExternalChanges) {
-        const externalDiffsHtml = await buildExternalChangesHtml(gitChanges, baseState.commitContextLines);
+        const externalDiffsHtml = await buildChangesFilesHtml(gitChanges, baseState.commitContextLines, { useExternalStyle: true });
         externalChangesHtml = `
             <div class="commit-section commit-external-section">
                 <div class="commit-section-title">
@@ -698,7 +663,7 @@ function buildReferenceChangesSection(refData) {
 async function buildGitOnlyCommitDialogHtml(gitChanges, configPath, isGitConfigured = true) {
     baseState.gitOnlyChanges = gitChanges;
 
-    const filesHtml = await buildGitOnlyFilesHtml(gitChanges, baseState.gitOnlyContextLines);
+    const filesHtml = await buildChangesFilesHtml(gitChanges, baseState.gitOnlyContextLines, { expandedByDefault: true });
 
     // Count by status
     let modifiedCount = 0, addedCount = 0, deletedCount = 0;
@@ -751,62 +716,18 @@ async function buildGitOnlyCommitDialogHtml(gitChanges, configPath, isGitConfigu
     `;
 }
 
-async function buildGitOnlyFilesHtml(gitChanges, contextLines) {
-    const statusLabels = {
-        'modified': 'Modified',
-        'added': 'Added',
-        'deleted': 'Deleted',
-        'untracked': 'Untracked',
-        'renamed': 'Renamed'
-    };
-
-    let filesHtml = '';
-    for (const change of gitChanges) {
-        const statusClass = change.status;
-        const statusLabel = statusLabels[change.status] || change.status;
-        const typeClass = statusClass === 'modified' ? '' : statusClass === 'added' || statusClass === 'untracked' ? 'create' : statusClass === 'deleted' ? 'delete' : 'move';
-
-        let diffContent = '';
-        const useFullFile = contextLines > 9;
-        const diffResult = await ApiClient.post('/api/git/diff', {
-            file: change.path,
-            fullFile: useFullFile,
-            contextLines: useFullFile ? null : contextLines
-        }, { silent: true });
-
-        if (diffResult.success && diffResult.data?.diff) {
-            diffContent = diffResult.data.diff.split('\n').map(line => {
-                const lineClass = line.startsWith('+') && !line.startsWith('+++') ? 'add' :
-                                 line.startsWith('-') && !line.startsWith('---') ? 'remove' :
-                                 line.startsWith('@@') ? 'hunk' : 'context';
-                return `<div class="diff-line ${lineClass}">${escapeHtml(line)}</div>`;
-            }).join('');
-        } else {
-            diffContent = '<div class="diff-line context">Unable to load diff</div>';
-        }
-
-        filesHtml += `
-            <div class="commit-item expanded">
-                <div class="commit-item-header">
-                    <span class="commit-item-expand">&#9658;</span>
-                    <span class="commit-item-type ${typeClass}">${statusLabel}</span>
-                    <span class="commit-item-name">${escapeHtml(change.path.split('/').pop())}</span>
-                    <span class="commit-item-file">${escapeHtml(change.path)}</span>
-                </div>
-                <div class="commit-item-diff">
-                    <div class="diff-content">${diffContent || '<div class="diff-line context">No changes to display</div>'}</div>
-                </div>
-            </div>
-        `;
-    }
-    return filesHtml;
-}
-
 /**
- * Build HTML for external changes (files modified outside the editor).
- * Similar to buildGitOnlyFilesHtml but for the mixed GUI+external view.
+ * Build HTML for git file changes (used by both git-only and external changes views).
+ * @param {Array} gitChanges - Array of git change objects with path and status
+ * @param {number} contextLines - Number of context lines for diffs
+ * @param {Object} options - Display options
+ * @param {boolean} [options.expandedByDefault=false] - Whether items start expanded
+ * @param {boolean} [options.useExternalStyle=false] - Use 'external' class for modified files
+ * @returns {Promise<string>} HTML string for file changes
  */
-async function buildExternalChangesHtml(gitChanges, contextLines) {
+async function buildChangesFilesHtml(gitChanges, contextLines, options = {}) {
+    const { expandedByDefault = false, useExternalStyle = false } = options;
+
     const statusLabels = {
         'modified': 'Modified',
         'added': 'Added',
@@ -819,7 +740,15 @@ async function buildExternalChangesHtml(gitChanges, contextLines) {
     for (const change of gitChanges) {
         const statusClass = change.status;
         const statusLabel = statusLabels[change.status] || change.status;
-        const typeClass = statusClass === 'modified' ? 'external' : statusClass === 'added' || statusClass === 'untracked' ? 'create' : statusClass === 'deleted' ? 'delete' : 'move';
+        // For 'modified': use 'external' if external style, otherwise empty
+        // For others: 'create' for added/untracked, 'delete' for deleted, 'move' for renamed
+        const typeClass = statusClass === 'modified'
+            ? (useExternalStyle ? 'external' : '')
+            : statusClass === 'added' || statusClass === 'untracked'
+                ? 'create'
+                : statusClass === 'deleted'
+                    ? 'delete'
+                    : 'move';
 
         let diffContent = '';
         const useFullFile = contextLines > 9;
@@ -840,8 +769,9 @@ async function buildExternalChangesHtml(gitChanges, contextLines) {
             diffContent = '<div class="diff-line context">Unable to load diff</div>';
         }
 
+        const expandedClass = expandedByDefault ? ' expanded' : '';
         filesHtml += `
-            <div class="commit-item">
+            <div class="commit-item${expandedClass}">
                 <div class="commit-item-header">
                     <span class="commit-item-expand">&#9658;</span>
                     <span class="commit-item-type ${typeClass}">${statusLabel}</span>
@@ -867,10 +797,10 @@ async function updateGitOnlyContextLines(value) {
     const changesList = document.getElementById('globalCommitChangesList');
     if (!changesList) return;
 
-    const filesHtml = await buildGitOnlyFilesHtml(baseState.gitOnlyChanges, baseState.gitOnlyContextLines);
+    const filesHtml = await buildChangesFilesHtml(baseState.gitOnlyChanges, baseState.gitOnlyContextLines, { expandedByDefault: true });
     changesList.innerHTML = `
         <div class="commit-section">
-            <div class="commit-section-title">File Changes <span class="badge">${baseState.gitOnlyChanges.length} file${baseState.gitOnlyChanges.length !== 1 ? 's' : ''}</span></div>
+            <div class="commit-section-title">File Changes <span class="badge">${pluralize(baseState.gitOnlyChanges.length, 'file')}</span></div>
             ${filesHtml}
         </div>
     `;
@@ -1722,32 +1652,24 @@ async function discardGlobalChanges() {
     let changeSummary = [];
     if (baseState.diffData && baseState.diffData.staging) {
         const s = baseState.diffData.staging;
-        const edits = Object.keys(s.pendingEdits || {}).length;
-        const moves = Object.keys(s.stagedMoves || {}).length;
-        const creates = (s.stagedCreations || []).length;
-        const objDeletes = (s.stagedObjectDeletions || []).length;
-        // Include file/folder operations in count
-        const fileCreates = (s.stagedFileCreations || []).length;
-        const fileDeletes = (s.stagedFileDeletions || []).length;
-        const fileMoves = (s.stagedFileMoves || []).length;
-        const folderCreates = (s.stagedFolderCreations || []).length;
-        const folderDeletes = (s.stagedFolderDeletions || []).length;
-        const folderMoves = (s.stagedFolderMoves || []).length;
+        // Collect counts for each operation type
+        const counts = [
+            [Object.keys(s.pendingEdits || {}).length, 'edit'],
+            [(s.stagedCreations || []).length, 'creation'],
+            [Object.keys(s.stagedMoves || {}).length, 'move'],
+            [(s.stagedObjectDeletions || []).length, 'object deletion'],
+            [(s.stagedFileCreations || []).length, 'file creation'],
+            [(s.stagedFileDeletions || []).length, 'file deletion'],
+            [(s.stagedFileMoves || []).length, 'file move'],
+            [(s.stagedFolderCreations || []).length, 'folder creation'],
+            [(s.stagedFolderDeletions || []).length, 'folder deletion'],
+            [(s.stagedFolderMoves || []).length, 'folder move']
+        ];
 
-        if (edits > 0) changeSummary.push(`${edits} edit${edits !== 1 ? 's' : ''}`);
-        if (creates > 0) changeSummary.push(`${creates} creation${creates !== 1 ? 's' : ''}`);
-        if (moves > 0) changeSummary.push(`${moves} move${moves !== 1 ? 's' : ''}`);
-        if (objDeletes > 0) changeSummary.push(`${objDeletes} object deletion${objDeletes !== 1 ? 's' : ''}`);
-        if (fileCreates > 0) changeSummary.push(`${fileCreates} file creation${fileCreates !== 1 ? 's' : ''}`);
-        if (fileDeletes > 0) changeSummary.push(`${fileDeletes} file deletion${fileDeletes !== 1 ? 's' : ''}`);
-        if (fileMoves > 0) changeSummary.push(`${fileMoves} file move${fileMoves !== 1 ? 's' : ''}`);
-        if (folderCreates > 0) changeSummary.push(`${folderCreates} folder creation${folderCreates !== 1 ? 's' : ''}`);
-        if (folderDeletes > 0) changeSummary.push(`${folderDeletes} folder deletion${folderDeletes !== 1 ? 's' : ''}`);
-        if (folderMoves > 0) changeSummary.push(`${folderMoves} folder move${folderMoves !== 1 ? 's' : ''}`);
-
-        changeCount = edits + moves + creates + objDeletes +
-                      fileCreates + fileDeletes + fileMoves +
-                      folderCreates + folderDeletes + folderMoves;
+        counts.forEach(([count, label]) => {
+            if (count > 0) changeSummary.push(pluralize(count, label));
+        });
+        changeCount = counts.reduce((sum, [count]) => sum + count, 0);
     }
 
     closeGlobalCommitDialog();
