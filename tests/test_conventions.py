@@ -357,24 +357,34 @@ class TestGlobalFunctions:
         assert not missing, f"Missing functions in app.js: {missing}"
 
     def test_base_js_functions(self):
-        """Required functions should be defined in base.js."""
-        base_js = ROOT / 'static' / 'js' / 'base.js'
-        content = base_js.read_text()
+        """Required functions should be defined in base.js modules.
 
-        required_functions = [
-            'showToast',
-            'showConfirmDialog',
-            'getSessionId',
-            'getUserIdentity',
-            'getStagingHeaders',
-        ]
+        After refactoring, these functions are split across extracted modules:
+        - session-manager.js: getSessionId, getUserIdentity, getStagingHeaders
+        - ui-notifications.js: showToast, showConfirmDialog
+        """
+        js_dir = ROOT / 'static' / 'js'
+
+        # Map functions to their expected module locations
+        function_locations = {
+            'showToast': 'ui-notifications.js',
+            'showConfirmDialog': 'ui-notifications.js',
+            'getSessionId': 'session-manager.js',
+            'getUserIdentity': 'session-manager.js',
+            'getStagingHeaders': 'session-manager.js',
+        }
 
         missing = []
-        for func in required_functions:
+        for func, module in function_locations.items():
+            module_path = js_dir / module
+            if not module_path.exists():
+                missing.append(f"{func} (module {module} not found)")
+                continue
+            content = module_path.read_text()
             if f'function {func}' not in content and f'{func} =' not in content:
-                missing.append(func)
+                missing.append(f"{func} in {module}")
 
-        assert not missing, f"Missing functions in base.js: {missing}"
+        assert not missing, f"Missing functions in base.js modules: {missing}"
 
 
 class TestReferenceFieldSync:

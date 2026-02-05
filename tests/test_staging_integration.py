@@ -131,7 +131,7 @@ def test_reject_old_list_format(client):
                        headers={'X-Session-Id': 'test-session'})
     assert resp.status_code == 400
     assert 'Invalid staging format' in resp.json['error']
-    assert 'dict format' in resp.json['error']
+    assert 'array of dicts' in resp.json['error']
 
 
 def test_undo_operations_dict_format(client):
