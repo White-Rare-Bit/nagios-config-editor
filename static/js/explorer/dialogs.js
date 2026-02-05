@@ -7,6 +7,68 @@
     const constants = Explorer.constants;
 
     // ============================================================================
+    // HTML Template Helpers
+    // ============================================================================
+
+    /**
+     * Build HTML for a warning box with icon
+     * @param {string} message - Warning message (can include HTML)
+     * @param {string} [type='warning'] - Box type: 'warning', 'danger', or 'info'
+     * @returns {string} HTML string
+     */
+    function buildWarningBox(message, type = 'warning') {
+        const icons = {
+            warning: 'fa-triangle-exclamation',
+            danger: 'fa-exclamation-circle',
+            info: 'fa-info-circle'
+        };
+        const icon = icons[type] || icons.warning;
+        const cssClass = type === 'danger' ? 'dialog-danger-box' : `dialog-${type}-box`;
+        return `<div class="${cssClass}"><strong><i class="fa-solid ${icon}"></i> ${message}</strong></div>`;
+    }
+
+    /**
+     * Build HTML for a scrollable list of items
+     * @param {Array<{title: string, items: string[]}>} sections - Sections with title and items
+     * @param {number} [maxItems=5] - Max items to show before "and X more"
+     * @returns {string} HTML string
+     */
+    function buildScrollableList(sections, maxItems = 5) {
+        let html = '';
+        for (const section of sections) {
+            if (!section.items || section.items.length === 0) continue;
+            html += `<div class="dialog-detail-item"><strong>${Explorer.escapeHtml(section.title)}</strong><ul>`;
+            const displayItems = section.items.slice(0, maxItems);
+            for (const item of displayItems) {
+                html += `<li>${item}</li>`; // Items may contain HTML
+            }
+            if (section.items.length > maxItems) {
+                html += `<li class="dialog-detail-more">... and ${section.items.length - maxItems} more</li>`;
+            }
+            html += '</ul></div>';
+        }
+        return html ? `<div class="dialog-scrollable-list">${html}</div>` : '';
+    }
+
+    /**
+     * Build HTML for object type dropdown
+     * @param {string} currentType - Currently selected type
+     * @returns {string} HTML string
+     */
+    function buildTypeDropdown(currentType) {
+        return `
+            <div class="new-object-type-container">
+                <button type="button" id="newObjectTypeSelect" class="new-object-type-btn" onclick="Explorer.toggleObjectTypeDropdown()">
+                    <span id="newObjectTypeValue">${currentType}</span>
+                    <span class="dropdown-arrow">▼</span>
+                </button>
+                <div id="newObjectTypeDropdown" class="object-type-dropdown u-hidden"></div>
+            </div>
+            <span class="new-object-badge">NEW</span>
+        `;
+    }
+
+    // ============================================================================
     // New Object Creation
     // ============================================================================
 
@@ -92,16 +154,7 @@
         // Store object types for dropdown
         window.newObjectTypes = objectTypes;
 
-        typeEl.innerHTML = `
-            <div class="new-object-type-container">
-                <button type="button" id="newObjectTypeSelect" class="new-object-type-btn" onclick="Explorer.toggleObjectTypeDropdown()">
-                    <span id="newObjectTypeValue">${obj.object_type}</span>
-                    <span class="dropdown-arrow">▼</span>
-                </button>
-                <div id="newObjectTypeDropdown" class="object-type-dropdown u-hidden"></div>
-            </div>
-            <span class="new-object-badge">NEW</span>
-        `;
+        typeEl.innerHTML = buildTypeDropdown(obj.object_type);
         typeEl.className = 'card-type is-new';
 
         // Hide issue button for new objects
@@ -526,11 +579,7 @@
             }
         }
 
-        let warningHtml = `
-            <div class="dialog-warning-box">
-                <strong><i class="fa-solid fa-triangle-exclamation"></i> Warning: This deletion will affect other objects</strong>
-            </div>
-        `;
+        let warningHtml = buildWarningBox('Warning: This deletion will affect other objects', 'warning');
 
         // Show orphaned services warning prominently
         if (orphanedServices.length > 0) {
