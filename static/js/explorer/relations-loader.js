@@ -31,7 +31,7 @@
     }
 
     // Type labels for display (from constants)
-    const typeLabels = constants.TYPE_LABELS;
+    const typeLabels = constants.typeLabels;
 
     // =============================================================================
     // DEPENDENCY/ESCALATION FINDING HELPERS

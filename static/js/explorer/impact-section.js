@@ -12,7 +12,7 @@
     const constants = Explorer.constants;
 
     // Type labels for display
-    const typeLabels = constants.TYPE_LABELS;
+    const typeLabels = constants.typeLabels;
 
     // Helper aliases for cleaner code
     function getEffectiveName(obj) {
