@@ -1,9 +1,17 @@
 // Find & Replace page JavaScript
 // Extracted from find_replace.html
 
-let searchTimeout = null;
-let allObjects = [];
-let lastSearchTerm = '';
+(function() {
+    'use strict';
+
+    // Configuration constants
+    const MIN_SEARCH_CHARS = 2;
+    const DEBOUNCE_MS = 150;
+    const MAX_SUGGESTIONS = 20;
+
+    let searchTimeout = null;
+    let allObjects = [];
+    let lastSearchTerm = '';
 
 // Load all objects on page load for fast client-side searching
 document.addEventListener('DOMContentLoaded', async () => {
@@ -58,7 +66,7 @@ function onSearchInput() {
     }
 
     // Hide suggestions if search is too short
-    if (findText.length < 2) {
+    if (findText.length < MIN_SEARCH_CHARS) {
         document.getElementById('searchSuggestions').style.display = 'none';
         document.getElementById('searchStatus').textContent = '';
         return;
@@ -68,7 +76,7 @@ function onSearchInput() {
     document.getElementById('searchStatus').textContent = 'Searching...';
     searchTimeout = setTimeout(() => {
         performLiveSearch(findText);
-    }, 150);
+    }, DEBOUNCE_MS);
 }
 
 function performLiveSearch(searchTerm) {
@@ -110,12 +118,12 @@ function performLiveSearch(searchTerm) {
             }
         }
 
-        if (matches.length >= 20) break; // Limit suggestions
+        if (matches.length >= MAX_SUGGESTIONS) break; // Limit suggestions
     }
 
     displaySuggestions(matches, searchTerm, useRegex);
-    document.getElementById('searchStatus').textContent = matches.length >= 20
-        ? '20+ matches (showing first 20)'
+    document.getElementById('searchStatus').textContent = matches.length >= MAX_SUGGESTIONS
+        ? `${MAX_SUGGESTIONS}+ matches (showing first ${MAX_SUGGESTIONS})`
         : `${matches.length} matches`;
 }
 
@@ -250,3 +258,5 @@ function highlightMatch(text, find, isRegex) {
         return escaped;
     }
 }
+
+})();
