@@ -2,22 +2,47 @@
 // Table layout with sortable columns and pagination
 // Uses shared pagination component from shared/pagination.js
 
+// Constants
+const SORT_COLUMNS = {
+    DATE: 'date',
+    FILES: 'files'
+};
+
+const DEFAULT_PAGE_SIZE = 25;
+
 // Sort state
-let currentSortColumn = 'date';
+let currentSortColumn = SORT_COLUMNS.DATE;
 let currentSortDirection = 'desc';
 
 // Pagination state
 let backupCurrentPage = 1;
-let backupPageSize = 25;
+let backupPageSize = DEFAULT_PAGE_SIZE;
 let allBackupRows = [];
+
+/**
+ * Helper to set button loading state and restore on completion
+ * @param {HTMLElement} btn - Button element
+ * @param {boolean} loading - Whether to show loading state
+ * @param {string} loadingText - Text to show while loading
+ * @param {string} originalText - Text to restore when done
+ */
+function setBackupButtonState(btn, loading, loadingText = 'Loading...', originalText = null) {
+    if (!btn) return;
+    if (loading) {
+        btn.disabled = true;
+        btn.dataset.originalText = btn.textContent;
+        btn.textContent = loadingText;
+    } else {
+        btn.disabled = false;
+        btn.textContent = originalText || btn.dataset.originalText || 'Action';
+    }
+}
 
 async function createBackup() {
     const btn = document.getElementById('createBackupBtn');
     const description = document.getElementById('backupDescription').value.trim();
 
-    // Show loading state
-    btn.disabled = true;
-    btn.textContent = 'Creating...';
+    setBackupButtonState(btn, true, 'Creating...');
 
     const identity = getUserIdentity();
     const result = await ApiClient.post('/api/backups', {
@@ -31,8 +56,7 @@ async function createBackup() {
         showToast('Backup created successfully', 'success');
         setTimeout(() => location.reload(), 800);
     } else {
-        btn.disabled = false;
-        btn.textContent = 'Create Backup';
+        setBackupButtonState(btn, false, null, 'Create Backup');
         if (result.aborted) {
             showToast('Backup creation timed out. Please try again.', 'error');
         } else {
@@ -55,10 +79,7 @@ async function restoreBackup(name, btn = null) {
 
     // Show restoring state
     if (backupRow) backupRow.classList.add('restoring');
-    if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Restoring...';
-    }
+    setBackupButtonState(btn, true, 'Restoring...');
 
     const identity = getUserIdentity();
     const result = await ApiClient.post(`/api/backups/${name}/restore`, {
@@ -72,17 +93,11 @@ async function restoreBackup(name, btn = null) {
         setTimeout(() => location.reload(), 1000);
     } else if (result.data?.locked) {
         if (backupRow) backupRow.classList.remove('restoring');
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = 'Restore';
-        }
+        setBackupButtonState(btn, false, null, 'Restore');
         showToast('Another user has pending changes. Wait for them to commit or discard.', 'error');
     } else {
         if (backupRow) backupRow.classList.remove('restoring');
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = 'Restore';
-        }
+        setBackupButtonState(btn, false, null, 'Restore');
         showToast('Error: ' + (result.error || 'Unknown error'), 'error');
     }
 }
@@ -154,17 +169,17 @@ function sortBackups(column) {
         currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
     } else {
         currentSortColumn = column;
-        currentSortDirection = column === 'date' ? 'desc' : 'asc';
+        currentSortDirection = column === SORT_COLUMNS.DATE ? 'desc' : 'asc';
     }
 
     // Sort allBackupRows array
     allBackupRows.sort((a, b) => {
         let aVal, bVal;
 
-        if (column === 'date') {
+        if (column === SORT_COLUMNS.DATE) {
             aVal = a.dataset.date || '';
             bVal = b.dataset.date || '';
-        } else if (column === 'files') {
+        } else if (column === SORT_COLUMNS.FILES) {
             aVal = parseInt(a.dataset.files) || 0;
             bVal = parseInt(b.dataset.files) || 0;
         }
