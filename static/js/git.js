@@ -115,7 +115,6 @@ function buildGitFilesHtml(files, selectedPath) {
         const statusClass = file.status;
         const isSelected = selectedPath === file.path;
         const escapedPath = escapeHtml(file.path);
-        const jsPath = file.path.replace(/'/g, "\\'");
         html += `
             <li class="git-file-item ${isSelected ? 'selected' : ''}" data-filepath="${escapedPath}">
                 <span class="git-status-badge ${statusClass}">${file.status_code}</span>
@@ -236,7 +235,7 @@ async function showGitDiff(filepath) {
         } else if (line.startsWith('diff ') || line.startsWith('index ') || line.startsWith('---') || line.startsWith('+++')) {
             lineClass = 'header';
         }
-        const escaped = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const escaped = escapeHtml(line);
         diffHtml += `<div class="git-diff-line ${lineClass}">${escaped || ' '}</div>`;
     }
 
@@ -268,31 +267,14 @@ async function discardGitFile(filepath) {
 }
 
 function showGitDiscardFileResultPanel(filepath, success, result) {
-    const overlay = document.getElementById('gitResultOverlay');
-    const icon = document.getElementById('gitResultIcon');
-    const title = document.getElementById('gitResultTitle');
-    const command = document.getElementById('gitResultCommand');
-    const output = document.getElementById('gitResultOutput');
-
-    baseState.gitResultNeedsReload = true;
-
-    command.textContent = `git checkout -- "${filepath}"`;
-
-    if (success) {
-        icon.className = 'git-result-icon success';
-        icon.innerHTML = '<i class="fa-solid fa-check"></i>';
-        title.textContent = 'Discard Successful';
-        output.className = 'git-result-output';
-        output.innerHTML = `<span class="success-text">Discarded changes to ${escapeHtml(filepath)}</span>`;
-    } else {
-        icon.className = 'git-result-icon error';
-        icon.innerHTML = '<i class="fa-solid fa-xmark"></i>';
-        title.textContent = 'Discard Failed';
-        output.className = 'git-result-output';
-        output.innerHTML = `<span class="error-text">${result.error || 'Unknown error'}</span>`;
-    }
-
-    overlay.classList.add('visible');
+    showResultPanel({
+        command: `git checkout -- "${filepath}"`,
+        success,
+        title: success ? 'Discard Successful' : 'Discard Failed',
+        outputHtml: success
+            ? `<span class="success-text">Discarded changes to ${escapeHtml(filepath)}</span>`
+            : `<span class="error-text">${result.error || 'Unknown error'}</span>`
+    });
 }
 
 // Clear all git history
@@ -330,33 +312,15 @@ async function clearGitHistory() {
 }
 
 function showGitClearHistoryResultPanel(success, result) {
-    const overlay = document.getElementById('gitResultOverlay');
-    const icon = document.getElementById('gitResultIcon');
-    const title = document.getElementById('gitResultTitle');
-    const command = document.getElementById('gitResultCommand');
-    const output = document.getElementById('gitResultOutput');
-
-    baseState.gitResultNeedsReload = true;
-
-    // Show full command with identity
     const identity = getUserIdentity();
-    command.textContent = `rm -rf .git && git init && git add -A && git -c user.name="${identity.userName || '?'}" -c user.email="${identity.userEmail || '?'}" commit -m "Initial commit"`;
-
-    if (success) {
-        icon.className = 'git-result-icon success';
-        icon.innerHTML = '<i class="fa-solid fa-check"></i>';
-        title.textContent = 'Git Log Wiped';
-        output.className = 'git-result-output';
-        output.innerHTML = '<span class="success-text">Git history cleared and reinitialized with a fresh initial commit.</span>';
-    } else {
-        icon.className = 'git-result-icon error';
-        icon.innerHTML = '<i class="fa-solid fa-xmark"></i>';
-        title.textContent = 'Wipe Git Log Failed';
-        output.className = 'git-result-output';
-        output.innerHTML = `<span class="error-text">${result.error || 'Unknown error'}</span>`;
-    }
-
-    overlay.classList.add('visible');
+    showResultPanel({
+        command: `rm -rf .git && git init && git add -A && git -c user.name="${identity.userName || '?'}" -c user.email="${identity.userEmail || '?'}" commit -m "Initial commit"`,
+        success,
+        title: success ? 'Git Log Wiped' : 'Wipe Git Log Failed',
+        outputHtml: success
+            ? '<span class="success-text">Git history cleared and reinitialized with a fresh initial commit.</span>'
+            : `<span class="error-text">${result.error || 'Unknown error'}</span>`
+    });
 }
 
 // Tab switching
@@ -462,11 +426,8 @@ function renderGitHistory() {
                 </div>
             </div>
         `;
-        updateHistoryBadge(0);
         return;
     }
-
-    updateHistoryBadge(gitHistory.length);
 
     // Calculate pagination
     const totalItems = gitHistory.length;
@@ -609,10 +570,6 @@ function setHistoryPageSize(size) {
     renderGitHistory();
 }
 
-function updateHistoryBadge(count) {
-    // Could add a badge to the History tab if needed
-}
-
 function sortHistory(column) {
     if (!gitHistory || gitHistory.length === 0) return;
 
@@ -692,54 +649,30 @@ async function restoreCommit(hash, message) {
     showGitRestoreResultPanel(hash, success, result.data || { error: result.error });
 }
 
-// Show git result panel for restore operations
 function showGitRestoreResultPanel(hash, success, result) {
-    const overlay = document.getElementById('gitResultOverlay');
-    const icon = document.getElementById('gitResultIcon');
-    const title = document.getElementById('gitResultTitle');
-    const command = document.getElementById('gitResultCommand');
-    const output = document.getElementById('gitResultOutput');
-
-    // Set flag to reload page when panel is closed
-    baseState.gitResultNeedsReload = true;
-
-    // Show the actual commands that were run
+    // Build command string from actual operations
     let cmds = [];
-    if (result.stashed) {
-        cmds.push('git stash push');
-    }
+    if (result.stashed) cmds.push('git stash push');
     cmds.push(`git checkout ${hash.substring(0, 7)} -- .`);
-    if (result.deleted_files && result.deleted_files.length > 0) {
-        cmds.push(`rm (${result.deleted_files.length} files)`);
-    }
-    command.textContent = cmds.join(' && ');
+    if (result.deleted_files?.length > 0) cmds.push(`rm (${result.deleted_files.length} files)`);
 
+    // Build output HTML
+    let outputHtml;
     if (success) {
-        icon.className = 'git-result-icon success';
-        icon.innerHTML = '<i class="fa-solid fa-check"></i>';
-        title.textContent = 'Git Restore Successful';
-
-        let outputHtml = `<span class="success-text">Restored to commit:</span> <span class="hash">${escapeHtml(hash.substring(0, 7))}</span>\n`;
-        if (result.message) {
-            outputHtml += `<span style="color: #888;">Message:</span> ${escapeHtml(result.message)}\n`;
-        }
-        if (result.stashed) {
-            outputHtml += `<span style="color: #ff9800;">Uncommitted changes were stashed</span>\n`;
-        }
-        if (result.deleted_files && result.deleted_files.length > 0) {
-            outputHtml += `<span style="color: #888;">Deleted ${result.deleted_files.length} file(s) not in target commit</span>\n`;
-        }
-        output.innerHTML = outputHtml;
+        outputHtml = `<span class="success-text">Restored to commit:</span> <span class="hash">${escapeHtml(hash.substring(0, 7))}</span>\n`;
+        if (result.message) outputHtml += `<span style="color: #888;">Message:</span> ${escapeHtml(result.message)}\n`;
+        if (result.stashed) outputHtml += `<span style="color: #ff9800;">Uncommitted changes were stashed</span>\n`;
+        if (result.deleted_files?.length > 0) outputHtml += `<span style="color: #888;">Deleted ${result.deleted_files.length} file(s) not in target commit</span>\n`;
     } else {
-        icon.className = 'git-result-icon error';
-        icon.innerHTML = '<i class="fa-solid fa-xmark"></i>';
-        title.textContent = 'Git Restore Failed';
-
-        const errorMsg = result.error || 'Unknown error occurred';
-        output.innerHTML = `<span class="error-text">${escapeHtml(errorMsg)}</span>`;
+        outputHtml = `<span class="error-text">${escapeHtml(result.error || 'Unknown error occurred')}</span>`;
     }
 
-    overlay.classList.add('visible');
+    showResultPanel({
+        command: cmds.join(' && '),
+        success,
+        title: success ? 'Git Restore Successful' : 'Git Restore Failed',
+        outputHtml
+    });
 }
 
 // Update changes badge
