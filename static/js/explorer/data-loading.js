@@ -7,6 +7,13 @@
 (function(Explorer) {
     'use strict';
 
+    // Configuration constants
+    const CONFIG = {
+        ANALYSIS_DEBOUNCE_MS: 500,      // Debounce for analysis updates after staging changes
+        SAVE_DEBOUNCE_RETRY_MS: 100,    // Retry delay when save is in progress
+        STAGING_POLL_INTERVAL_MS: 3000  // Interval for polling staging changes
+    };
+
     // Module-local state
     let stagingPollInterval = null;
     let lastStagingTimestamp = null;
@@ -28,7 +35,7 @@
             if (typeof Explorer.loadAllSuggestions === 'function') {
                 Explorer.loadAllSuggestions(true);
             }
-        }, 500);
+        }, CONFIG.ANALYSIS_DEBOUNCE_MS);
     }
 
     // =============================================================================
@@ -116,7 +123,7 @@
         }
 
         if (saveInProgress) {
-            saveDebounceTimer = setTimeout(() => Explorer.saveStagedChanges(), 100);
+            saveDebounceTimer = setTimeout(() => Explorer.saveStagedChanges(), CONFIG.SAVE_DEBOUNCE_RETRY_MS);
             return;
         }
 
@@ -320,7 +327,7 @@
             } finally {
                 isPollingInProgress = false;
             }
-        }, 3000);
+        }, CONFIG.STAGING_POLL_INTERVAL_MS);
     };
 
     /**
