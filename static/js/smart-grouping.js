@@ -1,7 +1,33 @@
 // Smart Grouping page JavaScript
 
-let allSuggestions = [];
-let currentMembers = [];
+(function() {
+    'use strict';
+
+    // Type configuration constants
+    const TYPE_COLORS = {
+        'hostname-prefix': 'primary',
+        'hostname-suffix': 'info',
+        'ip-subnet': 'success',
+        'common-services': 'warning',
+        'check-command': 'secondary',
+        'network-parent': 'dark',
+        'ungrouped': 'danger'
+    };
+
+    const TYPE_LABELS = {
+        'hostname-prefix': 'Hostname Prefix',
+        'hostname-suffix': 'Hostname Suffix',
+        'ip-subnet': 'IP Subnet',
+        'common-services': 'Common Services',
+        'check-command': 'Check Command',
+        'network-parent': 'Network Parent',
+        'ungrouped': 'Ungrouped'
+    };
+
+    const PREVIEW_LIMIT = 8;
+
+    let allSuggestions = [];
+    let currentMembers = [];
 
 document.getElementById('minMembers').addEventListener('input', function() {
     document.getElementById('minMembersValue').textContent = this.value;
@@ -80,32 +106,12 @@ function displaySuggestions(suggestions) {
         return;
     }
 
-    const typeColors = {
-        'hostname-prefix': 'primary',
-        'hostname-suffix': 'info',
-        'ip-subnet': 'success',
-        'common-services': 'warning',
-        'check-command': 'secondary',
-        'network-parent': 'dark',
-        'ungrouped': 'danger'
-    };
-
-    const typeLabels = {
-        'hostname-prefix': 'Hostname Prefix',
-        'hostname-suffix': 'Hostname Suffix',
-        'ip-subnet': 'IP Subnet',
-        'common-services': 'Common Services',
-        'check-command': 'Check Command',
-        'network-parent': 'Network Parent',
-        'ungrouped': 'Ungrouped'
-    };
-
     const html = suggestions.map((s, idx) => {
-        const color = typeColors[s.type] || 'secondary';
-        const label = typeLabels[s.type] || s.type;
+        const color = TYPE_COLORS[s.type] || 'secondary';
+        const label = TYPE_LABELS[s.type] || s.type;
 
-        const membersPreview = s.members.slice(0, 8);
-        const moreCount = s.members.length - 8;
+        const membersPreview = s.members.slice(0, PREVIEW_LIMIT);
+        const moreCount = s.members.length - PREVIEW_LIMIT;
 
         return `
             <div class="suggestion-card" data-index="${idx}">
@@ -262,3 +268,5 @@ document.addEventListener('input', function(e) {
         filterSuggestions();
     }
 });
+
+})();
