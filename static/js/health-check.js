@@ -8,20 +8,19 @@ async function runHealthCheck() {
     btn.disabled = true;
     btn.textContent = 'Analyzing...';
 
-    try {
-        const response = await fetch('/api/health-check');
-        const result = await response.json();
+    const result = await ApiClient.get('/api/health-check');
 
-        allIssues = result.issues;
-        displaySummary(result.summary);
-        displayIssues(result.issues);
-
-    } catch (error) {
-        showToast('Error running health check: ' + error.message, 'error');
-    } finally {
-        btn.disabled = false;
-        btn.textContent = 'Run Health Check';
+    if (result.success) {
+        allIssues = result.data.issues;
+        displaySummary(result.data.summary);
+        displayIssues(result.data.issues);
+    } else {
+        showToast('Error running health check: ' + result.error, 'error');
     }
+
+    // Always re-enable button
+    btn.disabled = false;
+    btn.textContent = 'Run Health Check';
 }
 
 function displaySummary(summary) {
