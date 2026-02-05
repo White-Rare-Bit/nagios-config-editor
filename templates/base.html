@@ -2402,7 +2402,7 @@
         border-top: 2px solid var(--nbe-info);
     }
     .ref-changes-title {
-        background: var(--nbe-info-light);
+        background: var(--nbe-dark-bg-tertiary);
         color: var(--nbe-info);
     }
     .ref-changes-badge {
@@ -2410,8 +2410,8 @@
         color: var(--nbe-text-inverse);
     }
     .ref-changes-diff {
-        background: var(--nbe-bg-subtle);
-        color: var(--nbe-text-primary);
+        background: var(--nbe-dark-bg-secondary);
+        color: var(--nbe-dark-text-primary);
     }
     .ref-changes-content {
         padding: var(--nbe-space-md);
@@ -2485,6 +2485,12 @@
         flex: 1;
     }
     </style>
+
+    {% if config.DEBUG %}
+    <!-- Console shim must load FIRST to capture all console output -->
+    <script>window.__CONSOLE_SHIM_ENABLED__ = true;</script>
+    <script src="{{ url_for('static', filename='js/console-shim.js') }}"></script>
+    {% endif %}
 
     <script src="{{ url_for('static', filename='vendor/js/bootstrap.bundle.min.js') }}"></script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
