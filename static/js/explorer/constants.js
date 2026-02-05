@@ -76,8 +76,38 @@
             'f - Flapping', 's - Scheduled Downtime', 'n - None'
         ],
         NOTIFICATION_OPTION_ATTRS: [
-            'notification_options', 'host_notification_options', 'service_notification_options'
+            'notification_options', 'host_notification_options', 'service_notification_options',
+            'execution_failure_criteria', 'notification_failure_criteria',
+            'escalation_options', 'stalking_options'
         ],
+
+        // Dependency failure criteria options
+        HOST_FAILURE_CRITERIA: [
+            'o - Up (OK)', 'd - Down', 'u - Unreachable', 'p - Pending', 'n - None'
+        ],
+        SERVICE_FAILURE_CRITERIA: [
+            'o - OK', 'w - Warning', 'u - Unknown', 'c - Critical', 'p - Pending', 'n - None'
+        ],
+
+        // Required fields per object type (sync with nagios_model.py:REQUIRED_FIELDS)
+        // String: field is required; Array: at least one must be present (OR condition)
+        REQUIRED_FIELDS: {
+            'host': ['host_name'],
+            'hostgroup': ['hostgroup_name'],
+            'service': ['service_description', ['host_name', 'hostgroup_name']],
+            'servicegroup': ['servicegroup_name'],
+            'contact': ['contact_name'],
+            'contactgroup': ['contactgroup_name'],
+            'command': ['command_name', 'command_line'],
+            'timeperiod': ['timeperiod_name'],
+            'hostdependency': [['host_name', 'hostgroup_name'], ['dependent_host_name', 'dependent_hostgroup_name']],
+            'servicedependency': [
+                'service_description', ['host_name', 'hostgroup_name'],
+                'dependent_service_description', ['dependent_host_name', 'dependent_hostgroup_name']
+            ],
+            'hostescalation': [['host_name', 'hostgroup_name']],
+            'serviceescalation': ['service_description', ['host_name', 'hostgroup_name']]
+        },
 
         // Reference fields for dependency detection (sync with nagios_model.py:REFERENCE_FIELDS)
         // Used by app.js for outgoing/incoming reference tracking

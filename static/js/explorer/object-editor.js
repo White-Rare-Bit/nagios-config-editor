@@ -10,140 +10,14 @@
     // Inheritance cache: stableKey -> {chain, inherited, errors}
     if (!state.inheritanceCache) state.inheritanceCache = new Map();
 
-    // Notification options with display names
-    const HOST_NOTIFICATION_OPTIONS = [
-        'd - Down',
-        'u - Unreachable',
-        'r - Recovery',
-        'f - Flapping',
-        's - Scheduled Downtime',
-        'n - None'
-    ];
-
-    const SERVICE_NOTIFICATION_OPTIONS = [
-        'w - Warning',
-        'u - Unknown',
-        'c - Critical',
-        'r - Recovery',
-        'f - Flapping',
-        's - Scheduled Downtime',
-        'n - None'
-    ];
-
-    // Dependency failure criteria options
-    const HOST_FAILURE_CRITERIA = [
-        'o - Up (OK)',
-        'd - Down',
-        'u - Unreachable',
-        'p - Pending',
-        'n - None'
-    ];
-
-    const SERVICE_FAILURE_CRITERIA = [
-        'o - OK',
-        'w - Warning',
-        'u - Unknown',
-        'c - Critical',
-        'p - Pending',
-        'n - None'
-    ];
-
-    // Attributes that are notification options
-    const NOTIFICATION_OPTION_ATTRS = [
-        'notification_options',
-        'host_notification_options',
-        'service_notification_options',
-        'execution_failure_criteria',
-        'notification_failure_criteria',
-        'escalation_options',
-        'stalking_options'
-    ];
-
-    // Map attribute names to the object type they reference
-    // Must stay in sync with REFERENCE_FIELDS in nagios_model.py
-    const ATTR_REFERENCE_MAP = {
-        // Host references
-        // Note: host_name deliberately excluded - it can contain wildcards, comma-lists, or not-yet-created hosts
-        'parents': 'host',
-        'dependent_host_name': 'host',
-        'master_host_name': 'host',
-
-        // Hostgroup references
-        'hostgroup_name': 'hostgroup',
-        'hostgroups': 'hostgroup',
-        'hostgroup_members': 'hostgroup',
-        'dependent_hostgroup_name': 'hostgroup',
-        'master_hostgroup_name': 'hostgroup',
-
-        // Servicegroup references
-        'servicegroups': 'servicegroup',
-        'servicegroup_name': 'servicegroup',
-        'servicegroup_members': 'servicegroup',
-
-        // Contact references
-        'contacts': 'contact',
-        'escalation_contacts': 'contact',
-
-        // Contactgroup references
-        'contact_groups': 'contactgroup',
-        'contactgroups': 'contactgroup',
-        'contactgroup_members': 'contactgroup',
-        'escalation_contact_groups': 'contactgroup',
-
-        // Command references
-        // N-05: Synced with nagios_model.py REFERENCE_FIELDS
-        'check_command': 'command',
-        'event_handler': 'command',
-        'notification_commands': 'command',
-        'host_notification_commands': 'command',
-        'service_notification_commands': 'command',
-        'obsess_over_host_command': 'command',
-        'obsess_over_service_command': 'command',
-        'ocsp_command': 'command',  // N-05: Added - Object Check Service Processor command
-        'ochp_command': 'command',  // N-05: Added - Object Check Host Processor command
-        'global_host_event_handler': 'command',
-        'global_service_event_handler': 'command',
-
-        // Timeperiod references
-        'check_period': 'timeperiod',
-        'notification_period': 'timeperiod',
-        'host_notification_period': 'timeperiod',
-        'service_notification_period': 'timeperiod',
-        'dependency_period': 'timeperiod',
-        'escalation_period': 'timeperiod',
-        'exclude': 'timeperiod',
-
-        // Template references (type depends on context)
-        'use': null,
-
-        // Group members (type depends on context)
-        'members': null
-    };
-
-    // C-05: Required fields per object type for validation
-    // Each entry is a list of field requirements:
-    // - String: field is required
-    // - Array of strings: at least one of these fields must be present (OR condition)
-    // Must stay in sync with REQUIRED_FIELDS in nagios_model.py
-    const REQUIRED_FIELDS = {
-        'host': ['host_name'],
-        'hostgroup': ['hostgroup_name'],
-        'service': ['service_description', ['host_name', 'hostgroup_name']],
-        'servicegroup': ['servicegroup_name'],
-        'contact': ['contact_name'],
-        'contactgroup': ['contactgroup_name'],
-        'command': ['command_name', 'command_line'],
-        'timeperiod': ['timeperiod_name'],
-        'hostdependency': [['host_name', 'hostgroup_name'], ['dependent_host_name', 'dependent_hostgroup_name']],
-        'servicedependency': [
-            'service_description',
-            ['host_name', 'hostgroup_name'],
-            'dependent_service_description',
-            ['dependent_host_name', 'dependent_hostgroup_name']
-        ],
-        'hostescalation': [['host_name', 'hostgroup_name']],
-        'serviceescalation': ['service_description', ['host_name', 'hostgroup_name']]
-    };
+    // Use constants from Explorer.constants (centralized in constants.js)
+    const HOST_NOTIFICATION_OPTIONS = constants.HOST_NOTIFICATION_OPTIONS;
+    const SERVICE_NOTIFICATION_OPTIONS = constants.SERVICE_NOTIFICATION_OPTIONS;
+    const HOST_FAILURE_CRITERIA = constants.HOST_FAILURE_CRITERIA;
+    const SERVICE_FAILURE_CRITERIA = constants.SERVICE_FAILURE_CRITERIA;
+    const NOTIFICATION_OPTION_ATTRS = constants.NOTIFICATION_OPTION_ATTRS;
+    const ATTR_REFERENCE_MAP = constants.ATTR_REFERENCE_MAP;
+    const REQUIRED_FIELDS = constants.REQUIRED_FIELDS;
 
     /**
      * C-05: Validate object has required fields.
