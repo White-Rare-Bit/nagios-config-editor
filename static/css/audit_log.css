@@ -650,6 +650,10 @@
     border-bottom: none;
 }
 
+.audit-detail-item.audit-detail-muted {
+    color: var(--nbe-dark-text-muted);
+}
+
 .audit-detail-item .object-info {
     font-weight: 500;
     color: var(--nbe-dark-text-primary);

@@ -16,6 +16,28 @@ let auditPageSize = 25;
 // =============================================================================
 
 /**
+ * Build error display HTML for container
+ * @param {string} message - Error message to display
+ * @returns {string} HTML string for error display
+ */
+function buildErrorDisplay(message) {
+    return `<div class="empty-state empty-state--dark empty-state--flex">Error: ${escapeHtml(message)}</div>`;
+}
+
+/**
+ * Parse date from archive filename
+ * @param {string} filename - Archive filename (e.g., audit_log_20240205_153045.json)
+ * @returns {Date|null} Parsed date or null if format doesn't match
+ */
+function parseArchiveDate(filename) {
+    const match = filename.match(/audit_log_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})\.json/);
+    if (match) {
+        return new Date(match[1], match[2] - 1, match[3], match[4], match[5], match[6]);
+    }
+    return null;
+}
+
+/**
  * Search within an entry array for matching fields
  * @param {Array} arr - Array to search (e.g., entry.object_edits)
  * @param {string} query - Lowercase search query
@@ -119,12 +141,12 @@ async function refreshAuditLog() {
     const result = await ApiClient.get('/api/audit-log', { silent: true });
 
     if (!result.success) {
-        container.innerHTML = `<div class="empty-state empty-state--dark empty-state--flex">Error: ${escapeHtml(result.error)}</div>`;
+        container.innerHTML = buildErrorDisplay(result.error);
         return;
     }
 
     if (result.data.error) {
-        container.innerHTML = `<div class="empty-state empty-state--dark empty-state--flex">Error: ${escapeHtml(result.data.error)}</div>`;
+        container.innerHTML = buildErrorDisplay(result.data.error);
         return;
     }
 
@@ -296,7 +318,7 @@ function renderActionEntry(entry, time) {
             title = 'Git Repository Initialized';
             details = `<div class="audit-detail-item">First commit: ${escapeHtml(entry.commit_hash)}</div>`;
             if (entry.message) {
-                details += `<div class="audit-detail-item" style="color: #666;">${escapeHtml(entry.message)}</div>`;
+                details += `<div class="audit-detail-item" class="audit-detail-muted">${escapeHtml(entry.message)}</div>`;
             }
             break;
         case 'git_restored':
@@ -305,7 +327,7 @@ function renderActionEntry(entry, time) {
             title = 'Restored to Git Commit';
             details = `<div class="audit-detail-item">Commit: ${escapeHtml(entry.commit_hash)}</div>`;
             if (entry.commit_message) {
-                details += `<div class="audit-detail-item" style="color: #666;">${escapeHtml(entry.commit_message)}</div>`;
+                details += `<div class="audit-detail-item" class="audit-detail-muted">${escapeHtml(entry.commit_message)}</div>`;
             }
             if (entry.deleted_files_count > 0) {
                 details += `<div class="audit-detail-item" style="color: var(--color-delete);">${entry.deleted_files_count} file${entry.deleted_files_count !== 1 ? 's' : ''} removed</div>`;
@@ -328,7 +350,7 @@ function renderActionEntry(entry, time) {
                 details = `<div class="audit-detail-item">Commit: ${escapeHtml(entry.commit_hash)}</div>`;
             }
             if (entry.message) {
-                details += `<div class="audit-detail-item" style="color: #666;">${escapeHtml(entry.message)}</div>`;
+                details += `<div class="audit-detail-item" class="audit-detail-muted">${escapeHtml(entry.message)}</div>`;
             }
             break;
         case 'git_discarded':
@@ -614,11 +636,9 @@ async function loadArchivesList() {
     `;
 
     (result.data.archives || []).forEach(archive => {
-        // Parse date from filename: audit_log_YYYYMMDD_HHMMSS.json
-        const match = archive.filename.match(/audit_log_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})\.json/);
+        const date = parseArchiveDate(archive.filename);
         let displayDate = archive.filename;
-        if (match) {
-            const date = new Date(match[1], match[2] - 1, match[3], match[4], match[5], match[6]);
+        if (date) {
             displayDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         }
 
@@ -653,12 +673,12 @@ async function loadArchive(filename) {
     const result = await ApiClient.get(`/api/audit-log/archives/${encodeURIComponent(filename)}`, { silent: true });
 
     if (!result.success) {
-        container.innerHTML = `<div class="empty-state empty-state--dark empty-state--flex">Error: ${escapeHtml(result.error)}</div>`;
+        container.innerHTML = buildErrorDisplay(result.error);
         return;
     }
 
     if (result.data.error) {
-        container.innerHTML = `<div class="empty-state empty-state--dark empty-state--flex">Error: ${escapeHtml(result.data.error)}</div>`;
+        container.innerHTML = buildErrorDisplay(result.data.error);
         return;
     }
 
@@ -676,9 +696,8 @@ function updateArchiveSelection() {
     if (currentArchive === 'current') {
         titleEl.textContent = 'Change History';
     } else {
-        const match = currentArchive.match(/audit_log_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})\.json/);
-        if (match) {
-            const date = new Date(match[1], match[2] - 1, match[3], match[4], match[5], match[6]);
+        const date = parseArchiveDate(currentArchive);
+        if (date) {
             titleEl.textContent = 'Archive: ' + date.toLocaleDateString();
         } else {
             titleEl.textContent = 'Archive: ' + currentArchive;
