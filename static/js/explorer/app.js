@@ -652,24 +652,8 @@ function computeStagedIssues() {
         return;
     }
 
-    // Reference fields that point to other objects
-    const referenceFields = {
-        'use': null, // template - same type as object
-        'host_name': 'host',
-        'hostgroup_name': 'hostgroup',
-        'hostgroups': 'hostgroup',
-        'parents': 'host',
-        'contacts': 'contact',
-        'contact_groups': 'contactgroup',
-        'check_command': 'command',
-        'event_handler': 'command',
-        'notification_commands': 'command',
-        'check_period': 'timeperiod',
-        'notification_period': 'timeperiod',
-        'members': null, // depends on group type
-        'dependent_host_name': 'host',
-        'dependent_hostgroup_name': 'hostgroup',
-    };
+    // Use centralized reference fields from constants
+    const referenceFields = constants.referenceFields;
 
     // Check all objects for references to renamed objects
     state.allObjects.forEach(o => {
@@ -2364,70 +2348,8 @@ function loadCenterReferences(obj) {
     // Use effective name considering pending edits
     const name = getEffectiveName(obj);
 
-    // Reference fields for dependency detection
-    // Must stay in sync with:
-    //   - nagios_model.py:REFERENCE_FIELDS (authoritative)
-    //   - static/js/explorer/object-editor.js:ATTR_REFERENCE_MAP
-    //   - static/js/explorer/main.js:referenceAttrs
-    // (4 locations total - update all when adding new reference fields)
-    const referenceFields = {
-        // Host references
-        'host_name': 'host',
-        'parents': 'host',
-        'dependent_host_name': 'host',
-        'master_host_name': 'host',
-
-        // Hostgroup references
-        'hostgroup_name': 'hostgroup',
-        'hostgroups': 'hostgroup',
-        'hostgroup_members': 'hostgroup',
-        'dependent_hostgroup_name': 'hostgroup',
-        'master_hostgroup_name': 'hostgroup',
-
-        // Servicegroup references
-        'servicegroups': 'servicegroup',
-        'servicegroup_name': 'servicegroup',
-        'servicegroup_members': 'servicegroup',
-
-        // Contact references
-        'contacts': 'contact',
-        'escalation_contacts': 'contact',
-
-        // Contactgroup references
-        'contact_groups': 'contactgroup',
-        'contactgroups': 'contactgroup',
-        'contactgroup_members': 'contactgroup',
-        'escalation_contact_groups': 'contactgroup',
-
-        // Command references
-        // N-05: Synced with nagios_model.py REFERENCE_FIELDS
-        'check_command': 'command',
-        'event_handler': 'command',
-        'notification_commands': 'command',
-        'host_notification_commands': 'command',
-        'service_notification_commands': 'command',
-        'obsess_over_host_command': 'command',
-        'obsess_over_service_command': 'command',
-        'ocsp_command': 'command',  // N-05: Added - Object Check Service Processor command
-        'ochp_command': 'command',  // N-05: Added - Object Check Host Processor command
-        'global_host_event_handler': 'command',
-        'global_service_event_handler': 'command',
-
-        // Timeperiod references
-        'check_period': 'timeperiod',
-        'notification_period': 'timeperiod',
-        'host_notification_period': 'timeperiod',
-        'service_notification_period': 'timeperiod',
-        'dependency_period': 'timeperiod',
-        'escalation_period': 'timeperiod',
-        'exclude': 'timeperiod',
-
-        // Template references (type depends on context)
-        'use': null,
-
-        // Group members (type depends on context)
-        'members': null
-    };
+    // Use centralized reference fields from constants (sync with nagios_model.py:REFERENCE_FIELDS)
+    const referenceFields = constants.referenceFields;
 
     // Helper to strip +/! prefixes from Nagios additive/exclusion syntax
     const stripRefPrefix = v => v.trim().replace(/^[+!]+/, '').trim();
@@ -3138,45 +3060,8 @@ function buildParentHostsTreeData(hostObj, visited = new Set()) {
 function gatherReferencesData(obj) {
     const name = getEffectiveName(obj);
 
-    // Reference fields for dependency detection (sync with nagios_model.py:REFERENCE_FIELDS)
-    const referenceFields = {
-        'host_name': 'host',
-        'parents': 'host',
-        'dependent_host_name': 'host',
-        'master_host_name': 'host',
-        'hostgroup_name': 'hostgroup',
-        'hostgroups': 'hostgroup',
-        'hostgroup_members': 'hostgroup',
-        'dependent_hostgroup_name': 'hostgroup',
-        'master_hostgroup_name': 'hostgroup',
-        'servicegroups': 'servicegroup',
-        'servicegroup_name': 'servicegroup',
-        'servicegroup_members': 'servicegroup',
-        'contacts': 'contact',
-        'escalation_contacts': 'contact',
-        'contact_groups': 'contactgroup',
-        'contactgroups': 'contactgroup',
-        'contactgroup_members': 'contactgroup',
-        'escalation_contact_groups': 'contactgroup',
-        'check_command': 'command',
-        'event_handler': 'command',
-        'notification_commands': 'command',
-        'host_notification_commands': 'command',
-        'service_notification_commands': 'command',
-        'obsess_over_host_command': 'command',
-        'obsess_over_service_command': 'command',
-        'global_host_event_handler': 'command',
-        'global_service_event_handler': 'command',
-        'check_period': 'timeperiod',
-        'notification_period': 'timeperiod',
-        'host_notification_period': 'timeperiod',
-        'service_notification_period': 'timeperiod',
-        'dependency_period': 'timeperiod',
-        'escalation_period': 'timeperiod',
-        'exclude': 'timeperiod',
-        'use': null,
-        'members': null
-    };
+    // Use centralized reference fields from constants
+    const referenceFields = constants.referenceFields;
 
     const stripRefPrefix = v => v.trim().replace(/^[+!]+/, '').trim();
     const commandFields = ['check_command', 'event_handler', 'notification_commands',

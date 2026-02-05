@@ -79,7 +79,59 @@
             'notification_options', 'host_notification_options', 'service_notification_options'
         ],
 
-        // Attribute reference map
+        // Reference fields for dependency detection (sync with nagios_model.py:REFERENCE_FIELDS)
+        // Used by app.js for outgoing/incoming reference tracking
+        referenceFields: {
+            // Host references
+            'host_name': 'host',
+            'parents': 'host',
+            'dependent_host_name': 'host',
+            'master_host_name': 'host',
+            // Hostgroup references
+            'hostgroup_name': 'hostgroup',
+            'hostgroups': 'hostgroup',
+            'hostgroup_members': 'hostgroup',
+            'dependent_hostgroup_name': 'hostgroup',
+            'master_hostgroup_name': 'hostgroup',
+            // Servicegroup references
+            'servicegroups': 'servicegroup',
+            'servicegroup_name': 'servicegroup',
+            'servicegroup_members': 'servicegroup',
+            // Contact references
+            'contacts': 'contact',
+            'escalation_contacts': 'contact',
+            // Contactgroup references
+            'contact_groups': 'contactgroup',
+            'contactgroups': 'contactgroup',
+            'contactgroup_members': 'contactgroup',
+            'escalation_contact_groups': 'contactgroup',
+            // Command references (N-05: Synced with nagios_model.py)
+            'check_command': 'command',
+            'event_handler': 'command',
+            'notification_commands': 'command',
+            'host_notification_commands': 'command',
+            'service_notification_commands': 'command',
+            'obsess_over_host_command': 'command',
+            'obsess_over_service_command': 'command',
+            'ocsp_command': 'command',
+            'ochp_command': 'command',
+            'global_host_event_handler': 'command',
+            'global_service_event_handler': 'command',
+            // Timeperiod references
+            'check_period': 'timeperiod',
+            'notification_period': 'timeperiod',
+            'host_notification_period': 'timeperiod',
+            'service_notification_period': 'timeperiod',
+            'dependency_period': 'timeperiod',
+            'escalation_period': 'timeperiod',
+            'exclude': 'timeperiod',
+            // Template references (type depends on context)
+            'use': null,
+            // Group members (type depends on context)
+            'members': null
+        },
+
+        // Attribute reference map (for autocomplete hints)
         ATTR_REFERENCE_MAP: {
             'hostgroup_name': 'hostgroup',
             'hostgroups': 'hostgroup',
