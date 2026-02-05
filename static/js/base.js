@@ -2,45 +2,16 @@
  * Nagios Bulk Editor - Base JavaScript
  *
  * Shared functionality across all pages:
- * - Session/identity management
  * - Lock status handling
- * - Toast notifications
- * - Confirmation dialogs
  * - Global commit dialog
  * - Git operations UI
+ *
+ * Dependencies (loaded before this file):
+ * - base-state.js: baseState object
+ * - session-manager.js: getSessionId, getUserIdentity, etc.
+ * - ui-notifications.js: showToast, showConfirmDialog
+ * - api-client.js: ApiClient
  */
-
-// =============================================================================
-// Consolidated State
-// =============================================================================
-
-const baseState = {
-    // Lock status
-    isEditingLocked: false,
-    lockOwner: null,
-    lockUserName: null,
-    lockUserEmail: null,
-    lockPollInterval: null,
-
-    // Commit dialog
-    commitContextLines: 3,
-    diffData: null,
-    referenceData: null,
-    gitResultNeedsReload: false,
-
-    // Git-only commit
-    gitOnlyChanges: null,
-    gitOnlyContextLines: 3,
-
-    // Reference analysis
-    currentRefData: null,
-
-    // C-10: Pending commit message for retry after failed git commit
-    pendingCommitMessage: null
-};
-
-// Global lock state alias - used by explorer/data-loading.js for lock status checks
-window.isEditingLocked = false;
 
 // =============================================================================
 // Debug Logger - sends debug logs to backend for file logging
