@@ -126,6 +126,30 @@ console.log('dependencies.js loaded');
         return edgeColors[fieldName] || '#999';
     }
 
+    // Edge traversal utilities - consolidated patterns for filtering edges by node set
+    /**
+     * Get all edges where both source and target are in the given node set
+     * @param {Set} nodeIdSet - Set of node IDs to filter by
+     * @returns {Array} Filtered edges
+     */
+    function getEdgesInSubgraph(nodeIdSet) {
+        return allEdges.filter(e => nodeIdSet.has(e.from) && nodeIdSet.has(e.to));
+    }
+
+    /**
+     * Get all node IDs connected via the given edges
+     * @param {Array} edges - Array of edges
+     * @returns {Set} Set of node IDs
+     */
+    function getConnectedNodeIdsFromEdges(edges) {
+        const nodeIds = new Set();
+        for (const edge of edges) {
+            nodeIds.add(edge.from);
+            nodeIds.add(edge.to);
+        }
+        return nodeIds;
+    }
+
     document.addEventListener('DOMContentLoaded', async () => {
         await loadAllData();
 
@@ -1817,16 +1841,10 @@ console.log('dependencies.js loaded');
         }
 
         // Filter edges based on node membership AND edge category filters
-        const displayEdges = allEdges.filter(e =>
-            typeFilteredNodeIds.has(e.from) && typeFilteredNodeIds.has(e.to) && isEdgeEnabled(e)
-        );
+        const displayEdges = getEdgesInSubgraph(typeFilteredNodeIds).filter(isEdgeEnabled);
 
         // Build set of nodes that have at least one visible edge
-        const connectedNodeIds = new Set();
-        for (const edge of displayEdges) {
-            connectedNodeIds.add(edge.from);
-            connectedNodeIds.add(edge.to);
-        }
+        const connectedNodeIds = getConnectedNodeIdsFromEdges(displayEdges);
 
         // Filter nodes: show if they have visible connections OR are focus/selected
         // This provides focused views while keeping the user's primary node visible
@@ -2491,15 +2509,8 @@ console.log('dependencies.js loaded');
         hideContextMenu();
 
         // Find all nodes that have at least one connection in the current graph
-        const connectedNodes = new Set();
-        const currentEdges = allEdges.filter(e =>
-            addedNodeIds.has(e.from) && addedNodeIds.has(e.to)
-        );
-
-        for (const edge of currentEdges) {
-            connectedNodes.add(edge.from);
-            connectedNodes.add(edge.to);
-        }
+        const currentEdges = getEdgesInSubgraph(addedNodeIds);
+        const connectedNodes = getConnectedNodeIdsFromEdges(currentEdges);
 
         // Remove nodes that have no connections
         const initialCount = addedNodeIds.size;
