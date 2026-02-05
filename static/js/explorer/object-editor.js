@@ -5,7 +5,6 @@
 
     const state = Explorer.state;
     const constants = Explorer.constants;
-    const typeLabels = constants.typeLabels;
     const identityFields = constants.identityFields;
 
     // Inheritance cache: stableKey -> {chain, inherited, errors}
@@ -972,7 +971,7 @@
         const unusedAttrs = availableAttrs.filter(a => !existingAttrs.includes(a));
 
         // Store for autocomplete
-        window.addAttrNameSuggestions = unusedAttrs;
+        state.addAttrNameSuggestions = unusedAttrs;
 
         Explorer.showDialog('Add Attribute', `
             <label>Name</label>
@@ -1036,7 +1035,7 @@
         if (!input || !container) return;
 
         const value = input.value.toLowerCase();
-        const suggestions = window.addAttrNameSuggestions || [];
+        const suggestions = state.addAttrNameSuggestions || [];
         const filtered = value ? suggestions.filter(s => s.toLowerCase().includes(value)) : suggestions;
 
         // Remove existing dropdown
