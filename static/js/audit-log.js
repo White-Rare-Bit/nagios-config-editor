@@ -11,6 +11,37 @@ let searchQuery = '';
 let auditCurrentPage = 1;
 let auditPageSize = 25;
 
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+/**
+ * Search within an entry array for matching fields
+ * @param {Array} arr - Array to search (e.g., entry.object_edits)
+ * @param {string} query - Lowercase search query
+ * @param {Array<string>} fields - Field names to search
+ * @returns {boolean} True if any item matches
+ */
+function searchInEntryArray(arr, query, fields) {
+    if (!arr) return false;
+    return arr.some(item =>
+        fields.some(field => item[field] && item[field].toLowerCase().includes(query))
+    );
+}
+
+/**
+ * Generate badge HTML for a count
+ * @param {number} count - Item count
+ * @param {string} cssClass - Badge CSS class
+ * @param {string} singular - Singular label (e.g., "object created")
+ * @param {string} plural - Plural label (e.g., "objects created")
+ * @returns {string} Badge HTML or empty string if count is 0
+ */
+function generateBadge(count, cssClass, singular, plural) {
+    if (count === 0) return '';
+    return `<span class="audit-badge ${cssClass}">${count} ${count === 1 ? singular : plural}</span>`;
+}
+
 // Convert path to display path with config folder prefix
 function toDisplayPath(path) {
     if (!path) return '';
@@ -151,53 +182,13 @@ function renderEntries() {
             // Search in action type
             if (entry.action && entry.action.toLowerCase().includes(query)) return true;
 
-            // Search in object edits
-            if (entry.object_edits) {
-                for (const edit of entry.object_edits) {
-                    if (edit.object_name && edit.object_name.toLowerCase().includes(query)) return true;
-                    if (edit.object_type && edit.object_type.toLowerCase().includes(query)) return true;
-                }
-            }
-
-            // Search in object moves
-            if (entry.object_moves) {
-                for (const move of entry.object_moves) {
-                    if (move.object_name && move.object_name.toLowerCase().includes(query)) return true;
-                    if (move.from_file && move.from_file.toLowerCase().includes(query)) return true;
-                    if (move.to_file && move.to_file.toLowerCase().includes(query)) return true;
-                }
-            }
-
-            // Search in object creations
-            if (entry.object_creations) {
-                for (const creation of entry.object_creations) {
-                    if (creation.object_name && creation.object_name.toLowerCase().includes(query)) return true;
-                    if (creation.file && creation.file.toLowerCase().includes(query)) return true;
-                }
-            }
-
-            // Search in object deletions
-            if (entry.object_deletions) {
-                for (const deletion of entry.object_deletions) {
-                    if (deletion.object_name && deletion.object_name.toLowerCase().includes(query)) return true;
-                    if (deletion.file && deletion.file.toLowerCase().includes(query)) return true;
-                }
-            }
-
-            // Search in file moves
-            if (entry.file_moves) {
-                for (const move of entry.file_moves) {
-                    if (move.from && move.from.toLowerCase().includes(query)) return true;
-                    if (move.to && move.to.toLowerCase().includes(query)) return true;
-                }
-            }
-
-            // Search in file deletions
-            if (entry.file_deletions) {
-                for (const deletion of entry.file_deletions) {
-                    if (deletion.path && deletion.path.toLowerCase().includes(query)) return true;
-                }
-            }
+            // Search in entry arrays using helper
+            if (searchInEntryArray(entry.object_edits, query, ['object_name', 'object_type'])) return true;
+            if (searchInEntryArray(entry.object_moves, query, ['object_name', 'from_file', 'to_file'])) return true;
+            if (searchInEntryArray(entry.object_creations, query, ['object_name', 'file'])) return true;
+            if (searchInEntryArray(entry.object_deletions, query, ['object_name', 'file'])) return true;
+            if (searchInEntryArray(entry.file_moves, query, ['from', 'to'])) return true;
+            if (searchInEntryArray(entry.file_deletions, query, ['path'])) return true;
 
             // Search in git-related fields
             if (entry.commit_hash && entry.commit_hash.toLowerCase().includes(query)) return true;
@@ -459,15 +450,16 @@ function renderAuditEntry(entry) {
     const deleteCount = objDeleteCount + fileDeleteCount;
     const errorCount = (entry.errors || []).length;
 
-    let badges = '';
-    if (createCount > 0) badges += `<span class="audit-badge creates">${createCount} object${createCount !== 1 ? 's' : ''} created</span>`;
-    if (attrCount > 0) badges += `<span class="audit-badge attrs">${attrCount} attribute change${attrCount !== 1 ? 's' : ''}</span>`;
-    if (moveCount > 0) badges += `<span class="audit-badge moves">${moveCount} object move${moveCount !== 1 ? 's' : ''}</span>`;
-    if (folderCount > 0) badges += `<span class="audit-badge folders">${folderCount} folder${folderCount !== 1 ? 's' : ''} created</span>`;
-    if (relocCount > 0) badges += `<span class="audit-badge relocs">${relocCount} file${relocCount !== 1 ? 's' : ''} relocated</span>`;
-    if (folderRelocCount > 0) badges += `<span class="audit-badge folder-relocs">${folderRelocCount} folder${folderRelocCount !== 1 ? 's' : ''} relocated</span>`;
-    if (deleteCount > 0) badges += `<span class="audit-badge deletes">${deleteCount} deletion${deleteCount !== 1 ? 's' : ''}</span>`;
-    if (errorCount > 0) badges += `<span class="audit-badge errors">${errorCount} error${errorCount !== 1 ? 's' : ''}</span>`;
+    const badges = [
+        generateBadge(createCount, 'creates', 'object created', 'objects created'),
+        generateBadge(attrCount, 'attrs', 'attribute change', 'attribute changes'),
+        generateBadge(moveCount, 'moves', 'object move', 'object moves'),
+        generateBadge(folderCount, 'folders', 'folder created', 'folders created'),
+        generateBadge(relocCount, 'relocs', 'file relocated', 'files relocated'),
+        generateBadge(folderRelocCount, 'folder-relocs', 'folder relocated', 'folders relocated'),
+        generateBadge(deleteCount, 'deletes', 'deletion', 'deletions'),
+        generateBadge(errorCount, 'errors', 'error', 'errors')
+    ].join('');
 
     let detailsHtml = '<div class="audit-entry-details">';
 
