@@ -12,13 +12,13 @@ async function loadObjects() {
     const params = new URLSearchParams();
     if (type) params.set('type', type);
 
-    try {
-        const response = await fetch('/api/objects?' + params.toString());
-        allObjects = await response.json();
+    const result = await ApiClient.get('/api/objects?' + params.toString());
+    if (result.success) {
+        allObjects = result.data;
         displayObjects(allObjects);
-    } catch (error) {
+    } else {
         document.getElementById('objectsList').innerHTML =
-            `<div class="text-danger p-3">Error loading objects: ${error.message}</div>`;
+            `<div class="text-danger p-3">Error loading objects: ${result.error}</div>`;
     }
 }
 
@@ -104,27 +104,18 @@ async function moveSelected() {
     });
     if (!confirmed) return;
 
-    try {
-        const response = await fetch('/api/move-objects', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                objects: indices,
-                target_file: targetFile
-            })
-        });
-        const result = await response.json();
+    const result = await ApiClient.post('/api/move-objects', {
+        objects: indices,
+        target_file: targetFile
+    });
 
-        if (result.error) {
-            showToast('Error: ' + result.error, 'error');
-            return;
-        }
-
-        showToast(`Moved ${result.moved} objects. Backup: ${result.backup}`, 'success');
-        location.reload();
-    } catch (error) {
-        showToast('Error: ' + error.message, 'error');
+    if (!result.success) {
+        showToast(result.error || 'Move failed', 'error');
+        return;
     }
+
+    showToast(`Moved ${result.data.moved} objects. Backup: ${result.data.backup}`, 'success');
+    location.reload();
 }
 
 async function cloneSelected() {
@@ -155,28 +146,19 @@ async function cloneSelected() {
     });
     if (!confirmed) return;
 
-    try {
-        const response = await fetch('/api/clone-objects', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                objects: indices,
-                prefix: prefix,
-                suffix: suffix
-            })
-        });
-        const result = await response.json();
+    const result = await ApiClient.post('/api/clone-objects', {
+        objects: indices,
+        prefix: prefix,
+        suffix: suffix
+    });
 
-        if (result.error) {
-            showToast('Error: ' + result.error, 'error');
-            return;
-        }
-
-        showToast(`Cloned ${result.cloned} objects. Backup: ${result.backup}`, 'success');
-        location.reload();
-    } catch (error) {
-        showToast('Error: ' + error.message, 'error');
+    if (!result.success) {
+        showToast(result.error || 'Clone failed', 'error');
+        return;
     }
+
+    showToast(`Cloned ${result.data.cloned} objects. Backup: ${result.data.backup}`, 'success');
+    location.reload();
 }
 
 async function deleteSelected() {
@@ -196,27 +178,18 @@ async function deleteSelected() {
     });
     if (!confirmed) return;
 
-    try {
-        const response = await fetch('/api/delete-objects', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                objects: indices,
-                update_references: cleanRefs
-            })
-        });
-        const result = await response.json();
+    const result = await ApiClient.post('/api/delete-objects', {
+        objects: indices,
+        update_references: cleanRefs
+    });
 
-        if (result.error) {
-            showToast('Error: ' + result.error, 'error');
-            return;
-        }
-
-        showToast(`Deleted ${result.deleted} objects. References cleaned: ${result.references_cleaned}`, 'success');
-        location.reload();
-    } catch (error) {
-        showToast('Error: ' + error.message, 'error');
+    if (!result.success) {
+        showToast(result.error || 'Delete failed', 'error');
+        return;
     }
+
+    showToast(`Deleted ${result.data.deleted} objects. References cleaned: ${result.data.references_cleaned}`, 'success');
+    location.reload();
 }
 
 // Event delegation for data-action attributes
