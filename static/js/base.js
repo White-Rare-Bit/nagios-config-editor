@@ -1174,7 +1174,8 @@ function processStagedMove(moveEntry, allObjects, editsMap, fileChanges, configP
         globalIndex: globalIndex,
         object: obj,
         originalAttrs,
-        lineNumber: obj.line_number
+        lineNumber: obj.line_number,
+        targetFile: move.targetFile
     });
 
     const targetFile = ensureFileChange(fileChanges, move.targetFile, configPath);
@@ -1184,7 +1185,8 @@ function processStagedMove(moveEntry, allObjects, editsMap, fileChanges, configP
         finalAttrs,
         objectType: obj.object_type,
         isNew: false,
-        insertPosition: move.insertPosition
+        insertPosition: move.insertPosition,
+        originalFile: move.originalFile
     });
 }
 
@@ -1268,15 +1270,31 @@ function buildGlobalFileBasedChanges(pendingEdits, stagedMoves, stagedCreations,
     const fileChanges = new Map();
     const editsMap = buildEditsMap(pendingEdits);
 
-    // Process moves (adds to both source and target files) - iterate over dict entries
-    for (const [moveKey, move] of Object.entries(stagedMoves)) {
+    // Helper to iterate over moves - handles both array and object formats
+    const iterateMoves = (moves, callback) => {
+        if (Array.isArray(moves)) {
+            // Array format: [{stableKey: "...", ...}, ...]
+            for (const move of moves) {
+                const key = move.stableKey || move.key || '';
+                callback(key, move);
+            }
+        } else {
+            // Object format: {"stableKey": {...}, ...}
+            for (const [key, move] of Object.entries(moves)) {
+                callback(key, move);
+            }
+        }
+    };
+
+    // Process moves (adds to both source and target files)
+    iterateMoves(stagedMoves, (moveKey, move) => {
         processStagedMove([moveKey, move], allObjects, editsMap, fileChanges, configPath);
-    }
+    });
 
     // Build set of moved indices to skip them in edit processing
     // Need to convert stable keys to global indices for proper matching
     const movedIndices = new Set();
-    for (const [moveKey, move] of Object.entries(stagedMoves)) {
+    iterateMoves(stagedMoves, (moveKey, move) => {
         // Try to find the object using stable key or global_index
         const obj = findObjectByKey(moveKey, allObjects);
         if (obj) {
@@ -1284,12 +1302,26 @@ function buildGlobalFileBasedChanges(pendingEdits, stagedMoves, stagedCreations,
         }
         // Also add the key itself for matching against key-based edits
         movedIndices.add(moveKey);
-    }
+    });
 
-    // Process edits (skip objects that are being moved) - iterate over dict entries
-    for (const [editKey, edit] of Object.entries(pendingEdits)) {
+    // Helper to iterate over edits - handles both array and object formats
+    const iterateEdits = (edits, callback) => {
+        if (Array.isArray(edits)) {
+            for (const edit of edits) {
+                const key = edit.globalIndex !== undefined ? edit.globalIndex : (edit.stableKey || edit.key || '');
+                callback(key, edit);
+            }
+        } else {
+            for (const [key, edit] of Object.entries(edits)) {
+                callback(key, edit);
+            }
+        }
+    };
+
+    // Process edits (skip objects that are being moved)
+    iterateEdits(pendingEdits, (editKey, edit) => {
         processPendingEdit([editKey, edit], allObjects, movedIndices, fileChanges, configPath);
-    }
+    });
 
     // Process creations
     for (const creation of stagedCreations) {
@@ -1485,13 +1517,23 @@ function renderGlobalFileDiff(filePath, fileData, allObjects, configPath) {
         const insertPos = addition.insertPosition !== undefined ? addition.insertPosition : Infinity;
         unifiedItems.push({
             type: 'addition',
-            sortKey: insertPos + 0.5,
+            sortKey: insertPos,
             addIdx: addIdx,
             addition: addition
         });
     });
 
-    unifiedItems.sort((a, b) => a.sortKey - b.sortKey);
+    // Sort with additions before existing objects at the same position
+    // This ensures items with small insertPosition values (0, 0.25, 0.5)
+    // appear before existing objects at line 1, 2, etc.
+    unifiedItems.sort((a, b) => {
+        const diff = a.sortKey - b.sortKey;
+        if (Math.abs(diff) > 0.001) return diff;
+        // When sortKeys are equal, additions come before existing objects
+        if (a.type === 'addition' && b.type !== 'addition') return -1;
+        if (a.type !== 'addition' && b.type === 'addition') return 1;
+        return 0;
+    });
 
     const maxContext = baseState.commitContextLines;
     const interestingPositions = new Set();
@@ -1531,7 +1573,13 @@ function renderGlobalFileDiff(filePath, fileData, allObjects, configPath) {
             if (addition.isNew) {
                 diffHtml += renderGlobalObject(addition.objectType, addition.finalAttrs, '+');
             } else {
-                diffHtml += `<div class="diff-line add">+ [Moved from ${escapeHtml(addition.originalFile || 'another file')}]</div>`;
+                // Check if this is a same-file reorder vs cross-file move
+                const isSameFile = addition.originalFile === filePath;
+                if (isSameFile) {
+                    diffHtml += `<div class="diff-line add">+ [Reordered within file]</div>`;
+                } else {
+                    diffHtml += `<div class="diff-line add">+ [Moved from ${escapeHtml(addition.originalFile || 'another file')}]</div>`;
+                }
                 diffHtml += renderGlobalObject(addition.objectType, addition.finalAttrs, '+');
             }
         } else if (item.isRemoval) {
@@ -1539,7 +1587,13 @@ function renderGlobalFileDiff(filePath, fileData, allObjects, configPath) {
             if (removal && removal.isDeletion) {
                 diffHtml += renderGlobalObject(item.object.object_type, removal.originalAttrs, '-');
             } else if (removal) {
-                diffHtml += `<div class="diff-line remove">- [Moving to another file]</div>`;
+                // Check if this is a same-file reorder vs cross-file move
+                const isSameFile = removal.targetFile === filePath;
+                if (isSameFile) {
+                    diffHtml += `<div class="diff-line remove">- [Reordered within file]</div>`;
+                } else {
+                    diffHtml += `<div class="diff-line remove">- [Moving to ${escapeHtml(removal.targetFile || 'another file')}]</div>`;
+                }
                 diffHtml += renderGlobalObject(item.object.object_type, removal.originalAttrs, '-');
             }
         } else if (item.isModification) {

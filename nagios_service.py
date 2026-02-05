@@ -658,19 +658,16 @@ class NagiosService:
         """Normalize staged move entries into a consistent format.
 
         Args:
-            staged_moves: Raw staged move entries from staging data
+            staged_moves: Array of move entries, pre-sorted by insertPosition
 
         Returns:
             List of normalized move dicts with target_file, source_file,
             obj_type, attrs, and insert_position keys
         """
         moves = []
-        # Frontend sends dict via Object.fromEntries
-        for key, entry in staged_moves.items():
+        # Frontend sends array sorted by insertPosition
+        for entry in staged_moves:
             move_data = _ensure_dict_format(entry)
-            if 'globalIndex' not in move_data and 'key' not in move_data:
-                move_data['globalIndex'] = key
-                move_data['key'] = key
             target_file = move_data.get('targetFile')
             obj_info = move_data.get('object', {})
             source_file = obj_info.get('source_file')
@@ -760,17 +757,20 @@ class NagiosService:
             self._log_apply_result('apply_object_moves', count, errors)
             return OperationResult(True, data={'count': count, 'errors': errors, 'details': details})
 
+        # Frontend sends moves pre-sorted by insertPosition. Track last inserted line per target
+        # file so subsequent moves to same file go after the previous insertion.
+        last_insert_line = {}  # target_file -> line number of last inserted object
+
         # Process each move individually using surgical operations
         for move in moves:
-            # Line numbers shift as objects are deleted from source files. Without reload between moves,
-            # stale line numbers corrupt target files.
+            # Reload parser to get current line numbers after previous moves
             self._parser = NagiosConfigParser(self._config_path)
             self._parser.parse_all()
             p = self.parser
 
-            # Attribute matching required for same-file reordering: line numbers shift as objects are moved
-            # within a file, making line-number lookup unreliable. Full attribute comparison ensures correct
-            # object identification regardless of intermediate line number changes.
+            # Attribute matching required for same-file reordering: line numbers shift as objects
+            # are moved, making line-number lookup unreliable. Full attribute comparison ensures
+            # correct object identification regardless of intermediate line number changes.
             source_real = os.path.realpath(move['source_file'])
             target_obj = None
             for obj in p.objects:
@@ -784,14 +784,21 @@ class NagiosService:
                 errors.append(f"Could not find object to move: {move['obj_type']} in {move['source_file']}")
                 continue
 
-            # Resolve virtual insertPosition to actual line number
-            # For same-file moves, exclude the object being moved from position calculation
-            insert_line = self._resolve_insert_position(
-                move['target_file'],
-                move['insert_position'],
-                p.objects,
-                exclude_obj=target_obj
-            )
+            target_file_real = os.path.realpath(move['target_file'])
+
+            # Determine insert position: use tracked position if we've already inserted to this file,
+            # otherwise resolve from insertPosition (for first move to a file)
+            if target_file_real in last_insert_line:
+                # Insert after the last object we put in this file
+                insert_line = last_insert_line[target_file_real]
+            else:
+                # First move to this file - resolve insertPosition to actual line
+                insert_line = self._resolve_insert_position(
+                    move['target_file'],
+                    move['insert_position'],
+                    p.objects,
+                    exclude_obj=target_obj
+                )
 
             # Perform the move using surgical operation
             result = move_object_between_files(
@@ -813,6 +820,17 @@ class NagiosService:
                     'from_file': move['source_file'],
                     'to_file': move['target_file']
                 })
+
+                # Track where we inserted so subsequent moves to same file go after this one.
+                # Reload parser and find the moved object to get its new line number.
+                self._parser = NagiosConfigParser(self._config_path)
+                self._parser.parse_all()
+                for obj in self._parser.objects:
+                    if (os.path.realpath(obj.source_file) == target_file_real and
+                        obj.object_type == move['obj_type'] and
+                        obj.attributes == move['attrs']):
+                        last_insert_line[target_file_real] = obj.line_number
+                        break
             else:
                 errors.append(f"Move failed: {result.error}")
 
@@ -839,12 +857,9 @@ class NagiosService:
             return OperationResult(True, data=result)
 
         p = self.parser
-        # Frontend sends dict via Object.fromEntries
-        for key, entry in pending_edits.items():
+        # Frontend sends array with globalIndex included in each entry
+        for entry in pending_edits:
             edit_data = _ensure_dict_format(entry)
-            if 'globalIndex' not in edit_data and 'key' not in edit_data:
-                edit_data['globalIndex'] = key
-                edit_data['key'] = key
 
             edited_attrs = edit_data.get('edited', {})
             if not edited_attrs:
