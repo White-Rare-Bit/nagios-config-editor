@@ -2571,6 +2571,9 @@ console.log('dependencies.js loaded');
             focusNodeId,
             selectedNodeId
         }),
+        // Edge traversal utilities
+        getEdgesInSubgraph,
+        getConnectedNodeIdsFromEdges,
         // Formatting utilities
         formatEdgeLabel,
         getEdgeColor,
