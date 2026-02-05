@@ -1,6 +1,10 @@
 /**
  * Centralized API client for Nagios Bulk Editor.
  * Provides standardized fetch wrappers with error handling, staging headers, and toast notifications.
+ *
+ * Dependencies (from base.js, loaded before this file):
+ * - showToast(message, type) - Display toast notifications
+ * - getStagingHeaders() - Get session/staging headers including Content-Type
  */
 const ApiClient = (function() {
     'use strict';
@@ -16,7 +20,6 @@ const ApiClient = (function() {
         try {
             result = await response.json();
         } catch (e) {
-            // Server returned non-JSON response (e.g., HTML error page)
             const errorMsg = `Server returned invalid response (${response.status})`;
             if (!options.silent) {
                 showToast(`${options.errorPrefix || 'Error'}: ${errorMsg}`, 'error');
@@ -42,7 +45,7 @@ const ApiClient = (function() {
     function handleError(e, options = {}) {
         if (e.name === 'AbortError') {
             if (!options.silent) {
-                showToast(`${options.errorPrefix || 'Request'} timed out`, 'error');
+                showToast(`${options.errorPrefix || 'Error'}: Request timed out`, 'error');
             }
             return { success: false, error: 'Request timed out', aborted: true };
         }
@@ -53,9 +56,10 @@ const ApiClient = (function() {
     }
 
     /**
-     * Make a JSON POST request with staging headers.
+     * Internal request function that handles common logic.
      * @param {string} url - API endpoint
-     * @param {object} data - Request body (will be JSON-serialized)
+     * @param {string} method - HTTP method (GET, POST, DELETE)
+     * @param {object|undefined} data - Request body for POST (will be JSON-serialized)
      * @param {object} [options] - Additional options
      * @param {boolean} [options.silent] - Don't show error toasts
      * @param {string} [options.errorPrefix] - Prefix for error messages
@@ -63,7 +67,7 @@ const ApiClient = (function() {
      * @param {number} [options.timeout] - Timeout in ms (creates AbortController internally)
      * @returns {Promise<{success: boolean, data?: object, error?: string, aborted?: boolean}>}
      */
-    async function post(url, data = {}, options = {}) {
+    async function request(url, method, data, options = {}) {
         let controller, timeoutId;
         if (options.timeout && !options.signal) {
             controller = new AbortController();
@@ -72,84 +76,52 @@ const ApiClient = (function() {
         }
 
         try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...getStagingHeaders()
-                },
-                body: JSON.stringify(data),
+            const fetchOptions = {
+                method,
+                headers: getStagingHeaders(),
                 signal: options.signal
-            });
-            if (timeoutId) clearTimeout(timeoutId);
+            };
+            if (data !== undefined) {
+                fetchOptions.body = JSON.stringify(data);
+            }
+            const response = await fetch(url, fetchOptions);
             return handleResponse(response, options);
         } catch (e) {
-            if (timeoutId) clearTimeout(timeoutId);
             return handleError(e, options);
+        } finally {
+            if (timeoutId) clearTimeout(timeoutId);
         }
+    }
+
+    /**
+     * Make a JSON POST request with staging headers.
+     * @param {string} url - API endpoint
+     * @param {object} data - Request body (will be JSON-serialized)
+     * @param {object} [options] - Additional options
+     * @returns {Promise<{success: boolean, data?: object, error?: string, aborted?: boolean}>}
+     */
+    function post(url, data = {}, options = {}) {
+        return request(url, 'POST', data, options);
     }
 
     /**
      * Make a JSON GET request with staging headers.
      * @param {string} url - API endpoint
      * @param {object} [options] - Additional options
-     * @param {boolean} [options.silent] - Don't show error toasts
-     * @param {string} [options.errorPrefix] - Prefix for error messages
-     * @param {AbortSignal} [options.signal] - AbortController signal for cancellation
-     * @param {number} [options.timeout] - Timeout in ms (creates AbortController internally)
      * @returns {Promise<{success: boolean, data?: object, error?: string, aborted?: boolean}>}
      */
-    async function get(url, options = {}) {
-        let controller, timeoutId;
-        if (options.timeout && !options.signal) {
-            controller = new AbortController();
-            timeoutId = setTimeout(() => controller.abort(), options.timeout);
-            options = { ...options, signal: controller.signal };
-        }
-
-        try {
-            const response = await fetch(url, {
-                headers: getStagingHeaders(),
-                signal: options.signal
-            });
-            if (timeoutId) clearTimeout(timeoutId);
-            return handleResponse(response, options);
-        } catch (e) {
-            if (timeoutId) clearTimeout(timeoutId);
-            return handleError(e, options);
-        }
+    function get(url, options = {}) {
+        return request(url, 'GET', undefined, options);
     }
 
     /**
      * Make a DELETE request with staging headers.
      * @param {string} url - API endpoint
      * @param {object} [options] - Additional options
-     * @param {boolean} [options.silent] - Don't show error toasts
-     * @param {string} [options.errorPrefix] - Prefix for error messages
-     * @param {AbortSignal} [options.signal] - AbortController signal for cancellation
-     * @param {number} [options.timeout] - Timeout in ms (creates AbortController internally)
      * @returns {Promise<{success: boolean, data?: object, error?: string, aborted?: boolean}>}
      */
-    async function del(url, options = {}) {
-        let controller, timeoutId;
-        if (options.timeout && !options.signal) {
-            controller = new AbortController();
-            timeoutId = setTimeout(() => controller.abort(), options.timeout);
-            options = { ...options, signal: controller.signal };
-        }
-
-        try {
-            const response = await fetch(url, {
-                method: 'DELETE',
-                headers: getStagingHeaders(),
-                signal: options.signal
-            });
-            if (timeoutId) clearTimeout(timeoutId);
-            return handleResponse(response, options);
-        } catch (e) {
-            if (timeoutId) clearTimeout(timeoutId);
-            return handleError(e, options);
-        }
+    function del(url, options = {}) {
+        return request(url, 'DELETE', undefined, options);
     }
 
     return { post, get, del };
