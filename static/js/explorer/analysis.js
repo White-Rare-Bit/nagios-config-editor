@@ -13,6 +13,21 @@
     // Strip +/! prefixes from Nagios additive/exclusion syntax
     const stripPrefix = s => s.trim().replace(/^[+!]+/, '').trim();
 
+    // A-02: Filter out suggestions for objects marked for deletion (used 11+ times)
+    function filterActiveSuggestions(suggestions) {
+        return suggestions.filter(s => s.object && !Explorer.isObjectMarkedForDeletion(s.object.global_index));
+    }
+
+    // A-03: Build file dropdown options HTML (used 3+ times in dialogs)
+    function buildFileOptionsHtml(defaultFile = '') {
+        const configFiles = [...new Set(state.allObjects.map(o => o.source_file))].sort();
+        return configFiles.map(f => {
+            const fileName = f.split('/').pop();
+            const selected = f === defaultFile ? 'selected' : '';
+            return `<option value="${Explorer.escapeHtml(f)}" ${selected}>${Explorer.escapeHtml(fileName)}</option>`;
+        }).join('');
+    }
+
 async function analyzeAll() {
     try {
         await loadAllSuggestions(true);
@@ -991,20 +1006,12 @@ function getConfidenceClass(confidence) {
 function showCreateTemplateDialog(idx) {
     const suggestion = state.allTemplateSuggestions[idx];
 
-    // Get unique config files from state.allObjects
+    // A-03: Use shared file options builder
     const configFiles = [...new Set(state.allObjects.map(o => o.source_file))].sort();
-
-    // Try to find a good default file (templates file, or file where objects are)
     const objectFiles = [...new Set(suggestion.objects.map(o => o.source_file))];
-    let defaultFile = configFiles.find(f => f.toLowerCase().includes('template')) ||
-                      objectFiles[0] ||
-                      configFiles[0] || '';
-
-    const fileOptions = configFiles.map(f => {
-        const fileName = f.split('/').pop();
-        const selected = f === defaultFile ? 'selected' : '';
-        return `<option value="${Explorer.escapeHtml(f)}" ${selected}>${Explorer.escapeHtml(fileName)}</option>`;
-    }).join('');
+    const defaultFile = configFiles.find(f => f.toLowerCase().includes('template')) ||
+                        objectFiles[0] || configFiles[0] || '';
+    const fileOptions = buildFileOptionsHtml(defaultFile);
 
     // Format attributes for display
     const attrsHtml = Object.entries(suggestion.attributes)
@@ -1127,19 +1134,12 @@ function showCreateTemplateDialog(idx) {
 function showCreateGroupDialog(idx) {
     const suggestion = state.allGroupingSuggestions[idx];
 
-    // Get unique config files from state.allObjects
+    // A-03: Use shared file options builder
     const configFiles = [...new Set(state.allObjects.map(o => o.source_file))].sort();
-
-    // Try to find a good default file (existing hostgroups file, or first file with hosts)
-    let defaultFile = configFiles.find(f => f.toLowerCase().includes('hostgroup')) ||
-                      configFiles.find(f => state.allObjects.some(o => o.source_file === f && o.object_type === 'host')) ||
-                      configFiles[0] || '';
-
-    const fileOptions = configFiles.map(f => {
-        const fileName = f.split('/').pop();
-        const selected = f === defaultFile ? 'selected' : '';
-        return `<option value="${Explorer.escapeHtml(f)}" ${selected}>${Explorer.escapeHtml(fileName)}</option>`;
-    }).join('');
+    const defaultFile = configFiles.find(f => f.toLowerCase().includes('hostgroup')) ||
+                        configFiles.find(f => state.allObjects.some(o => o.source_file === f && o.object_type === 'host')) ||
+                        configFiles[0] || '';
+    const fileOptions = buildFileOptionsHtml(defaultFile);
 
     Explorer.showDialog('Create Hostgroup', `
         <label>Group Name</label>
@@ -1287,7 +1287,7 @@ function findUnusedTemplates() {
             });
         }
     }
-    return suggestions.filter(s => s.object && !Explorer.isObjectMarkedForDeletion(s.object.global_index));
+    return filterActiveSuggestions(suggestions);
 }
 
 function findDuplicateObjects() {
@@ -1341,7 +1341,7 @@ function findDuplicateObjects() {
             });
         }
     }
-    return suggestions.filter(s => s.object && !Explorer.isObjectMarkedForDeletion(s.object.global_index));
+    return filterActiveSuggestions(suggestions);
 }
 
 function findEmptyGroups() {
@@ -1387,7 +1387,7 @@ function findEmptyGroups() {
             }
         }
     }
-    return suggestions.filter(s => s.object && !Explorer.isObjectMarkedForDeletion(s.object.global_index));
+    return filterActiveSuggestions(suggestions);
 }
 
 function findOrphanObjects(existingSuggestions) {
@@ -1416,7 +1416,7 @@ function findOrphanObjects(existingSuggestions) {
             });
         }
     }
-    return suggestions.filter(s => s.object && !Explorer.isObjectMarkedForDeletion(s.object.global_index));
+    return filterActiveSuggestions(suggestions);
 }
 
 function findLongHostLists() {
@@ -1437,7 +1437,7 @@ function findLongHostLists() {
             });
         }
     }
-    return suggestions.filter(s => s.object && !Explorer.isObjectMarkedForDeletion(s.object.global_index));
+    return filterActiveSuggestions(suggestions);
 }
 
 function findUnusedCommands() {
@@ -1469,7 +1469,7 @@ function findUnusedCommands() {
             });
         }
     }
-    return suggestions.filter(s => s.object && !Explorer.isObjectMarkedForDeletion(s.object.global_index));
+    return filterActiveSuggestions(suggestions);
 }
 
 function findUnusedContacts() {
@@ -1505,7 +1505,7 @@ function findUnusedContacts() {
             });
         }
     }
-    return suggestions.filter(s => s.object && !Explorer.isObjectMarkedForDeletion(s.object.global_index));
+    return filterActiveSuggestions(suggestions);
 }
 
 function findUnusedContactgroups() {
@@ -1546,7 +1546,7 @@ function findUnusedContactgroups() {
             });
         }
     }
-    return suggestions.filter(s => s.object && !Explorer.isObjectMarkedForDeletion(s.object.global_index));
+    return filterActiveSuggestions(suggestions);
 }
 
 function findUnusedTimeperiods() {
@@ -1579,7 +1579,7 @@ function findUnusedTimeperiods() {
             });
         }
     }
-    return suggestions.filter(s => s.object && !Explorer.isObjectMarkedForDeletion(s.object.global_index));
+    return filterActiveSuggestions(suggestions);
 }
 
 function findHealthCheckWarnings() {
@@ -1603,7 +1603,7 @@ function findHealthCheckWarnings() {
             });
         }
     }
-    return suggestions.filter(s => s.object && !Explorer.isObjectMarkedForDeletion(s.object.global_index));
+    return filterActiveSuggestions(suggestions);
 }
 
 // =============================================================================
@@ -2284,7 +2284,7 @@ function analyzeNotificationGaps() {
     const severityOrder = { warning: 0, info: 1 };
     suggestions.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
 
-    return suggestions.filter(s => s.object && !Explorer.isObjectMarkedForDeletion(s.object.global_index));
+    return filterActiveSuggestions(suggestions);
 }
 
 function renderNotificationSuggestions() {
@@ -2840,14 +2840,8 @@ function openCreateObjectForIssue(objectType, objectName, targetFile, issue) {
 }
 
 function showCreateObjectForIssueDialog(objectType, attributes, suggestedFile, isTemplate) {
-    // Get list of existing files
-    const existingFiles = [...new Set(state.allObjects.map(o => o.source_file))].sort();
-
-    const fileOptions = existingFiles.map(f => {
-        const selected = f === suggestedFile ? 'selected' : '';
-        const fileName = f.split('/').pop();
-        return `<option value="${Explorer.escapeHtml(f)}" ${selected}>${Explorer.escapeHtml(fileName)}</option>`;
-    }).join('');
+    // A-03: Use shared file options builder
+    const fileOptions = buildFileOptionsHtml(suggestedFile);
 
     const typeLabel = isTemplate ? `${objectType} template` : objectType;
     const nameField = Object.keys(attributes)[0];
