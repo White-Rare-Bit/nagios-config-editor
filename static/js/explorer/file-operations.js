@@ -24,6 +24,21 @@
         return path ? path.split('/').pop() || fallback : fallback;
     }
 
+    /**
+     * Update UI after staging changes. Consolidates the common pattern:
+     * saveStagedChanges → updateCommitUI → renderTargetPane → buildTree
+     * @param {Object} options - Optional configuration
+     * @param {boolean} options.save - Call saveStagedChanges (default: true)
+     * @param {boolean} options.tree - Call buildTree (default: true)
+     */
+    function afterStagingChange(options = {}) {
+        const { save = true, tree = true } = options;
+        if (save) Explorer.saveStagedChanges();
+        Explorer.updateCommitUI();
+        renderTargetPane();
+        if (tree) Explorer.buildTree();
+    }
+
     // ============================================================================
     // Navigation
     // ============================================================================
@@ -866,10 +881,7 @@
                 }
             });
             state.expandedFiles.add(targetFile);
-            Explorer.saveStagedChanges();
-            Explorer.updateCommitUI();
-            renderTargetPane();
-            Explorer.buildTree();
+            afterStagingChange();
             if (moved > 0) {
                 showToast(`Moved ${moved} new object(s) to ${extractFileName(targetFile)}`, 'info');
             }
@@ -905,10 +917,7 @@
                             object: objData,
                             insertPosition: position
                         });
-                        Explorer.saveStagedChanges();
-                        Explorer.updateCommitUI();
-                        renderTargetPane();
-                        Explorer.buildTree();
+                        afterStagingChange();
                     } else {
                         state.stagedMoves.set(objKey, {
                             originalFile: obj.source_file,
@@ -917,10 +926,7 @@
                             insertPosition: position
                         });
                         state.expandedFiles.add(targetFile);
-                        Explorer.saveStagedChanges();
-                        Explorer.updateCommitUI();
-                        renderTargetPane();
-                        Explorer.buildTree();
+                        afterStagingChange();
                         showToast(`Staged object to move. Use Commit to apply.`, 'info');
                     }
                 } else {
@@ -931,10 +937,7 @@
                 if (move) {
                     move.targetFile = targetFile;
                     move.insertPosition = position;
-                    Explorer.saveStagedChanges();
-                    Explorer.updateCommitUI();
-                    renderTargetPane();
-                    Explorer.buildTree();
+                    afterStagingChange();
                     if (sourceFile !== targetFile) {
                         showToast(`Moved pending object to ${extractFileName(targetFile)}`, 'info');
                     }
@@ -945,10 +948,7 @@
                     const wasInDifferentFile = creation.targetFile !== targetFile;
                     creation.targetFile = targetFile;
                     creation.insertPosition = position;
-                    Explorer.saveStagedChanges();
-                    Explorer.updateCommitUI();
-                    renderTargetPane();
-                    Explorer.buildTree();
+                    afterStagingChange();
                     if (wasInDifferentFile) {
                         showToast(`Moved new object to ${extractFileName(targetFile)}`, 'info');
                     }
@@ -1048,10 +1048,7 @@
                 }
             });
             state.expandedFiles.add(targetFile);
-            Explorer.saveStagedChanges();
-            Explorer.updateCommitUI();
-            renderTargetPane();
-            Explorer.buildTree();
+            afterStagingChange();
             if (moved > 0 && alreadyInFile > 0) {
                 showToast(`Moved ${moved} new object(s) to ${extractFileName(targetFile)}. ${alreadyInFile} already in file.`, 'info');
             } else if (moved > 0) {
@@ -1139,10 +1136,7 @@
 
     function removePendingMove(idx) {
         state.stagedMoves.delete(idx);
-        Explorer.saveStagedChanges();
-        Explorer.updateCommitUI();
-        renderTargetPane();
-        Explorer.buildTree();
+        afterStagingChange();
     }
 
     function undoObjectMove(idx) {
@@ -1167,9 +1161,7 @@
             }
         }
         state.newFiles.delete(filePath);
-        Explorer.saveStagedChanges();
-        Explorer.updateCommitUI();
-        renderTargetPane();
+        afterStagingChange({ tree: false });
         showToast('New file removed', 'info');
     }
 
@@ -1186,10 +1178,7 @@
             state.newObjectStagedIndex--;
         }
         state.selectedStagedIndices.clear();
-        Explorer.saveStagedChanges();
-        Explorer.updateCommitUI();
-        renderTargetPane();
-        Explorer.buildTree();
+        afterStagingChange();
     }
 
     function getFilesInFolder(folderPath) {
@@ -1254,8 +1243,7 @@
 
         await Explorer.loadObjects();
         state.expandedFolders.add(targetFolder);
-        Explorer.updateCommitUI();
-        renderTargetPane();
+        afterStagingChange({ save: false, tree: false });
         const displayName = extractFileName(targetFolder);
         showToast(`Moved file to ${displayName}/`, 'success');
     }
@@ -1270,8 +1258,7 @@
 
         await Explorer.loadObjects();
         state.expandedFolders.add(targetFolder);
-        Explorer.updateCommitUI();
-        renderTargetPane();
+        afterStagingChange({ save: false, tree: false });
         const displayName = extractFileName(targetFolder);
         showToast(`Moved folder to ${displayName}/`, 'success');
     }
@@ -1338,9 +1325,7 @@
                 }
 
                 state.expandedFolders.add(effectiveTargetFolder);
-                Explorer.saveStagedChanges();
-                Explorer.updateCommitUI();
-                renderTargetPane();
+                afterStagingChange({ tree: false });
                 showToast(`Moved new folder to ${extractFileName(effectiveTargetFolder)}/`, 'info');
                 return;
             }
@@ -1374,9 +1359,7 @@
                 }
 
                 state.expandedFolders.add(effectiveTargetFolder);
-                Explorer.saveStagedChanges();
-                Explorer.updateCommitUI();
-                renderTargetPane();
+                afterStagingChange({ tree: false });
                 const displayName = extractFileName(effectiveTargetFolder);
                 showToast(`Moved new file to ${displayName}/`, 'info');
                 return;
@@ -1411,10 +1394,7 @@
                 }
 
                 state.expandedFolders.add(effectiveTargetFolder);
-                Explorer.saveStagedChanges();
-                Explorer.updateCommitUI();
-                renderTargetPane();
-                Explorer.buildTree();
+                afterStagingChange();
                 const displayName = extractFileName(effectiveTargetFolder);
                 showToast(`Staged file move to ${displayName}/. Commit to apply.`, 'info');
                 return;
@@ -1474,10 +1454,7 @@
 
                     state.expandedFiles.add(targetFile);
                     state.expandedFolders.add(targetFolder);
-                    Explorer.saveStagedChanges();
-                    Explorer.updateCommitUI();
-                    renderTargetPane();
-                    Explorer.buildTree();
+                    afterStagingChange();
                     if (moved > 0) {
                         showToast(`Moved ${moved} new object(s) to ${extractFileName(targetFile)}`, 'info');
                     }
@@ -1608,9 +1585,7 @@
         if (state.newFiles.has(filePath)) {
             state.newFiles.delete(filePath);
             state.stagedCreations = state.stagedCreations.filter(c => c.targetFile !== filePath);
-            Explorer.saveStagedChanges();
-            Explorer.updateCommitUI();
-            renderTargetPane();
+            afterStagingChange({ tree: false });
             showToast('Removed new file', 'info');
             return;
         }
@@ -1655,8 +1630,7 @@
         }
 
         await Explorer.loadStagedChanges(false);
-        Explorer.updateCommitUI();
-        renderTargetPane();
+        afterStagingChange({ save: false, tree: false });
         showToast(`Staged deletion of "${extractFileName(filePath)}"`, 'info');
     }
 
@@ -1724,8 +1698,7 @@
         }
 
         await Explorer.loadStagedChanges(false);
-        Explorer.updateCommitUI();
-        renderTargetPane();
+        afterStagingChange({ save: false, tree: false });
         showToast(`Staged deletion of "${extractFileName(folderPath)}/"`, 'info');
     }
 
@@ -1738,9 +1711,7 @@
 
         Explorer.saveStagedChanges();
         await Explorer.loadStagedChanges(false);
-
-        Explorer.updateCommitUI();
-        renderTargetPane();
+        afterStagingChange({ save: false, tree: false });
         showToast(`Unstaged deletion of "${extractFileName(filePath)}"`, 'info');
     }
 
@@ -1753,10 +1724,7 @@
 
         Explorer.saveStagedChanges();
         await Explorer.loadStagedChanges(false);
-
-        Explorer.updateCommitUI();
-        renderTargetPane();
-        Explorer.buildTree();
+        afterStagingChange({ save: false });
         showToast(`Unstaged move of "${extractFileName(sourcePath)}"`, 'info');
     }
 
@@ -1769,9 +1737,7 @@
 
         Explorer.saveStagedChanges();
         await Explorer.loadStagedChanges(false);
-
-        Explorer.updateCommitUI();
-        renderTargetPane();
+        afterStagingChange({ save: false, tree: false });
         showToast(`Unstaged deletion of "${extractFileName(folderPath)}/"`, 'info');
     }
 
@@ -1784,9 +1750,7 @@
 
         Explorer.saveStagedChanges();
         await Explorer.loadStagedChanges(false);
-
-        Explorer.updateCommitUI();
-        renderTargetPane();
+        afterStagingChange({ save: false, tree: false });
         showToast(`Unstaged folder "${extractFileName(folderPath)}/"`, 'info');
     }
 
@@ -1838,8 +1802,7 @@
 
             state.expandedFolders.add(fullPath);
             document.getElementById('newItemName').value = '';
-            Explorer.updateCommitUI();
-            renderTargetPane();
+            afterStagingChange({ save: false, tree: false });
             showToast(`Staged folder "${name}/". Use Commit to apply.`, 'info');
             return;
         }
@@ -1860,9 +1823,7 @@
         state.newFiles.add(fullPath);
         state.expandedFiles.add(fullPath);
         document.getElementById('newItemName').value = '';
-        Explorer.saveStagedChanges();
-        Explorer.updateCommitUI();
-        renderTargetPane();
+        afterStagingChange({ tree: false });
         showToast(`Staged new file "${name}". Commit to create.`, 'info');
     }
 
@@ -1979,8 +1940,7 @@
 
             state.expandedFolders.add(fullPath);
             row.remove();
-            Explorer.updateCommitUI();
-            renderTargetPane();
+            afterStagingChange({ save: false, tree: false });
             showToast(`Staged folder "${name}/". Use Commit to apply.`, 'info');
         } else {
             name = name.replace(/\.cfg$/i, '');
@@ -2002,9 +1962,7 @@
             state.newFiles.add(fullPath);
             state.expandedFiles.add(fullPath);
             row.remove();
-            Explorer.saveStagedChanges();
-            Explorer.updateCommitUI();
-            renderTargetPane();
+            afterStagingChange({ tree: false });
             showToast(`Staged new file "${name}". Commit to create.`, 'info');
         }
     }
