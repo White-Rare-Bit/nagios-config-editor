@@ -14,6 +14,7 @@ def register_blueprints(app):
     from .analysis import bp as analysis_bp
     from .staging import bp as staging_bp
     from .templates import bp as templates_bp
+    from .debug import debug_bp
 
     app.register_blueprint(pages_bp)
     app.register_blueprint(validation_bp)
@@ -26,3 +27,4 @@ def register_blueprints(app):
     app.register_blueprint(analysis_bp)
     app.register_blueprint(staging_bp)
     app.register_blueprint(templates_bp)
+    app.register_blueprint(debug_bp)
