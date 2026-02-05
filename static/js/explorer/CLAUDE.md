@@ -18,6 +18,7 @@ Modular architecture for Nagios config explorer: shared namespace, three-pane UI
 | `drag-drop.js` | Unified drag-drop handler (objects and files), drop zones, visual feedback | Drag-drop behavior |
 | `analysis.js` | Suggestions tab: template detection, validation errors. Utilities: `stripPrefix()`, `filterActiveSuggestions()` | Analysis features |
 | `analysis-cleanup.js` | Cleanup analysis: unused templates/commands/contacts, duplicates, orphans, empty groups | Cleanup suggestions |
+| `analysis-issues.js` | Validation issues: grouped errors, batch create missing objects, issue resolution | Validation errors |
 | `badge-issues.js` | Issue badge rendering and counts for tree nodes | Issue indicators |
 | `orphan-detection.js` | Orphan object analysis and cache building | Orphan detection |
 | `relations-loader.js` | Reference and inheritance loading for center pane | Object relationships |
