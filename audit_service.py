@@ -14,46 +14,42 @@ from datetime import datetime
 _audit_lock = multiprocessing.Lock()
 
 
-AUDIT_LOG_DIR = None
-AUDIT_LOG_FILE = None
 AUDIT_LOG_MAX_ENTRIES = 1000  # Rotate after this many entries
+
+# Default audit log directory - set once at module load to project root
+# This ensures consistent paths regardless of which module calls first
+_DEFAULT_AUDIT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
 
 
 def get_audit_log_dir(config_dir: str = None):
     """Get the path to the audit log directory, creating it if needed.
 
-    D-08: Clarified default location behavior.
-
     Args:
-        config_dir: Configuration directory path. If None, uses the directory
-            containing this module (audit_service.py), NOT the current working directory.
+        config_dir: Configuration directory path. If None, uses the project root
+            (directory containing audit_service.py) to ensure consistent paths.
 
     Returns:
-        Path to audit log directory (config_dir/logs/).
+        Path to audit log directory (config_dir/logs/ or project_root/logs/).
     """
-    global AUDIT_LOG_DIR
-    if AUDIT_LOG_DIR is None:
-        if config_dir is None:
-            config_dir = os.path.dirname(os.path.abspath(__file__))
-        AUDIT_LOG_DIR = os.path.join(config_dir, 'logs')
-        os.makedirs(AUDIT_LOG_DIR, exist_ok=True)
-    return AUDIT_LOG_DIR
+    if config_dir is None:
+        log_dir = _DEFAULT_AUDIT_DIR
+    else:
+        log_dir = os.path.join(config_dir, 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    return log_dir
 
 
 def get_audit_log_path(config_dir: str = None):
     """Get the path to the current audit log file.
 
     Args:
-        config_dir: Configuration directory path. If None, uses the directory
-            containing this module (audit_service.py).
+        config_dir: Configuration directory path. If None, uses the project root
+            (directory containing audit_service.py) to ensure consistent paths.
 
     Returns:
         Path to audit log file.
     """
-    global AUDIT_LOG_FILE
-    if AUDIT_LOG_FILE is None:
-        AUDIT_LOG_FILE = os.path.join(get_audit_log_dir(config_dir), 'audit_log.json')
-    return AUDIT_LOG_FILE
+    return os.path.join(get_audit_log_dir(config_dir), 'audit_log.json')
 
 
 def rotate_audit_log(entries: list) -> list:

@@ -357,8 +357,8 @@ def api_frontend_log():
 @bp.route('/api/audit-log', methods=['GET'])
 def api_get_audit_log():
     """Get the audit log."""
-    config_dir = current_app.config.get('CONFIG_DIR', os.path.dirname(os.path.abspath(__file__)))
-    audit_path = get_audit_log_path(config_dir)
+    # Use None to get default project root path, ensuring consistency with write_audit_log()
+    audit_path = get_audit_log_path(None)
     if not os.path.exists(audit_path):
         return jsonify({'entries': []})
 
@@ -373,8 +373,8 @@ def api_get_audit_log():
 @bp.route('/api/audit-log', methods=['POST'])
 def api_save_audit_log():
     """Save an audit log entry."""
-    config_dir = current_app.config.get('CONFIG_DIR', os.path.dirname(os.path.abspath(__file__)))
-    audit_path = get_audit_log_path(config_dir)
+    # Use None to get default project root path, ensuring consistency with write_audit_log()
+    audit_path = get_audit_log_path(None)
 
     try:
         entries = []
@@ -399,8 +399,8 @@ def api_save_audit_log():
 @bp.route('/api/audit-log/clear', methods=['POST'])
 def api_clear_audit_log():
     """Clear the audit log."""
-    config_dir = current_app.config.get('CONFIG_DIR', os.path.dirname(os.path.abspath(__file__)))
-    audit_path = get_audit_log_path(config_dir)
+    # Use None to get default project root path, ensuring consistency with write_audit_log()
+    audit_path = get_audit_log_path(None)
 
     try:
         with open(audit_path, 'w') as f:
@@ -413,8 +413,8 @@ def api_clear_audit_log():
 @bp.route('/api/audit-log/archives', methods=['GET'])
 def api_list_audit_archives():
     """List all archived audit log files."""
-    config_dir = current_app.config.get('CONFIG_DIR', os.path.dirname(os.path.abspath(__file__)))
-    log_dir = get_audit_log_dir(config_dir)
+    # Use None to get default project root path, ensuring consistency with write_audit_log()
+    log_dir = get_audit_log_dir(None)
 
     archives = []
     try:
