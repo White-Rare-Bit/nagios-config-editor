@@ -287,9 +287,12 @@ def api_inheritance_chain(object_type, name):
         chain = [obj.to_dict()]
         uses = obj.attributes.get('use', '')
 
-        if uses and uses in templates and uses not in visited:
-            visited.add(uses)
-            chain.extend(get_chain(templates[uses], visited))
+        if uses:
+            template_names = [t.strip() for t in uses.split(',') if t.strip()]
+            for tmpl_name in template_names:
+                if tmpl_name in templates and tmpl_name not in visited:
+                    visited.add(tmpl_name)
+                    chain.extend(get_chain(templates[tmpl_name], visited))
 
         return chain
 
