@@ -92,11 +92,11 @@
         // Required fields per object type (sync with nagios_model.py:REQUIRED_FIELDS)
         // String: field is required; Array: at least one must be present (OR condition)
         REQUIRED_FIELDS: {
-            'host': ['host_name'],
+            'host': ['host_name', 'address', 'max_check_attempts', ['contacts', 'contact_groups']],
             'hostgroup': ['hostgroup_name'],
-            'service': ['service_description', ['host_name', 'hostgroup_name']],
+            'service': ['service_description', ['host_name', 'hostgroup_name'], 'check_command', 'max_check_attempts', ['contacts', 'contact_groups']],
             'servicegroup': ['servicegroup_name'],
-            'contact': ['contact_name'],
+            'contact': ['contact_name', ['host_notification_commands', 'notification_commands'], ['service_notification_commands', 'notification_commands'], ['host_notification_period', 'notification_period'], ['service_notification_period', 'notification_period']],
             'contactgroup': ['contactgroup_name'],
             'command': ['command_name', 'command_line'],
             'timeperiod': ['timeperiod_name'],

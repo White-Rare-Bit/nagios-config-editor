@@ -39,8 +39,10 @@ def _atomic_write(file_path: str, content: str) -> None:
     dir_name = os.path.dirname(os.path.abspath(file_path))
     fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix='.tmp')
     try:
-        with os.fdopen(fd, 'w') as f:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
             f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp_path, file_path)
     except:
         # Clean up temp file on failure
