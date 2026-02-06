@@ -17,7 +17,6 @@ All page modules use the IIFE pattern for scope isolation and extract configurat
 | `backups.js` | Backup list/restore/delete UI | Modifying backup page |
 | `bulk-rename.js` | Pattern-based bulk rename, preview | Modifying bulk rename page |
 | `dependencies.js` | Cytoscape graph visualization, edge categories, quick view presets. Utilities: `getEdgesInSubgraph()`, `getConnectedNodeIdsFromEdges()` | Modifying dependency graph page |
-| `find-replace.js` | Search, preview, bulk replacement. Constants: `MIN_SEARCH_CHARS`, `DEBOUNCE_MS`, `MAX_SUGGESTIONS` | Modifying find/replace page |
 | `git.js` | File list, diff viewer, commit/discard UI | Modifying git page |
 | `inheritance.js` | Inheritance tree visualization | Modifying inheritance page |
 | `reorganize.js` | File/folder restructuring UI. Helper: `performBulkOperation()` for move/clone/delete | Modifying reorganize page |

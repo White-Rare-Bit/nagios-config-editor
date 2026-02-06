@@ -25,14 +25,6 @@ def bulk_rename():
     return render_template('bulk_rename.html', object_types=types)
 
 
-@bp.route('/find-replace')
-def find_replace():
-    """Find and replace interface."""
-    p = get_service().parser
-    types = p.get_object_types()
-    return render_template('find_replace.html', object_types=types)
-
-
 @bp.route('/reorganize')
 def reorganize():
     """Reorganize objects interface."""

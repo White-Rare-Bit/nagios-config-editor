@@ -1,14 +1,12 @@
 """Bulk operations routes for Nagios configuration editing."""
 
 import os
-import re
 import copy
 from flask import Blueprint, request, jsonify
 from typing import List
 
 from .helpers import (
     get_service,
-    get_parser,
     get_parser_for_modification,
     get_backup_manager,
     get_op_logger,
@@ -140,117 +138,6 @@ def api_apply_rename():
         'success': True,
         'renamed': renamed_count,
         'references_updated': references_updated,
-        'backup': backup_path
-    })
-
-
-@bp.route('/api/preview-replace', methods=['POST'])
-def api_preview_replace():
-    """Preview find/replace operation."""
-    p = get_service().parser
-    data = request.get_json() or {}
-
-    find_text = data.get('find', '')
-    object_type = data.get('type')
-    field = data.get('field')
-    use_regex = data.get('regex', False)
-
-    if not find_text:
-        return jsonify({'matches': [], 'total': 0})
-
-    results = p.find_objects(find_text, object_type, field, use_regex)
-
-    matches = []
-    for obj in results:
-        # Find which fields match
-        matched_fields = []
-        for f, v in obj.attributes.items():
-            if field and f != field:
-                continue
-            if use_regex:
-                try:
-                    if re.search(find_text, v, re.IGNORECASE):
-                        matched_fields.append({'field': f, 'value': v})
-                except re.error:
-                    pass
-            else:
-                if find_text.lower() in v.lower():
-                    matched_fields.append({'field': f, 'value': v})
-
-        matches.append({
-            'object': obj.to_dict(),
-            'matched_fields': matched_fields
-        })
-
-    return jsonify({
-        'matches': matches,
-        'total': len(matches)
-    })
-
-
-@bp.route('/api/apply-replace', methods=['POST'])
-def api_apply_replace():
-    """Apply find/replace operation."""
-    op_log = get_op_logger()
-    bm = get_backup_manager()
-    data = request.get_json() or {}
-
-    find_text = data.get('find', '')
-    if op_log:
-        op_log.info('app', 'apply_replace', params={'type': data.get('type'), 'field': data.get('field')})
-    replace_text = data.get('replace', '')
-    object_type = data.get('type')
-    field = data.get('field')
-    use_regex = data.get('regex', False)
-
-    if not find_text:
-        return jsonify({'error': 'Find text required'}), 400
-
-    with get_parser_for_modification() as p:
-        # Create backup
-        backup_path = bm.create_backup("find_replace")
-
-        objects_modified = 0
-        fields_changed = 0
-
-        for obj in p.objects:
-            if object_type and obj.object_type != object_type:
-                continue
-
-            object_changed = False
-            for f in list(obj.attributes.keys()):
-                if field and f != field:
-                    continue
-
-                old_value = obj.attributes[f]
-
-                if use_regex:
-                    try:
-                        new_value = re.sub(find_text, replace_text, old_value)
-                    except re.error:
-                        continue
-                else:
-                    new_value = old_value.replace(find_text, replace_text)
-
-                if new_value != old_value:
-                    obj.attributes[f] = new_value
-                    fields_changed += 1
-                    object_changed = True
-
-            if object_changed:
-                objects_modified += 1
-
-        # Write changes
-        writer = NagiosConfigWriter()
-        writer.write_objects_to_original_files(p.objects)
-
-    # Reload config
-    get_service().reload()
-
-    return jsonify({
-        'success': True,
-        'objects_modified': objects_modified,
-        'fields_changed': fields_changed,
         'backup': backup_path
     })
 
