@@ -102,12 +102,6 @@ def settings():
     return render_template('settings.html', config=config)
 
 
-@bp.route('/health-check')
-def health_check():
-    """Config health check page."""
-    return render_template('health_check.html')
-
-
 @bp.route('/bulk-attributes')
 def bulk_attributes():
     """Bulk attribute editor page."""

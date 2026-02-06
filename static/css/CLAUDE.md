@@ -23,7 +23,6 @@ Design tokens, component styles, and page-specific CSS for the Nagios Bulk Edito
 | `find-replace.css`      | Find/replace page styling                                                                            | Styling search/replace UI                                        |
 | `smart-grouping.css`    | Smart grouping suggestions page                                                                      | Styling smart grouping UI                                        |
 | `validate.css`          | Validation page styling                                                                              | Styling validation output display                                |
-| `health-check.css`      | Health check page styling                                                                            | Styling health check results                                     |
 
 ## Dark Theme System
 

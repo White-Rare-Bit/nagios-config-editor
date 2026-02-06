@@ -19,7 +19,6 @@ base.html (master template - 2496 lines)
   ├─ smart_grouping.html (Smart grouping suggestions)
   ├─ inheritance.html (Template inheritance analysis)
   ├─ validate.html (Nagios -v validation)
-  ├─ health_check.html (Config health check)
   └─ objects.html (Simple object browser - deprecated)
 ```
 
@@ -242,7 +241,6 @@ buildBreadcrumb(filePath); // Returns HTML string
 | bulk_rename.html | bulk-rename.css | js/bulk-rename.js | Bulk rename |
 | bulk_attributes.html | bulk-attributes.css | js/bulk-attributes.js | Bulk attribute editor |
 | validate.html | validate.css | js/validate.js | Validation interface |
-| health_check.html | health-check.css | js/health-check.js | Health checks |
 | inheritance.html | inheritance.css | js/inheritance.js | Template inheritance |
 | reorganize.html | (none) | js/reorganize.js | Reorganization |
 | smart_grouping.html | smart-grouping.css | js/smart-grouping.js | Smart grouping |

@@ -20,7 +20,6 @@ All page modules use the IIFE pattern for scope isolation and extract configurat
 | `dependencies.js` | Cytoscape graph visualization, edge categories, quick view presets. Utilities: `getEdgesInSubgraph()`, `getConnectedNodeIdsFromEdges()` | Modifying dependency graph page |
 | `find-replace.js` | Search, preview, bulk replacement. Constants: `MIN_SEARCH_CHARS`, `DEBOUNCE_MS`, `MAX_SUGGESTIONS` | Modifying find/replace page |
 | `git.js` | File list, diff viewer, commit/discard UI | Modifying git page |
-| `health-check.js` | Config health checks (orphans, circular deps). Constants: `SEVERITY_ORDER` | Modifying health check page |
 | `inheritance.js` | Inheritance tree visualization | Modifying inheritance page |
 | `objects.js` | Legacy object browser (DEPRECATED - use Explorer). IIFE-wrapped | Maintaining legacy objects page |
 | `reorganize.js` | File/folder restructuring UI. Helper: `performBulkOperation()` for move/clone/delete | Modifying reorganize page |
