@@ -1049,7 +1049,7 @@ def api_health_check():
         if not has_contacts and not has_contact_groups and not has_use:
             obj_name = obj.get_name() or obj.get_display_name()
             issues.append({
-                'type': 'notification_gap',
+                'type': 'missing_contacts',
                 'severity': 'warning',
                 'object': obj_name,
                 'object_type': obj.object_type,

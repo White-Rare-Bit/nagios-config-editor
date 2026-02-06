@@ -1412,7 +1412,7 @@ class TestNotificationGaps:
         """no-contacts-host has no contacts, no contact_groups, no use -- should be flagged."""
         data = _get_health_issues(comp_client)
         gap_issues = [i for i in data['issues']
-                      if i['type'] == 'notification_gap' and i['object_type'] in ('host', 'service')]
+                      if i['type'] == 'missing_contacts' and i['object_type'] in ('host', 'service')]
         gap_objects = [i['object'] for i in gap_issues]
         assert 'no-contacts-host' in gap_objects, \
             f"Expected 'no-contacts-host' flagged, got: {gap_objects}"
@@ -1421,7 +1421,7 @@ class TestNotificationGaps:
         """No Contacts Service has no contacts, no contact_groups, no use -- should be flagged."""
         data = _get_health_issues(comp_client)
         gap_issues = [i for i in data['issues']
-                      if i['type'] == 'notification_gap' and i['object_type'] == 'service']
+                      if i['type'] == 'missing_contacts' and i['object_type'] == 'service']
         gap_objects = [i['object'] for i in gap_issues]
         assert any('No Contacts Service' in o for o in gap_objects), \
             f"Expected 'No Contacts Service' flagged, got: {gap_objects}"
@@ -1430,7 +1430,7 @@ class TestNotificationGaps:
         """Hosts that use a template should not be flagged (contacts may come from template)."""
         data = _get_health_issues(comp_client)
         gap_issues = [i for i in data['issues']
-                      if i['type'] == 'notification_gap'
+                      if i['type'] == 'missing_contacts'
                       and i['object_type'] in ('host', 'service')]
         gap_objects = [i['object'] for i in gap_issues]
         # referenced-host uses base-host-template which has contact_groups
@@ -1441,7 +1441,7 @@ class TestNotificationGaps:
         """Notification gap issues should be warnings."""
         data = _get_health_issues(comp_client)
         gap_issues = [i for i in data['issues']
-                      if i['type'] == 'notification_gap'
+                      if i['type'] == 'missing_contacts'
                       and i['object_type'] in ('host', 'service')]
         for issue in gap_issues:
             assert issue['severity'] == 'warning'
