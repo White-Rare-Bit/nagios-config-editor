@@ -161,6 +161,24 @@ function collectAllSuggestions() {
         }
     }
 
+    // 1b. Health check warnings (e.g. hosts without services)
+    if (state.allIssues) {
+        const warnings = state.allIssues.filter(i => i.severity === 'warning');
+        for (const issue of warnings) {
+            suggestions.push({
+                id: `health-warning-${issue.type}-${issue.object}`,
+                severity: 'warning',
+                type: 'health_check_warning',
+                label: issue.type === 'host_without_services' ? 'No services' : 'Health warning',
+                name: issue.object || 'unknown',
+                detail: issue.message || '',
+                actionLabel: 'View',
+                actionType: 'navigate',
+                data: { issue }
+            });
+        }
+    }
+
     // 2. Template Issues (invalid refs, circular deps)
     if (state.templateIssues) {
         if (state.templateIssues.invalid_use) {
@@ -438,6 +456,9 @@ function handleSuggestionClick(id, event) {
     } else if (s.data?.objects && s.data.objects.length > 0) {
         // For duplicates, show the first one
         Explorer.navigateToObjectByIndex(s.data.objects[0].global_index);
+    } else if (s.data?.issue) {
+        // For health check warnings, navigate to the referenced object
+        Explorer.navigateToIssue(s.data.issue.object, s.data.issue.object_type);
     } else if (s.data?.issues && s.data.issues.length > 0) {
         // For missing objects, navigate to the first referencing object
         const firstIssue = s.data.issues[0];
