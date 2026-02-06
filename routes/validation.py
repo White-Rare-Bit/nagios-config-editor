@@ -1,5 +1,7 @@
 """Validation and health-check routes."""
 
+import re
+
 from flask import Blueprint, jsonify
 from validator import NagiosValidator
 from .helpers import get_service, get_config
@@ -122,6 +124,16 @@ def api_health_check():
         for key, value in obj.attributes.items():
             resolved[key] = value
         return resolved
+
+    # Build command arg count map: command_name -> max ARG number used
+    command_arg_counts = {}
+    for obj in service.get_objects():
+        if obj.object_type == 'command':
+            cmd_name = obj.attributes.get('command_name', '')
+            cmd_line = obj.attributes.get('command_line', '')
+            arg_matches = re.findall(r'\$ARG(\d+)\$', cmd_line)
+            max_arg = max((int(n) for n in arg_matches), default=0)
+            command_arg_counts[cmd_name] = max_arg
 
     for obj in service.get_objects():
         name = obj.get_name()
@@ -506,6 +518,37 @@ def api_health_check():
                 'object_type': 'service',
                 'file': obj.source_file,
                 'message': 'Service has no check_command (directly or through template inheritance)'
+            })
+
+    # 12. Check for command argument count mismatches
+    for obj in service.get_objects():
+        if obj.object_type not in ('service', 'host'):
+            continue
+        if obj.attributes.get('register', '1') == '0':
+            continue
+
+        resolved = resolve_inherited_attrs(obj)
+        check_cmd = resolved.get('check_command', '')
+        if not check_cmd:
+            continue
+
+        parts = check_cmd.split('!')
+        cmd_name = parts[0].strip()
+        provided_args = len(parts) - 1  # Everything after first !
+
+        expected_args = command_arg_counts.get(cmd_name)
+        if expected_args is None:
+            continue  # Command not found — already reported by missing_command check
+
+        if provided_args != expected_args:
+            obj_name = obj.get_name() or 'unnamed'
+            issues.append({
+                'type': 'command_arg_mismatch',
+                'severity': 'warning',
+                'object': obj_name,
+                'object_type': obj.object_type,
+                'file': obj.source_file,
+                'message': f'Command {cmd_name} expects {expected_args} arg(s) but {provided_args} provided'
             })
 
     # Summary

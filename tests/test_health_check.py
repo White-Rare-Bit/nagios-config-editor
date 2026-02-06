@@ -429,6 +429,120 @@ define service {
         assert not any('Direct Check Command' in n for n in flagged_names)
 
 
+class TestCommandArgValidation:
+    """Test that check_command argument count mismatches are detected."""
+
+    @pytest.fixture
+    def app_with_arg_mismatch(self):
+        """Config with argument count mismatches."""
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / 'nagios'
+        test_config_path.mkdir()
+
+        (test_config_path / 'commands.cfg').write_text('''
+define command {
+    command_name    check_ping
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$ -w $ARG1$ -c $ARG2$
+}
+
+define command {
+    command_name    check_http
+    command_line    $USER1$/check_http -H $HOSTADDRESS$
+}
+
+define command {
+    command_name    check_procs
+    command_line    $USER1$/check_procs -w $ARG1$ -c $ARG2$ -s $ARG3$
+}
+''')
+
+        (test_config_path / 'hosts.cfg').write_text('''
+define host {
+    host_name       test-host
+    address         10.0.0.1
+    max_check_attempts 5
+    contact_groups  admins
+}
+''')
+
+        (test_config_path / 'contacts.cfg').write_text('''
+define contact {
+    contact_name    admin
+    host_notification_commands  check_ping
+    service_notification_commands check_ping
+    host_notification_period    24x7
+    service_notification_period 24x7
+}
+define contactgroup {
+    contactgroup_name admins
+    members           admin
+}
+define timeperiod {
+    timeperiod_name 24x7
+    monday          00:00-24:00
+}
+''')
+
+        (test_config_path / 'services.cfg').write_text('''
+define service {
+    host_name               test-host
+    service_description     Correct Args
+    check_command           check_ping!100!500
+    max_check_attempts      3
+    contact_groups          admins
+}
+
+define service {
+    host_name               test-host
+    service_description     Too Few Args
+    check_command           check_ping!100
+    max_check_attempts      3
+    contact_groups          admins
+}
+
+define service {
+    host_name               test-host
+    service_description     Too Many Args
+    check_command           check_http!extra_arg
+    max_check_attempts      3
+    contact_groups          admins
+}
+
+define service {
+    host_name               test-host
+    service_description     No Args Needed
+    check_command           check_http
+    max_check_attempts      3
+    contact_groups          admins
+}
+''')
+
+        app = create_app(config_path=str(test_config_path))
+        app.config['TESTING'] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_detects_argument_count_mismatch(self, app_with_arg_mismatch):
+        """Services with wrong argument count are flagged."""
+        client = app_with_arg_mismatch.test_client()
+        resp = client.get('/api/health-check')
+        assert resp.status_code == 200
+        data = resp.get_json()
+
+        arg_issues = [i for i in data['issues']
+                      if i['type'] == 'command_arg_mismatch']
+
+        flagged_names = [i['object'] for i in arg_issues]
+
+        # "Too Few Args" and "Too Many Args" should be flagged
+        assert any('Too Few Args' in n for n in flagged_names)
+        assert any('Too Many Args' in n for n in flagged_names)
+
+        # "Correct Args" and "No Args Needed" should NOT be flagged
+        assert not any('Correct Args' in n for n in flagged_names)
+        assert not any('No Args Needed' in n for n in flagged_names)
+
+
 def test_apply_staging_with_validate_flag():
     """Apply staging should include validation result when validate=true."""
     test_dir = tempfile.mkdtemp()
