@@ -1,10 +1,12 @@
 """Tests for health check endpoint."""
 
+import os
 import pytest
 import tempfile
 import shutil
 from pathlib import Path
 from app import create_app
+from git_service import GitService
 
 
 @pytest.fixture
@@ -124,3 +126,19 @@ def test_health_check_detects_missing_cmd_in_comma_separated_list(health_client)
         f"Expected exactly 1 missing command issue for 'oncall', got {len(oncall_cmd_issues)}: {oncall_cmd_issues}"
     assert oncall_cmd_issues[0]['message'] == 'References non-existent command: nonexistent-cmd', \
         f"Expected precise error for 'nonexistent-cmd', got: {oncall_cmd_issues[0]['message']}"
+
+
+def test_gitignore_references_correct_staging_dir():
+    """Generated .gitignore should reference .staging/ not .nagios_staging/."""
+    test_dir = tempfile.mkdtemp()
+    try:
+        gs = GitService(test_dir)
+        gs.init_repo()
+        gitignore_path = os.path.join(test_dir, '.gitignore')
+        assert os.path.exists(gitignore_path), ".gitignore should be created"
+        content = Path(gitignore_path).read_text()
+        assert '.staging/' in content, f".gitignore should contain '.staging/', got:\n{content}"
+        assert '.nagios_staging/' not in content, \
+            f".gitignore should NOT contain '.nagios_staging/', got:\n{content}"
+    finally:
+        shutil.rmtree(test_dir, ignore_errors=True)
