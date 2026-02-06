@@ -239,12 +239,25 @@ def api_health_check():
 
         # 3. Check for missing commands
         # Severity: error (missing command would cause Nagios config verification failure)
-        for cmd_field in ['check_command', 'event_handler',
-                          'host_notification_commands', 'service_notification_commands']:
+        # check_command/event_handler: single command, args via ! (e.g. check_ping!100.0,20%!500.0,60%)
+        # notification_commands: comma-separated list, each can have ! args
+        for cmd_field in ['check_command', 'event_handler']:
             if cmd_field in obj.attributes:
-                cmd_list = obj.attributes[cmd_field].split(',')
-                for cmd_full in cmd_list:
-                    cmd_ref = cmd_full.strip().split('!')[0]  # Get command without args
+                cmd_ref = obj.attributes[cmd_field].split('!')[0].strip()
+                if cmd_ref and cmd_ref not in commands:
+                    issues.append({
+                        'type': 'missing_command',
+                        'severity': 'error',
+                        'object': obj_name,
+                        'object_type': obj.object_type,
+                        'file': obj.source_file,
+                        'message': f'References non-existent command: {cmd_ref}'
+                    })
+
+        for cmd_field in ['host_notification_commands', 'service_notification_commands']:
+            if cmd_field in obj.attributes:
+                for cmd_full in obj.attributes[cmd_field].split(','):
+                    cmd_ref = cmd_full.strip().split('!')[0]
                     if cmd_ref and cmd_ref not in commands:
                         issues.append({
                             'type': 'missing_command',
