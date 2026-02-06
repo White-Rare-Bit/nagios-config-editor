@@ -37,6 +37,16 @@ define contact {
     host_notification_options       d,u,r
     service_notification_options    w,u,c,r
 }
+
+define contact {
+    contact_name                    oncall
+    host_notification_commands      notify-host-by-email,nonexistent-cmd
+    service_notification_commands   notify-host-by-email
+    host_notification_period        24x7
+    service_notification_period     24x7
+    host_notification_options       d,u,r
+    service_notification_options    w,u,c,r
+}
 ''')
 
     (test_config_path / 'timeperiods.cfg').write_text('''
@@ -92,3 +102,25 @@ def test_health_check_valid_notification_commands_no_false_positive(health_clien
     # notify-host-by-email exists, should NOT be flagged
     assert not any('notify-host-by-email' in msg for msg in missing_cmds), \
         f"False positive: valid command 'notify-host-by-email' flagged as missing"
+
+
+def test_health_check_detects_missing_cmd_in_comma_separated_list(health_client):
+    """Health check should detect a missing command even when it appears in a comma-separated list."""
+    resp = health_client.get('/api/health-check')
+    assert resp.status_code == 200
+    data = resp.json
+
+    cmd_issues = [i for i in data['issues'] if i['type'] == 'missing_command']
+    missing_cmds = [i['message'] for i in cmd_issues]
+
+    # The 'oncall' contact has host_notification_commands = notify-host-by-email,nonexistent-cmd
+    # The second command in the comma-separated list is invalid and should be detected
+    assert any('nonexistent-cmd' in msg for msg in missing_cmds), \
+        f"Expected missing_command for 'nonexistent-cmd' in comma-separated list, got issues: {cmd_issues}"
+
+    # The issue message should reference ONLY 'nonexistent-cmd', not the entire comma-separated string
+    oncall_cmd_issues = [i for i in cmd_issues if i['object'] == 'oncall']
+    assert len(oncall_cmd_issues) == 1, \
+        f"Expected exactly 1 missing command issue for 'oncall', got {len(oncall_cmd_issues)}: {oncall_cmd_issues}"
+    assert oncall_cmd_issues[0]['message'] == 'References non-existent command: nonexistent-cmd', \
+        f"Expected precise error for 'nonexistent-cmd', got: {oncall_cmd_issues[0]['message']}"

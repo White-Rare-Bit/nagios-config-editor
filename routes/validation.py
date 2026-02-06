@@ -208,16 +208,18 @@ def api_health_check():
         for cmd_field in ['check_command', 'event_handler',
                           'host_notification_commands', 'service_notification_commands']:
             if cmd_field in obj.attributes:
-                cmd_ref = obj.attributes[cmd_field].split('!')[0]  # Get command without args
-                if cmd_ref and cmd_ref not in commands:
-                    issues.append({
-                        'type': 'missing_command',
-                        'severity': 'error',
-                        'object': obj_name,
-                        'object_type': obj.object_type,
-                        'file': obj.source_file,
-                        'message': f'References non-existent command: {cmd_ref}'
-                    })
+                cmd_list = obj.attributes[cmd_field].split(',')
+                for cmd_full in cmd_list:
+                    cmd_ref = cmd_full.strip().split('!')[0]  # Get command without args
+                    if cmd_ref and cmd_ref not in commands:
+                        issues.append({
+                            'type': 'missing_command',
+                            'severity': 'error',
+                            'object': obj_name,
+                            'object_type': obj.object_type,
+                            'file': obj.source_file,
+                            'message': f'References non-existent command: {cmd_ref}'
+                        })
 
         # 4. Check for missing timeperiods
         for tp_field in ['check_period', 'notification_period']:
