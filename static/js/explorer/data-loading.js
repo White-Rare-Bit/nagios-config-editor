@@ -42,14 +42,19 @@
      * Load domain constants from backend (single source of truth)
      * Populates Explorer.constants with name_fields, required_fields, reference_fields
      */
+    let constantsLoaded = false;
+
     async function loadConstants() {
+        if (constantsLoaded) return;
         try {
             const result = await ApiClient.get('/api/constants');
             if (result.success) {
                 const c = Explorer.constants;
-                c.nameFields = result.data.name_fields;
-                c.REQUIRED_FIELDS = result.data.required_fields;
-                c.referenceFields = result.data.reference_fields;
+                // Mutate in-place so module-load-time references stay valid
+                Object.assign(c.nameFields, result.data.name_fields);
+                Object.assign(c.REQUIRED_FIELDS, result.data.required_fields);
+                Object.assign(c.referenceFields, result.data.reference_fields);
+                constantsLoaded = true;
             }
         } catch (error) {
             console.error('Failed to load constants:', error);

@@ -450,7 +450,7 @@
         const stagedCreations = state.stagedCreations || [];
         for (const creation of stagedCreations) {
             if (creation.object_type === refType) {
-                const nameField = state.nameFields[refType];
+                const nameField = constants.nameFields[refType];
                 const name = creation.attributes?.[nameField];
                 if (name && name !== '(unnamed)' && !suggestions.includes(name)) {
                     suggestions.push(name);
