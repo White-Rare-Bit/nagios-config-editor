@@ -171,6 +171,7 @@ class NagiosObject:
     attributes: Dict[str, str] = field(default_factory=dict)
     source_file: str = ""
     line_number: int = 0
+    inline_comments: Dict[str, str] = field(default_factory=dict)
 
     def get_name(self) -> Optional[str]:
         """Get the primary name/identifier for this object.
@@ -289,13 +290,16 @@ class NagiosObject:
         }
 
 
-def format_object_block(obj_type: str, attrs: Dict[str, str], indent: str = "    ") -> str:
+def format_object_block(obj_type: str, attrs: Dict[str, str], indent: str = "    ",
+                        inline_comments: Dict[str, str] = None) -> str:
     """Format a Nagios object definition block.
 
     Args:
         obj_type: The object type (host, service, etc.)
         attrs: Dictionary of attribute key-value pairs
         indent: Indentation string (default 4 spaces)
+        inline_comments: Optional dict mapping attribute keys to inline comment text.
+            When present, the comment is appended as '; comment' after the value.
 
     Returns:
         Formatted object block string
@@ -312,7 +316,10 @@ def format_object_block(obj_type: str, attrs: Dict[str, str], indent: str = "   
 
     for key, value in sorted_attrs:
         padding = max(30, len(key) + 1)
-        lines.append(f"{indent}{key:<{padding}}{value}")
+        line = f"{indent}{key:<{padding}}{value}"
+        if inline_comments and key in inline_comments:
+            line += f" ; {inline_comments[key]}"
+        lines.append(line)
 
     lines.append("}")
     return '\n'.join(lines)
