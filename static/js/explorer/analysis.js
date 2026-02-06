@@ -1256,21 +1256,31 @@ async function loadNotificationSuggestions(forceRefresh = false) {
     const container = document.getElementById('notificationsContent');
     const badge = document.getElementById('notificationsSectionBadge');
 
-    if (!forceRefresh && state.allNotificationSuggestions.length > 0) {
-        renderNotificationSuggestions();
-        return;
-    }
+    // Read notification issues from backend health check data
+    state.allNotificationSuggestions = [];
+    if (state.allIssues) {
+        for (const issue of state.allIssues) {
+            if (issue.type !== 'notification_gap') continue;
 
-    if (container) {
-        container.innerHTML = '<div class="tab-placeholder">Analyzing notification coverage...</div>';
-    }
+            const obj = state.allObjects.find(o =>
+                o.object_type === issue.object_type &&
+                (o.name === issue.object || o.display_name === issue.object)
+            );
 
-    // Client-side analysis
-    state.allNotificationSuggestions = analyzeNotificationGaps();
+            state.allNotificationSuggestions.push({
+                type: 'notification_gap',
+                severity: issue.severity || 'warning',
+                object: obj || null,
+                title: `Notification gap: ${issue.object}`,
+                description: issue.message,
+                fix: null
+            });
+        }
+    }
 
     if (state.allNotificationSuggestions.length === 0) {
         if (container) {
-            container.innerHTML = '<div class="empty-state empty-state-success"><span class="empty-icon"><i class="fa-solid fa-circle-check"></i></span><div class="empty-title">All covered</div><div class="empty-desc">All hosts and services have notification contacts configured!</div></div>';
+            container.innerHTML = '<div class="empty-state empty-state-success"><span class="empty-icon"><i class="fa-solid fa-circle-check"></i></span><div class="empty-title">All covered</div><div class="empty-desc">All contacts have notification commands and periods configured!</div></div>';
         }
         if (badge) badge.style.display = 'none';
         return;
@@ -1282,76 +1292,6 @@ async function loadNotificationSuggestions(forceRefresh = false) {
     }
 
     renderNotificationSuggestions();
-}
-
-function analyzeNotificationGaps() {
-    const suggestions = [];
-
-    // Build a set of all contact and contactgroup names
-    const contacts = new Set(state.allObjects.filter(o => o.object_type === 'contact').map(o => o.attributes.contact_name));
-    const contactgroups = new Set(state.allObjects.filter(o => o.object_type === 'contactgroup').map(o => o.attributes.contactgroup_name));
-
-    // Check hosts
-    const hosts = state.allObjects.filter(o => o.object_type === 'host' && o.attributes.register !== '0');
-    for (const host of hosts) {
-        const hasContacts = host.attributes.contacts && host.attributes.contacts.trim() !== '';
-        const hasContactGroups = host.attributes.contact_groups && host.attributes.contact_groups.trim() !== '';
-
-        // Check if it inherits from a template that might have contacts
-        const usesTemplate = host.attributes.use;
-
-        if (!hasContacts && !hasContactGroups && !usesTemplate) {
-            suggestions.push({
-                type: 'host_no_contacts',
-                severity: 'warning',
-                object: host,
-                title: `Host without contacts: ${host.attributes.host_name}`,
-                description: 'No contacts or contact_groups defined. Notifications will not be sent.',
-                fix: 'contacts'
-            });
-        }
-    }
-
-    // Check services
-    const services = state.allObjects.filter(o => o.object_type === 'service' && o.attributes.register !== '0');
-    for (const service of services) {
-        const hasContacts = service.attributes.contacts && service.attributes.contacts.trim() !== '';
-        const hasContactGroups = service.attributes.contact_groups && service.attributes.contact_groups.trim() !== '';
-        const usesTemplate = service.attributes.use;
-
-        if (!hasContacts && !hasContactGroups && !usesTemplate) {
-            const hostName = service.attributes.host_name || '*';
-            const serviceDesc = service.attributes.service_description || 'unknown';
-            suggestions.push({
-                type: 'service_no_contacts',
-                severity: 'warning',
-                object: service,
-                title: `Service without contacts: ${serviceDesc}`,
-                description: `On host "${hostName}". No contacts or contact_groups defined.`,
-                fix: 'contacts'
-            });
-        }
-    }
-
-    // Check for hosts/services with notifications disabled but no apparent reason
-    for (const host of hosts) {
-        if (host.attributes.notifications_enabled === '0' && !host.attributes.use) {
-            suggestions.push({
-                type: 'notifications_disabled',
-                severity: 'info',
-                object: host,
-                title: `Notifications disabled: ${host.attributes.host_name}`,
-                description: 'Host has notifications explicitly disabled.',
-                fix: null
-            });
-        }
-    }
-
-    // Sort by severity
-    const severityOrder = { warning: 0, info: 1 };
-    suggestions.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
-
-    return filterActiveSuggestions(suggestions);
 }
 
 function renderNotificationSuggestions() {
@@ -1437,7 +1377,6 @@ Explorer.openNewObjectInEditor = openNewObjectInEditor;
 Explorer.handleHostgroupServiceLink = handleHostgroupServiceLink;
 Explorer.updateCleanupBadge = updateCleanupBadge;
 Explorer.loadNotificationSuggestions = loadNotificationSuggestions;
-Explorer.analyzeNotificationGaps = analyzeNotificationGaps;
 Explorer.renderNotificationSuggestions = renderNotificationSuggestions;
 // Issues functions exported from analysis-issues.js
 

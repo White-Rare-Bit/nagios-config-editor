@@ -56,10 +56,29 @@
             const result = await response.json();
             state.allGroupingSuggestions = result.suggestions || [];
 
-            // Load client-side analysis suggestions
+            // Load analysis suggestions (cleanup now reads from state.allIssues)
             state.allTemplateSuggestions = Explorer.analyzeTemplateConsolidation();
             state.allCleanupSuggestions = Explorer.analyzeCleanupIssues();
-            state.allNotificationSuggestions = Explorer.analyzeNotificationGaps();
+
+            // Notification suggestions now come from backend health-check data
+            state.allNotificationSuggestions = [];
+            if (state.allIssues) {
+                for (const issue of state.allIssues) {
+                    if (issue.type !== 'notification_gap') continue;
+                    const obj = state.allObjects.find(o =>
+                        o.object_type === issue.object_type &&
+                        (o.name === issue.object || o.display_name === issue.object)
+                    );
+                    state.allNotificationSuggestions.push({
+                        type: 'notification_gap',
+                        severity: issue.severity || 'warning',
+                        object: obj || null,
+                        title: `Notification gap: ${issue.object}`,
+                        description: issue.message,
+                        fix: null
+                    });
+                }
+            }
 
             // Build grouped errors (this populates state.groupedErrors array)
             Explorer.filterIssues();
