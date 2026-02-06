@@ -122,6 +122,9 @@ function mapHealthCheckToState(data) {
     for (const issue of state.allIssues) {
         const obj = issue.global_index != null ? objectsByIndex.get(issue.global_index) : null;
 
+        // Skip issues for objects staged for deletion
+        if (obj && state.stagedObjectDeletions.has(obj.global_index)) continue;
+
         switch (issue.type) {
             case 'duplicate': {
                 // Build duplicateGroup from related_objects if available
@@ -327,6 +330,8 @@ function collectAllSuggestions() {
     if (state.allIssues) {
         const warnings = state.allIssues.filter(i => i.severity === 'warning');
         for (const issue of warnings) {
+            // Skip warnings for objects staged for deletion
+            if (issue.global_index != null && state.stagedObjectDeletions.has(issue.global_index)) continue;
             suggestions.push({
                 id: `health-warning-${issue.type}-${issue.object}`,
                 severity: 'warning',

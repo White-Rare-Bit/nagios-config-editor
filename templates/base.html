@@ -10,6 +10,8 @@
     <link href="{{ url_for('static', filename='css/forms.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
     {% block extra_css %}{% endblock %}
+    <!-- Critical hide rules - must be in <head> to prevent FOUC on elements rendered before the inline <style> block -->
+    <style>.u-hidden{display:none!important}.global-dialog-overlay,.confirm-dialog-overlay,.git-result-overlay,.identity-required-overlay,.keyboard-shortcuts-overlay{display:none}</style>
 </head>
 <body class="u-overflow-x-hidden">
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
