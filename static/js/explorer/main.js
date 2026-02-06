@@ -94,7 +94,10 @@ Explorer.state = {
     addAttrNameHighlightedIndex: -1,
 
     // Pending actions
-    pendingHostgroupServiceLink: null
+    pendingHostgroupServiceLink: null,
+
+    // Metadata
+    metadataLoaded: false
 };
 
 // =============================================================================

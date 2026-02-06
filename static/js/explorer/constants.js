@@ -1,114 +1,95 @@
 /**
  * Nagios Bulk Editor - Explorer Constants Module
  *
- * Centralized configuration and constants for the explorer.
- * Extracted from main.js to reduce complexity.
+ * Initially empty shells populated by /api/metadata at startup.
+ * Fallback defaults ensure the explorer works if metadata hasn't loaded yet.
  */
 
 (function(Explorer) {
     'use strict';
 
+    // Identity fields are UI-only (not in backend model) — keep hardcoded
+    const IDENTITY_FIELDS = {
+        host: ['host_name', 'alias', 'display_name', 'address', 'name'],
+        hostgroup: ['hostgroup_name', 'alias', 'name'],
+        service: ['service_description', 'alias', 'display_name', 'name'],
+        servicegroup: ['servicegroup_name', 'alias', 'name'],
+        contact: ['contact_name', 'alias', 'name'],
+        contactgroup: ['contactgroup_name', 'alias', 'name'],
+        command: ['command_name', 'command_line', 'name'],
+        timeperiod: ['timeperiod_name', 'alias', 'name'],
+        servicedependency: ['name'],
+        hostdependency: ['name'],
+        serviceescalation: ['name'],
+        hostescalation: ['name']
+    };
+
+    // Attributes that affect inheritance/reference sections (UI behavior)
+    const INHERITANCE_ATTRS = ['use', 'parents'];
+    const REFERENCE_TRIGGER_ATTRS = [
+        'use', 'parents', 'hostgroups', 'servicegroups', 'contactgroups',
+        'contact_groups', 'host_name', 'hostgroup_name', 'check_command',
+        'event_handler', 'check_period', 'notification_period', 'contacts', 'members'
+    ];
+
     Explorer.constants = {
-        // Type display labels
-        typeLabels: {
-            host: 'Hosts',
-            service: 'Services',
-            hostgroup: 'Host Groups',
-            servicegroup: 'Service Groups',
-            contact: 'Contacts',
-            contactgroup: 'Contact Groups',
-            command: 'Commands',
-            timeperiod: 'Time Periods',
-            servicedependency: 'Service Dependencies',
-            hostdependency: 'Host Dependencies',
-            serviceescalation: 'Service Escalations',
-            hostescalation: 'Host Escalations'
-        },
-
-        // Fields that define the object identity
-        identityFields: {
-            host: ['host_name', 'alias', 'display_name', 'address', 'name'],
-            hostgroup: ['hostgroup_name', 'alias', 'name'],
-            service: ['service_description', 'alias', 'display_name', 'name'],
-            servicegroup: ['servicegroup_name', 'alias', 'name'],
-            contact: ['contact_name', 'alias', 'name'],
-            contactgroup: ['contactgroup_name', 'alias', 'name'],
-            command: ['command_name', 'command_line', 'name'],
-            timeperiod: ['timeperiod_name', 'alias', 'name'],
-            servicedependency: ['name'],
-            hostdependency: ['name'],
-            serviceescalation: ['name'],
-            hostescalation: ['name']
-        },
-
-        // Attributes that affect inheritance/reference sections
-        inheritanceAttrs: ['use', 'parents'],
-        referenceAttrs: [
-            'use', 'parents', 'hostgroups', 'servicegroups', 'contactgroups',
-            'contact_groups', 'host_name', 'hostgroup_name', 'check_command',
-            'event_handler', 'check_period', 'notification_period', 'contacts', 'members'
-        ],
-
-        // Name fields by object type (populated from /api/constants)
+        // --- Populated by /api/metadata ---
+        typeLabels: {},
         nameFields: {},
+        REQUIRED_FIELDS: {},
+        referenceFields: {},
+        ATTR_REFERENCE_MAP: {},
+        NAGIOS_ATTRIBUTES: {},
+        defaultAttributes: {},
+        notificationOptions: {},
+        groupStructure: {},
+
+        // --- UI-only constants (not from backend) ---
+        identityFields: IDENTITY_FIELDS,
+        inheritanceAttrs: INHERITANCE_ATTRS,
+        referenceAttrs: REFERENCE_TRIGGER_ATTRS,
+
+        // Notification option accessors (populated by applyMetadata)
+        HOST_NOTIFICATION_OPTIONS: [],
+        SERVICE_NOTIFICATION_OPTIONS: [],
+        NOTIFICATION_OPTION_ATTRS: [],
+        HOST_FAILURE_CRITERIA: [],
+        SERVICE_FAILURE_CRITERIA: [],
+    };
+
+    /**
+     * Populate Explorer.constants from /api/metadata response.
+     * Called once at startup from data-loading.js.
+     */
+    Explorer.applyMetadata = function(meta) {
+        const c = Explorer.constants;
+
+        c.typeLabels = meta.object_type_labels || c.typeLabels;
+        c.nameFields = meta.name_fields || c.nameFields;
+        c.REQUIRED_FIELDS = meta.required_fields || c.REQUIRED_FIELDS;
+        c.referenceFields = meta.reference_fields || c.referenceFields;
+        c.NAGIOS_ATTRIBUTES = meta.valid_attributes || c.NAGIOS_ATTRIBUTES;
+        c.defaultAttributes = meta.default_attributes || c.defaultAttributes;
+        c.groupStructure = meta.group_structure || c.groupStructure;
+
+        // Build ATTR_REFERENCE_MAP from referenceFields (same data, used for autocomplete)
+        // Exclude fields that are also name fields (they refer to the object itself)
+        const nameFieldValues = new Set(Object.values(c.nameFields));
+        c.ATTR_REFERENCE_MAP = {};
+        for (const [field, type] of Object.entries(c.referenceFields)) {
+            // Include fields useful for autocomplete hints
+            if (!nameFieldValues.has(field) || field === 'host_name') {
+                c.ATTR_REFERENCE_MAP[field] = type;
+            }
+        }
 
         // Notification options
-        HOST_NOTIFICATION_OPTIONS: [
-            'd - Down', 'u - Unreachable', 'r - Recovery',
-            'f - Flapping', 's - Scheduled Downtime', 'n - None'
-        ],
-        SERVICE_NOTIFICATION_OPTIONS: [
-            'w - Warning', 'u - Unknown', 'c - Critical', 'r - Recovery',
-            'f - Flapping', 's - Scheduled Downtime', 'n - None'
-        ],
-        NOTIFICATION_OPTION_ATTRS: [
-            'notification_options', 'host_notification_options', 'service_notification_options',
-            'execution_failure_criteria', 'notification_failure_criteria',
-            'escalation_options', 'stalking_options'
-        ],
-
-        // Dependency failure criteria options
-        HOST_FAILURE_CRITERIA: [
-            'o - Up (OK)', 'd - Down', 'u - Unreachable', 'p - Pending', 'n - None'
-        ],
-        SERVICE_FAILURE_CRITERIA: [
-            'o - OK', 'w - Warning', 'u - Unknown', 'c - Critical', 'p - Pending', 'n - None'
-        ],
-
-        // Required fields per object type (populated from /api/constants)
-        REQUIRED_FIELDS: {},
-
-        // Reference fields for dependency detection (populated from /api/constants)
-        referenceFields: {},
-
-        // Attribute reference map (for autocomplete hints)
-        ATTR_REFERENCE_MAP: {
-            'hostgroup_name': 'hostgroup',
-            'hostgroups': 'hostgroup',
-            'hostgroup_members': 'hostgroup',
-            'parents': 'host',
-            'members': null,
-            'servicegroups': 'servicegroup',
-            'servicegroup_name': 'servicegroup',
-            'servicegroup_members': 'servicegroup',
-            'contacts': 'contact',
-            'contact_groups': 'contactgroup',
-            'contactgroups': 'contactgroup',
-            'contactgroup_members': 'contactgroup',
-            'check_command': 'command',
-            'event_handler': 'command',
-            'host_notification_commands': 'command',
-            'service_notification_commands': 'command',
-            'check_period': 'timeperiod',
-            'notification_period': 'timeperiod',
-            'host_notification_period': 'timeperiod',
-            'service_notification_period': 'timeperiod',
-            'dependency_period': 'timeperiod',
-            'escalation_period': 'timeperiod',
-            'use': null,
-            'dependent_host_name': 'host',
-            'dependent_hostgroup_name': 'hostgroup'
-        }
+        const opts = meta.notification_options || {};
+        c.HOST_NOTIFICATION_OPTIONS = opts.host_notification_options || [];
+        c.SERVICE_NOTIFICATION_OPTIONS = opts.service_notification_options || [];
+        c.NOTIFICATION_OPTION_ATTRS = opts.notification_option_attrs || [];
+        c.HOST_FAILURE_CRITERIA = opts.host_failure_criteria || [];
+        c.SERVICE_FAILURE_CRITERIA = opts.service_failure_criteria || [];
     };
 
 })(window.Explorer);

@@ -38,47 +38,33 @@
         }, CONFIG.ANALYSIS_DEBOUNCE_MS);
     }
 
-    /**
-     * Load domain constants from backend (single source of truth)
-     * Populates Explorer.constants with name_fields, required_fields, reference_fields
-     */
-    let constantsLoaded = false;
-
-    async function loadConstants() {
-        if (constantsLoaded) return;
-        try {
-            const result = await ApiClient.get('/api/constants');
-            if (result.success) {
-                const c = Explorer.constants;
-                // Mutate in-place so module-load-time references stay valid
-                Object.assign(c.nameFields, result.data.name_fields);
-                Object.assign(c.REQUIRED_FIELDS, result.data.required_fields);
-                Object.assign(c.referenceFields, result.data.reference_fields);
-                constantsLoaded = true;
-            }
-        } catch (error) {
-            console.error('Failed to load constants:', error);
-        }
-    }
-
     // =============================================================================
     // Data Loading
     // =============================================================================
 
     /**
-     * Load objects and files from backend
+     * Load objects, files, and metadata from backend.
+     * Metadata is fetched once (first load) and cached via metadataLoaded flag.
      */
     Explorer.loadObjects = async function() {
-        await loadConstants();
-        const [objectsResult, filesResult, foldersResult] = await Promise.all([
+        const [objectsResult, filesResult, foldersResult, metadataResult] = await Promise.all([
             ApiClient.get('/api/objects?_=' + Date.now(), { silent: true }),
             ApiClient.get('/api/files?_=' + Date.now(), { silent: true }),
-            ApiClient.get('/api/folders?_=' + Date.now(), { silent: true })
+            ApiClient.get('/api/folders?_=' + Date.now(), { silent: true }),
+            Explorer.state.metadataLoaded
+                ? Promise.resolve(null)
+                : ApiClient.get('/api/metadata', { silent: true })
         ]);
 
         Explorer.state.allObjects = objectsResult.data || [];
         Explorer.state.allFiles = filesResult.data?.files || [];
         Explorer.state.existingFolders = foldersResult.data?.folders || [];
+
+        // Populate constants from backend metadata (once)
+        if (metadataResult && metadataResult.success) {
+            Explorer.applyMetadata(metadataResult.data);
+            Explorer.state.metadataLoaded = true;
+        }
     };
 
     // =============================================================================
