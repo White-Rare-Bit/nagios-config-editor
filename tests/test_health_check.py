@@ -1570,3 +1570,220 @@ class TestConstantsEndpoint:
         assert ref['check_command'] == 'command'
         assert ref['host_name'] == 'host'
         assert ref['use'] is None
+
+
+# ============================================================
+# Object References endpoint tests
+# ============================================================
+
+@pytest.fixture
+def references_app():
+    """Create Flask app with config designed for object-references tests.
+
+    Objects:
+    - command: check-host-alive
+    - host template: generic-host (register=0, check_command=check-host-alive)
+    - hostgroup: web-servers (members: web-01)
+    - host: web-01 (use=generic-host, hostgroups=web-servers)
+    - service: HTTP on web-01 (check_command=check-host-alive)
+    - contact: admin-contact
+    - contactgroup: admins (members: admin-contact)
+    """
+    test_dir = tempfile.mkdtemp()
+    test_config_path = Path(test_dir) / 'nagios'
+    test_config_path.mkdir()
+
+    (test_config_path / 'commands.cfg').write_text('''
+define command {
+    command_name    check-host-alive
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+''')
+
+    (test_config_path / 'templates.cfg').write_text('''
+define host {
+    name                    generic-host
+    register                0
+    check_command           check-host-alive
+    max_check_attempts      5
+    contact_groups          admins
+}
+''')
+
+    (test_config_path / 'hostgroups.cfg').write_text('''
+define hostgroup {
+    hostgroup_name  web-servers
+    alias           Web Servers
+    members         web-01
+}
+''')
+
+    (test_config_path / 'hosts.cfg').write_text('''
+define host {
+    host_name       web-01
+    alias           Web Server 01
+    address         10.0.0.1
+    use             generic-host
+    hostgroups      web-servers
+}
+''')
+
+    (test_config_path / 'services.cfg').write_text('''
+define service {
+    host_name               web-01
+    service_description     HTTP
+    check_command           check-host-alive
+    max_check_attempts      3
+    contact_groups          admins
+}
+''')
+
+    (test_config_path / 'contacts.cfg').write_text('''
+define contact {
+    contact_name                    admin-contact
+    host_notification_commands      check-host-alive
+    service_notification_commands   check-host-alive
+    host_notification_period        24x7
+    service_notification_period     24x7
+}
+''')
+
+    (test_config_path / 'contactgroups.cfg').write_text('''
+define contactgroup {
+    contactgroup_name   admins
+    alias               Administrators
+    members             admin-contact
+}
+''')
+
+    (test_config_path / 'timeperiods.cfg').write_text('''
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24 Hours A Day
+    monday          00:00-24:00
+    tuesday         00:00-24:00
+    wednesday       00:00-24:00
+    thursday        00:00-24:00
+    friday          00:00-24:00
+    saturday        00:00-24:00
+    sunday          00:00-24:00
+}
+''')
+
+    app = create_app(config_path=str(test_config_path))
+    app.config['TESTING'] = True
+    yield app
+    shutil.rmtree(test_dir, ignore_errors=True)
+
+
+@pytest.fixture
+def ref_client(references_app):
+    return references_app.test_client()
+
+
+class TestObjectReferences:
+    """Tests for /api/object-references/<global_index> endpoint."""
+
+    def _find_index(self, client, object_type, name):
+        """Find the global_index of an object by type and name."""
+        resp = client.get('/api/objects')
+        for obj in resp.json:
+            if obj['object_type'] == object_type and obj.get('name') == name:
+                return obj['global_index']
+        return None
+
+    def test_host_outgoing_references(self, ref_client):
+        """Host web-01 uses generic-host template -> outgoing reference to template."""
+        idx = self._find_index(ref_client, 'host', 'web-01')
+        assert idx is not None, "Could not find host web-01"
+
+        resp = ref_client.get(f'/api/object-references/{idx}')
+        assert resp.status_code == 200
+        data = resp.json
+
+        outgoing = data['outgoing']
+        # web-01 uses generic-host template, so there should be an outgoing ref via 'use'
+        use_refs = [r for r in outgoing if r['field'] == 'use']
+        assert len(use_refs) >= 1, \
+            f"Expected outgoing 'use' reference to generic-host, got: {outgoing}"
+        assert any(r['name'] == 'generic-host' for r in use_refs), \
+            f"Expected outgoing ref to 'generic-host', got: {use_refs}"
+
+    def test_host_incoming_references(self, ref_client):
+        """Host web-01 is referenced by services -> incoming references."""
+        idx = self._find_index(ref_client, 'host', 'web-01')
+        assert idx is not None, "Could not find host web-01"
+
+        resp = ref_client.get(f'/api/object-references/{idx}')
+        assert resp.status_code == 200
+        data = resp.json
+
+        incoming = data['incoming']
+        # The HTTP service references web-01 via host_name
+        host_name_refs = [r for r in incoming if r['field'] == 'host_name']
+        assert len(host_name_refs) >= 1, \
+            f"Expected incoming host_name reference from HTTP service, got: {incoming}"
+
+    def test_host_members(self, ref_client):
+        """Host web-01 is member of hostgroup web-servers -> member_of."""
+        idx = self._find_index(ref_client, 'host', 'web-01')
+        assert idx is not None, "Could not find host web-01"
+
+        resp = ref_client.get(f'/api/object-references/{idx}')
+        assert resp.status_code == 200
+        data = resp.json
+
+        member_of = data['member_of']
+        hg_refs = [r for r in member_of if r['object_type'] == 'hostgroup']
+        assert len(hg_refs) >= 1, \
+            f"Expected web-01 to be member_of web-servers hostgroup, got: {member_of}"
+        assert any(r['name'] == 'web-servers' for r in hg_refs), \
+            f"Expected member_of 'web-servers', got: {hg_refs}"
+
+    def test_hostgroup_members(self, ref_client):
+        """Hostgroup web-servers has web-01 as member -> members list."""
+        idx = self._find_index(ref_client, 'hostgroup', 'web-servers')
+        assert idx is not None, "Could not find hostgroup web-servers"
+
+        resp = ref_client.get(f'/api/object-references/{idx}')
+        assert resp.status_code == 200
+        data = resp.json
+
+        members = data['members']
+        host_members = [m for m in members if m['object_type'] == 'host']
+        assert len(host_members) >= 1, \
+            f"Expected web-01 in members of web-servers, got: {members}"
+        assert any(m['name'] == 'web-01' for m in host_members), \
+            f"Expected 'web-01' in members, got: {host_members}"
+
+    def test_command_incoming_references(self, ref_client):
+        """Command check-host-alive is referenced by the template -> incoming."""
+        idx = self._find_index(ref_client, 'command', 'check-host-alive')
+        assert idx is not None, "Could not find command check-host-alive"
+
+        resp = ref_client.get(f'/api/object-references/{idx}')
+        assert resp.status_code == 200
+        data = resp.json
+
+        incoming = data['incoming']
+        # generic-host template uses check-host-alive as check_command
+        check_cmd_refs = [r for r in incoming if r['field'] == 'check_command']
+        assert len(check_cmd_refs) >= 1, \
+            f"Expected incoming check_command reference from template, got: {incoming}"
+
+    def test_parent_hosts_none_for_non_host(self, ref_client):
+        """Non-host objects should have parent_hosts=None."""
+        idx = self._find_index(ref_client, 'command', 'check-host-alive')
+        assert idx is not None, "Could not find command check-host-alive"
+
+        resp = ref_client.get(f'/api/object-references/{idx}')
+        assert resp.status_code == 200
+        data = resp.json
+
+        assert data['parent_hosts'] is None, \
+            f"Expected parent_hosts=None for command, got: {data['parent_hosts']}"
+
+    def test_invalid_index_returns_404(self, ref_client):
+        """Out-of-range global_index should return 404."""
+        resp = ref_client.get('/api/object-references/99999')
+        assert resp.status_code == 404
