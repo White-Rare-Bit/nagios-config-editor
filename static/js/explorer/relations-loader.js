@@ -34,169 +34,6 @@
     const typeLabels = constants.typeLabels;
 
     // =============================================================================
-    // DEPENDENCY/ESCALATION FINDING HELPERS
-    // =============================================================================
-
-    /**
-     * Find hostdependency/servicedependency objects referencing this host or service.
-     *
-     * Dependency objects define master/dependent relationships that control execution
-     * and notification behavior.
-     *
-     * For hosts: matches host_name (master) and dependent_host_name (dependent) fields.
-     * For services: matches service_description with host scoping when host_name present;
-     * services using only hostgroup_name cannot be matched precisely.
-     *
-     * @returns {Object} {masterOf: [...], dependentOf: [...]}
-     */
-    function findDependencyObjects(obj, allObjects) {
-        const result = { masterOf: [], dependentOf: [] };
-
-        if (obj.object_type === 'host') {
-            const hostName = getEffectiveName(obj);
-            allObjects.filter(o => o.object_type === 'hostdependency').forEach(depObj => {
-                const attrs = getEffectiveAttrs(depObj);
-                const masterHost = attrs.host_name;
-                const dependentHost = attrs.dependent_host_name;
-
-                if (masterHost === hostName) {
-                    result.masterOf.push(depObj);
-                }
-                if (dependentHost === hostName) {
-                    result.dependentOf.push(depObj);
-                }
-            });
-        } else if (obj.object_type === 'service') {
-            const serviceName = getEffectiveName(obj);
-            const objAttrs = getEffectiveAttrs(obj);
-            const hostName = objAttrs.host_name;
-
-            if (!hostName) {
-                return result;
-            }
-
-            allObjects.filter(o => o.object_type === 'servicedependency').forEach(depObj => {
-                const attrs = getEffectiveAttrs(depObj);
-                const masterService = attrs.service_description;
-                const masterHost = attrs.host_name;
-                const dependentService = attrs.dependent_service_description;
-                const dependentHost = attrs.dependent_host_name;
-
-                if (masterService === serviceName && (!masterHost || masterHost === hostName)) {
-                    result.masterOf.push(depObj);
-                }
-                if (dependentService === serviceName && (!dependentHost || dependentHost === hostName)) {
-                    result.dependentOf.push(depObj);
-                }
-            });
-        }
-
-        return result;
-    }
-
-    /**
-     * Check if a host is a member of a hostgroup (direct or via hostgroups attribute).
-     */
-    function isHostInHostgroup(hostName, hostgroupName, allObjects) {
-        const hostgroup = allObjects.find(o =>
-            o.object_type === 'hostgroup' && getEffectiveName(o) === hostgroupName
-        );
-        if (!hostgroup) return false;
-
-        const hgAttrs = getEffectiveAttrs(hostgroup);
-
-        // Check direct members
-        const directMembers = (hgAttrs.members || '').split(',').map(m => m.trim()).filter(m => m);
-        if (directMembers.includes(hostName)) return true;
-
-        // Check host's hostgroups attribute
-        const host = allObjects.find(o => o.object_type === 'host' && getEffectiveName(o) === hostName);
-        if (host) {
-            const hostAttrs = getEffectiveAttrs(host);
-            const hostGroups = (hostAttrs.hostgroups || '').split(',').map(g => g.trim().replace(/^[+!]+/, '')).filter(g => g);
-            if (hostGroups.includes(hostgroupName)) return true;
-        }
-
-        // Check nested hostgroup_members (recursive)
-        const nestedGroups = (hgAttrs.hostgroup_members || '').split(',').map(g => g.trim().replace(/^[+!]+/, '')).filter(g => g);
-        for (const nestedGroupName of nestedGroups) {
-            if (isHostInHostgroup(hostName, nestedGroupName, allObjects)) return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Find escalation objects (hostescalation/serviceescalation) that apply to a host or service.
-     * @returns {Object} { escalations: [...] }
-     */
-    function findEscalationObjects(obj, allObjects) {
-        const result = { escalations: [] };
-
-        if (obj.object_type === 'host') {
-            const hostName = getEffectiveName(obj);
-            allObjects.filter(o => o.object_type === 'hostescalation').forEach(escObj => {
-                const attrs = getEffectiveAttrs(escObj);
-                const escHostName = attrs.host_name;
-                const escHostgroupName = attrs.hostgroup_name;
-
-                if (escHostName && escHostName.split(',').map(h => h.trim()).includes(hostName)) {
-                    result.escalations.push(escObj);
-                    return;
-                }
-
-                if (escHostgroupName) {
-                    const groups = escHostgroupName.split(',').map(g => g.trim()).filter(g => g);
-                    for (const groupName of groups) {
-                        if (isHostInHostgroup(hostName, groupName, allObjects)) {
-                            result.escalations.push(escObj);
-                            return;
-                        }
-                    }
-                }
-            });
-        } else if (obj.object_type === 'service') {
-            const serviceName = getEffectiveName(obj);
-            const objAttrs = getEffectiveAttrs(obj);
-            const hostName = objAttrs.host_name;
-
-            if (!hostName) {
-                return result;
-            }
-
-            allObjects.filter(o => o.object_type === 'serviceescalation').forEach(escObj => {
-                const attrs = getEffectiveAttrs(escObj);
-                const escServiceDesc = attrs.service_description;
-                const escHostName = attrs.host_name;
-                const escHostgroupName = attrs.hostgroup_name;
-
-                if (escServiceDesc && escServiceDesc.split(',').map(s => s.trim()).includes(serviceName)) {
-                    if (escHostName && escHostName.split(',').map(h => h.trim()).includes(hostName)) {
-                        result.escalations.push(escObj);
-                        return;
-                    }
-
-                    if (escHostgroupName) {
-                        const groups = escHostgroupName.split(',').map(g => g.trim()).filter(g => g);
-                        for (const groupName of groups) {
-                            if (isHostInHostgroup(hostName, groupName, allObjects)) {
-                                result.escalations.push(escObj);
-                                return;
-                            }
-                        }
-                    }
-
-                    if (!escHostName && !escHostgroupName) {
-                        result.escalations.push(escObj);
-                    }
-                }
-            });
-        }
-
-        return result;
-    }
-
-    // =============================================================================
     // FORMAT HELPERS
     // =============================================================================
 
@@ -510,112 +347,36 @@
     /**
      * Load references (dependencies and dependents) for an object.
      */
-    function loadCenterReferences(obj) {
-        const name = getEffectiveName(obj);
-        const referenceFields = constants.referenceFields;
-        const stripRefPrefix = v => v.trim().replace(/^[+!]+/, '').trim();
-        const commandFields = ['check_command', 'event_handler', 'notification_commands',
-                              'host_notification_commands', 'service_notification_commands',
-                              'obsess_over_host_command', 'obsess_over_service_command',
-                              'global_host_event_handler', 'global_service_event_handler'];
-
-        // Outgoing references
-        const outgoing = [];
-        for (const [field, refType] of Object.entries(referenceFields)) {
-            if (!obj.attributes[field]) continue;
-            const values = obj.attributes[field].split(',').map(stripRefPrefix).filter(v => v && v !== '*');
-            const actualType = refType || obj.object_type;
-
-            values.forEach(val => {
-                let lookupVal = val;
-                if (commandFields.includes(field) && val.includes('!')) {
-                    lookupVal = val.split('!')[0];
-                }
-                const referenced = state.allObjects.find(o =>
-                    o.object_type === actualType &&
-                    (getEffectiveName(o) === lookupVal || getEffectiveAttrs(o).name === lookupVal)
-                );
-                if (referenced && referenced.global_index !== obj.global_index) {
-                    outgoing.push({ field, object: referenced });
-                }
-            });
+    async function loadCenterReferences(obj) {
+        if (!obj || obj.global_index == null) {
+            renderCenterReferences({ outgoing: [], incoming: [] });
+            return;
         }
-
-        // Find dependency objects
-        const depObjects = findDependencyObjects(obj, state.allObjects);
-        depObjects.masterOf.forEach(depObj => {
-            outgoing.push({ field: 'dependency_rule', object: depObj, isDependencyRule: true });
-        });
-
-        // Incoming references
-        const incoming = [];
-        const objEffectiveAttrs = getEffectiveAttrs(obj);
-        state.allObjects.forEach(o => {
-            if (o.global_index === obj.global_index) return;
-            const attrs = getEffectiveAttrs(o);
-            for (const [field, refType] of Object.entries(referenceFields)) {
-                if (!attrs[field]) continue;
-                const actualType = refType || o.object_type;
-                const isEscalationReference = (o.object_type === 'hostescalation' || o.object_type === 'serviceescalation') &&
-                                             (obj.object_type === 'contact' || obj.object_type === 'contactgroup') &&
-                                             (field === 'escalation_contacts' || field === 'escalation_contact_groups' ||
-                                              field === 'contacts' || field === 'contact_groups');
-                if (actualType !== obj.object_type && refType !== null && !isEscalationReference) continue;
-
-                let values = attrs[field].split(',').map(stripRefPrefix);
-                if (commandFields.includes(field)) {
-                    values = values.map(v => v.includes('!') ? v.split('!')[0] : v);
-                }
-                if (values.includes(name) || values.includes(objEffectiveAttrs.name)) {
-                    incoming.push({ field, object: o });
-                }
+        try {
+            const result = await ApiClient.get(`/api/object-references/${obj.global_index}`);
+            if (!result.success) {
+                renderCenterReferences({ outgoing: [], incoming: [] });
+                return;
             }
-        });
-
-        // Add dependent relationships to incoming
-        depObjects.dependentOf.forEach(depObj => {
-            incoming.push({ field: 'dependency_rule', object: depObj, isDependencyRule: true });
-        });
-
-        // Find escalation objects
-        const escObjects = findEscalationObjects(obj, state.allObjects);
-        escObjects.escalations.forEach(escObj => {
-            incoming.push({ field: 'escalation_rule', object: escObj, isEscalationRule: true });
-        });
-
-        // For hostgroups: find services deployed via hostgroup_name
-        if (obj.object_type === 'hostgroup') {
-            state.allObjects.filter(o => o.object_type === 'service').forEach(svc => {
-                const svcAttrs = getEffectiveAttrs(svc);
-                if (svcAttrs.hostgroup_name) {
-                    const groups = svcAttrs.hostgroup_name.split(',').map(g => g.trim().replace(/^[+!]+/, '').trim());
-                    if (groups.includes(name)) {
-                        incoming.push({ field: 'hostgroup_name', object: svc, isServiceBinding: true });
-                    }
-                }
-            });
+            const data = result.data;
+            const objectsByIndex = new Map();
+            state.allObjects.forEach(o => objectsByIndex.set(o.global_index, o));
+            const outgoing = (data.outgoing || []).map(r => ({
+                field: r.field, object: objectsByIndex.get(r.global_index),
+                isDependencyRule: r.is_dependency_rule || false,
+                isEscalationRule: r.is_escalation_rule || false,
+            })).filter(r => r.object);
+            const incoming = (data.incoming || []).map(r => ({
+                field: r.field, object: objectsByIndex.get(r.global_index),
+                isDependencyRule: r.is_dependency_rule || false,
+                isEscalationRule: r.is_escalation_rule || false,
+                isServiceBinding: r.is_service_binding || false,
+                viaGroup: r.via_group || null,
+            })).filter(r => r.object);
+            renderCenterReferences({ outgoing, incoming });
+        } catch (error) {
+            renderCenterReferences({ outgoing: [], incoming: [] });
         }
-
-        // For hosts: find services deployed via hostgroup_name where host is member
-        if (obj.object_type === 'host') {
-            const hostName = name;
-            state.allObjects.filter(o => o.object_type === 'service').forEach(svc => {
-                const svcAttrs = getEffectiveAttrs(svc);
-                if (svcAttrs.host_name) return;
-
-                if (svcAttrs.hostgroup_name) {
-                    const groups = svcAttrs.hostgroup_name.split(',').map(g => g.trim().replace(/^[+!]+/, '').trim());
-                    for (const groupName of groups) {
-                        if (isHostInHostgroup(hostName, groupName, state.allObjects)) {
-                            incoming.push({ field: 'hostgroup_name', object: svc, isServiceBinding: true, viaGroup: groupName });
-                            break;
-                        }
-                    }
-                }
-            });
-        }
-
-        renderCenterReferences({ outgoing, incoming });
     }
 
     /**
@@ -853,173 +614,29 @@
     /**
      * Load members for a group or template object.
      */
-    function loadCenterMembers(obj) {
+    async function loadCenterMembers(obj) {
         const container = document.getElementById('membersContent');
-        const objName = getEffectiveName(obj);
-        const objEffectiveAttrs = Explorer.getEffectiveAttributes(obj);
-        const members = [];
-
-        function getHostgroupHosts(hostgroup, visited = new Set(), viaLabel = 'members') {
-            if (visited.has(hostgroup.global_index)) return [];
-            visited.add(hostgroup.global_index);
-
-            const hosts = [];
-            const attrs = getEffectiveAttrs(hostgroup);
-
-            const directMembers = (attrs.members || '').split(',').map(x => x.trim()).filter(x => x);
-            directMembers.forEach(m => {
-                const host = state.allObjects.find(o => o.object_type === 'host' && getEffectiveName(o) === m);
-                if (host && !hosts.find(h => h.object.global_index === host.global_index)) {
-                    hosts.push({ object: host, via: viaLabel });
-                }
-            });
-
-            const hgName = getEffectiveName(hostgroup);
-            state.allObjects.filter(o => o.object_type === 'host').forEach(host => {
-                const hostAttrs = getEffectiveAttrs(host);
-                const hgs = (hostAttrs.hostgroups || '').split(',').map(x => x.trim().replace(/^[+!]+/, '').trim());
-                if (hgs.includes(hgName) && !hosts.find(h => h.object.global_index === host.global_index)) {
-                    hosts.push({ object: host, via: viaLabel === 'members' ? 'hostgroups attr' : viaLabel });
-                }
-            });
-
-            const nestedGroups = (attrs.hostgroup_members || '').split(',').map(x => x.trim().replace(/^[+!]+/, '').trim()).filter(x => x);
-            nestedGroups.forEach(groupName => {
-                const nestedGroup = state.allObjects.find(o =>
-                    o.object_type === 'hostgroup' && getEffectiveName(o) === groupName
-                );
-                if (nestedGroup) {
-                    const nestedHosts = getHostgroupHosts(nestedGroup, new Set(visited), `via ${groupName}`);
-                    nestedHosts.forEach(h => {
-                        if (!hosts.find(existing => existing.object.global_index === h.object.global_index)) {
-                            hosts.push(h);
-                        }
-                    });
-                }
-            });
-
-            return hosts;
+        if (!obj || obj.global_index == null) {
+            renderCenterMembers([], obj);
+            return;
         }
-
-        if (obj.object_type === 'hostgroup') {
-            const allHosts = getHostgroupHosts(obj);
-            allHosts.forEach(h => members.push(h));
-        } else if (obj.object_type === 'contactgroup') {
-            function getContactgroupContacts(contactgroup, visited = new Set(), viaLabel = 'members') {
-                if (visited.has(contactgroup.global_index)) return [];
-                visited.add(contactgroup.global_index);
-
-                const contacts = [];
-                const attrs = getEffectiveAttrs(contactgroup);
-
-                const directMembers = (attrs.members || '').split(',')
-                    .map(x => x.trim().replace(/^[+!]+/, '').trim())
-                    .filter(x => x);
-                directMembers.forEach(m => {
-                    const contact = state.allObjects.find(o => o.object_type === 'contact' && getEffectiveName(o) === m);
-                    if (contact && !contacts.find(c => c.object.global_index === contact.global_index)) {
-                        contacts.push({ object: contact, via: viaLabel });
-                    }
-                });
-
-                const cgName = getEffectiveName(contactgroup);
-                state.allObjects.filter(o => o.object_type === 'contact').forEach(contact => {
-                    const contactAttrs = getEffectiveAttrs(contact);
-                    const cgs = (contactAttrs.contactgroups || '').split(',')
-                        .map(x => x.trim().replace(/^[+!]+/, '').trim())
-                        .filter(x => x);
-                    if (cgs.includes(cgName) && !contacts.find(c => c.object.global_index === contact.global_index)) {
-                        contacts.push({ object: contact, via: viaLabel === 'members' ? 'contactgroups attr' : viaLabel });
-                    }
-                });
-
-                const nestedGroups = (attrs.contactgroup_members || '').split(',')
-                    .map(x => x.trim().replace(/^[+!]+/, '').trim())
-                    .filter(x => x);
-                nestedGroups.forEach(groupName => {
-                    const nestedGroup = state.allObjects.find(o =>
-                        o.object_type === 'contactgroup' && getEffectiveName(o) === groupName
-                    );
-                    if (nestedGroup) {
-                        const nestedContacts = getContactgroupContacts(nestedGroup, new Set(visited), `via ${groupName}`);
-                        nestedContacts.forEach(c => {
-                            if (!contacts.find(existing => existing.object.global_index === c.object.global_index)) {
-                                contacts.push(c);
-                            }
-                        });
-                    }
-                });
-
-                return contacts;
+        try {
+            const result = await ApiClient.get(`/api/object-references/${obj.global_index}`);
+            if (!result.success) {
+                renderCenterMembers([], obj);
+                return;
             }
-
-            const allContacts = getContactgroupContacts(obj);
-            allContacts.forEach(c => members.push(c));
-        } else if (obj.object_type === 'servicegroup') {
-            function getServicegroupServices(servicegroup, visited = new Set(), viaLabel = 'members') {
-                if (visited.has(servicegroup.global_index)) return [];
-                visited.add(servicegroup.global_index);
-
-                const services = [];
-                const attrs = getEffectiveAttrs(servicegroup);
-
-                const directMembers = (attrs.members || '').split(',')
-                    .map(x => x.trim().replace(/^[+!]+/, '').trim())
-                    .filter(x => x);
-                directMembers.forEach(m => {
-                    const svc = state.allObjects.find(o => o.object_type === 'service' && getEffectiveName(o) === m);
-                    if (svc && !services.find(s => s.object.global_index === svc.global_index)) {
-                        services.push({ object: svc, via: viaLabel });
-                    }
-                });
-
-                const sgName = getEffectiveName(servicegroup);
-                state.allObjects.filter(o => o.object_type === 'service').forEach(svc => {
-                    const svcAttrs = getEffectiveAttrs(svc);
-                    const sgs = (svcAttrs.servicegroups || '').split(',')
-                        .map(x => x.trim().replace(/^[+!]+/, '').trim())
-                        .filter(x => x);
-                    if (sgs.includes(sgName) && !services.find(s => s.object.global_index === svc.global_index)) {
-                        services.push({ object: svc, via: viaLabel === 'members' ? 'servicegroups attr' : viaLabel });
-                    }
-                });
-
-                const nestedGroups = (attrs.servicegroup_members || '').split(',')
-                    .map(x => x.trim().replace(/^[+!]+/, '').trim())
-                    .filter(x => x);
-                nestedGroups.forEach(groupName => {
-                    const nestedGroup = state.allObjects.find(o =>
-                        o.object_type === 'servicegroup' && getEffectiveName(o) === groupName
-                    );
-                    if (nestedGroup) {
-                        const nestedServices = getServicegroupServices(nestedGroup, new Set(visited), `via ${groupName}`);
-                        nestedServices.forEach(s => {
-                            if (!services.find(existing => existing.object.global_index === s.object.global_index)) {
-                                services.push(s);
-                            }
-                        });
-                    }
-                });
-
-                return services;
-            }
-
-            const allServices = getServicegroupServices(obj);
-            allServices.forEach(s => members.push(s));
-        } else if (Explorer.isObjectTemplate(obj)) {
-            state.allObjects.forEach(o => {
-                if (o.global_index === obj.global_index) return;
-                if (o.object_type === obj.object_type && getEffectiveName(o) === objName) return;
-
-                const attrs = getEffectiveAttrs(o);
-                const uses = (attrs.use || '').split(',').map(x => x.trim());
-                if (uses.includes(objName) || uses.includes(objEffectiveAttrs.name)) {
-                    members.push({ object: o, via: 'inherits' });
-                }
-            });
+            const data = result.data;
+            const objectsByIndex = new Map();
+            state.allObjects.forEach(o => objectsByIndex.set(o.global_index, o));
+            const members = (data.members || []).map(r => ({
+                object: objectsByIndex.get(r.global_index),
+                via: r.via,
+            })).filter(r => r.object);
+            renderCenterMembers(members, obj);
+        } catch (error) {
+            renderCenterMembers([], obj);
         }
-
-        renderCenterMembers(members, obj);
     }
 
     /**
@@ -1069,10 +686,7 @@
     // EXPORT TO EXPLORER NAMESPACE
     // =============================================================================
 
-    // Helper functions (used by impact-section.js)
-    Explorer.findDependencyObjects = findDependencyObjects;
-    Explorer.isHostInHostgroup = isHostInHostgroup;
-    Explorer.findEscalationObjects = findEscalationObjects;
+    // Helper functions
     Explorer.formatFailureCriteria = formatFailureCriteria;
     Explorer.formatEscalationInfo = formatEscalationInfo;
 
