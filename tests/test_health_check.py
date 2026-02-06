@@ -543,6 +543,98 @@ define service {
         assert not any('No Args Needed' in n for n in flagged_names)
 
 
+class TestTemplateConflictDetection:
+    """Test that conflicting attributes from multi-template inheritance are warned."""
+
+    @pytest.fixture
+    def app_with_template_conflicts(self):
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / 'nagios'
+        test_config_path.mkdir()
+
+        (test_config_path / 'templates.cfg').write_text('''
+define host {
+    name                    fast-check
+    register                0
+    check_interval          1
+    max_check_attempts      3
+}
+
+define host {
+    name                    slow-check
+    register                0
+    check_interval          10
+    max_check_attempts      5
+}
+
+define host {
+    name                    no-conflict
+    register                0
+    address                 0.0.0.0
+}
+''')
+
+        (test_config_path / 'hosts.cfg').write_text('''
+define host {
+    host_name       conflicting-host
+    address         10.0.0.1
+    use             fast-check,slow-check
+    contact_groups  admins
+}
+
+define host {
+    host_name       no-conflict-host
+    address         10.0.0.2
+    use             fast-check,no-conflict
+    contact_groups  admins
+}
+''')
+
+        (test_config_path / 'contacts.cfg').write_text('''
+define contact {
+    contact_name    admin
+    host_notification_commands  notify
+    service_notification_commands notify
+    host_notification_period    24x7
+    service_notification_period 24x7
+}
+define contactgroup {
+    contactgroup_name admins
+    members           admin
+}
+define command {
+    command_name    notify
+    command_line    /bin/true
+}
+define timeperiod {
+    timeperiod_name 24x7
+    monday          00:00-24:00
+}
+''')
+
+        app = create_app(config_path=str(test_config_path))
+        app.config['TESTING'] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_detects_template_attribute_conflicts(self, app_with_template_conflicts):
+        """Objects inheriting conflicting attributes from multiple templates get a warning."""
+        client = app_with_template_conflicts.test_client()
+        resp = client.get('/api/health-check')
+        assert resp.status_code == 200
+        data = resp.get_json()
+
+        conflict_issues = [i for i in data['issues']
+                           if i['type'] == 'template_conflict']
+
+        # conflicting-host should have conflicts (check_interval, max_check_attempts differ)
+        flagged = [i['object'] for i in conflict_issues]
+        assert any('conflicting-host' in n for n in flagged)
+
+        # no-conflict-host should NOT be flagged (fast-check and no-conflict don't overlap)
+        assert not any('no-conflict-host' in n for n in flagged)
+
+
 def test_apply_staging_with_validate_flag():
     """Apply staging should include validation result when validate=true."""
     test_dir = tempfile.mkdtemp()

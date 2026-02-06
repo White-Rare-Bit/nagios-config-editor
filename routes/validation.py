@@ -551,6 +551,60 @@ def api_health_check():
                 'message': f'Command {cmd_name} expects {expected_args} arg(s) but {provided_args} provided'
             })
 
+    # 13. Check for template attribute conflicts in multi-template inheritance
+    for obj in service.get_objects():
+        if obj.attributes.get('register', '1') == '0':
+            continue
+        use_value = obj.attributes.get('use', '')
+        if not use_value:
+            continue
+
+        tmpl_names = [t.strip() for t in use_value.split(',') if t.strip()]
+        if len(tmpl_names) < 2:
+            continue  # Single template — no conflicts possible
+
+        # Resolve each template's full attribute set independently
+        tmpl_attr_sets = []
+        for tmpl_name in tmpl_names:
+            tmpl = template_lookup.get((obj.object_type, tmpl_name))
+            if tmpl:
+                resolved_tmpl = resolve_inherited_attrs(tmpl)
+                # Remove system fields
+                cleaned = {k: v for k, v in resolved_tmpl.items()
+                           if k not in ('use', 'name', 'register')}
+                tmpl_attr_sets.append((tmpl_name, cleaned))
+
+        if len(tmpl_attr_sets) < 2:
+            continue
+
+        # Find attributes defined in multiple templates with different values
+        # that are NOT overridden by the object itself
+        conflicts = []
+        seen_attrs = {}  # attr -> (first_value, first_template)
+        for tmpl_name, attrs in tmpl_attr_sets:
+            for attr, value in attrs.items():
+                if attr in obj.attributes:
+                    continue  # Object overrides this — no conflict
+                if attr in seen_attrs:
+                    prev_value, prev_tmpl = seen_attrs[attr]
+                    if value != prev_value:
+                        conflicts.append(
+                            f'{attr} differs: {prev_tmpl}={prev_value}, {tmpl_name}={value}'
+                        )
+                else:
+                    seen_attrs[attr] = (value, tmpl_name)
+
+        if conflicts:
+            obj_name = obj.get_name() or 'unnamed'
+            issues.append({
+                'type': 'template_conflict',
+                'severity': 'warning',
+                'object': obj_name,
+                'object_type': obj.object_type,
+                'file': obj.source_file,
+                'message': f'Template inheritance conflict (first template wins): {"; ".join(conflicts[:3])}'
+            })
+
     # Summary
     summary = {
         'total_issues': len(issues),
