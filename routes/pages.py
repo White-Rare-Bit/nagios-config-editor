@@ -17,24 +17,6 @@ def index():
     return redirect(url_for('pages.explorer'))
 
 
-@bp.route('/objects')
-@bp.route('/objects/<object_type>')
-def objects(object_type=None):
-    """Browse objects by type."""
-    service = get_service()
-    p = service.parser
-    types = p.get_object_types()
-
-    if object_type:
-        objs = p.get_objects_by_type(object_type)
-    else:
-        objs = service.get_objects()
-
-    return render_template('objects.html',
-                           objects=objs,
-                           object_types=types,
-                           selected_type=object_type)
-
 
 @bp.route('/bulk-rename')
 def bulk_rename():
@@ -123,11 +105,6 @@ def inheritance():
     types = p.get_object_types()
     return render_template('inheritance.html', object_types=types)
 
-
-@bp.route('/smart-grouping')
-def smart_grouping():
-    """Smart grouping suggestions page."""
-    return render_template('smart_grouping.html')
 
 
 @bp.route('/explorer')
