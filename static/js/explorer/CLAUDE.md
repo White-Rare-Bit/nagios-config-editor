@@ -104,32 +104,39 @@ Explorer.refreshAfterObjectChange({ skipTree: true });
 
 ## Constants Module (constants.js)
 
-Centralized configuration accessed via `Explorer.constants`:
+All domain metadata is served by `GET /api/metadata` and populated into `Explorer.constants` at startup via `Explorer.applyMetadata()`. **Never hardcode domain metadata in JS files.**
 
 ```javascript
 const constants = Explorer.constants;
 
-// Type display labels
-constants.typeLabels        // { host: 'Hosts', service: 'Services', ... }
-
-// Name fields by object type (sync with nagios_model.py:NAME_FIELDS)
-constants.nameFields        // { host: 'host_name', service: 'service_description', ... }
-
-// Notification options
+// --- Populated from /api/metadata (nagios_model.py is source of truth) ---
+constants.typeLabels          // { host: 'Hosts', ... }
+constants.nameFields          // { host: 'host_name', ... }
+constants.REQUIRED_FIELDS     // { host: ['host_name'], ... }
+constants.referenceFields     // { host_name: 'host', check_command: 'command', ... }
+constants.ATTR_REFERENCE_MAP  // Built from referenceFields (for autocomplete)
+constants.NAGIOS_ATTRIBUTES   // { host: ['host_name', 'alias', ...], ... }
+constants.defaultAttributes   // { host: {host_name: '', ...}, ... }
+constants.groupStructure      // { hostgroup: {name_attr, member_attrs, ...}, ... }
 constants.HOST_NOTIFICATION_OPTIONS
 constants.SERVICE_NOTIFICATION_OPTIONS
 constants.NOTIFICATION_OPTION_ATTRS
-
-// Dependency failure criteria
 constants.HOST_FAILURE_CRITERIA
 constants.SERVICE_FAILURE_CRITERIA
 
-// Required fields per object type (sync with nagios_model.py:REQUIRED_FIELDS)
-constants.REQUIRED_FIELDS   // { host: ['host_name'], service: ['service_description', [...]], ... }
+// --- UI-only (hardcoded, no backend equivalent) ---
+constants.identityFields      // Fields that define object identity in UI
+constants.inheritanceAttrs    // ['use', 'parents']
+constants.referenceAttrs      // Attrs that trigger reference section refresh
+```
 
-// Reference field mappings (sync with nagios_model.py:REFERENCE_FIELDS)
-constants.referenceFields   // { host_name: 'host', check_command: 'command', ... }
-constants.ATTR_REFERENCE_MAP // For autocomplete hints
+### Shared Helpers (constants.js)
+
+```javascript
+Explorer.isObjectTemplate(obj)      // Detect templates (register=0 or name without type-specific name)
+Explorer.getFieldsForType(type)     // Get all fields referencing a type (e.g., 'command' → ['check_command', ...])
+Explorer.stripPrefix(val)           // Strip +/! prefixes from values
+Explorer.applyMetadata(meta)        // Populate constants from /api/metadata response
 ```
 
 ## Key Helpers
