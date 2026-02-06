@@ -812,3 +812,159 @@ def get_template_issues():
             })
 
     return jsonify(issues)
+
+
+@bp.route('/api/escalation-path/<object_type>/<name>')
+@bp.route('/api/escalation-path/<object_type>/<name>/<service_desc>')
+def api_escalation_path(object_type, name, service_desc=None):
+    """Get escalation path for a host or service.
+
+    Returns base contacts and escalation levels in notification order.
+    """
+    service = get_service()
+
+    # Find target object
+    target = None
+    for obj in service.get_objects():
+        if object_type == 'host':
+            if obj.object_type == 'host' and obj.get_name() == name:
+                target = obj
+                break
+        elif object_type == 'service' and service_desc:
+            if obj.object_type == 'service':
+                host_attr = obj.attributes.get('host_name', '')
+                svc_desc = obj.attributes.get('service_description', '')
+                if name in [h.strip() for h in host_attr.split(',')] and svc_desc == service_desc:
+                    target = obj
+                    break
+
+    if not target:
+        return jsonify({'error': 'Object not found'}), 404
+
+    # Build lookups
+    template_lookup = {}
+    contact_objects = {}
+    cg_objects = {}
+    for obj in service.get_objects():
+        tmpl_name = obj.attributes.get('name')
+        if tmpl_name:
+            template_lookup[(obj.object_type, tmpl_name)] = obj
+        if obj.object_type == 'contact' and obj.attributes.get('register', '1') != '0':
+            contact_objects[obj.attributes.get('contact_name', '')] = obj
+        elif obj.object_type == 'contactgroup':
+            cg_objects[obj.attributes.get('contactgroup_name', '')] = obj
+
+    def resolve_attrs(obj, visited=None):
+        if visited is None:
+            visited = set()
+        resolved = {}
+        use_templates = obj.attributes.get('use', '')
+        if use_templates:
+            for t in [t.strip() for t in use_templates.split(',') if t.strip()]:
+                if t not in visited:
+                    visited.add(t)
+                    tmpl = template_lookup.get((obj.object_type, t))
+                    if tmpl:
+                        for k, v in resolve_attrs(tmpl, visited).items():
+                            if k not in ('use', 'name', 'register'):
+                                resolved[k] = v
+        for k, v in obj.attributes.items():
+            resolved[k] = v
+        return resolved
+
+    def resolve_cg_members(cg_name):
+        """Resolve contactgroup to individual contact names."""
+        cg = cg_objects.get(cg_name)
+        if not cg:
+            return []
+        members = []
+        if 'members' in cg.attributes:
+            members.extend([m.strip() for m in cg.attributes['members'].split(',') if m.strip()])
+        return members
+
+    def contact_info(cname):
+        """Get contact notification info."""
+        cobj = contact_objects.get(cname)
+        if not cobj:
+            return {'name': cname, 'exists': False}
+        resolved = resolve_attrs(cobj)
+        return {
+            'name': cname,
+            'exists': True,
+            'host_notification_commands': resolved.get('host_notification_commands', ''),
+            'service_notification_commands': resolved.get('service_notification_commands', ''),
+            'host_notification_period': resolved.get('host_notification_period', ''),
+            'service_notification_period': resolved.get('service_notification_period', ''),
+        }
+
+    # Resolve base contacts
+    resolved_target = resolve_attrs(target)
+    base_contact_names = set()
+    if 'contacts' in resolved_target:
+        for c in resolved_target['contacts'].split(','):
+            c = c.strip().lstrip('+!')
+            if c:
+                base_contact_names.add(c)
+    if 'contact_groups' in resolved_target:
+        for cg in resolved_target['contact_groups'].split(','):
+            cg = cg.strip().lstrip('+!')
+            for m in resolve_cg_members(cg):
+                base_contact_names.add(m)
+
+    base_contacts = [contact_info(c) for c in sorted(base_contact_names)]
+
+    # Find matching escalations
+    esc_type = 'hostescalation' if object_type == 'host' else 'serviceescalation'
+    escalations = []
+    for obj in service.get_objects():
+        if obj.object_type != esc_type:
+            continue
+
+        # Check if escalation matches our target
+        matches = False
+        if object_type == 'host':
+            esc_hosts = obj.attributes.get('host_name', '')
+            if name in [h.strip() for h in esc_hosts.split(',')]:
+                matches = True
+        else:
+            esc_hosts = obj.attributes.get('host_name', '')
+            esc_svc = obj.attributes.get('service_description', '')
+            if service_desc and esc_svc == service_desc:
+                if name in [h.strip() for h in esc_hosts.split(',')]:
+                    matches = True
+
+        if not matches:
+            continue
+
+        # Resolve escalation contacts
+        esc_contact_names = set()
+        if 'contact_groups' in obj.attributes:
+            for cg in obj.attributes['contact_groups'].split(','):
+                cg = cg.strip()
+                for m in resolve_cg_members(cg):
+                    esc_contact_names.add(m)
+        if 'contacts' in obj.attributes:
+            for c in obj.attributes['contacts'].split(','):
+                c = c.strip()
+                if c:
+                    esc_contact_names.add(c)
+
+        escalations.append({
+            'first_notification': int(obj.attributes.get('first_notification', 0)),
+            'last_notification': int(obj.attributes.get('last_notification', 0)),
+            'notification_interval': int(obj.attributes.get('notification_interval', 0)),
+            'escalation_period': obj.attributes.get('escalation_period', ''),
+            'contacts': [contact_info(c) for c in sorted(esc_contact_names)],
+            'source_file': obj.source_file,
+        })
+
+    # Sort escalations by first_notification
+    escalations.sort(key=lambda e: e['first_notification'])
+
+    return jsonify({
+        'object_type': object_type,
+        'name': name,
+        'service_description': service_desc,
+        'base_contacts': base_contacts,
+        'escalations': escalations,
+    })
