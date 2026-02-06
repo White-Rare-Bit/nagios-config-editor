@@ -1,5 +1,6 @@
 """Tests for health check endpoint."""
 
+import json
 import os
 import pytest
 import tempfile
@@ -315,3 +316,67 @@ def test_edit_object_uses_atomic_write(tmp_path):
     assert 'Updated' in content
     # File should still exist and be valid (atomic write doesn't leave partial files)
     assert 'define host' in content
+
+
+def test_apply_staging_with_validate_flag():
+    """Apply staging should include validation result when validate=true."""
+    test_dir = tempfile.mkdtemp()
+    try:
+        test_config_path = Path(test_dir) / 'nagios'
+        test_config_path.mkdir()
+
+        (test_config_path / 'hosts.cfg').write_text('''
+define host {
+    host_name       test-host
+    alias           Test Host
+    address         192.168.1.1
+}
+''')
+
+        app = create_app(config_path=str(test_config_path))
+        app.config['TESTING'] = True
+        client = app.test_client()
+
+        # Stage an edit
+        session_id = 'test-session'
+        headers = {'X-Session-Id': session_id, 'Content-Type': 'application/json'}
+
+        # Get objects to find stable key
+        resp = client.get('/api/objects')
+        assert resp.status_code == 200
+        objects = resp.json
+        assert len(objects) > 0
+        obj = objects[0]
+
+        # Stage an edit
+        staging_data = {
+            'sessionId': session_id,
+            'userName': 'Test User',
+            'userEmail': 'test@example.com',
+            'pendingEdits': {
+                str(obj['global_index']): {
+                    'object': obj,
+                    'original': obj['attributes'],
+                    'edited': {**obj['attributes'], 'alias': 'Modified'}
+                }
+            }
+        }
+
+        resp = client.post('/api/staging',
+                           data=json.dumps(staging_data),
+                           content_type='application/json',
+                           headers=headers)
+        assert resp.status_code == 200
+
+        # Apply with validate flag
+        resp = client.post('/api/staging/apply', headers=headers, json={
+            'validate': True
+        })
+        assert resp.status_code == 200
+        data = resp.json
+
+        # Response should include a validation field
+        assert 'validation' in data, \
+            f"Response should include 'validation' when validate=true, got keys: {list(data.keys())}"
+    finally:
+        shutil.rmtree(test_dir, ignore_errors=True)

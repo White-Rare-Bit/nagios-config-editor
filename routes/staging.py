@@ -17,6 +17,7 @@ from staging_manager import (
 from audit_service import write_audit_log
 import file_operations
 from .helpers import (
+    get_config,
     get_config_path,
     get_service,
     get_staging_manager,
@@ -946,6 +947,7 @@ def api_apply_staging():
     request_data = request.get_json(silent=True) or {}
     update_references_flag = request_data.get('updateReferences', False)
     defer_clear = request_data.get('deferClear', False)
+    validate_after = request_data.get('validate', False)
 
     # Validate preconditions
     error_response, staging_data = _validate_apply_preconditions(sm, session_id, op_log)
@@ -1043,6 +1045,30 @@ def api_apply_staging():
         }
         if audit_failed:
             response_data['warnings'] = ['Audit log write failed - changes applied but not logged']
+
+        # Optional: Run nagios -v validation after successful apply
+        if validate_after:
+            try:
+                config = get_config()
+                nagios_bin = config.get('nagios_bin', '')
+                nagios_cfg = config.get('nagios_cfg', '')
+                if nagios_bin and nagios_cfg:
+                    from validator import NagiosValidator
+                    validator = NagiosValidator(nagios_bin, nagios_cfg)
+                    val_result = validator.validate()
+                    response_data['validation'] = val_result.to_dict()
+                else:
+                    response_data['validation'] = {
+                        'success': None,
+                        'skipped': True,
+                        'message': 'Nagios binary or config path not configured'
+                    }
+            except Exception as e:
+                response_data['validation'] = {
+                    'success': None,
+                    'skipped': True,
+                    'message': f'Validation failed to run: {str(e)}'
+                }
 
         return jsonify(response_data)
 
