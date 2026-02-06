@@ -799,3 +799,148 @@ define timeperiod {
         for issue in unused_cmd_issues:
             assert issue['severity'] == 'warning', \
                 f"Expected severity 'warning', got '{issue['severity']}' for {issue['object']}"
+
+
+class TestUnusedObjectDetection:
+    """Test that unused contacts, contactgroups, and timeperiods are detected."""
+
+    @pytest.fixture
+    def app_with_unused_objects(self):
+        """Config with used and unused contacts, contactgroups, and timeperiods."""
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / 'nagios'
+        test_config_path.mkdir()
+
+        (test_config_path / 'commands.cfg').write_text('''
+define command {
+    command_name    check-host-alive
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+
+define command {
+    command_name    notify-by-email
+    command_line    /usr/bin/printf "%b" "Notification"
+}
+''')
+
+        (test_config_path / 'timeperiods.cfg').write_text('''
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24 Hours A Day
+    monday          00:00-24:00
+    tuesday         00:00-24:00
+    wednesday       00:00-24:00
+    thursday        00:00-24:00
+    friday          00:00-24:00
+    saturday        00:00-24:00
+    sunday          00:00-24:00
+}
+
+define timeperiod {
+    timeperiod_name unused-period
+    alias           Unused Time Period
+    monday          08:00-17:00
+}
+''')
+
+        (test_config_path / 'contacts.cfg').write_text('''
+define contact {
+    contact_name                    used-contact
+    host_notification_commands      notify-by-email
+    service_notification_commands   notify-by-email
+    host_notification_period        24x7
+    service_notification_period     24x7
+}
+
+define contact {
+    contact_name                    unused-contact
+    host_notification_commands      notify-by-email
+    service_notification_commands   notify-by-email
+    host_notification_period        24x7
+    service_notification_period     24x7
+}
+''')
+
+        (test_config_path / 'contactgroups.cfg').write_text('''
+define contactgroup {
+    contactgroup_name   used-cg
+    alias               Used Contact Group
+    members             used-contact
+}
+
+define contactgroup {
+    contactgroup_name   unused-cg
+    alias               Unused Contact Group
+}
+''')
+
+        (test_config_path / 'hosts.cfg').write_text('''
+define host {
+    host_name       test-host
+    address         10.0.0.1
+    check_command   check-host-alive
+    contact_groups  used-cg
+}
+''')
+
+        (test_config_path / 'services.cfg').write_text('''
+define service {
+    host_name               test-host
+    service_description     PING
+    check_command           check-host-alive
+    contact_groups          used-cg
+}
+''')
+
+        app = create_app(config_path=str(test_config_path))
+        app.config['TESTING'] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_detects_unused_contacts(self, app_with_unused_objects):
+        """unused-contact should be flagged; used-contact should not."""
+        client = app_with_unused_objects.test_client()
+        resp = client.get('/api/health-check')
+        assert resp.status_code == 200
+        data = resp.get_json()
+
+        unused_contact_issues = [i for i in data['issues']
+                                 if i['type'] == 'unused_contact']
+        flagged_names = [i['object'] for i in unused_contact_issues]
+
+        assert 'unused-contact' in flagged_names, \
+            f"Expected 'unused-contact' flagged, got: {flagged_names}"
+        assert 'used-contact' not in flagged_names, \
+            f"False positive: 'used-contact' is referenced by contactgroup but was flagged"
+
+    def test_detects_unused_contactgroups(self, app_with_unused_objects):
+        """unused-cg should be flagged; used-cg should not."""
+        client = app_with_unused_objects.test_client()
+        resp = client.get('/api/health-check')
+        assert resp.status_code == 200
+        data = resp.get_json()
+
+        unused_cg_issues = [i for i in data['issues']
+                            if i['type'] == 'unused_contactgroup']
+        flagged_names = [i['object'] for i in unused_cg_issues]
+
+        assert 'unused-cg' in flagged_names, \
+            f"Expected 'unused-cg' flagged, got: {flagged_names}"
+        assert 'used-cg' not in flagged_names, \
+            f"False positive: 'used-cg' is assigned to host/service but was flagged"
+
+    def test_detects_unused_timeperiods(self, app_with_unused_objects):
+        """unused-period should be flagged; 24x7 should not."""
+        client = app_with_unused_objects.test_client()
+        resp = client.get('/api/health-check')
+        assert resp.status_code == 200
+        data = resp.get_json()
+
+        unused_tp_issues = [i for i in data['issues']
+                            if i['type'] == 'unused_timeperiod']
+        flagged_names = [i['object'] for i in unused_tp_issues]
+
+        assert 'unused-period' in flagged_names, \
+            f"Expected 'unused-period' flagged, got: {flagged_names}"
+        assert '24x7' not in flagged_names, \
+            f"False positive: '24x7' is used by contacts but was flagged"

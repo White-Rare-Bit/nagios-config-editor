@@ -741,6 +741,125 @@ def api_health_check():
                     'message': f'Command is not referenced by any object'
                 })
 
+    # 16. Check for unused contacts
+    # A contact is "used" if any non-template object has it in 'contacts' attribute,
+    # or any contactgroup has it in 'members' attribute.
+    used_contacts = set()
+    for obj in service.get_objects():
+        is_template = obj.attributes.get('register', '1') == '0'
+        if is_template:
+            continue
+
+        # Direct contacts attribute on any object
+        if 'contacts' in obj.attributes:
+            for c in obj.attributes['contacts'].split(','):
+                c = c.strip().lstrip('+!').strip()
+                if c:
+                    used_contacts.add(c)
+
+    # Also check contactgroup 'members' attribute (contactgroups are not templates)
+    for obj in service.get_objects():
+        if obj.object_type == 'contactgroup' and 'members' in obj.attributes:
+            for m in obj.attributes['members'].split(','):
+                m = m.strip().lstrip('+!').strip()
+                if m:
+                    used_contacts.add(m)
+
+    for obj in service.get_objects():
+        if obj.object_type == 'contact' and obj.attributes.get('register', '1') != '0':
+            contact_name = obj.attributes.get('contact_name', '')
+            if contact_name and contact_name not in used_contacts:
+                issues.append({
+                    'type': 'unused_contact',
+                    'severity': 'warning',
+                    'object': contact_name,
+                    'object_type': 'contact',
+                    'file': obj.source_file,
+                    'message': 'Contact is not referenced by any object'
+                })
+
+    # 17. Check for unused contactgroups
+    # A contactgroup is "used" if any non-template object has it in 'contact_groups',
+    # any contactgroup has it in 'contactgroup_members', or any contact has it in 'contactgroups'.
+    used_contactgroups = set()
+    for obj in service.get_objects():
+        is_template = obj.attributes.get('register', '1') == '0'
+
+        # contact_groups attribute on any non-template object
+        if not is_template and 'contact_groups' in obj.attributes:
+            for cg in obj.attributes['contact_groups'].split(','):
+                cg = cg.strip().lstrip('+!').strip()
+                if cg:
+                    used_contactgroups.add(cg)
+
+        # contactgroup_members on contactgroups
+        if obj.object_type == 'contactgroup' and 'contactgroup_members' in obj.attributes:
+            for cg in obj.attributes['contactgroup_members'].split(','):
+                cg = cg.strip().lstrip('+!').strip()
+                if cg:
+                    used_contactgroups.add(cg)
+
+        # contactgroups attribute on contacts
+        if obj.object_type == 'contact' and 'contactgroups' in obj.attributes:
+            for cg in obj.attributes['contactgroups'].split(','):
+                cg = cg.strip().lstrip('+!').strip()
+                if cg:
+                    used_contactgroups.add(cg)
+
+    for obj in service.get_objects():
+        if obj.object_type == 'contactgroup':
+            cg_name = obj.attributes.get('contactgroup_name', '')
+            if cg_name and cg_name not in used_contactgroups:
+                issues.append({
+                    'type': 'unused_contactgroup',
+                    'severity': 'warning',
+                    'object': cg_name,
+                    'object_type': 'contactgroup',
+                    'file': obj.source_file,
+                    'message': 'Contact group is not referenced by any object'
+                })
+
+    # 18. Check for unused timeperiods
+    # A timeperiod is "used" if any non-template object references it in:
+    # check_period, notification_period, host_notification_period,
+    # service_notification_period, dependency_period, or exclude (comma-separated).
+    used_timeperiods = set()
+    tp_fields_single = [
+        'check_period', 'notification_period',
+        'host_notification_period', 'service_notification_period',
+        'dependency_period',
+    ]
+    for obj in service.get_objects():
+        is_template = obj.attributes.get('register', '1') == '0'
+        if is_template:
+            continue
+
+        for tp_field in tp_fields_single:
+            if tp_field in obj.attributes:
+                tp_ref = obj.attributes[tp_field].strip().lstrip('+!').strip()
+                if tp_ref:
+                    used_timeperiods.add(tp_ref)
+
+        # 'exclude' is comma-separated on timeperiod objects
+        if 'exclude' in obj.attributes:
+            for tp in obj.attributes['exclude'].split(','):
+                tp = tp.strip().lstrip('+!').strip()
+                if tp:
+                    used_timeperiods.add(tp)
+
+    for obj in service.get_objects():
+        if obj.object_type == 'timeperiod' and obj.attributes.get('register', '1') != '0':
+            tp_name = obj.attributes.get('timeperiod_name', '')
+            if tp_name and tp_name not in used_timeperiods:
+                issues.append({
+                    'type': 'unused_timeperiod',
+                    'severity': 'warning',
+                    'object': tp_name,
+                    'object_type': 'timeperiod',
+                    'file': obj.source_file,
+                    'message': 'Time period is not referenced by any object'
+                })
+
     # Summary
     summary = {
         'total_issues': len(issues),
