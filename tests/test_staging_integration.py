@@ -264,3 +264,48 @@ def test_conflict_detection(client):
     resp = client.get('/api/staging/conflicts', headers=headers)
     assert resp.status_code == 200
     assert len(resp.json.get('conflicts', [])) == 0
+
+
+class TestBulkOpsUseStagingSystem:
+    """Verify that bulk operations flow through staging (SAFETY-4 regression test)."""
+
+    def test_bulk_rename_does_not_write_to_disk_without_apply(self, client, app):
+        """Bulk rename via staging save should not modify disk files."""
+        with app.app_context():
+            service = app.extensions['service']
+            original_objects = service.get_objects()
+
+            # Find a host to rename
+            host = None
+            for obj in original_objects:
+                if obj.object_type == 'host':
+                    host = obj
+                    break
+
+            if host is None:
+                pytest.skip("No host objects in test config")
+
+            original_content = Path(host.source_file).read_text()
+
+        # Stage a rename edit (don't apply)
+        resp = client.post('/api/staging', json={
+            'pendingEdits': {
+                '0': {
+                    'object': host.to_dict(),
+                    'original': host.attributes.copy(),
+                    'edited': {**host.attributes, 'alias': 'RENAMED-ALIAS'}
+                }
+            }
+        }, headers={'X-Session-Id': 'test-session'})
+        assert resp.status_code == 200
+
+        # Verify disk file is UNCHANGED
+        with app.app_context():
+            service = app.extensions['service']
+            host_obj = None
+            for obj in service.get_objects():
+                if obj.object_type == 'host':
+                    host_obj = obj
+                    break
+            current_content = Path(host_obj.source_file).read_text()
+            assert current_content == original_content
