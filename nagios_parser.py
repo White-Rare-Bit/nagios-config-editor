@@ -22,6 +22,14 @@ class NagiosConfigParser:
     # Reference fields imported from nagios_model for backward compatibility
     REFERENCE_FIELDS = REFERENCE_FIELDS
 
+    # Regex matching a Nagios time range value (e.g. 00:00-24:00, 08:00-17:00)
+    _TIMERANGE_RE = re.compile(r'\d{1,2}:\d{2}-\d{1,2}:\d{2}')
+
+    # Standard timeperiod attributes that use normal key/value splitting
+    _TIMEPERIOD_STANDARD_ATTRS = frozenset({
+        'timeperiod_name', 'alias', 'use', 'name', 'register', 'exclude',
+    })
+
     def __init__(self, config_path: str = "./sample-config"):
         # Always use absolute path to ensure consistent file paths
         self.config_path = Path(config_path).resolve()
@@ -83,13 +91,14 @@ class NagiosConfigParser:
         # Use state machine approach for proper brace matching
         # This handles braces inside quoted strings correctly
         for obj_type, block_content, line_num in self._find_define_blocks(content):
-            attributes = self._parse_attributes(block_content)
+            attributes, inline_comments = self._parse_attributes(block_content, object_type=obj_type)
 
             obj = NagiosObject(
                 object_type=obj_type,
                 attributes=attributes,
                 source_file=filepath,
-                line_number=line_num
+                line_number=line_num,
+                inline_comments=inline_comments,
             )
             objects.append(obj)
             self.objects.append(obj)
@@ -176,9 +185,21 @@ class NagiosConfigParser:
 
         return blocks
 
-    def _parse_attributes(self, block_content: str) -> Dict[str, str]:
-        """Parse attributes from a define block content."""
+    def _parse_attributes(self, block_content: str, object_type: str = None) -> tuple:
+        """Parse attributes from a define block content.
+
+        Args:
+            block_content: The text inside the define { } block.
+            object_type: The Nagios object type (e.g. 'timeperiod'). Used to
+                enable special parsing for timeperiod date-range directives.
+
+        Returns:
+            Tuple of (attributes dict, inline_comments dict).
+            inline_comments maps attribute keys to their comment text (without
+            the leading ';').
+        """
         attributes = {}
+        inline_comments = {}
 
         # Handle line continuations (backslash at end of line)
         block_content = re.sub(r'\\\n\s*', ' ', block_content)
@@ -190,18 +211,62 @@ class NagiosConfigParser:
             if not line or line.startswith('#') or line.startswith(';'):
                 continue
 
-            # Split on first whitespace to get key/value
-            parts = line.split(None, 1)
-            if len(parts) >= 1:
+            if object_type == 'timeperiod':
+                key, value = self._parse_timeperiod_line(line)
+            else:
+                # Split on first whitespace to get key/value
+                parts = line.split(None, 1)
                 key = parts[0]
                 value = parts[1] if len(parts) > 1 else ''
 
-                # Remove inline comments (semicolons outside quotes)
-                value = self._strip_inline_comment(value)
+            # Extract inline comment before stripping it
+            comment = self._extract_inline_comment(value)
 
-                attributes[key] = value.strip()
+            # Remove inline comments (semicolons outside quotes)
+            value = self._strip_inline_comment(value)
 
-        return attributes
+            attributes[key] = value.strip()
+            if comment:
+                inline_comments[key] = comment
+
+        return attributes, inline_comments
+
+    def _parse_timeperiod_line(self, line: str) -> tuple:
+        """Parse a single line inside a timeperiod block.
+
+        Timeperiod directives have multi-word keys like:
+            monday 1                08:00-12:00
+            day 1 - 15              08:00-17:00
+            2025-12-24 - 2025-12-26 00:00-24:00
+            monday 3 - thursday 4   00:00-24:00
+
+        The value always starts with a time range pattern (HH:MM-HH:MM).
+        Standard attributes (timeperiod_name, alias, etc.) use normal splitting.
+
+        Returns:
+            (key, value) tuple.
+        """
+        # First, check if the line starts with a standard timeperiod attribute
+        parts = line.split(None, 1)
+        first_word = parts[0]
+
+        if first_word in self._TIMEPERIOD_STANDARD_ATTRS:
+            value = parts[1] if len(parts) > 1 else ''
+            return first_word, value
+
+        # For date-range directives, find the time range pattern.
+        # Everything before it is the key; from the pattern onward is the value.
+        match = self._TIMERANGE_RE.search(line)
+        if match:
+            key = line[:match.start()].rstrip()
+            value = line[match.start():]
+            if key:
+                return key, value
+
+        # Fallback: standard first-whitespace split
+        key = parts[0]
+        value = parts[1] if len(parts) > 1 else ''
+        return key, value
 
     def _strip_inline_comment(self, value: str) -> str:
         """Remove inline comments (;) while respecting quoted strings.
@@ -239,6 +304,39 @@ class NagiosConfigParser:
             i += 1
 
         return ''.join(result)
+
+    def _extract_inline_comment(self, value: str) -> Optional[str]:
+        """Extract inline comment text from a value string.
+
+        Returns the comment text (after the ';') stripped of whitespace,
+        or None if no inline comment is present. Respects quoted strings.
+        """
+        in_double_quote = False
+        in_single_quote = False
+        i = 0
+
+        while i < len(value):
+            char = value[i]
+            prev_char = value[i-1] if i > 0 else ''
+
+            # Handle escaped characters
+            if prev_char == '\\':
+                i += 1
+                continue
+
+            # Track quote state
+            if char == '"' and not in_single_quote:
+                in_double_quote = not in_double_quote
+            elif char == "'" and not in_double_quote:
+                in_single_quote = not in_single_quote
+            elif char == ';' and not in_double_quote and not in_single_quote:
+                # Found comment start outside quotes
+                comment = value[i+1:].strip()
+                return comment if comment else None
+
+            i += 1
+
+        return None
 
     def get_objects_by_type(self, object_type: str) -> List[NagiosObject]:
         """Get all objects of a specific type."""

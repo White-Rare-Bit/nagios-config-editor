@@ -446,8 +446,7 @@ function buildTree() {
 
     // Filter by orphans
     if (orphansOnly) {
-        Explorer.buildOrphanCache(); // Ensure cache is built
-        filtered = filtered.filter(o => Explorer.isObjectOrphan(o));
+        filtered = filtered.filter(o => state.orphanIndices.has(o.global_index));
     }
 
     // Filter by issues
@@ -713,7 +712,7 @@ function buildTypeTree(container, objects) {
 function renderTreeItem(obj, showType = false) {
     const selected = Explorer.isSelectedByIndex(obj.global_index) ? 'selected' : '';
     const isTemplate = isTreeItemTemplate(obj);
-    const isOrphan = Explorer.isObjectOrphan(obj);
+    const isOrphan = state.orphanIndices.has(obj.global_index);
     const hostListInfo = getHostListInfo(obj);
     const issue = getObjectIssue(obj);
     const isDeleted = state.stagedObjectDeletions.has(obj.global_index);
@@ -798,14 +797,9 @@ function getHostListInfo(obj) {
     };
 }
 
-// Check if tree item is a template (lightweight check for rendering)
+// Check if tree item is a template (delegates to shared implementation)
 function isTreeItemTemplate(obj) {
-    if (obj.attributes.register === '0') return true;
-    if (obj.object_type === 'host' && obj.attributes.name && !obj.attributes.host_name) return true;
-    // Service templates have 'name' but no 'service_description' (may have hostgroup_name)
-    if (obj.object_type === 'service' && obj.attributes.name && !obj.attributes.service_description) return true;
-    if (obj.object_type === 'contact' && obj.attributes.name && !obj.attributes.contact_name) return true;
-    return false;
+    return Explorer.isObjectTemplate(obj);
 }
 
 // Helper to get effective attributes for an object (considering pending edits)
@@ -817,35 +811,18 @@ function getEffectiveAttributes(obj) {
 // Helper to get the name field that should be used for an object
 // Templates use 'name', regular objects use type-specific field (host_name, etc.)
 function getNameFieldForObject(obj) {
-    const typeSpecificFields = {
-        'host': 'host_name',
-        'hostgroup': 'hostgroup_name',
-        'service': 'service_description',
-        'servicegroup': 'servicegroup_name',
-        'contact': 'contact_name',
-        'contactgroup': 'contactgroup_name',
-        'command': 'command_name',
-        'timeperiod': 'timeperiod_name',
-        'hostdependency': 'host_name',
-        'servicedependency': 'service_description',
-        'hostescalation': 'host_name',
-        'serviceescalation': 'service_description'
-    };
-    const typeField = typeSpecificFields[obj.object_type];
+    const typeField = constants.nameFields[obj.object_type];
     const attrs = getEffectiveAttributes(obj);
 
-    // Use type-specific field if it exists, otherwise use 'name' (for templates)
     if (typeField && attrs[typeField]) {
         return typeField;
     }
-    // For escalations/dependencies, fall back to hostgroup_name if host_name not present
     if ((obj.object_type === 'hostescalation' || obj.object_type === 'hostdependency') && attrs.hostgroup_name) {
         return 'hostgroup_name';
     }
     if (attrs.name) {
         return 'name';
     }
-    // Default to type-specific field for objects without either
     return typeField || 'name';
 }
 

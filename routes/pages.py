@@ -26,14 +26,6 @@ def bulk_rename():
     return render_template('bulk_rename.html', object_types=types)
 
 
-@bp.route('/find-replace')
-def find_replace():
-    """Find and replace interface."""
-    p = get_service().parser
-    types = p.get_object_types()
-    return render_template('find_replace.html', object_types=types)
-
-
 @bp.route('/reorganize')
 def reorganize():
     """Reorganize objects interface."""
@@ -82,20 +74,6 @@ def settings():
     """Settings page for configuring paths."""
     config = get_config()
     return render_template('settings.html', config=config)
-
-
-@bp.route('/health-check')
-def health_check():
-    """Config health check page."""
-    return render_template('health_check.html')
-
-
-@bp.route('/bulk-attributes')
-def bulk_attributes():
-    """Bulk attribute editor page."""
-    p = get_service().parser
-    types = p.get_object_types()
-    return render_template('bulk_attributes.html', object_types=types)
 
 
 @bp.route('/inheritance')

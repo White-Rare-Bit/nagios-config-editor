@@ -7,10 +7,24 @@
     const constants = Explorer.constants;
     const typeLabels = constants.typeLabels;
 
-    // C-01: Extracted constants for add-to-group functionality
-    const GROUP_ATTR_MAP = { host: 'hostgroups', service: 'servicegroups', contact: 'contactgroups' };
-    const GROUP_TYPE_MAP = { host: 'hostgroup', service: 'servicegroup', contact: 'contactgroup' };
     const VIEWPORT_PADDING = 10;
+
+    // C-01: Derive group maps from constants.groupStructure (populated by /api/metadata)
+    function getGroupAttrMap() {
+        const map = {};
+        for (const [groupType, gs] of Object.entries(constants.groupStructure || {})) {
+            map[gs.member_type] = gs.member_of_attr;
+        }
+        return map;
+    }
+
+    function getGroupTypeMap() {
+        const map = {};
+        for (const [groupType, gs] of Object.entries(constants.groupStructure || {})) {
+            map[gs.member_type] = groupType;
+        }
+        return map;
+    }
 
     /**
      * Get or initialize pending edit data for an object
@@ -390,7 +404,7 @@
 
         Explorer.saveStagedChanges();
         Explorer.updateCommitUI();
-        Explorer.invalidateOrphanCache();
+        state.healthCheckData = null;
         Explorer.computeStagedIssues();
         Explorer.buildTree();
         Explorer.renderTargetPane();
@@ -681,7 +695,7 @@
         // Get selected objects that can have groups
         const eligibleObjects = Array.from(Explorer.getSelectedIndices())
             .map(i => state.allObjects.find(o => o.global_index === i))
-            .filter(o => o && GROUP_ATTR_MAP[o.object_type]);
+            .filter(o => o && getGroupAttrMap()[o.object_type]);
 
         if (eligibleObjects.length === 0) {
             showToast('Please select hosts, services, or contacts', 'warning');
@@ -689,7 +703,7 @@
         }
 
         // Validate that the group exists
-        const requiredGroupTypes = [...new Set(eligibleObjects.map(o => GROUP_TYPE_MAP[o.object_type]))];
+        const requiredGroupTypes = [...new Set(eligibleObjects.map(o => getGroupTypeMap()[o.object_type]))];
         const existingGroups = state.allObjects
             .filter(o => requiredGroupTypes.includes(o.object_type))
             .map(o => o.name || o.display_name);
@@ -702,7 +716,7 @@
         // Update each object's group attribute by appending the new group
         let updatedCount = 0;
         for (const obj of eligibleObjects) {
-            const groupAttr = GROUP_ATTR_MAP[obj.object_type];
+            const groupAttr = getGroupAttrMap()[obj.object_type];
             const { original: originalAttrs, edited: editedAttrs } = getOrCreatePendingEdit(obj);
 
             // Parse existing groups and add new one
@@ -907,28 +921,7 @@
         }
     }
 
-    // Helper function to detect if an object is a template
-    function isObjectTemplate(obj) {
-        // Check for register 0 (explicit template marker)
-        if (obj.attributes.register === '0') return true;
-
-        // For hosts: has 'name' but no 'host_name'
-        if (obj.object_type === 'host') {
-            return obj.attributes.name && !obj.attributes.host_name;
-        }
-
-        // For services: has 'name' but no 'service_description'
-        if (obj.object_type === 'service') {
-            return obj.attributes.name && !obj.attributes.service_description;
-        }
-
-        // For contacts: has 'name' but no 'contact_name'
-        if (obj.object_type === 'contact') {
-            return obj.attributes.name && !obj.attributes.contact_name;
-        }
-
-        return false;
-    }
+    // isObjectTemplate is now a shared implementation in constants.js (Explorer.isObjectTemplate)
 
     // Export all functions
     Explorer.handleContextMenu = handleContextMenu;
@@ -953,6 +946,5 @@
     Explorer.handleDragEnd = handleDragEnd;
     Explorer.handleDragOver = handleDragOver;
     Explorer.handleDrop = handleDrop;
-    Explorer.isObjectTemplate = isObjectTemplate;
 
 })(Explorer);

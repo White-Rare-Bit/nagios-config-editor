@@ -129,7 +129,7 @@ config = load_config()
 
 **Explorer:** See `static/js/explorer/CLAUDE.md` - main.js (state), app.js (tree), object-editor.js (center pane), file-operations.js (target pane), context-menu.js, dialogs.js, data-loading.js, state-management.js, drag-drop.js, analysis.js, ui-utils.js
 
-**Page-specific:** See `static/js/CLAUDE.md` - git.js, backups.js, audit-log.js, dependencies.js, settings.js, find-replace.js, bulk-rename.js, bulk-attributes.js, reorganize.js, smart-grouping.js, inheritance.js, validate.js, health-check.js
+**Page-specific:** See `static/js/CLAUDE.md` - git.js, backups.js, audit-log.js, dependencies.js, settings.js, bulk-rename.js, reorganize.js, smart-grouping.js, inheritance.js, validate.js
 
 ## Cross-Cutting Concerns
 
@@ -162,16 +162,16 @@ See `static/js/explorer/CLAUDE.md` for complete details.
 
 `Explorer.state` holds allObjects, selections, staging maps, undo stack. Call `Explorer.refreshAfterObjectChange(options)` after mutations.
 
-### Reference Field Sync
+### Domain Metadata
 
-Reference fields duplicated across 4 locations. Only sync when adding Nagios reference fields (rare):
+All Nagios domain constants (NAME_FIELDS, REQUIRED_FIELDS, REFERENCE_FIELDS,
+VALID_ATTRIBUTES, etc.) are defined in `nagios_model.py` and served via
+`GET /api/metadata`. The frontend fetches metadata once at startup and stores
+it in `Explorer.constants`. **Never hardcode domain metadata in JavaScript.**
 
-| Location | Purpose |
-|----------|---------|
-| nagios_model.py:REFERENCE_FIELDS | Backend dependency analysis |
-| object-editor.js:ATTR_REFERENCE_MAP | Autocomplete hints |
-| main.js:referenceAttrs | Dependencies refresh triggers |
-| app.js:loadCenterReferences:referenceFields | Center pane deps |
+To add a new Nagios object type or reference field:
+1. Update the relevant constant in `nagios_model.py`
+2. The frontend will pick it up automatically via `/api/metadata`
 
 ### Design System
 

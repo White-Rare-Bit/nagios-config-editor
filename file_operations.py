@@ -28,6 +28,31 @@ def _compute_checksum(content: str) -> str:
     return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
 
+def _atomic_write(file_path: str, content: str) -> None:
+    """Write content to file atomically using temp file + rename.
+
+    Creates a temp file in the same directory, writes content, then
+    renames to target path. This ensures the file is never in a
+    partially-written state.
+    """
+    import tempfile
+    dir_name = os.path.dirname(os.path.abspath(file_path))
+    fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix='.tmp')
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, file_path)
+    except:
+        # Clean up temp file on failure
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
 def _read_file_content(file_path: str, expected_checksum: Optional[str] = None) -> OperationResult:
     """Read file content with standard error handling and optional checksum validation.
 
@@ -208,7 +233,7 @@ def edit_object_in_file(file_path: str, line_number: int, new_attrs: Dict[str, s
     new_content = content[:start_char] + new_block + content[end_char:]
 
     try:
-        Path(file_path).write_text(new_content)
+        _atomic_write(file_path, new_content)
     except (IOError, OSError) as e:
         return OperationResult(False, f"Write error: {e}")
 
@@ -244,7 +269,7 @@ def delete_object_from_file(file_path: str, line_number: int,
     new_content = _normalize_block_spacing(content[:start_char], '', content[end_char:])
 
     try:
-        Path(file_path).write_text(new_content)
+        _atomic_write(file_path, new_content)
     except (IOError, OSError) as e:
         return OperationResult(False, f"Write error: {e}")
 
@@ -280,7 +305,7 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: Dict[str, str],
         # New file - no checksum validation needed
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(new_block + '\n')
+            _atomic_write(file_path, new_block + '\n')
             return OperationResult(True)
         except (IOError, OSError) as e:
             return OperationResult(False, f"Failed to create file {file_path}: {e}")
@@ -310,7 +335,7 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: Dict[str, str],
         new_content = _normalize_block_spacing(content, new_block, '')
 
     try:
-        path.write_text(new_content)
+        _atomic_write(file_path, new_content)
     except (IOError, OSError) as e:
         return OperationResult(False, f"Write error: {e}")
 
@@ -402,7 +427,7 @@ def move_object_between_files(source_file: str, source_line: int,
                 if raw_block in target_content:
                     rollback_content = target_content.replace(raw_block, '', 1)
                     rollback_content = re.sub(r'\n{3,}', '\n\n', rollback_content)
-                    Path(target_file).write_text(rollback_content)
+                    _atomic_write(target_file, rollback_content)
                 if _op_logger:
                     _op_logger.info('file_op', 'move_rollback',
                                    params={'target': target_file}, result='success')

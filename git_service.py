@@ -647,7 +647,7 @@ class GitService:
             with open(gitignore_path, 'w') as f:
                 f.write('# Nagios Bulk Editor - auto-generated .gitignore\n')
                 f.write('backups/\n')
-                f.write('.nagios_staging/\n')
+                f.write('.staging/\n')
                 f.write('*.bak\n')
                 f.write('*.tmp\n')
 

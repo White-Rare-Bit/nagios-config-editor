@@ -21,7 +21,8 @@ class NagiosConfigWriter:
 
     def object_to_string(self, obj: NagiosObject) -> str:
         """Convert a NagiosObject to its config file string representation."""
-        return format_object_block(obj.object_type, obj.attributes, self.indent)
+        return format_object_block(obj.object_type, obj.attributes, self.indent,
+                                   getattr(obj, 'inline_comments', None))
 
     def objects_to_string(self, objects: List[NagiosObject], preserve_order: bool = True) -> str:
         """Convert multiple objects to config file content.

@@ -31,11 +31,28 @@ NAME_FIELDS: Dict[str, str] = {
 # - Tuple of strings: at least one of these fields must be present (OR condition)
 # Note: Templates (register=0) require 'name' instead of the type-specific name field
 REQUIRED_FIELDS: Dict[str, List] = {
-    'host': ['host_name'],  # Templates need 'name' instead
+    'host': [
+        'host_name',
+        'address',
+        'max_check_attempts',
+        ('contacts', 'contact_groups'),
+    ],
     'hostgroup': ['hostgroup_name'],
-    'service': ['service_description', ('host_name', 'hostgroup_name')],  # Need target host(s)
+    'service': [
+        'service_description',
+        ('host_name', 'hostgroup_name'),
+        'check_command',
+        'max_check_attempts',
+        ('contacts', 'contact_groups'),
+    ],
     'servicegroup': ['servicegroup_name'],
-    'contact': ['contact_name'],
+    'contact': [
+        'contact_name',
+        ('host_notification_commands', 'notification_commands'),
+        ('service_notification_commands', 'notification_commands'),
+        ('host_notification_period', 'notification_period'),
+        ('service_notification_period', 'notification_period'),
+    ],
     'contactgroup': ['contactgroup_name'],
     'command': ['command_name', 'command_line'],
     'timeperiod': ['timeperiod_name'],
@@ -68,6 +85,180 @@ SPECIAL_DIRECTIVES: Dict[str, str] = {
     'notes': "Informational notes about the object.",
     'notes_url': "URL for additional notes about the object.",
     'action_url': "URL for actions related to the object.",
+}
+
+VALID_ATTRIBUTES: Dict[str, List[str]] = {
+    'host': [
+        'host_name', 'alias', 'display_name', 'address', 'parents', 'hostgroups',
+        'check_command', 'initial_state', 'max_check_attempts', 'check_interval',
+        'retry_interval', 'active_checks_enabled', 'passive_checks_enabled',
+        'check_period', 'obsess_over_host', 'check_freshness', 'freshness_threshold',
+        'event_handler', 'event_handler_enabled', 'low_flap_threshold',
+        'high_flap_threshold', 'flap_detection_enabled', 'flap_detection_options',
+        'process_perf_data', 'retain_status_information', 'retain_nonstatus_information',
+        'contacts', 'contact_groups', 'notification_interval', 'first_notification_delay',
+        'notification_period', 'notification_options', 'notifications_enabled',
+        'stalking_options', 'notes', 'notes_url', 'action_url', 'icon_image',
+        'icon_image_alt', 'vrml_image', 'statusmap_image', '2d_coords', '3d_coords',
+        'use', 'name', 'register',
+    ],
+    'hostgroup': [
+        'hostgroup_name', 'alias', 'members', 'hostgroup_members', 'notes',
+        'notes_url', 'action_url', 'use', 'name', 'register',
+    ],
+    'service': [
+        'host_name', 'hostgroup_name', 'service_description', 'display_name',
+        'servicegroups', 'is_volatile', 'check_command', 'initial_state',
+        'max_check_attempts', 'check_interval', 'retry_interval',
+        'active_checks_enabled', 'passive_checks_enabled', 'check_period',
+        'obsess_over_service', 'check_freshness', 'freshness_threshold',
+        'event_handler', 'event_handler_enabled', 'low_flap_threshold',
+        'high_flap_threshold', 'flap_detection_enabled', 'flap_detection_options',
+        'process_perf_data', 'retain_status_information', 'retain_nonstatus_information',
+        'notification_interval', 'first_notification_delay', 'notification_period',
+        'notification_options', 'notifications_enabled', 'contacts', 'contact_groups',
+        'stalking_options', 'notes', 'notes_url', 'action_url', 'icon_image',
+        'icon_image_alt', 'use', 'name', 'register',
+    ],
+    'servicegroup': [
+        'servicegroup_name', 'alias', 'members', 'servicegroup_members', 'notes',
+        'notes_url', 'action_url', 'use', 'name', 'register',
+    ],
+    'contact': [
+        'contact_name', 'alias', 'contactgroups', 'minimum_importance',
+        'host_notifications_enabled', 'service_notifications_enabled',
+        'host_notification_period', 'service_notification_period',
+        'host_notification_options', 'service_notification_options',
+        'host_notification_commands', 'service_notification_commands',
+        'email', 'pager', 'addressx', 'can_submit_commands',
+        'retain_status_information', 'retain_nonstatus_information',
+        'use', 'name', 'register',
+    ],
+    'contactgroup': [
+        'contactgroup_name', 'alias', 'members', 'contactgroup_members',
+        'use', 'name', 'register',
+    ],
+    'command': [
+        'command_name', 'command_line', 'use', 'name', 'register',
+    ],
+    'timeperiod': [
+        'timeperiod_name', 'alias', 'sunday', 'monday', 'tuesday', 'wednesday',
+        'thursday', 'friday', 'saturday', 'exclude', 'use', 'name', 'register',
+    ],
+    'servicedependency': [
+        'dependent_host_name', 'dependent_hostgroup_name', 'dependent_service_description',
+        'host_name', 'hostgroup_name', 'service_description', 'inherits_parent',
+        'execution_failure_criteria', 'notification_failure_criteria',
+        'dependency_period', 'use', 'name', 'register',
+    ],
+    'hostdependency': [
+        'dependent_host_name', 'dependent_hostgroup_name', 'host_name', 'hostgroup_name',
+        'inherits_parent', 'execution_failure_criteria', 'notification_failure_criteria',
+        'dependency_period', 'use', 'name', 'register',
+    ],
+    'serviceescalation': [
+        'host_name', 'hostgroup_name', 'service_description', 'contacts', 'contact_groups',
+        'first_notification', 'last_notification', 'notification_interval',
+        'escalation_period', 'escalation_options', 'use', 'name', 'register',
+    ],
+    'hostescalation': [
+        'host_name', 'hostgroup_name', 'contacts', 'contact_groups',
+        'first_notification', 'last_notification', 'notification_interval',
+        'escalation_period', 'escalation_options', 'use', 'name', 'register',
+    ],
+}
+
+OBJECT_TYPE_LABELS: Dict[str, str] = {
+    'host': 'Hosts',
+    'hostgroup': 'Host Groups',
+    'service': 'Services',
+    'servicegroup': 'Service Groups',
+    'contact': 'Contacts',
+    'contactgroup': 'Contact Groups',
+    'command': 'Commands',
+    'timeperiod': 'Time Periods',
+    'servicedependency': 'Service Dependencies',
+    'hostdependency': 'Host Dependencies',
+    'serviceescalation': 'Service Escalations',
+    'hostescalation': 'Host Escalations',
+}
+
+DEFAULT_ATTRIBUTES: Dict[str, Dict[str, str]] = {
+    'host': {
+        'host_name': '', 'alias': '', 'address': '', 'hostgroups': '',
+    },
+    'service': {
+        'service_description': '', 'host_name': '', 'check_command': '',
+        'max_check_attempts': '', 'check_period': '', 'notification_period': '',
+        'contact_groups': '',
+    },
+    'hostgroup': {'hostgroup_name': '', 'alias': ''},
+    'servicegroup': {'servicegroup_name': '', 'alias': ''},
+    'contact': {
+        'contact_name': '', 'alias': '', 'email': '',
+        'host_notification_period': '', 'service_notification_period': '',
+        'host_notification_commands': '', 'service_notification_commands': '',
+        'host_notification_options': '', 'service_notification_options': '',
+    },
+    'contactgroup': {'contactgroup_name': '', 'alias': ''},
+    'command': {'command_name': '', 'command_line': ''},
+    'timeperiod': {'timeperiod_name': '', 'alias': ''},
+    'servicedependency': {
+        'host_name': '', 'service_description': '',
+        'dependent_host_name': '', 'dependent_service_description': '',
+    },
+    'hostdependency': {'host_name': '', 'dependent_host_name': ''},
+    'serviceescalation': {
+        'host_name': '', 'service_description': '', 'contact_groups': '',
+        'first_notification': '', 'last_notification': '',
+    },
+    'hostescalation': {
+        'host_name': '', 'contact_groups': '',
+        'first_notification': '', 'last_notification': '',
+    },
+}
+
+NOTIFICATION_OPTIONS: Dict[str, list] = {
+    'host_notification_options': [
+        'd - Down', 'u - Unreachable', 'r - Recovery',
+        'f - Flapping', 's - Scheduled Downtime', 'n - None',
+    ],
+    'service_notification_options': [
+        'w - Warning', 'u - Unknown', 'c - Critical', 'r - Recovery',
+        'f - Flapping', 's - Scheduled Downtime', 'n - None',
+    ],
+    'host_failure_criteria': [
+        'o - Up (OK)', 'd - Down', 'u - Unreachable', 'p - Pending', 'n - None',
+    ],
+    'service_failure_criteria': [
+        'o - OK', 'w - Warning', 'u - Unknown', 'c - Critical', 'p - Pending', 'n - None',
+    ],
+    'notification_option_attrs': [
+        'notification_options', 'host_notification_options', 'service_notification_options',
+        'execution_failure_criteria', 'notification_failure_criteria',
+        'escalation_options', 'stalking_options',
+    ],
+}
+
+GROUP_STRUCTURE: Dict[str, Dict[str, Any]] = {
+    'hostgroup': {
+        'name_attr': 'hostgroup_name',
+        'member_attrs': ['members', 'hostgroup_members'],
+        'member_of_attr': 'hostgroups',
+        'member_type': 'host',
+    },
+    'servicegroup': {
+        'name_attr': 'servicegroup_name',
+        'member_attrs': ['members', 'servicegroup_members'],
+        'member_of_attr': 'servicegroups',
+        'member_type': 'service',
+    },
+    'contactgroup': {
+        'name_attr': 'contactgroup_name',
+        'member_attrs': ['members', 'contactgroup_members'],
+        'member_of_attr': 'contactgroups',
+        'member_type': 'contact',
+    },
 }
 
 # Reference fields mapping: field name → object type it references
@@ -154,6 +345,7 @@ class NagiosObject:
     attributes: Dict[str, str] = field(default_factory=dict)
     source_file: str = ""
     line_number: int = 0
+    inline_comments: Dict[str, str] = field(default_factory=dict)
 
     def get_name(self) -> Optional[str]:
         """Get the primary name/identifier for this object.
@@ -272,13 +464,16 @@ class NagiosObject:
         }
 
 
-def format_object_block(obj_type: str, attrs: Dict[str, str], indent: str = "    ") -> str:
+def format_object_block(obj_type: str, attrs: Dict[str, str], indent: str = "    ",
+                        inline_comments: Dict[str, str] = None) -> str:
     """Format a Nagios object definition block.
 
     Args:
         obj_type: The object type (host, service, etc.)
         attrs: Dictionary of attribute key-value pairs
         indent: Indentation string (default 4 spaces)
+        inline_comments: Optional dict mapping attribute keys to inline comment text.
+            When present, the comment is appended as '; comment' after the value.
 
     Returns:
         Formatted object block string
@@ -295,7 +490,10 @@ def format_object_block(obj_type: str, attrs: Dict[str, str], indent: str = "   
 
     for key, value in sorted_attrs:
         padding = max(30, len(key) + 1)
-        lines.append(f"{indent}{key:<{padding}}{value}")
+        line = f"{indent}{key:<{padding}}{value}"
+        if inline_comments and key in inline_comments:
+            line += f" ; {inline_comments[key]}"
+        lines.append(line)
 
     lines.append("}")
     return '\n'.join(lines)

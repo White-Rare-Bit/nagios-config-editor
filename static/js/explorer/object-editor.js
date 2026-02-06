@@ -65,87 +65,7 @@
         return { valid: errors.length === 0, errors };
     }
 
-    // Nagios attribute definitions by object type
-    const NAGIOS_ATTRIBUTES = {
-        host: [
-            'host_name', 'alias', 'display_name', 'address', 'parents', 'hostgroups',
-            'check_command', 'initial_state', 'max_check_attempts', 'check_interval',
-            'retry_interval', 'active_checks_enabled', 'passive_checks_enabled',
-            'check_period', 'obsess_over_host', 'check_freshness', 'freshness_threshold',
-            'event_handler', 'event_handler_enabled', 'low_flap_threshold',
-            'high_flap_threshold', 'flap_detection_enabled', 'flap_detection_options',
-            'process_perf_data', 'retain_status_information', 'retain_nonstatus_information',
-            'contacts', 'contact_groups', 'notification_interval', 'first_notification_delay',
-            'notification_period', 'notification_options', 'notifications_enabled',
-            'stalking_options', 'notes', 'notes_url', 'action_url', 'icon_image',
-            'icon_image_alt', 'vrml_image', 'statusmap_image', '2d_coords', '3d_coords',
-            'use', 'name', 'register'
-        ],
-        hostgroup: [
-            'hostgroup_name', 'alias', 'members', 'hostgroup_members', 'notes',
-            'notes_url', 'action_url', 'use', 'name', 'register'
-        ],
-        service: [
-            'host_name', 'hostgroup_name', 'service_description', 'display_name',
-            'servicegroups', 'is_volatile', 'check_command', 'initial_state',
-            'max_check_attempts', 'check_interval', 'retry_interval',
-            'active_checks_enabled', 'passive_checks_enabled', 'check_period',
-            'obsess_over_service', 'check_freshness', 'freshness_threshold',
-            'event_handler', 'event_handler_enabled', 'low_flap_threshold',
-            'high_flap_threshold', 'flap_detection_enabled', 'flap_detection_options',
-            'process_perf_data', 'retain_status_information', 'retain_nonstatus_information',
-            'notification_interval', 'first_notification_delay', 'notification_period',
-            'notification_options', 'notifications_enabled', 'contacts', 'contact_groups',
-            'stalking_options', 'notes', 'notes_url', 'action_url', 'icon_image',
-            'icon_image_alt', 'use', 'name', 'register'
-        ],
-        servicegroup: [
-            'servicegroup_name', 'alias', 'members', 'servicegroup_members', 'notes',
-            'notes_url', 'action_url', 'use', 'name', 'register'
-        ],
-        contact: [
-            'contact_name', 'alias', 'contactgroups', 'minimum_importance',
-            'host_notifications_enabled', 'service_notifications_enabled',
-            'host_notification_period', 'service_notification_period',
-            'host_notification_options', 'service_notification_options',
-            'host_notification_commands', 'service_notification_commands',
-            'email', 'pager', 'addressx', 'can_submit_commands',
-            'retain_status_information', 'retain_nonstatus_information',
-            'use', 'name', 'register'
-        ],
-        contactgroup: [
-            'contactgroup_name', 'alias', 'members', 'contactgroup_members',
-            'use', 'name', 'register'
-        ],
-        command: [
-            'command_name', 'command_line', 'use', 'name', 'register'
-        ],
-        timeperiod: [
-            'timeperiod_name', 'alias', 'sunday', 'monday', 'tuesday', 'wednesday',
-            'thursday', 'friday', 'saturday', 'exclude', 'use', 'name', 'register'
-        ],
-        servicedependency: [
-            'dependent_host_name', 'dependent_hostgroup_name', 'dependent_service_description',
-            'host_name', 'hostgroup_name', 'service_description', 'inherits_parent',
-            'execution_failure_criteria', 'notification_failure_criteria',
-            'dependency_period', 'use', 'name', 'register'
-        ],
-        hostdependency: [
-            'dependent_host_name', 'dependent_hostgroup_name', 'host_name', 'hostgroup_name',
-            'inherits_parent', 'execution_failure_criteria', 'notification_failure_criteria',
-            'dependency_period', 'use', 'name', 'register'
-        ],
-        serviceescalation: [
-            'host_name', 'hostgroup_name', 'service_description', 'contacts', 'contact_groups',
-            'first_notification', 'last_notification', 'notification_interval',
-            'escalation_period', 'escalation_options', 'use', 'name', 'register'
-        ],
-        hostescalation: [
-            'host_name', 'hostgroup_name', 'contacts', 'contact_groups',
-            'first_notification', 'last_notification', 'notification_interval',
-            'escalation_period', 'escalation_options', 'use', 'name', 'register'
-        ]
-    };
+    // Nagios attribute definitions by object type (from constants, populated by /api/metadata)
 
     function showCenterPaneObject(obj) {
         DebugLogger.debug('Showing object in center pane', {
@@ -172,7 +92,7 @@
         document.getElementById('centerCloseBtn').style.display = 'none';
 
         const isTemplate = Explorer.isObjectTemplate(obj);
-        const isOrphan = Explorer.isObjectOrphan(obj);
+        const isOrphan = Explorer.state.orphanIndices.has(obj.global_index);
         const hostListInfo = Explorer.getHostListInfo(obj);
         const issue = Explorer.getObjectIssue(obj);
 
@@ -450,7 +370,7 @@
         const stagedCreations = state.stagedCreations || [];
         for (const creation of stagedCreations) {
             if (creation.object_type === refType) {
-                const nameField = state.nameFields[refType];
+                const nameField = constants.nameFields[refType];
                 const name = creation.attributes?.[nameField];
                 if (name && name !== '(unnamed)' && !suggestions.includes(name)) {
                     suggestions.push(name);
@@ -739,8 +659,7 @@
 
                 for (const v of values) {
                     let checkValue = isCommandAttr ? v.split('!')[0] : v;
-                    // Strip +/! prefixes for group membership attributes (additive/exclusion syntax)
-                    checkValue = checkValue.replace(/^[+!]+/, '').trim();
+                    checkValue = Explorer.stripPrefix(checkValue);
                     if (!suggestions.includes(checkValue)) {
                         showToast(`"${checkValue}" does not exist`, 'error');
                         // Revert the input to the old value
@@ -838,7 +757,7 @@
 
     function showAddAttribute() {
         const objectType = state.editedObject.object_type;
-        const availableAttrs = NAGIOS_ATTRIBUTES[objectType] || [];
+        const availableAttrs = constants.NAGIOS_ATTRIBUTES[objectType] || [];
         const existingAttrs = Object.keys(state.editedObject.attributes);
 
         // Filter out attributes that already exist
@@ -882,8 +801,7 @@
 
                         for (const v of values) {
                             let checkValue = isCommandAttr ? v.split('!')[0] : v;
-                            // Strip +/! prefixes for group membership attributes (additive/exclusion syntax)
-                            checkValue = checkValue.replace(/^[+!]+/, '').trim();
+                            checkValue = Explorer.stripPrefix(checkValue);
                             if (!suggestions.includes(checkValue)) {
                                 showToast(`"${checkValue}" does not exist`, 'error');
                                 return;
@@ -1330,16 +1248,19 @@
         // Render inherited attributes
         if (data.inherited && Object.keys(data.inherited).length > 0) {
             html += '<div class="inherited-attrs-table">';
-            for (const [key, value] of Object.entries(data.inherited)) {
+            for (const [key, rawValue] of Object.entries(data.inherited)) {
                 // Skip control directives
                 if (['use', 'name', 'register'].includes(key)) continue;
+
+                // Handle both old string format and new {value, source} format
+                const displayValue = (typeof rawValue === 'object' && rawValue !== null) ? rawValue.value : rawValue;
 
                 // Check if object overrides this attribute
                 const isOverridden = obj.attributes && obj.attributes.hasOwnProperty(key);
 
                 html += `<div class="attr-row ${isOverridden ? 'overridden' : ''}">`;
                 html += `<div class="attr-key inherited-attr">${escapeHtml(key)}</div>`;
-                html += `<div class="attr-value inherited-attr">${escapeHtml(value)}</div>`;
+                html += `<div class="attr-value inherited-attr">${escapeHtml(displayValue)}</div>`;
                 if (isOverridden) {
                     html += `<div class="attr-override-badge"><i class="fa-solid fa-circle-check"></i> Overridden</div>`;
                 }

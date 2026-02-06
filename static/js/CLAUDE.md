@@ -15,14 +15,10 @@ All page modules use the IIFE pattern for scope isolation and extract configurat
 | ---- | ---- | ---- |
 | `audit-log.js` | Audit log filtering, pagination. Constants: `ENTRIES_PER_PAGE` | Modifying audit log page |
 | `backups.js` | Backup list/restore/delete UI | Modifying backup page |
-| `bulk-attributes.js` | Bulk attribute editing, batch updates | Modifying bulk attribute page |
 | `bulk-rename.js` | Pattern-based bulk rename, preview | Modifying bulk rename page |
 | `dependencies.js` | Cytoscape graph visualization, edge categories, quick view presets. Utilities: `getEdgesInSubgraph()`, `getConnectedNodeIdsFromEdges()` | Modifying dependency graph page |
-| `find-replace.js` | Search, preview, bulk replacement. Constants: `MIN_SEARCH_CHARS`, `DEBOUNCE_MS`, `MAX_SUGGESTIONS` | Modifying find/replace page |
 | `git.js` | File list, diff viewer, commit/discard UI | Modifying git page |
-| `health-check.js` | Config health checks (orphans, circular deps). Constants: `SEVERITY_ORDER` | Modifying health check page |
 | `inheritance.js` | Inheritance tree visualization | Modifying inheritance page |
-| `objects.js` | Legacy object browser (DEPRECATED - use Explorer). IIFE-wrapped | Maintaining legacy objects page |
 | `reorganize.js` | File/folder restructuring UI. Helper: `performBulkOperation()` for move/clone/delete | Modifying reorganize page |
 | `settings.js` | Identity config, git preferences, config paths | Modifying settings page |
 | `smart-grouping.js` | Auto-suggest grouping patterns. Constants: `TYPE_COLORS`, `TYPE_LABELS`, `PREVIEW_LIMIT` | Modifying smart grouping page |

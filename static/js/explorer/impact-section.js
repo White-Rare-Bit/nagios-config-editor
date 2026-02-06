@@ -31,6 +31,20 @@
         return Explorer.isObjectTemplate(obj);
     }
 
+    /**
+     * Map parent hosts tree from API response to local objects
+     */
+    function mapParentHostsTree(node, objectsByIndex) {
+        if (node.circular) return { name: node.name, circular: true };
+        if (node.missing) return { name: node.name, missing: true };
+        return {
+            name: node.name,
+            file: node.file ? node.file.split('/').pop() : '',
+            obj: objectsByIndex.get(node.global_index) || null,
+            parents: (node.parents || []).map(p => mapParentHostsTree(p, objectsByIndex)),
+        };
+    }
+
     // =============================================================================
     // MAIN ENTRY POINT
     // =============================================================================
@@ -46,20 +60,62 @@
 
         if (!container || !section) return;
 
-        // Show the section
         section.style.display = 'block';
-
-        // Show loading state
         container.innerHTML = '<div class="loading">Loading relationships...</div>';
 
-        // Gather all data in parallel where possible
-        const [inheritanceData, referencesData, membersData] = await Promise.all([
-            gatherInheritanceData(obj),
-            gatherReferencesData(obj),
-            gatherMembersData(obj)
-        ]);
+        // Gather inheritance data locally (still needed for template chains)
+        const inheritanceData = await gatherInheritanceData(obj);
 
-        // Render the unified section
+        // Fetch references from backend
+        let referencesData = { outgoing: [], incoming: [] };
+        let membersData = { members: [], memberOf: [] };
+
+        if (!state.isNewObject && obj.global_index != null) {
+            try {
+                const result = await ApiClient.get(`/api/object-references/${obj.global_index}`);
+                if (result.success) {
+                    const data = result.data;
+                    const objectsByIndex = new Map();
+                    state.allObjects.forEach(o => objectsByIndex.set(o.global_index, o));
+
+                    referencesData.outgoing = (data.outgoing || []).map(r => ({
+                        field: r.field,
+                        object: objectsByIndex.get(r.global_index),
+                        isDependencyRule: r.is_dependency_rule || false,
+                        isEscalationRule: r.is_escalation_rule || false,
+                        isServiceBinding: r.is_service_binding || false,
+                        viaGroup: r.via_group || null,
+                    })).filter(r => r.object);
+
+                    referencesData.incoming = (data.incoming || []).map(r => ({
+                        field: r.field,
+                        object: objectsByIndex.get(r.global_index),
+                        isDependencyRule: r.is_dependency_rule || false,
+                        isEscalationRule: r.is_escalation_rule || false,
+                        isServiceBinding: r.is_service_binding || false,
+                        viaGroup: r.via_group || null,
+                    })).filter(r => r.object);
+
+                    membersData.members = (data.members || []).map(r => ({
+                        object: objectsByIndex.get(r.global_index),
+                        via: r.via,
+                    })).filter(r => r.object);
+
+                    membersData.memberOf = (data.member_of || []).map(r => ({
+                        object: objectsByIndex.get(r.global_index),
+                        via: r.via,
+                    })).filter(r => r.object);
+
+                    // Parent hosts tree from API
+                    if (data.parent_hosts) {
+                        inheritanceData.parentHosts = mapParentHostsTree(data.parent_hosts, objectsByIndex);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load object references:', error);
+            }
+        }
+
         renderImpactSection(obj, inheritanceData, referencesData, membersData);
     }
 
@@ -73,302 +129,29 @@
     async function gatherInheritanceData(obj) {
         const result = {
             templateChain: null,
-            parentHosts: null
+            parentHosts: null,
+            resolvedAttrs: null
         };
 
-        // For new objects, build inheritance chain locally
-        if (state.isNewObject) {
-            const useAttr = obj.attributes.use;
-            if (useAttr) {
-                const templateNames = Explorer.parseCommaValues(useAttr);
-                result.templateChain = Explorer.buildLocalInheritanceChain(obj, templateNames);
-            }
-        } else {
-            // Fetch from API
-            try {
-                const response = await fetch(`/api/inheritance/${obj.object_type}/${encodeURIComponent(obj.name || obj.display_name)}`);
-                const apiResult = await response.json();
-                if (!apiResult.error) {
-                    result.templateChain = apiResult.chain;
-                }
-            } catch (error) {
-                console.error('Error loading inheritance:', error);
-            }
+        const useAttr = obj.attributes.use;
+        if (useAttr) {
+            const templateNames = Explorer.parseCommaValues(useAttr);
+            result.templateChain = Explorer.buildLocalInheritanceChain(obj, templateNames);
         }
 
-        // Build parent hosts tree (for hosts only)
-        if (obj.object_type === 'host') {
-            const attrs = getEffectiveAttributes(obj);
-            if (attrs.parents) {
-                result.parentHosts = buildParentHostsTreeData(obj);
+        if (!state.isNewObject && useAttr) {
+            try {
+                const stableKey = Explorer.buildStableKey(obj);
+                const inheritData = await Explorer.fetchInheritance(stableKey);
+                if (inheritData && inheritData.inherited) {
+                    result.resolvedAttrs = inheritData.inherited;
+                }
+            } catch (error) {
+                console.error('Error loading resolved attributes:', error);
             }
         }
 
         return result;
-    }
-
-    /**
-     * Build parent hosts tree data structure
-     */
-    function buildParentHostsTreeData(hostObj, visited = new Set()) {
-        const attrs = getEffectiveAttributes(hostObj);
-        const hostName = getEffectiveName(hostObj);
-
-        if (visited.has(hostObj.global_index)) {
-            return { name: hostName, circular: true };
-        }
-        visited.add(hostObj.global_index);
-
-        const parentsAttr = attrs.parents || '';
-        const parentNames = Explorer.parseCommaValues(parentsAttr);
-
-        const parentNodes = [];
-        for (const parentName of parentNames) {
-            const parentObj = state.allObjects.find(o =>
-                o.object_type === 'host' && getEffectiveName(o) === parentName
-            );
-            if (parentObj) {
-                parentNodes.push(buildParentHostsTreeData(parentObj, new Set(visited)));
-            } else {
-                parentNodes.push({ name: parentName, missing: true });
-            }
-        }
-
-        return {
-            name: hostName,
-            file: hostObj.source_file ? hostObj.source_file.split('/').pop() : '',
-            obj: hostObj,
-            parents: parentNodes
-        };
-    }
-
-    /**
-     * Gather references data (outgoing dependencies + incoming dependents)
-     */
-    function gatherReferencesData(obj) {
-        const name = getEffectiveName(obj);
-
-        // Use centralized reference fields from constants
-        const referenceFields = constants.referenceFields;
-
-        const stripRefPrefix = v => v.trim().replace(/^[+!]+/, '').trim();
-        const commandFields = ['check_command', 'event_handler', 'notification_commands',
-                              'host_notification_commands', 'service_notification_commands',
-                              'obsess_over_host_command', 'obsess_over_service_command',
-                              'global_host_event_handler', 'global_service_event_handler'];
-
-        // Outgoing references (what this object depends on)
-        const outgoing = [];
-        for (const [field, refType] of Object.entries(referenceFields)) {
-            if (!obj.attributes[field]) continue;
-            const values = obj.attributes[field].split(',').map(stripRefPrefix).filter(v => v && v !== '*');
-            const actualType = refType || obj.object_type;
-
-            values.forEach(val => {
-                let lookupVal = val;
-                if (commandFields.includes(field) && val.includes('!')) {
-                    lookupVal = val.split('!')[0];
-                }
-                const referenced = state.allObjects.find(o =>
-                    o.object_type === actualType &&
-                    (getEffectiveName(o) === lookupVal || getEffectiveAttributes(o).name === lookupVal)
-                );
-                if (referenced && referenced.global_index !== obj.global_index) {
-                    outgoing.push({ field, object: referenced });
-                }
-            });
-        }
-
-        // Find dependency objects (hostdependency/servicedependency)
-        const depObjects = Explorer.findDependencyObjects(obj, state.allObjects);
-
-        // Add master relationships to outgoing
-        depObjects.masterOf.forEach(depObj => {
-            outgoing.push({ field: 'dependency_rule', object: depObj, isDependencyRule: true });
-        });
-
-        // Incoming references (what references this object - impact of deletion/rename)
-        const incoming = [];
-        const objEffectiveAttrs = getEffectiveAttributes(obj);
-        state.allObjects.forEach(o => {
-            if (o.global_index === obj.global_index) return;
-            const attrs = getEffectiveAttributes(o);
-            for (const [field, refType] of Object.entries(referenceFields)) {
-                if (!attrs[field]) continue;
-                const actualType = refType || o.object_type;
-                const isEscalationReference = (o.object_type === 'hostescalation' || o.object_type === 'serviceescalation') &&
-                                             (obj.object_type === 'contact' || obj.object_type === 'contactgroup') &&
-                                             (field === 'escalation_contacts' || field === 'escalation_contact_groups' ||
-                                              field === 'contacts' || field === 'contact_groups');
-                if (actualType !== obj.object_type && refType !== null && !isEscalationReference) continue;
-
-                let values = attrs[field].split(',').map(stripRefPrefix);
-                if (commandFields.includes(field)) {
-                    values = values.map(v => v.includes('!') ? v.split('!')[0] : v);
-                }
-                if (values.includes(name) || values.includes(objEffectiveAttrs.name)) {
-                    incoming.push({ field, object: o });
-                }
-            }
-        });
-
-        // Add dependent relationships to incoming
-        depObjects.dependentOf.forEach(depObj => {
-            incoming.push({ field: 'dependency_rule', object: depObj, isDependencyRule: true });
-        });
-
-        // Find escalation objects (hostescalation/serviceescalation) that apply to this host/service
-        const escObjects = Explorer.findEscalationObjects(obj, state.allObjects);
-        escObjects.escalations.forEach(escObj => {
-            incoming.push({ field: 'escalation_rule', object: escObj, isEscalationRule: true });
-        });
-
-        // For hostgroups: find services deployed via hostgroup_name
-        if (obj.object_type === 'hostgroup') {
-            state.allObjects.filter(o => o.object_type === 'service').forEach(svc => {
-                const svcAttrs = getEffectiveAttributes(svc);
-                if (svcAttrs.hostgroup_name) {
-                    const groups = svcAttrs.hostgroup_name.split(',').map(g => g.trim().replace(/^[+!]+/, '').trim());
-                    if (groups.includes(name)) {
-                        incoming.push({ field: 'hostgroup_name', object: svc, isServiceBinding: true });
-                    }
-                }
-            });
-        }
-
-        // For hosts: find services deployed via hostgroup_name where host is member of that hostgroup
-        if (obj.object_type === 'host') {
-            const hostName = name;
-            state.allObjects.filter(o => o.object_type === 'service').forEach(svc => {
-                const svcAttrs = getEffectiveAttributes(svc);
-                if (svcAttrs.host_name) return;
-
-                if (svcAttrs.hostgroup_name) {
-                    const groups = svcAttrs.hostgroup_name.split(',').map(g => g.trim().replace(/^[+!]+/, '').trim());
-                    for (const groupName of groups) {
-                        if (Explorer.isHostInHostgroup(hostName, groupName, state.allObjects)) {
-                            incoming.push({ field: 'hostgroup_name', object: svc, isServiceBinding: true, viaGroup: groupName });
-                            break;
-                        }
-                    }
-                }
-            });
-        }
-
-        return { outgoing, incoming };
-    }
-
-    /**
-     * Gather members data (for groups and templates)
-     */
-    function gatherMembersData(obj) {
-        const objName = getEffectiveName(obj);
-        const objEffectiveAttrs = getEffectiveAttributes(obj);
-        const members = [];
-        const memberOf = [];
-
-        // Group membership (what groups this object belongs to)
-        if (obj.object_type === 'host') {
-            const hostgroups = (objEffectiveAttrs.hostgroups || '').split(',')
-                .map(x => x.trim().replace(/^[+!]+/, '').trim())
-                .filter(x => x);
-            hostgroups.forEach(groupName => {
-                const group = state.allObjects.find(o =>
-                    o.object_type === 'hostgroup' && getEffectiveName(o) === groupName
-                );
-                if (group) memberOf.push({ object: group, via: 'hostgroups' });
-            });
-        } else if (obj.object_type === 'service') {
-            const servicegroups = (objEffectiveAttrs.servicegroups || '').split(',')
-                .map(x => x.trim().replace(/^[+!]+/, '').trim())
-                .filter(x => x);
-            servicegroups.forEach(groupName => {
-                const group = state.allObjects.find(o =>
-                    o.object_type === 'servicegroup' && getEffectiveName(o) === groupName
-                );
-                if (group) memberOf.push({ object: group, via: 'servicegroups' });
-            });
-        } else if (obj.object_type === 'contact') {
-            const contactgroups = (objEffectiveAttrs.contactgroups || '').split(',')
-                .map(x => x.trim().replace(/^[+!]+/, '').trim())
-                .filter(x => x);
-            contactgroups.forEach(groupName => {
-                const group = state.allObjects.find(o =>
-                    o.object_type === 'contactgroup' && getEffectiveName(o) === groupName
-                );
-                if (group) memberOf.push({ object: group, via: 'contactgroups' });
-            });
-        }
-
-        // For groups: get direct members
-        if (obj.object_type === 'hostgroup') {
-            const directMembers = (objEffectiveAttrs.members || '').split(',').map(x => x.trim()).filter(x => x);
-            directMembers.forEach(m => {
-                const host = state.allObjects.find(o => o.object_type === 'host' && getEffectiveName(o) === m);
-                if (host) members.push({ object: host, via: 'members' });
-            });
-            // Hosts with this hostgroup in their hostgroups attribute
-            state.allObjects.filter(o => o.object_type === 'host').forEach(host => {
-                const attrs = getEffectiveAttributes(host);
-                const hgs = (attrs.hostgroups || '').split(',').map(x => x.trim().replace(/^[+!]+/, '').trim());
-                if (hgs.includes(objName) && !members.find(m => m.object.global_index === host.global_index)) {
-                    members.push({ object: host, via: 'hostgroups attr' });
-                }
-            });
-        } else if (obj.object_type === 'contactgroup') {
-            const directMembers = (objEffectiveAttrs.members || '').split(',')
-                .map(x => x.trim().replace(/^[+!]+/, '').trim())
-                .filter(x => x);
-            directMembers.forEach(m => {
-                const contact = state.allObjects.find(o => o.object_type === 'contact' && getEffectiveName(o) === m);
-                if (contact && !members.find(mem => mem.object.global_index === contact.global_index)) {
-                    members.push({ object: contact, via: 'members' });
-                }
-            });
-            // Contacts with this contactgroup in their contactgroups attribute
-            state.allObjects.filter(o => o.object_type === 'contact').forEach(contact => {
-                const attrs = getEffectiveAttributes(contact);
-                const cgs = (attrs.contactgroups || '').split(',')
-                    .map(x => x.trim().replace(/^[+!]+/, '').trim())
-                    .filter(x => x);
-                if (cgs.includes(objName) && !members.find(m => m.object.global_index === contact.global_index)) {
-                    members.push({ object: contact, via: 'contactgroups attr' });
-                }
-            });
-        } else if (obj.object_type === 'servicegroup') {
-            const directMembers = (objEffectiveAttrs.members || '').split(',')
-                .map(x => x.trim().replace(/^[+!]+/, '').trim())
-                .filter(x => x);
-            directMembers.forEach(m => {
-                const svc = state.allObjects.find(o => o.object_type === 'service' && getEffectiveName(o) === m);
-                if (svc && !members.find(mem => mem.object.global_index === svc.global_index)) {
-                    members.push({ object: svc, via: 'members' });
-                }
-            });
-            // Services with this servicegroup in their servicegroups attribute
-            state.allObjects.filter(o => o.object_type === 'service').forEach(svc => {
-                const attrs = getEffectiveAttributes(svc);
-                const sgs = (attrs.servicegroups || '').split(',')
-                    .map(x => x.trim().replace(/^[+!]+/, '').trim())
-                    .filter(x => x);
-                if (sgs.includes(objName) && !members.find(m => m.object.global_index === svc.global_index)) {
-                    members.push({ object: svc, via: 'servicegroups attr' });
-                }
-            });
-        } else if (isObjectTemplate(obj)) {
-            // Find objects using this template
-            state.allObjects.forEach(o => {
-                if (o.global_index === obj.global_index) return;
-                if (o.object_type === obj.object_type && getEffectiveName(o) === objName) return;
-                const attrs = getEffectiveAttributes(o);
-                const uses = (attrs.use || '').split(',').map(x => x.trim());
-                if (uses.includes(objName) || uses.includes(objEffectiveAttrs.name)) {
-                    members.push({ object: o, via: 'inherits' });
-                }
-            });
-        }
-
-        return { members, memberOf };
     }
 
     // =============================================================================
@@ -382,19 +165,20 @@
         const container = document.getElementById('impactContent');
         const section = document.getElementById('impactSection');
 
-        const { templateChain, parentHosts } = inheritanceData;
+        const { templateChain, parentHosts, resolvedAttrs } = inheritanceData;
         const { outgoing, incoming } = referencesData;
         const { members, memberOf } = membersData;
 
         // Check if there's any data to show
         const hasTemplateChain = templateChain && templateChain.parents && templateChain.parents.length > 0;
         const hasParentHosts = parentHosts && parentHosts.parents && parentHosts.parents.length > 0;
+        const hasResolvedAttrs = resolvedAttrs && Object.keys(resolvedAttrs).length > 0;
         const hasIncoming = incoming.length > 0;
         const hasOutgoing = outgoing.length > 0;
         const hasMembers = members.length > 0;
         const hasMemberOf = memberOf.length > 0;
 
-        if (!hasTemplateChain && !hasParentHosts && !hasIncoming && !hasOutgoing && !hasMembers && !hasMemberOf) {
+        if (!hasTemplateChain && !hasParentHosts && !hasResolvedAttrs && !hasIncoming && !hasOutgoing && !hasMembers && !hasMemberOf) {
             section.style.display = 'none';
             container.innerHTML = '';
             return;
@@ -402,9 +186,9 @@
 
         let html = '';
 
-        // 1. Configuration Ancestry (Templates + Parent Hosts)
-        if (hasTemplateChain || hasParentHosts) {
-            html += renderAncestrySubsection(obj, templateChain, parentHosts);
+        // 1. Configuration Ancestry (Templates + Parent Hosts + Resolved Attributes)
+        if (hasTemplateChain || hasParentHosts || hasResolvedAttrs) {
+            html += renderAncestrySubsection(obj, templateChain, parentHosts, resolvedAttrs);
         }
 
         // 2. "If Deleted/Renamed" (incoming references)
@@ -436,9 +220,10 @@
     /**
      * Render the Configuration Ancestry subsection
      */
-    function renderAncestrySubsection(obj, templateChain, parentHosts) {
+    function renderAncestrySubsection(obj, templateChain, parentHosts, resolvedAttrs) {
         const hasTemplates = templateChain && templateChain.parents && templateChain.parents.length > 0;
         const hasParents = parentHosts && parentHosts.parents && parentHosts.parents.length > 0;
+        const hasResolved = resolvedAttrs && Object.keys(resolvedAttrs).length > 0;
 
         let content = '';
 
@@ -452,6 +237,11 @@
         if (hasParents) {
             content += '<div class="ancestry-label">Network Parents</div>';
             content += renderParentHostsChain(parentHosts);
+        }
+
+        // Resolved attributes table
+        if (hasResolved) {
+            content += renderResolvedAttrsTable(resolvedAttrs, obj);
         }
 
         return `
@@ -892,6 +682,48 @@
                 <div class="impact-subsection-content">${content}</div>
             </div>
         `;
+    }
+
+    // =============================================================================
+    // RESOLVED ATTRIBUTES TABLE
+    // =============================================================================
+
+    /**
+     * Render the resolved attributes table showing each attribute's final value and source.
+     * @param {Object} resolvedAttrs - {attrName: {value, source}} or {attrName: "value"} map
+     * @param {Object} obj - The current object
+     */
+    function renderResolvedAttrsTable(resolvedAttrs, obj) {
+        const objName = getEffectiveName(obj);
+        const entries = Object.entries(resolvedAttrs)
+            .filter(([key]) => !['use', 'name', 'register'].includes(key))
+            .sort(([a], [b]) => a.localeCompare(b));
+
+        if (entries.length === 0) return '';
+
+        let html = '<div class="ancestry-label">Resolved Attributes</div>';
+        html += '<div class="resolved-attrs-compact">';
+        html += '<div class="resolved-attrs-header-row">';
+        html += '<span class="resolved-attr-name">Attribute</span>';
+        html += '<span class="resolved-attr-value">Value</span>';
+        html += '<span class="resolved-attr-source">Source</span>';
+        html += '</div>';
+
+        for (const [key, rawValue] of entries) {
+            const value = (typeof rawValue === 'object' && rawValue !== null) ? rawValue.value : rawValue;
+            const source = (typeof rawValue === 'object' && rawValue !== null) ? rawValue.source : objName;
+            const isSelf = source === objName;
+            const sourceClass = isSelf ? 'resolved-source-self' : 'resolved-source-inherited';
+
+            html += '<div class="resolved-attrs-row">';
+            html += `<span class="resolved-attr-name">${Explorer.escapeHtml(key)}</span>`;
+            html += `<span class="resolved-attr-value" title="${Explorer.escapeHtml(value)}">${Explorer.escapeHtml(value)}</span>`;
+            html += `<span class="resolved-attr-source ${sourceClass}">${Explorer.escapeHtml(source)}</span>`;
+            html += '</div>';
+        }
+
+        html += '</div>';
+        return html;
     }
 
     // =============================================================================

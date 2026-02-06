@@ -442,7 +442,7 @@
         Explorer.saveStagedChanges();
         Explorer.updateCommitUI();
         Explorer.buildTree();
-        Explorer.invalidateOrphanCache();
+        state.healthCheckData = null;
         Explorer.computeStagedIssues();
         loadIssues();
 
@@ -461,18 +461,7 @@
      * Build default attributes for a new object based on type
      */
     function buildDefaultAttributes(objectType, objectName, isTemplate) {
-        const nameFields = {
-            'host': 'host_name',
-            'service': 'service_description',
-            'contact': 'contact_name',
-            'contactgroup': 'contactgroup_name',
-            'hostgroup': 'hostgroup_name',
-            'servicegroup': 'servicegroup_name',
-            'command': 'command_name',
-            'timeperiod': 'timeperiod_name'
-        };
-
-        const nameField = isTemplate ? 'name' : (nameFields[objectType] || 'name');
+        const nameField = isTemplate ? 'name' : (Explorer.constants.nameFields[objectType] || 'name');
         const attributes = {};
         attributes[nameField] = objectName;
 
@@ -501,20 +490,8 @@
         // Determine if this should be a template (for missing_template issues)
         const isTemplate = issue.type === 'missing_template';
 
-        // Get the name field for this object type
-        const nameFields = {
-            'host': 'host_name',
-            'service': 'service_description',
-            'contact': 'contact_name',
-            'contactgroup': 'contactgroup_name',
-            'hostgroup': 'hostgroup_name',
-            'servicegroup': 'servicegroup_name',
-            'command': 'command_name',
-            'timeperiod': 'timeperiod_name'
-        };
-
         // For templates, the name field is 'name' and we need to set register=0
-        const nameField = isTemplate ? 'name' : (nameFields[objectType] || 'name');
+        const nameField = isTemplate ? 'name' : (Explorer.constants.nameFields[objectType] || 'name');
 
         // Build initial attributes
         const attributes = {};

@@ -43,18 +43,28 @@
     // =============================================================================
 
     /**
-     * Load objects and files from backend
+     * Load objects, files, and metadata from backend.
+     * Metadata is fetched once (first load) and cached via metadataLoaded flag.
      */
     Explorer.loadObjects = async function() {
-        const [objectsResult, filesResult, foldersResult] = await Promise.all([
+        const [objectsResult, filesResult, foldersResult, metadataResult] = await Promise.all([
             ApiClient.get('/api/objects?_=' + Date.now(), { silent: true }),
             ApiClient.get('/api/files?_=' + Date.now(), { silent: true }),
-            ApiClient.get('/api/folders?_=' + Date.now(), { silent: true })
+            ApiClient.get('/api/folders?_=' + Date.now(), { silent: true }),
+            Explorer.state.metadataLoaded
+                ? Promise.resolve(null)
+                : ApiClient.get('/api/metadata', { silent: true })
         ]);
 
         Explorer.state.allObjects = objectsResult.data || [];
         Explorer.state.allFiles = filesResult.data?.files || [];
         Explorer.state.existingFolders = foldersResult.data?.folders || [];
+
+        // Populate constants from backend metadata (once)
+        if (metadataResult && metadataResult.success) {
+            Explorer.applyMetadata(metadataResult.data);
+            Explorer.state.metadataLoaded = true;
+        }
     };
 
     // =============================================================================

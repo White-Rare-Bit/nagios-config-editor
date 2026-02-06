@@ -120,11 +120,7 @@
         const fileName = targetFile.split('/').pop();
 
         // Build object type selector
-        const objectTypes = [
-            'host', 'hostgroup', 'service', 'servicegroup',
-            'contact', 'contactgroup', 'command', 'timeperiod',
-            'servicedependency', 'hostdependency', 'serviceescalation', 'hostescalation'
-        ];
+        const objectTypes = Object.keys(constants.nameFields);
 
         // Show center pane first
         const emptyState = document.getElementById('centerEmptyState');
@@ -324,79 +320,7 @@
     }
 
     function getDefaultAttributes(objectType) {
-        // Returns default empty attributes for a new object of the given type
-        const defaults = {
-            'host': {
-                host_name: '',
-                alias: '',
-                address: '',
-                hostgroups: ''
-            },
-            'service': {
-                service_description: '',
-                host_name: '',
-                check_command: '',
-                max_check_attempts: '',
-                check_period: '',
-                notification_period: '',
-                contact_groups: ''
-            },
-            'hostgroup': {
-                hostgroup_name: '',
-                alias: ''
-            },
-            'servicegroup': {
-                servicegroup_name: '',
-                alias: ''
-            },
-            'contact': {
-                contact_name: '',
-                alias: '',
-                email: '',
-                host_notification_period: '',
-                service_notification_period: '',
-                host_notification_commands: '',
-                service_notification_commands: '',
-                host_notification_options: '',
-                service_notification_options: ''
-            },
-            'contactgroup': {
-                contactgroup_name: '',
-                alias: ''
-            },
-            'command': {
-                command_name: '',
-                command_line: ''
-            },
-            'timeperiod': {
-                timeperiod_name: '',
-                alias: ''
-            },
-            'servicedependency': {
-                host_name: '',
-                service_description: '',
-                dependent_host_name: '',
-                dependent_service_description: ''
-            },
-            'hostdependency': {
-                host_name: '',
-                dependent_host_name: ''
-            },
-            'serviceescalation': {
-                host_name: '',
-                service_description: '',
-                contact_groups: '',
-                first_notification: '',
-                last_notification: ''
-            },
-            'hostescalation': {
-                host_name: '',
-                contact_groups: '',
-                first_notification: '',
-                last_notification: ''
-            }
-        };
-        return defaults[objectType] || {};
+        return {...(constants.defaultAttributes[objectType] || {})};
     }
 
     function stageNewObjectChanges() {
@@ -501,16 +425,13 @@
     function findDependencies(objectName, objectType = null) {
         const dependencies = [];
 
-        // Helper to strip +/! prefixes from Nagios additive/exclusion syntax
-        const stripPrefix = v => v.trim().replace(/^[+!]+/, '').trim();
-
         for (const obj of state.allObjects) {
             let foundInFields = [];
             for (const [key, value] of Object.entries(obj.attributes)) {
                 if (!value || typeof value !== 'string') continue;
 
                 // Check each comma-separated value, stripping prefixes
-                const values = value.split(',').map(stripPrefix).filter(v => v);
+                const values = value.split(',').map(Explorer.stripPrefix).filter(v => v);
                 if (values.includes(objectName)) {
                     foundInFields.push(key);
                 }
@@ -795,7 +716,7 @@
 
             // Centralized refresh ensures all UI components stay in sync
             Explorer.saveStagedChanges();
-            Explorer.invalidateOrphanCache();
+            state.healthCheckData = null;
             Explorer.computeStagedIssues();
             Explorer.refreshAfterObjectChange();
             Explorer.closeDialog();
@@ -897,8 +818,7 @@
 
                         for (const v of values) {
                             let checkValue = isCommandAttr ? v.split('!')[0] : v;
-                            // Strip +/! prefixes for group membership attributes (additive/exclusion syntax)
-                            checkValue = checkValue.replace(/^[+!]+/, '').trim();
+                            checkValue = Explorer.stripPrefix(checkValue);
                             if (!suggestions.includes(checkValue)) {
                                 showToast(`"${checkValue}" does not exist`, 'error');
                                 return;
@@ -962,7 +882,7 @@
 
             // Centralized refresh ensures all UI components stay in sync
             Explorer.saveStagedChanges();
-            Explorer.invalidateOrphanCache();
+            state.healthCheckData = null;
             Explorer.computeStagedIssues();
             Explorer.refreshAfterObjectChange();
             Explorer.closeDialog();

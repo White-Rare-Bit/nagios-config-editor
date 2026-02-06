@@ -10,9 +10,6 @@
     // Severity order for consistent sorting across suggestion types
     const SEVERITY_ORDER = { error: 0, warning: 1, info: 2 };
 
-    // Strip +/! prefixes from Nagios additive/exclusion syntax
-    const stripPrefix = s => s.trim().replace(/^[+!]+/, '').trim();
-
     // A-02: Filter out suggestions for objects marked for deletion (used 11+ times)
     function filterActiveSuggestions(suggestions) {
         return suggestions.filter(s => s.object && !Explorer.isObjectMarkedForDeletion(s.object.global_index));
@@ -72,17 +69,185 @@ function switchSuggestionsSubtab(subtab) {
 }
 
 async function loadAllSuggestions(forceRefresh = false) {
-    await Promise.all([
-        Explorer.loadIssues(),
-        Explorer.loadTemplateSuggestions(forceRefresh),
-        Explorer.loadTemplateIssues(forceRefresh),
-        Explorer.loadGroupingSuggestions(forceRefresh),
-        loadCleanupSuggestions(forceRefresh),
-        loadNotificationSuggestions(forceRefresh)
-    ]);
-    // Badge is now updated inside renderUnifiedSuggestionsList() using the accurate
-    // collectAllSuggestions() count, so we don't call updateSuggestionsBadge() here
+    if (!forceRefresh && state.healthCheckData) {
+        mapHealthCheckToState(state.healthCheckData);
+    } else {
+        try {
+            const result = await ApiClient.get('/api/health-check');
+            if (result.success) {
+                state.healthCheckData = result.data;
+                mapHealthCheckToState(result.data);
+            }
+        } catch (error) {
+            showToast('Analysis failed: ' + error.message, 'error');
+            return;
+        }
+    }
+    await Explorer.loadGroupingSuggestions(forceRefresh);
+    await Explorer.loadTemplateIssues(forceRefresh);
     renderUnifiedSuggestionsList();
+}
+
+/**
+ * Distribute health-check issues from backend into existing state arrays.
+ * Called after fetching /api/health-check or from cached data.
+ */
+function mapHealthCheckToState(data) {
+    // 1. Reset state arrays
+    state.allCleanupSuggestions = [];
+    state.allNotificationSuggestions = [];
+    state.allTemplateSuggestions = [];
+    state.orphanIndices = new Set();
+
+    // 2. Store all issues
+    state.allIssues = data.issues || [];
+
+    // 3. Rebuild issuesByObject map
+    state.issuesByObject.clear();
+    state.allIssues.forEach(issue => {
+        const key = `${issue.object_type}:${issue.object}`;
+        if (!state.issuesByObject.has(key) || issue.severity === 'error') {
+            state.issuesByObject.set(key, issue);
+        }
+    });
+
+    // 4. Call filterIssues to build groupedErrors
+    Explorer.filterIssues();
+
+    // 5. Build index lookup for O(1) object resolution
+    const objectsByIndex = new Map();
+    state.allObjects.forEach(o => objectsByIndex.set(o.global_index, o));
+
+    // 6. Loop through issues and distribute to appropriate state arrays
+    for (const issue of state.allIssues) {
+        const obj = issue.global_index != null ? objectsByIndex.get(issue.global_index) : null;
+
+        // Skip issues for objects staged for deletion
+        if (obj && state.stagedObjectDeletions.has(obj.global_index)) continue;
+
+        switch (issue.type) {
+            case 'duplicate': {
+                // Build duplicateGroup from related_objects if available
+                let duplicateGroup = [];
+                if (issue.related_objects) {
+                    duplicateGroup = issue.related_objects
+                        .map(ro => objectsByIndex.get(ro.global_index))
+                        .filter(Boolean);
+                } else if (obj) {
+                    // Fallback: find all matching objects by name/type
+                    duplicateGroup = state.allObjects.filter(o =>
+                        o.object_type === issue.object_type &&
+                        (o.name === issue.object || o.display_name === issue.object)
+                    );
+                }
+                // Only add one entry per duplicate group (first occurrence)
+                const existingDup = state.allCleanupSuggestions.find(s =>
+                    s.type === 'duplicate' && s.object?.object_type === issue.object_type &&
+                    (s.object?.name === issue.object || s.object?.display_name === issue.object)
+                );
+                if (!existingDup) {
+                    state.allCleanupSuggestions.push({
+                        type: 'duplicate',
+                        severity: 'error',
+                        object: obj || null,
+                        objects: duplicateGroup,
+                        title: `Duplicate ${issue.object_type}: ${issue.object}`,
+                        description: issue.message || `Found ${duplicateGroup.length} definitions with the same identity.`,
+                        action: 'review',
+                        duplicateGroup: duplicateGroup
+                    });
+                }
+                break;
+            }
+
+            case 'empty_group':
+                if (obj) {
+                    state.allCleanupSuggestions.push({
+                        type: 'empty_group',
+                        severity: 'warning',
+                        object: obj,
+                        title: `Empty ${issue.object_type}: ${issue.object}`,
+                        description: issue.message || 'Group has no members and is not referenced',
+                        action: 'delete'
+                    });
+                }
+                break;
+
+            case 'orphan':
+                if (obj) {
+                    state.orphanIndices.add(obj.global_index);
+                    state.allCleanupSuggestions.push({
+                        type: 'orphan',
+                        severity: 'info',
+                        object: obj,
+                        title: `Orphan ${issue.object_type}: ${issue.object}`,
+                        description: issue.message || 'This object is not referenced by any other object in the configuration.',
+                        action: 'delete'
+                    });
+                }
+                break;
+
+            case 'unused_template':
+            case 'unused_command':
+            case 'unused_contact':
+            case 'unused_contactgroup':
+            case 'unused_timeperiod':
+                if (obj) {
+                    state.allCleanupSuggestions.push({
+                        type: issue.type,
+                        severity: 'warning',
+                        object: obj,
+                        title: `${issue.type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}: ${issue.object}`,
+                        description: issue.message || '',
+                        action: 'delete'
+                    });
+                }
+                break;
+
+            case 'long_host_list':
+                if (obj) {
+                    state.allCleanupSuggestions.push({
+                        type: 'long_host_list',
+                        severity: 'info',
+                        object: obj,
+                        title: `Consider hostgroup: ${issue.object}`,
+                        description: issue.message || `This service has many hosts listed individually.`,
+                        action: 'review'
+                    });
+                }
+                break;
+
+            case 'missing_contacts':
+                state.allNotificationSuggestions.push({
+                    type: issue.object_type === 'host' ? 'host_no_contacts' : 'service_no_contacts',
+                    severity: issue.severity || 'warning',
+                    object: obj || null,
+                    title: `No contacts: ${issue.object}`,
+                    description: issue.message || 'No contacts or contact_groups defined',
+                    fix: null
+                });
+                break;
+
+            case 'template_opportunity':
+                if (issue.suggestion) {
+                    const s = issue.suggestion;
+                    state.allTemplateSuggestions.push({
+                        type: s.type,
+                        suggestedName: s.suggested_name,
+                        attributes: s.attributes,
+                        objects: (s.object_indices || []).map(idx =>
+                            state.allObjects.find(o => o.global_index === idx)
+                        ).filter(Boolean),
+                        count: s.count,
+                        attrCount: s.attr_count
+                    });
+                }
+                break;
+
+            // Other types (missing_*, notification_gap for contacts, etc.) are handled
+            // by filterIssues() which builds groupedErrors for the errors tab
+        }
+    }
 }
 
 function updateSuggestionsBadge() {
@@ -157,6 +322,26 @@ function collectAllSuggestions() {
                 actionLabel: 'Create',
                 actionType: 'create',
                 data: group
+            });
+        }
+    }
+
+    // 1b. Health check warnings (e.g. hosts without services)
+    if (state.allIssues) {
+        const warnings = state.allIssues.filter(i => i.severity === 'warning');
+        for (const issue of warnings) {
+            // Skip warnings for objects staged for deletion
+            if (issue.global_index != null && state.stagedObjectDeletions.has(issue.global_index)) continue;
+            suggestions.push({
+                id: `health-warning-${issue.type}-${issue.object}`,
+                severity: 'warning',
+                type: 'health_check_warning',
+                label: issue.type === 'host_without_services' ? 'No services' : 'Health warning',
+                name: issue.object || 'unknown',
+                detail: issue.message || '',
+                actionLabel: 'View',
+                actionType: 'navigate',
+                data: { issue }
             });
         }
     }
@@ -438,6 +623,9 @@ function handleSuggestionClick(id, event) {
     } else if (s.data?.objects && s.data.objects.length > 0) {
         // For duplicates, show the first one
         Explorer.navigateToObjectByIndex(s.data.objects[0].global_index);
+    } else if (s.data?.issue) {
+        // For health check warnings, navigate to the referenced object
+        Explorer.navigateToIssue(s.data.issue.object, s.data.issue.object_type);
     } else if (s.data?.issues && s.data.issues.length > 0) {
         // For missing objects, navigate to the first referencing object
         const firstIssue = s.data.issues[0];
@@ -659,8 +847,21 @@ async function loadCleanupSuggestions(forceRefresh = false) {
         container.innerHTML = '<div class="tab-placeholder">Analyzing configuration...</div>';
     }
 
-    // Client-side analysis (implementation in analysis-cleanup.js)
-    state.allCleanupSuggestions = Explorer.analyzeCleanupIssues();
+    // Ensure health-check data is loaded (force re-fetch if forceRefresh)
+    if (!state.healthCheckData || forceRefresh) {
+        try {
+            const result = await ApiClient.get('/api/health-check');
+            if (result.success) {
+                state.healthCheckData = result.data;
+                mapHealthCheckToState(result.data);
+            }
+        } catch (error) {
+            if (container) {
+                container.innerHTML = '<div class="tab-placeholder">Error loading cleanup data.</div>';
+            }
+            return;
+        }
+    }
 
     if (state.allCleanupSuggestions.length === 0) {
         if (container) {
@@ -679,7 +880,7 @@ async function loadCleanupSuggestions(forceRefresh = false) {
 }
 
 // =============================================================================
-// Cleanup Analysis - Implementation moved to analysis-cleanup.js
+// Cleanup Analysis Rendering
 // =============================================================================
 
 function renderCleanupSuggestions() {
@@ -1235,21 +1436,25 @@ async function loadNotificationSuggestions(forceRefresh = false) {
     const container = document.getElementById('notificationsContent');
     const badge = document.getElementById('notificationsSectionBadge');
 
-    if (!forceRefresh && state.allNotificationSuggestions.length > 0) {
-        renderNotificationSuggestions();
-        return;
+    // Ensure health-check data is loaded (force re-fetch if forceRefresh)
+    if (!state.healthCheckData || forceRefresh) {
+        try {
+            const result = await ApiClient.get('/api/health-check');
+            if (result.success) {
+                state.healthCheckData = result.data;
+                mapHealthCheckToState(result.data);
+            }
+        } catch (error) {
+            if (container) {
+                container.innerHTML = '<div class="tab-placeholder">Error loading notification data.</div>';
+            }
+            return;
+        }
     }
-
-    if (container) {
-        container.innerHTML = '<div class="tab-placeholder">Analyzing notification coverage...</div>';
-    }
-
-    // Client-side analysis
-    state.allNotificationSuggestions = analyzeNotificationGaps();
 
     if (state.allNotificationSuggestions.length === 0) {
         if (container) {
-            container.innerHTML = '<div class="empty-state empty-state-success"><span class="empty-icon"><i class="fa-solid fa-circle-check"></i></span><div class="empty-title">All covered</div><div class="empty-desc">All hosts and services have notification contacts configured!</div></div>';
+            container.innerHTML = '<div class="empty-state empty-state-success"><span class="empty-icon"><i class="fa-solid fa-circle-check"></i></span><div class="empty-title">All covered</div><div class="empty-desc">All contacts have notification commands and periods configured!</div></div>';
         }
         if (badge) badge.style.display = 'none';
         return;
@@ -1261,76 +1466,6 @@ async function loadNotificationSuggestions(forceRefresh = false) {
     }
 
     renderNotificationSuggestions();
-}
-
-function analyzeNotificationGaps() {
-    const suggestions = [];
-
-    // Build a set of all contact and contactgroup names
-    const contacts = new Set(state.allObjects.filter(o => o.object_type === 'contact').map(o => o.attributes.contact_name));
-    const contactgroups = new Set(state.allObjects.filter(o => o.object_type === 'contactgroup').map(o => o.attributes.contactgroup_name));
-
-    // Check hosts
-    const hosts = state.allObjects.filter(o => o.object_type === 'host' && o.attributes.register !== '0');
-    for (const host of hosts) {
-        const hasContacts = host.attributes.contacts && host.attributes.contacts.trim() !== '';
-        const hasContactGroups = host.attributes.contact_groups && host.attributes.contact_groups.trim() !== '';
-
-        // Check if it inherits from a template that might have contacts
-        const usesTemplate = host.attributes.use;
-
-        if (!hasContacts && !hasContactGroups && !usesTemplate) {
-            suggestions.push({
-                type: 'host_no_contacts',
-                severity: 'warning',
-                object: host,
-                title: `Host without contacts: ${host.attributes.host_name}`,
-                description: 'No contacts or contact_groups defined. Notifications will not be sent.',
-                fix: 'contacts'
-            });
-        }
-    }
-
-    // Check services
-    const services = state.allObjects.filter(o => o.object_type === 'service' && o.attributes.register !== '0');
-    for (const service of services) {
-        const hasContacts = service.attributes.contacts && service.attributes.contacts.trim() !== '';
-        const hasContactGroups = service.attributes.contact_groups && service.attributes.contact_groups.trim() !== '';
-        const usesTemplate = service.attributes.use;
-
-        if (!hasContacts && !hasContactGroups && !usesTemplate) {
-            const hostName = service.attributes.host_name || '*';
-            const serviceDesc = service.attributes.service_description || 'unknown';
-            suggestions.push({
-                type: 'service_no_contacts',
-                severity: 'warning',
-                object: service,
-                title: `Service without contacts: ${serviceDesc}`,
-                description: `On host "${hostName}". No contacts or contact_groups defined.`,
-                fix: 'contacts'
-            });
-        }
-    }
-
-    // Check for hosts/services with notifications disabled but no apparent reason
-    for (const host of hosts) {
-        if (host.attributes.notifications_enabled === '0' && !host.attributes.use) {
-            suggestions.push({
-                type: 'notifications_disabled',
-                severity: 'info',
-                object: host,
-                title: `Notifications disabled: ${host.attributes.host_name}`,
-                description: 'Host has notifications explicitly disabled.',
-                fix: null
-            });
-        }
-    }
-
-    // Sort by severity
-    const severityOrder = { warning: 0, info: 1 };
-    suggestions.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
-
-    return filterActiveSuggestions(suggestions);
 }
 
 function renderNotificationSuggestions() {
@@ -1399,8 +1534,8 @@ Explorer.switchSuggestionsSubtab = switchSuggestionsSubtab;
 Explorer.loadAllSuggestions = loadAllSuggestions;
 Explorer.updateSuggestionsBadge = updateSuggestionsBadge;
 // Template & grouping functions exported from analysis-suggestions.js
+Explorer.mapHealthCheckToState = mapHealthCheckToState;
 Explorer.loadCleanupSuggestions = loadCleanupSuggestions;
-// analyzeCleanupIssues exported from analysis-cleanup.js
 Explorer.renderCleanupSuggestions = renderCleanupSuggestions;
 Explorer.toggleCleanupSection = toggleCleanupSection;
 Explorer.bulkDeleteCleanupGroup = bulkDeleteCleanupGroup;
@@ -1416,7 +1551,6 @@ Explorer.openNewObjectInEditor = openNewObjectInEditor;
 Explorer.handleHostgroupServiceLink = handleHostgroupServiceLink;
 Explorer.updateCleanupBadge = updateCleanupBadge;
 Explorer.loadNotificationSuggestions = loadNotificationSuggestions;
-Explorer.analyzeNotificationGaps = analyzeNotificationGaps;
 Explorer.renderNotificationSuggestions = renderNotificationSuggestions;
 // Issues functions exported from analysis-issues.js
 

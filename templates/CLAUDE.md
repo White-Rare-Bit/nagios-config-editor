@@ -12,15 +12,11 @@ base.html (master template - 2496 lines)
   ├─ backups.html (Backup management)
   ├─ git.html (Git operations)
   ├─ settings.html (Config + identity)
-  ├─ find_replace.html (Bulk find/replace)
   ├─ bulk_rename.html (Bulk rename)
-  ├─ bulk_attributes.html (Bulk attribute editor)
   ├─ reorganize.html (File reorganization)
   ├─ smart_grouping.html (Smart grouping suggestions)
   ├─ inheritance.html (Template inheritance analysis)
-  ├─ validate.html (Nagios -v validation)
-  ├─ health_check.html (Config health check)
-  └─ objects.html (Simple object browser - deprecated)
+  └─ validate.html (Nagios -v validation)
 ```
 
 ## base.html Blocks
@@ -191,7 +187,7 @@ Used by: `explorer.html` only
 
 ### Single-Pane Layout
 
-Used by: `find_replace.html`, `bulk_rename.html`, `bulk_attributes.html`, `validate.html`
+Used by: `bulk_rename.html`, `validate.html`
 
 ```html
 <div class="container-fluid">
@@ -238,11 +234,8 @@ buildBreadcrumb(filePath); // Returns HTML string
 | backups.html | backups.css | js/backups.js | Backup management |
 | settings.html | settings.css | js/settings.js | Settings management |
 | audit_log.html | audit_log.css | js/audit-log.js | Audit log viewer |
-| find_replace.html | find-replace.css | js/find-replace.js | Find/replace operations |
 | bulk_rename.html | bulk-rename.css | js/bulk-rename.js | Bulk rename |
-| bulk_attributes.html | bulk-attributes.css | js/bulk-attributes.js | Bulk attribute editor |
 | validate.html | validate.css | js/validate.js | Validation interface |
-| health_check.html | health-check.css | js/health-check.js | Health checks |
 | inheritance.html | inheritance.css | js/inheritance.js | Template inheritance |
 | reorganize.html | (none) | js/reorganize.js | Reorganization |
 | smart_grouping.html | smart-grouping.css | js/smart-grouping.js | Smart grouping |
