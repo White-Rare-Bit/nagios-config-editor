@@ -114,4 +114,12 @@
         return fields;
     };
 
+    /**
+     * Strip Nagios additive/exclusion prefixes (+/!) from a value.
+     * Shared implementation — do not duplicate in other modules.
+     */
+    Explorer.stripPrefix = function(val) {
+        return val.trim().replace(/^[+!]+/, '').trim();
+    };
+
 })(window.Explorer);

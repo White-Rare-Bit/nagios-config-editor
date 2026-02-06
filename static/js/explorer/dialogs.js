@@ -425,16 +425,13 @@
     function findDependencies(objectName, objectType = null) {
         const dependencies = [];
 
-        // Helper to strip +/! prefixes from Nagios additive/exclusion syntax
-        const stripPrefix = v => v.trim().replace(/^[+!]+/, '').trim();
-
         for (const obj of state.allObjects) {
             let foundInFields = [];
             for (const [key, value] of Object.entries(obj.attributes)) {
                 if (!value || typeof value !== 'string') continue;
 
                 // Check each comma-separated value, stripping prefixes
-                const values = value.split(',').map(stripPrefix).filter(v => v);
+                const values = value.split(',').map(Explorer.stripPrefix).filter(v => v);
                 if (values.includes(objectName)) {
                     foundInFields.push(key);
                 }
@@ -821,8 +818,7 @@
 
                         for (const v of values) {
                             let checkValue = isCommandAttr ? v.split('!')[0] : v;
-                            // Strip +/! prefixes for group membership attributes (additive/exclusion syntax)
-                            checkValue = checkValue.replace(/^[+!]+/, '').trim();
+                            checkValue = Explorer.stripPrefix(checkValue);
                             if (!suggestions.includes(checkValue)) {
                                 showToast(`"${checkValue}" does not exist`, 'error');
                                 return;

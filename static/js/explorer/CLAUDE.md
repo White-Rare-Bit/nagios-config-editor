@@ -16,7 +16,7 @@ Modular architecture for Nagios config explorer: shared namespace, three-pane UI
 | `dialogs.js` | Create/delete/rename dialogs, validation. Helpers: `buildWarningBox()`, `buildTypeDropdown()` | Dialog UI |
 | `data-loading.js` | API calls, staging sync/polling, initial load. Helpers: `handleApiError()`, `toDisplayPath()` | Data loading or sync |
 | `drag-drop.js` | Unified drag-drop handler (objects and files), drop zones, visual feedback | Drag-drop behavior |
-| `analysis.js` | Suggestions tab: template detection, validation errors. Utilities: `stripPrefix()`, `filterActiveSuggestions()` | Analysis features |
+| `analysis.js` | Suggestions tab: template detection, validation errors. Utilities: `filterActiveSuggestions()` | Analysis features |
 | `analysis-cleanup.js` | Cleanup analysis: unused templates/commands/contacts, duplicates, orphans, empty groups | Cleanup suggestions |
 | `analysis-issues.js` | Validation issues: grouped errors, batch create missing objects, issue resolution | Validation errors |
 | `analysis-suggestions.js` | Template consolidation and hostgroup suggestions, create dialogs | Suggestions UI |
@@ -161,8 +161,12 @@ buildWarningBox('Warning message', 'warning')  // or 'danger', 'info'
 buildTypeDropdown(currentType)  // Object type selector HTML
 ```
 
+### Shared Utilities (constants.js)
+```javascript
+Explorer.stripPrefix('+value')  // → 'value' (removes +/! prefixes)
+```
+
 ### Analysis Utilities (analysis.js)
 ```javascript
-stripPrefix('+value')  // → 'value' (removes +/! prefixes)
 filterActiveSuggestions(suggestions)  // Excludes deleted objects
 ```

@@ -402,7 +402,7 @@
 
             state.allObjects.filter(o => o.object_type === groupType).forEach(parentGroup => {
                 const attrs = getEffectiveAttrs(parentGroup);
-                const members = (attrs[membersAttr] || '').split(',').map(m => m.trim().replace(/^[+!]+/, '').trim());
+                const members = (attrs[membersAttr] || '').split(',').map(m => Explorer.stripPrefix(m));
                 if (members.includes(groupName)) {
                     parents.push({
                         object: parentGroup,
@@ -445,7 +445,7 @@
             }
 
             if (attrs.contactgroup_members) {
-                const groupNames = attrs.contactgroup_members.split(',').map(m => m.trim().replace(/^[+!]+/, ''));
+                const groupNames = attrs.contactgroup_members.split(',').map(m => Explorer.stripPrefix(m));
                 for (const groupName of groupNames) {
                     if (!groupName || groupName.startsWith('!')) continue;
                     const nestedGroup = state.allObjects.find(o =>

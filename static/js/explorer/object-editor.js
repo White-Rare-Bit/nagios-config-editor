@@ -659,8 +659,7 @@
 
                 for (const v of values) {
                     let checkValue = isCommandAttr ? v.split('!')[0] : v;
-                    // Strip +/! prefixes for group membership attributes (additive/exclusion syntax)
-                    checkValue = checkValue.replace(/^[+!]+/, '').trim();
+                    checkValue = Explorer.stripPrefix(checkValue);
                     if (!suggestions.includes(checkValue)) {
                         showToast(`"${checkValue}" does not exist`, 'error');
                         // Revert the input to the old value
@@ -802,8 +801,7 @@
 
                         for (const v of values) {
                             let checkValue = isCommandAttr ? v.split('!')[0] : v;
-                            // Strip +/! prefixes for group membership attributes (additive/exclusion syntax)
-                            checkValue = checkValue.replace(/^[+!]+/, '').trim();
+                            checkValue = Explorer.stripPrefix(checkValue);
                             if (!suggestions.includes(checkValue)) {
                                 showToast(`"${checkValue}" does not exist`, 'error');
                                 return;

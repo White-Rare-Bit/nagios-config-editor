@@ -10,9 +10,6 @@
     // Severity order for consistent sorting across suggestion types
     const SEVERITY_ORDER = { error: 0, warning: 1, info: 2 };
 
-    // Strip +/! prefixes from Nagios additive/exclusion syntax
-    const stripPrefix = s => s.trim().replace(/^[+!]+/, '').trim();
-
     // A-02: Filter out suggestions for objects marked for deletion (used 11+ times)
     function filterActiveSuggestions(suggestions) {
         return suggestions.filter(s => s.object && !Explorer.isObjectMarkedForDeletion(s.object.global_index));
