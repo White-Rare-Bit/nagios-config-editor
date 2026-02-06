@@ -170,6 +170,7 @@ def api_health_check():
             templates[obj.object_type].add(obj.attributes['name'])
 
     # Check for issues
+    missing_parents = {}  # parent_name -> [(host_name, file)]
     for obj in p.objects:
         # Use get_name() for stable identity (matches o.name in frontend)
         # This ensures lookups work even if display_name format changes
@@ -209,23 +210,17 @@ def api_health_check():
                             'message': f'Service references non-existent hostgroup: {hg}'
                         })
 
-        # 1c. Check for hosts with missing parents
+        # 1c. Collect missing parent references (consolidated after loop)
         if obj.object_type == 'host':
-            # Skip templates
             if obj.attributes.get('register', '1') != '0':
                 parents_ref = obj.attributes.get('parents', '')
                 if parents_ref:
                     for parent in parents_ref.split(','):
                         parent = parent.strip()
                         if parent and parent not in hosts:
-                            issues.append({
-                                'type': 'missing_parent',
-                                'severity': 'warning',
-                                'object': obj_name,
-                                'object_type': obj.object_type,
-                                'file': obj.source_file,
-                                'message': f'Host references non-existent parent: {parent}'
-                            })
+                            missing_parents.setdefault(parent, []).append(
+                                (obj_name, obj.source_file)
+                            )
 
         # 2. Check for missing templates
         if 'use' in obj.attributes:
@@ -327,6 +322,23 @@ def api_health_check():
                         'file': obj.source_file,
                         'message': f'References non-existent servicegroup: {sg}'
                     })
+
+    # 1c (consolidated). Emit missing parent issues (one per missing parent)
+    for parent_name, host_refs in missing_parents.items():
+        host_names = [h for h, _ in host_refs]
+        first_file = host_refs[0][1]
+        if len(host_names) <= 3:
+            host_list = ', '.join(host_names)
+        else:
+            host_list = f'{", ".join(host_names[:3])} and {len(host_names) - 3} more'
+        issues.append({
+            'type': 'missing_parent',
+            'severity': 'warning',
+            'object': parent_name,
+            'object_type': 'host',
+            'file': first_file,
+            'message': f'Non-existent parent host referenced by: {host_list}'
+        })
 
     # 7. Check for empty groups
     for obj in p.objects:
