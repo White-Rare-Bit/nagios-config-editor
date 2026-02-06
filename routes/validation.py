@@ -205,7 +205,8 @@ def api_health_check():
 
         # 3. Check for missing commands
         # Severity: error (missing command would cause Nagios config verification failure)
-        for cmd_field in ['check_command', 'event_handler', 'notification_commands']:
+        for cmd_field in ['check_command', 'event_handler',
+                          'host_notification_commands', 'service_notification_commands']:
             if cmd_field in obj.attributes:
                 cmd_ref = obj.attributes[cmd_field].split('!')[0]  # Get command without args
                 if cmd_ref and cmd_ref not in commands:
