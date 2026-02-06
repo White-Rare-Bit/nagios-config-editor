@@ -860,6 +860,33 @@ def api_health_check():
                     'message': 'Time period is not referenced by any object'
                 })
 
+    # 19. Check for duplicate object definitions
+    identity_map = {}  # "type:name" -> [obj, ...]
+    for obj in p.objects:
+        if obj.attributes.get('register', '1') == '0':
+            continue
+        name = obj.get_name()
+        if not name:
+            continue
+        key = f'{obj.object_type}:{name}'
+        identity_map.setdefault(key, []).append(obj)
+
+    for key, objs in identity_map.items():
+        if len(objs) <= 1:
+            continue
+        obj_type, identity = key.split(':', 1)
+        files = [o.source_file.rsplit('/', 1)[-1] for o in objs]
+        for obj in objs:
+            other_files = [f for f, o in zip(files, objs) if o is not obj]
+            issues.append({
+                'type': 'duplicate_object',
+                'severity': 'error',
+                'object': identity,
+                'object_type': obj_type,
+                'file': obj.source_file,
+                'message': f'Duplicate {obj_type} definition (also in {", ".join(other_files)})'
+            })
+
     # Summary
     summary = {
         'total_issues': len(issues),

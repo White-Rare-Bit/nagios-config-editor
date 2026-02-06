@@ -944,3 +944,109 @@ define service {
             f"Expected 'unused-period' flagged, got: {flagged_names}"
         assert '24x7' not in flagged_names, \
             f"False positive: '24x7' is used by contacts but was flagged"
+
+
+class TestDuplicateObjectDetection:
+    """Test that duplicate object definitions are detected by health check."""
+
+    @pytest.fixture
+    def app_with_duplicates(self):
+        """Config with duplicate host definitions across files."""
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / 'nagios'
+        test_config_path.mkdir()
+
+        (test_config_path / 'hosts1.cfg').write_text('''
+define host {
+    host_name       duplicate-host
+    alias           First Copy
+    address         10.0.0.1
+}
+''')
+
+        (test_config_path / 'hosts2.cfg').write_text('''
+define host {
+    host_name       duplicate-host
+    alias           Second Copy
+    address         10.0.0.2
+}
+
+define host {
+    host_name       unique-host
+    alias           Only One
+    address         10.0.0.3
+}
+''')
+
+        (test_config_path / 'commands.cfg').write_text('''
+define command {
+    command_name    check-host-alive
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+''')
+
+        (test_config_path / 'timeperiods.cfg').write_text('''
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+}
+''')
+
+        app = create_app(config_path=str(test_config_path))
+        app.config['TESTING'] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_detects_duplicate_hosts(self, app_with_duplicates):
+        """duplicate-host should be flagged; unique-host should not."""
+        client = app_with_duplicates.test_client()
+        resp = client.get('/api/health-check')
+        assert resp.status_code == 200
+        data = resp.get_json()
+
+        dup_issues = [i for i in data['issues']
+                      if i['type'] == 'duplicate_object']
+        flagged_names = [i['object'] for i in dup_issues]
+
+        assert 'duplicate-host' in flagged_names, \
+            f"Expected 'duplicate-host' flagged, got: {flagged_names}"
+        assert 'unique-host' not in flagged_names, \
+            f"False positive: 'unique-host' is not duplicated but was flagged"
+
+    def test_duplicate_is_error_severity(self, app_with_duplicates):
+        """All duplicate_object issues should have 'error' severity."""
+        client = app_with_duplicates.test_client()
+        resp = client.get('/api/health-check')
+        assert resp.status_code == 200
+        data = resp.get_json()
+
+        dup_issues = [i for i in data['issues']
+                      if i['type'] == 'duplicate_object']
+
+        assert len(dup_issues) > 0, "Expected at least one duplicate_object issue"
+        for issue in dup_issues:
+            assert issue['severity'] == 'error', \
+                f"Expected severity 'error', got '{issue['severity']}' for {issue['object']}"
+
+    def test_duplicate_reports_files(self, app_with_duplicates):
+        """Duplicate issue message should mention the other file(s)."""
+        client = app_with_duplicates.test_client()
+        resp = client.get('/api/health-check')
+        assert resp.status_code == 200
+        data = resp.get_json()
+
+        dup_issues = [i for i in data['issues']
+                      if i['type'] == 'duplicate_object']
+
+        assert len(dup_issues) >= 2, \
+            f"Expected at least 2 duplicate issues (one per copy), got {len(dup_issues)}"
+
+        # Each duplicate issue should mention the other file
+        for issue in dup_issues:
+            # The message should reference at least one other file
+            assert 'also in' in issue['message'], \
+                f"Expected 'also in' in message, got: {issue['message']}"
+            # Should mention a .cfg file
+            assert '.cfg' in issue['message'], \
+                f"Expected a .cfg filename in message, got: {issue['message']}"
