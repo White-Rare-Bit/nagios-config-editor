@@ -3,7 +3,7 @@
 import re
 
 from flask import Blueprint, jsonify
-from nagios_model import NAME_FIELDS, REFERENCE_FIELDS
+from nagios_model import NAME_FIELDS, REFERENCE_FIELDS, REQUIRED_FIELDS
 from validator import NagiosValidator
 from .helpers import get_service, get_config
 
@@ -76,6 +76,27 @@ def api_validate_check():
         'message': verify_message,
         'nagios_bin': config['nagios_bin'],
         'nagios_cfg': config['nagios_cfg']
+    })
+
+
+@bp.route('/api/constants')
+def api_constants():
+    """Return domain metadata constants (single source of truth)."""
+    # Convert REQUIRED_FIELDS tuples to lists for JSON serialization
+    required_fields_json = {}
+    for obj_type, reqs in REQUIRED_FIELDS.items():
+        converted = []
+        for req in reqs:
+            if isinstance(req, tuple):
+                converted.append(list(req))  # OR condition
+            else:
+                converted.append(req)
+        required_fields_json[obj_type] = converted
+
+    return jsonify({
+        'name_fields': NAME_FIELDS,
+        'required_fields': required_fields_json,
+        'reference_fields': REFERENCE_FIELDS,
     })
 
 

@@ -49,22 +49,8 @@
             'event_handler', 'check_period', 'notification_period', 'contacts', 'members'
         ],
 
-        // Name fields by object type (must stay in sync with nagios_model.py:NAME_FIELDS)
-        // N-01: Added dependency and escalation object types
-        nameFields: {
-            host: 'host_name',
-            hostgroup: 'hostgroup_name',
-            service: 'service_description',
-            servicegroup: 'servicegroup_name',
-            contact: 'contact_name',
-            contactgroup: 'contactgroup_name',
-            command: 'command_name',
-            timeperiod: 'timeperiod_name',
-            servicedependency: 'service_description',
-            hostdependency: 'host_name',
-            serviceescalation: 'service_description',
-            hostescalation: 'host_name'
-        },
+        // Name fields by object type (populated from /api/constants)
+        nameFields: {},
 
         // Notification options
         HOST_NOTIFICATION_OPTIONS: [
@@ -89,77 +75,11 @@
             'o - OK', 'w - Warning', 'u - Unknown', 'c - Critical', 'p - Pending', 'n - None'
         ],
 
-        // Required fields per object type (sync with nagios_model.py:REQUIRED_FIELDS)
-        // String: field is required; Array: at least one must be present (OR condition)
-        REQUIRED_FIELDS: {
-            'host': ['host_name', 'address', 'max_check_attempts', ['contacts', 'contact_groups']],
-            'hostgroup': ['hostgroup_name'],
-            'service': ['service_description', ['host_name', 'hostgroup_name'], 'check_command', 'max_check_attempts', ['contacts', 'contact_groups']],
-            'servicegroup': ['servicegroup_name'],
-            'contact': ['contact_name', ['host_notification_commands', 'notification_commands'], ['service_notification_commands', 'notification_commands'], ['host_notification_period', 'notification_period'], ['service_notification_period', 'notification_period']],
-            'contactgroup': ['contactgroup_name'],
-            'command': ['command_name', 'command_line'],
-            'timeperiod': ['timeperiod_name'],
-            'hostdependency': [['host_name', 'hostgroup_name'], ['dependent_host_name', 'dependent_hostgroup_name']],
-            'servicedependency': [
-                'service_description', ['host_name', 'hostgroup_name'],
-                'dependent_service_description', ['dependent_host_name', 'dependent_hostgroup_name']
-            ],
-            'hostescalation': [['host_name', 'hostgroup_name']],
-            'serviceescalation': ['service_description', ['host_name', 'hostgroup_name']]
-        },
+        // Required fields per object type (populated from /api/constants)
+        REQUIRED_FIELDS: {},
 
-        // Reference fields for dependency detection (sync with nagios_model.py:REFERENCE_FIELDS)
-        // Used by app.js for outgoing/incoming reference tracking
-        referenceFields: {
-            // Host references
-            'host_name': 'host',
-            'parents': 'host',
-            'dependent_host_name': 'host',
-            'master_host_name': 'host',
-            // Hostgroup references
-            'hostgroup_name': 'hostgroup',
-            'hostgroups': 'hostgroup',
-            'hostgroup_members': 'hostgroup',
-            'dependent_hostgroup_name': 'hostgroup',
-            'master_hostgroup_name': 'hostgroup',
-            // Servicegroup references
-            'servicegroups': 'servicegroup',
-            'servicegroup_name': 'servicegroup',
-            'servicegroup_members': 'servicegroup',
-            // Contact references
-            'contacts': 'contact',
-            'escalation_contacts': 'contact',
-            // Contactgroup references
-            'contact_groups': 'contactgroup',
-            'contactgroups': 'contactgroup',
-            'contactgroup_members': 'contactgroup',
-            'escalation_contact_groups': 'contactgroup',
-            // Command references (N-05: Synced with nagios_model.py)
-            'check_command': 'command',
-            'event_handler': 'command',
-            'notification_commands': 'command',
-            'host_notification_commands': 'command',
-            'service_notification_commands': 'command',
-            'obsess_over_host_command': 'command',
-            'obsess_over_service_command': 'command',
-            'ocsp_command': 'command',
-            'ochp_command': 'command',
-            'global_host_event_handler': 'command',
-            'global_service_event_handler': 'command',
-            // Timeperiod references
-            'check_period': 'timeperiod',
-            'notification_period': 'timeperiod',
-            'host_notification_period': 'timeperiod',
-            'service_notification_period': 'timeperiod',
-            'dependency_period': 'timeperiod',
-            'escalation_period': 'timeperiod',
-            'exclude': 'timeperiod',
-            // Template references (type depends on context)
-            'use': null,
-            // Group members (type depends on context)
-            'members': null
-        },
+        // Reference fields for dependency detection (populated from /api/constants)
+        referenceFields: {},
 
         // Attribute reference map (for autocomplete hints)
         ATTR_REFERENCE_MAP: {

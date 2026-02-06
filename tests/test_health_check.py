@@ -1524,3 +1524,49 @@ class TestTemplateConsolidation:
         tmpl_issues = [i for i in data['issues'] if i['type'] == 'template_opportunity']
         for issue in tmpl_issues:
             assert issue['severity'] == 'info'
+
+
+class TestConstantsEndpoint:
+    """Tests for /api/constants endpoint serving domain metadata."""
+
+    def test_constants_returns_name_fields(self, health_client):
+        """Endpoint should return name_fields with correct mappings."""
+        resp = health_client.get('/api/constants')
+        assert resp.status_code == 200
+        data = resp.json
+
+        assert 'name_fields' in data
+        nf = data['name_fields']
+        assert nf['host'] == 'host_name'
+        assert nf['service'] == 'service_description'
+        assert nf['command'] == 'command_name'
+
+    def test_constants_returns_required_fields(self, health_client):
+        """Endpoint should return required_fields with OR conditions as lists."""
+        resp = health_client.get('/api/constants')
+        assert resp.status_code == 200
+        data = resp.json
+
+        assert 'required_fields' in data
+        rf = data['required_fields']
+
+        # host should have host_name and address as simple strings
+        assert 'host_name' in rf['host']
+        assert 'address' in rf['host']
+
+        # host should have at least one OR condition (list within list)
+        or_conditions = [r for r in rf['host'] if isinstance(r, list)]
+        assert len(or_conditions) >= 1, \
+            f"Expected at least one OR condition in host required_fields, got: {rf['host']}"
+
+    def test_constants_returns_reference_fields(self, health_client):
+        """Endpoint should return reference_fields with correct target types."""
+        resp = health_client.get('/api/constants')
+        assert resp.status_code == 200
+        data = resp.json
+
+        assert 'reference_fields' in data
+        ref = data['reference_fields']
+        assert ref['check_command'] == 'command'
+        assert ref['host_name'] == 'host'
+        assert ref['use'] is None

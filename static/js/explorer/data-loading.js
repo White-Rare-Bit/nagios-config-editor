@@ -38,6 +38,24 @@
         }, CONFIG.ANALYSIS_DEBOUNCE_MS);
     }
 
+    /**
+     * Load domain constants from backend (single source of truth)
+     * Populates Explorer.constants with name_fields, required_fields, reference_fields
+     */
+    async function loadConstants() {
+        try {
+            const result = await ApiClient.get('/api/constants');
+            if (result.success) {
+                const c = Explorer.constants;
+                c.nameFields = result.data.name_fields;
+                c.REQUIRED_FIELDS = result.data.required_fields;
+                c.referenceFields = result.data.reference_fields;
+            }
+        } catch (error) {
+            console.error('Failed to load constants:', error);
+        }
+    }
+
     // =============================================================================
     // Data Loading
     // =============================================================================
@@ -46,6 +64,7 @@
      * Load objects and files from backend
      */
     Explorer.loadObjects = async function() {
+        await loadConstants();
         const [objectsResult, filesResult, foldersResult] = await Promise.all([
             ApiClient.get('/api/objects?_=' + Date.now(), { silent: true }),
             ApiClient.get('/api/files?_=' + Date.now(), { silent: true }),
