@@ -391,6 +391,76 @@ def api_health_check():
             else:
                 dep_signatures[sig] = {'file': obj.source_file, 'obj': obj}
 
+    # 10. Check for hosts without any services
+    # Build set of hosts that have at least one service (direct or via hostgroup)
+    hosts_with_services = set()
+
+    # Collect hostgroup memberships: host -> set of hostgroups
+    host_to_hostgroups = {}
+    for obj in p.objects:
+        if obj.object_type == 'host' and obj.attributes.get('register', '1') != '0':
+            hname = obj.get_name()
+            if hname:
+                hgs = obj.attributes.get('hostgroups', '')
+                if hgs:
+                    host_to_hostgroups[hname] = {
+                        g.strip().lstrip('+').strip()
+                        for g in hgs.split(',') if g.strip()
+                    }
+
+    # Also check hostgroup 'members' directives
+    hostgroup_to_hosts = {}
+    for obj in p.objects:
+        if obj.object_type == 'hostgroup':
+            gname = obj.get_name()
+            if gname and 'members' in obj.attributes:
+                hostgroup_to_hosts[gname] = {
+                    h.strip() for h in obj.attributes['members'].split(',') if h.strip()
+                }
+
+    for obj in p.objects:
+        if obj.object_type == 'service' and obj.attributes.get('register', '1') != '0':
+            # Direct host_name references
+            host_ref = obj.attributes.get('host_name', '')
+            if host_ref and host_ref != '*':
+                for h in host_ref.split(','):
+                    h = h.strip()
+                    if h and not h.startswith('!'):
+                        hosts_with_services.add(h)
+            elif host_ref == '*':
+                # Wildcard means all hosts have this service
+                hosts_with_services = hosts.copy()
+                break
+
+            # Hostgroup-based service assignment
+            hg_ref = obj.attributes.get('hostgroup_name', '')
+            if hg_ref:
+                for hg in hg_ref.split(','):
+                    hg = hg.strip().lstrip('+!').strip()
+                    if hg:
+                        # All hosts in this hostgroup get this service
+                        # Check hosts that declared membership via 'hostgroups' attr
+                        for hname, hg_set in host_to_hostgroups.items():
+                            if hg in hg_set:
+                                hosts_with_services.add(hname)
+                        # Check hostgroup 'members' directive
+                        if hg in hostgroup_to_hosts:
+                            hosts_with_services.update(hostgroup_to_hosts[hg])
+
+    # Flag non-template hosts without services
+    for obj in p.objects:
+        if obj.object_type == 'host' and obj.attributes.get('register', '1') != '0':
+            hname = obj.get_name()
+            if hname and hname not in hosts_with_services:
+                issues.append({
+                    'type': 'host_without_services',
+                    'severity': 'warning',
+                    'object': hname,
+                    'object_type': 'host',
+                    'file': obj.source_file,
+                    'message': 'Host has no services assigned (directly or via hostgroup)'
+                })
+
     # Summary
     summary = {
         'total_issues': len(issues),

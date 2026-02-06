@@ -145,6 +145,114 @@ def test_gitignore_references_correct_staging_dir():
         shutil.rmtree(test_dir, ignore_errors=True)
 
 
+def test_health_check_detects_hosts_without_services():
+    """Health check should detect hosts that have no services assigned."""
+    test_dir = tempfile.mkdtemp()
+    try:
+        test_config_path = Path(test_dir) / 'nagios'
+        test_config_path.mkdir()
+
+        (test_config_path / 'hosts.cfg').write_text('''
+define host {
+    host_name       monitored-host
+    alias           Has Services
+    address         10.0.0.1
+}
+
+define host {
+    host_name       lonely-host
+    alias           No Services
+    address         10.0.0.2
+}
+''')
+
+        (test_config_path / 'services.cfg').write_text('''
+define service {
+    host_name               monitored-host
+    service_description     PING
+    check_command           check_ping
+}
+''')
+
+        (test_config_path / 'commands.cfg').write_text('''
+define command {
+    command_name    check_ping
+    command_line    /usr/lib/nagios/plugins/check_ping -H $HOSTADDRESS$
+}
+''')
+
+        app = create_app(config_path=str(test_config_path))
+        app.config['TESTING'] = True
+        client = app.test_client()
+
+        resp = client.get('/api/health-check')
+        assert resp.status_code == 200
+        data = resp.json
+
+        no_service_issues = [i for i in data['issues']
+                             if i['type'] == 'host_without_services']
+
+        # lonely-host should be flagged
+        flagged_hosts = [i['object'] for i in no_service_issues]
+        assert 'lonely-host' in flagged_hosts, \
+            f"Expected 'lonely-host' flagged, got: {flagged_hosts}"
+
+        # monitored-host should NOT be flagged
+        assert 'monitored-host' not in flagged_hosts, \
+            f"False positive: 'monitored-host' has services but was flagged"
+    finally:
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+
+def test_health_check_hostgroup_services_not_flagged():
+    """Hosts with services via hostgroup_name should NOT be flagged."""
+    test_dir = tempfile.mkdtemp()
+    try:
+        test_config_path = Path(test_dir) / 'nagios'
+        test_config_path.mkdir()
+
+        (test_config_path / 'config.cfg').write_text('''
+define host {
+    host_name       grouped-host
+    alias           In Hostgroup
+    address         10.0.0.3
+    hostgroups      web-servers
+}
+
+define hostgroup {
+    hostgroup_name  web-servers
+    alias           Web Servers
+}
+
+define service {
+    hostgroup_name          web-servers
+    service_description     HTTP
+    check_command           check_http
+}
+
+define command {
+    command_name    check_http
+    command_line    /usr/lib/nagios/plugins/check_http -H $HOSTADDRESS$
+}
+''')
+
+        app = create_app(config_path=str(test_config_path))
+        app.config['TESTING'] = True
+        client = app.test_client()
+
+        resp = client.get('/api/health-check')
+        data = resp.json
+
+        no_service_issues = [i for i in data['issues']
+                             if i['type'] == 'host_without_services']
+        flagged_hosts = [i['object'] for i in no_service_issues]
+
+        assert 'grouped-host' not in flagged_hosts, \
+            f"False positive: 'grouped-host' has services via hostgroup but was flagged"
+    finally:
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+
 def test_edit_object_uses_atomic_write(tmp_path):
     """edit_object_in_file should write atomically (temp file + rename)."""
     cfg = tmp_path / 'test.cfg'
