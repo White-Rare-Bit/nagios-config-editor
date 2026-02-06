@@ -149,8 +149,24 @@
             container.innerHTML = '<div class="tab-placeholder">Analyzing objects...</div>';
         }
 
-        // Analyze objects client-side
-        state.allTemplateSuggestions = analyzeTemplateConsolidation();
+        // Fetch from backend
+        const result = await ApiClient.get('/api/analysis/template-suggestions', { silent: true });
+
+        if (result.success && result.data.suggestions) {
+            // Convert backend format to frontend format
+            state.allTemplateSuggestions = result.data.suggestions.map(s => ({
+                type: s.type,
+                suggestedName: s.suggested_name,
+                attributes: s.attributes,
+                objects: s.object_indices.map(idx =>
+                    state.allObjects.find(o => o.global_index === idx)
+                ).filter(Boolean),
+                count: s.count,
+                attrCount: s.attr_count
+            }));
+        } else {
+            state.allTemplateSuggestions = [];
+        }
 
         if (state.allTemplateSuggestions.length === 0) {
             if (container) {
@@ -169,114 +185,9 @@
     }
 
     function analyzeTemplateConsolidation() {
-        const suggestions = [];
-
-        // Identity fields that should be excluded from comparison
-        const identityFields = ['host_name', 'service_description', 'name', 'contact_name', 'alias', 'address', 'hostgroup_name', 'servicegroup_name', 'contactgroup_name', 'command_name', 'timeperiod_name'];
-
-        // Group objects by type
-        const objectsByType = {};
-        for (const obj of state.allObjects) {
-            if (!objectsByType[obj.object_type]) {
-                objectsByType[obj.object_type] = [];
-            }
-            objectsByType[obj.object_type].push(obj);
-        }
-
-        // Analyze each object type
-        for (const [objType, objects] of Object.entries(objectsByType)) {
-            if (objects.length < 3) continue; // Need at least 3 objects to suggest a template
-
-            // Skip if this type is typically a template itself
-            if (['timeperiod', 'command'].includes(objType)) continue;
-
-            // Create signature for each object (excluding identity fields)
-            const signatures = new Map(); // signature -> [objects]
-
-            for (const obj of objects) {
-                // Skip objects that already use a template
-                if (obj.attributes.use || obj.attributes.register === '0') continue;
-
-                // Build attribute signature (sorted key-value pairs)
-                const attrPairs = [];
-                for (const [key, value] of Object.entries(obj.attributes)) {
-                    if (!identityFields.includes(key) && key !== 'register') {
-                        attrPairs.push(`${key}=${value}`);
-                    }
-                }
-
-                if (attrPairs.length === 0) continue;
-
-                attrPairs.sort();
-                const signature = attrPairs.join('|');
-
-                if (!signatures.has(signature)) {
-                    signatures.set(signature, []);
-                }
-                signatures.get(signature).push(obj);
-            }
-
-            // Find signatures with multiple objects
-            for (const [signature, matchingObjects] of signatures) {
-                if (matchingObjects.length >= 3) {
-                    // Parse the signature back to attributes
-                    const attrs = {};
-                    for (const pair of signature.split('|')) {
-                        const [key, value] = pair.split('=');
-                        attrs[key] = value;
-                    }
-
-                    // Generate a suggested template name
-                    const suggestedName = generateTemplateName(objType, matchingObjects, attrs);
-
-                    suggestions.push({
-                        type: objType,
-                        suggestedName: suggestedName,
-                        attributes: attrs,
-                        objects: matchingObjects,
-                        count: matchingObjects.length,
-                        attrCount: Object.keys(attrs).length
-                    });
-                }
-            }
-        }
-
-        // Sort by potential impact (count * attrCount)
-        suggestions.sort((a, b) => (b.count * b.attrCount) - (a.count * a.attrCount));
-
-        return suggestions;
-    }
-
-    function generateTemplateName(objType, objects, attrs) {
-        // Try to find common patterns in object names
-        const names = objects.map(o => {
-            return o.attributes.host_name || o.attributes.service_description || o.attributes.name || '';
-        }).filter(n => n);
-
-        if (names.length > 0) {
-            // Find common prefix
-            let prefix = names[0];
-            for (const name of names) {
-                while (prefix && !name.startsWith(prefix)) {
-                    prefix = prefix.slice(0, -1);
-                }
-            }
-            if (prefix && prefix.length >= 3) {
-                // Clean up the prefix (remove trailing dashes, numbers, etc.)
-                prefix = prefix.replace(/[-_\d]+$/, '');
-                if (prefix.length >= 3) {
-                    return `${prefix}-${objType}-template`;
-                }
-            }
-        }
-
-        // Fall back to attribute-based naming
-        if (attrs.check_command) {
-            const cmd = attrs.check_command.split('!')[0];
-            return `${cmd}-${objType}-template`;
-        }
-
-        return `common-${objType}-template`;
+        // Legacy synchronous wrapper - returns cached data or empty array.
+        // Actual computation now happens via loadTemplateSuggestions().
+        return state.allTemplateSuggestions;
     }
 
     function filterTemplateSuggestions() {
@@ -638,7 +549,6 @@
     Explorer.renderTemplateIssues = renderTemplateIssues;
     Explorer.loadTemplateSuggestions = loadTemplateSuggestions;
     Explorer.analyzeTemplateConsolidation = analyzeTemplateConsolidation;
-    Explorer.generateTemplateName = generateTemplateName;
     Explorer.filterTemplateSuggestions = filterTemplateSuggestions;
     Explorer.showCreateTemplateDialog = showCreateTemplateDialog;
 

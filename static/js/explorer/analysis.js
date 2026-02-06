@@ -1252,31 +1252,38 @@ function updateCleanupBadge() {
 // Notification Gap Analysis
 // ============================================================================
 
+/**
+ * Build notification suggestions from backend health-check issues.
+ * Shared helper used by both loadNotificationSuggestions (analysis tab)
+ * and loadSuggestionsForBadges (badge-issues.js).
+ */
+function buildNotificationSuggestionsFromIssues() {
+    state.allNotificationSuggestions = [];
+    if (!state.allIssues) return;
+
+    for (const issue of state.allIssues) {
+        if (issue.type !== 'notification_gap') continue;
+        const obj = state.allObjects.find(o =>
+            o.object_type === issue.object_type &&
+            (o.name === issue.object || o.display_name === issue.object)
+        );
+        state.allNotificationSuggestions.push({
+            type: 'notification_gap',
+            severity: issue.severity || 'warning',
+            object: obj || null,
+            title: `Notification gap: ${issue.object}`,
+            description: issue.message,
+            fix: null
+        });
+    }
+}
+
 async function loadNotificationSuggestions(forceRefresh = false) {
     const container = document.getElementById('notificationsContent');
     const badge = document.getElementById('notificationsSectionBadge');
 
-    // Read notification issues from backend health check data
-    state.allNotificationSuggestions = [];
-    if (state.allIssues) {
-        for (const issue of state.allIssues) {
-            if (issue.type !== 'notification_gap') continue;
-
-            const obj = state.allObjects.find(o =>
-                o.object_type === issue.object_type &&
-                (o.name === issue.object || o.display_name === issue.object)
-            );
-
-            state.allNotificationSuggestions.push({
-                type: 'notification_gap',
-                severity: issue.severity || 'warning',
-                object: obj || null,
-                title: `Notification gap: ${issue.object}`,
-                description: issue.message,
-                fix: null
-            });
-        }
-    }
+    // Build notification suggestions from backend health-check data
+    buildNotificationSuggestionsFromIssues();
 
     if (state.allNotificationSuggestions.length === 0) {
         if (container) {
@@ -1376,6 +1383,7 @@ Explorer.openHostgroupEditorForService = openHostgroupEditorForService;
 Explorer.openNewObjectInEditor = openNewObjectInEditor;
 Explorer.handleHostgroupServiceLink = handleHostgroupServiceLink;
 Explorer.updateCleanupBadge = updateCleanupBadge;
+Explorer.buildNotificationSuggestionsFromIssues = buildNotificationSuggestionsFromIssues;
 Explorer.loadNotificationSuggestions = loadNotificationSuggestions;
 Explorer.renderNotificationSuggestions = renderNotificationSuggestions;
 // Issues functions exported from analysis-issues.js

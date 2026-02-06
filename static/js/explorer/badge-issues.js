@@ -33,6 +33,7 @@
             });
 
             // Add client-side orphan detection (other issues come from backend)
+            await Explorer.loadOrphanCache();
             addCleanupIssuesToBadges();
 
             // Build grouped errors and update badge
@@ -57,29 +58,15 @@
             const result = await response.json();
             state.allGroupingSuggestions = result.suggestions || [];
 
+            // Load orphan data from backend before computing cleanup
+            await Explorer.loadOrphanCache();
+
             // Load analysis suggestions (cleanup now reads from state.allIssues)
-            state.allTemplateSuggestions = Explorer.analyzeTemplateConsolidation();
+            await Explorer.loadTemplateSuggestions(true);
             state.allCleanupSuggestions = Explorer.analyzeCleanupIssues();
 
-            // Notification suggestions now come from backend health-check data
-            state.allNotificationSuggestions = [];
-            if (state.allIssues) {
-                for (const issue of state.allIssues) {
-                    if (issue.type !== 'notification_gap') continue;
-                    const obj = state.allObjects.find(o =>
-                        o.object_type === issue.object_type &&
-                        (o.name === issue.object || o.display_name === issue.object)
-                    );
-                    state.allNotificationSuggestions.push({
-                        type: 'notification_gap',
-                        severity: issue.severity || 'warning',
-                        object: obj || null,
-                        title: `Notification gap: ${issue.object}`,
-                        description: issue.message,
-                        fix: null
-                    });
-                }
-            }
+            // Notification suggestions come from backend health-check data.
+            Explorer.buildNotificationSuggestionsFromIssues();
 
             // Build grouped errors (this populates state.groupedErrors array)
             Explorer.filterIssues();
