@@ -73,18 +73,13 @@
     // =============================================================================
 
     function getObjectIdentity(obj) {
-        switch (obj.object_type) {
-            case 'host': return obj.attributes.host_name;
-            case 'service':
-                return `${obj.attributes.host_name || obj.attributes.hostgroup_name || '*'}::${obj.attributes.service_description}`;
-            case 'contact': return obj.attributes.contact_name;
-            case 'hostgroup': return obj.attributes.hostgroup_name;
-            case 'servicegroup': return obj.attributes.servicegroup_name;
-            case 'contactgroup': return obj.attributes.contactgroup_name;
-            case 'command': return obj.attributes.command_name;
-            case 'timeperiod': return obj.attributes.timeperiod_name;
-            default: return null;
+        const nameField = constants.nameFields[obj.object_type];
+        if (obj.object_type === 'service') {
+            const host = obj.attributes.host_name || obj.attributes.hostgroup_name || '*';
+            const desc = obj.attributes.service_description || '';
+            return `${host}::${desc}`;
         }
+        return nameField ? (obj.attributes[nameField] || '') : (obj.attributes.name || '');
     }
 
     // =============================================================================
