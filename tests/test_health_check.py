@@ -253,6 +253,49 @@ define command {
         shutil.rmtree(test_dir, ignore_errors=True)
 
 
+from nagios_model import REQUIRED_FIELDS
+
+
+def test_required_fields_host_includes_address():
+    """REQUIRED_FIELDS for host should include 'address' (or template fallback)."""
+    host_fields = REQUIRED_FIELDS.get('host', [])
+    # address should be listed (possibly in an OR tuple with 'use')
+    flat = []
+    for f in host_fields:
+        if isinstance(f, tuple):
+            flat.extend(f)
+        else:
+            flat.append(f)
+    assert 'address' in flat, \
+        f"'address' should be in host REQUIRED_FIELDS, got: {host_fields}"
+
+
+def test_required_fields_service_includes_check_command():
+    """REQUIRED_FIELDS for service should include 'check_command'."""
+    svc_fields = REQUIRED_FIELDS.get('service', [])
+    flat = []
+    for f in svc_fields:
+        if isinstance(f, tuple):
+            flat.extend(f)
+        else:
+            flat.append(f)
+    assert 'check_command' in flat, \
+        f"'check_command' should be in service REQUIRED_FIELDS, got: {svc_fields}"
+
+
+def test_required_fields_contact_includes_notification_fields():
+    """REQUIRED_FIELDS for contact should include notification fields."""
+    contact_fields = REQUIRED_FIELDS.get('contact', [])
+    flat = []
+    for f in contact_fields:
+        if isinstance(f, tuple):
+            flat.extend(f)
+        else:
+            flat.append(f)
+    assert 'host_notification_commands' in flat or 'notification_commands' in flat, \
+        f"Contact REQUIRED_FIELDS should include notification commands, got: {contact_fields}"
+
+
 def test_edit_object_uses_atomic_write(tmp_path):
     """edit_object_in_file should write atomically (temp file + rename)."""
     cfg = tmp_path / 'test.cfg'

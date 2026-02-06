@@ -31,11 +31,28 @@ NAME_FIELDS: Dict[str, str] = {
 # - Tuple of strings: at least one of these fields must be present (OR condition)
 # Note: Templates (register=0) require 'name' instead of the type-specific name field
 REQUIRED_FIELDS: Dict[str, List] = {
-    'host': ['host_name'],  # Templates need 'name' instead
+    'host': [
+        'host_name',
+        'address',
+        'max_check_attempts',
+        ('contacts', 'contact_groups'),
+    ],
     'hostgroup': ['hostgroup_name'],
-    'service': ['service_description', ('host_name', 'hostgroup_name')],  # Need target host(s)
+    'service': [
+        'service_description',
+        ('host_name', 'hostgroup_name'),
+        'check_command',
+        'max_check_attempts',
+        ('contacts', 'contact_groups'),
+    ],
     'servicegroup': ['servicegroup_name'],
-    'contact': ['contact_name'],
+    'contact': [
+        'contact_name',
+        ('host_notification_commands', 'notification_commands'),
+        ('service_notification_commands', 'notification_commands'),
+        ('host_notification_period', 'notification_period'),
+        ('service_notification_period', 'notification_period'),
+    ],
     'contactgroup': ['contactgroup_name'],
     'command': ['command_name', 'command_line'],
     'timeperiod': ['timeperiod_name'],
