@@ -390,7 +390,7 @@
 
         Explorer.saveStagedChanges();
         Explorer.updateCommitUI();
-        Explorer.invalidateOrphanCache();
+        state.healthCheckData = null;
         Explorer.computeStagedIssues();
         Explorer.buildTree();
         Explorer.renderTargetPane();

@@ -149,23 +149,21 @@
             container.innerHTML = '<div class="tab-placeholder">Analyzing objects...</div>';
         }
 
-        // Fetch from backend
-        const result = await ApiClient.get('/api/analysis/template-suggestions', { silent: true });
-
-        if (result.success && result.data.suggestions) {
-            // Convert backend format to frontend format
-            state.allTemplateSuggestions = result.data.suggestions.map(s => ({
-                type: s.type,
-                suggestedName: s.suggested_name,
-                attributes: s.attributes,
-                objects: s.object_indices.map(idx =>
-                    state.allObjects.find(o => o.global_index === idx)
-                ).filter(Boolean),
-                count: s.count,
-                attrCount: s.attr_count
-            }));
-        } else {
-            state.allTemplateSuggestions = [];
+        // Template suggestions are populated by mapHealthCheckToState from health-check data.
+        // If not loaded yet, trigger a health-check fetch.
+        if (!state.healthCheckData) {
+            try {
+                const result = await ApiClient.get('/api/health-check');
+                if (result.success) {
+                    state.healthCheckData = result.data;
+                    Explorer.mapHealthCheckToState(result.data);
+                }
+            } catch (error) {
+                if (container) {
+                    container.innerHTML = '<div class="tab-placeholder">Error loading template suggestions.</div>';
+                }
+                return;
+            }
         }
 
         if (state.allTemplateSuggestions.length === 0) {
@@ -182,12 +180,6 @@
         }
 
         filterTemplateSuggestions();
-    }
-
-    function analyzeTemplateConsolidation() {
-        // Legacy synchronous wrapper - returns cached data or empty array.
-        // Actual computation now happens via loadTemplateSuggestions().
-        return state.allTemplateSuggestions;
     }
 
     function filterTemplateSuggestions() {
@@ -548,7 +540,6 @@
     Explorer.loadTemplateIssues = loadTemplateIssues;
     Explorer.renderTemplateIssues = renderTemplateIssues;
     Explorer.loadTemplateSuggestions = loadTemplateSuggestions;
-    Explorer.analyzeTemplateConsolidation = analyzeTemplateConsolidation;
     Explorer.filterTemplateSuggestions = filterTemplateSuggestions;
     Explorer.showCreateTemplateDialog = showCreateTemplateDialog;
 

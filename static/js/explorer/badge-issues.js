@@ -2,8 +2,8 @@
  * Nagios Bulk Editor - Explorer Badge Issues Module
  *
  * Handles badge and issue calculation for the explorer tree.
- * Consumes backend health-check data for most issue types.
- * Client-side only: orphan detection (needs pending edits) and staged issue detection.
+ * Consumes backend health-check data for all issue types via mapHealthCheckToState.
+ * Client-side only: staged issue detection (broken references from pending edits).
  */
 
 (function(Explorer) {
@@ -21,20 +21,11 @@
 
     async function loadIssuesForBadges() {
         try {
-            const response = await fetch('/api/health-check');
-            const result = await response.json();
-            state.allIssues = result.issues || [];
-            state.issuesByObject.clear();
-            state.allIssues.forEach(issue => {
-                const key = `${issue.object_type}:${issue.object}`;
-                if (!state.issuesByObject.has(key) || issue.severity === 'error') {
-                    state.issuesByObject.set(key, issue);
-                }
-            });
-
-            // Add client-side orphan detection (other issues come from backend)
-            await Explorer.loadOrphanCache();
-            addCleanupIssuesToBadges();
+            const result = await ApiClient.get('/api/health-check');
+            if (result.success) {
+                state.healthCheckData = result.data;
+                Explorer.mapHealthCheckToState(result.data);
+            }
 
             // Build grouped errors and update badge
             Explorer.filterIssues();
@@ -48,28 +39,18 @@
 
     async function loadSuggestionsForBadges() {
         try {
-            // Load issues from server
-            const issuesResponse = await fetch('/api/health-check');
-            const issuesResult = await issuesResponse.json();
-            state.allIssues = issuesResult.issues || [];
+            // Load health-check data (populates all issue types including orphans)
+            const result = await ApiClient.get('/api/health-check');
+            if (result.success) {
+                state.healthCheckData = result.data;
+                Explorer.mapHealthCheckToState(result.data);
+            }
 
             // Load grouping suggestions from server
-            const response = await fetch('/api/smart-grouping/suggest');
-            const result = await response.json();
-            state.allGroupingSuggestions = result.suggestions || [];
-
-            // Load orphan data from backend before computing cleanup
-            await Explorer.loadOrphanCache();
-
-            // Load analysis suggestions (cleanup now reads from state.allIssues)
-            await Explorer.loadTemplateSuggestions(true);
-            state.allCleanupSuggestions = Explorer.analyzeCleanupIssues();
-
-            // Notification suggestions come from backend health-check data.
-            Explorer.buildNotificationSuggestionsFromIssues();
-
-            // Build grouped errors (this populates state.groupedErrors array)
-            Explorer.filterIssues();
+            const groupingResult = await ApiClient.get('/api/smart-grouping/suggest', { silent: true });
+            if (groupingResult.success) {
+                state.allGroupingSuggestions = groupingResult.data?.suggestions || [];
+            }
 
             // Update main badge using centralized function that matches collectAllSuggestions()
             Explorer.updateSuggestionsBadge();
@@ -104,29 +85,6 @@
             case 'timeperiod': return obj.attributes.timeperiod_name;
             default: return null;
         }
-    }
-
-    function addOrphanIssuesToBadges() {
-        const orphanCache = Explorer.buildOrphanCache();
-        for (const obj of state.allObjects) {
-            if (obj.attributes.register === '0') continue;
-            if (orphanCache.has(obj.global_index)) {
-                const issueKey = `${obj.object_type}:${obj.display_name}`;
-                const existingIssue = state.issuesByObject.get(issueKey);
-                if (existingIssue && existingIssue.severity === 'error') continue;
-                state.issuesByObject.set(issueKey, { type: 'orphan', severity: 'info', object: obj.name || obj.display_name, object_type: obj.object_type, file: obj.source_file, message: 'Orphan - not referenced by anything' });
-            }
-        }
-    }
-
-    // =============================================================================
-    // Main Badge Issue Function
-    // =============================================================================
-
-    function addCleanupIssuesToBadges() {
-        // Duplicate, unused, and empty group issues now come from backend /api/health-check.
-        // Only orphan detection remains client-side (needs effective attributes from pending edits).
-        addOrphanIssuesToBadges();
     }
 
     // =============================================================================
@@ -259,7 +217,6 @@
     Explorer.loadIssuesForBadges = loadIssuesForBadges;
     Explorer.loadSuggestionsForBadges = loadSuggestionsForBadges;
     Explorer.getObjectIdentity = getObjectIdentity;
-    Explorer.addOrphanIssuesToBadges = addOrphanIssuesToBadges;
     Explorer.computeStagedIssues = computeStagedIssues;
     Explorer.updateStagedIssuesUI = updateStagedIssuesUI;
 

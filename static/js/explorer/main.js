@@ -70,6 +70,8 @@ Explorer.state = {
     allCleanupSuggestions: [],
     allNotificationSuggestions: [],
     groupedErrors: [],
+    orphanIndices: new Set(),   // Set of global_index values for orphan objects
+    healthCheckData: null,      // Cached /api/health-check response
 
     // Folder/file state
     expandedFolders: new Set(),

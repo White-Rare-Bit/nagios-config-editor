@@ -795,7 +795,7 @@
 
             // Centralized refresh ensures all UI components stay in sync
             Explorer.saveStagedChanges();
-            Explorer.invalidateOrphanCache();
+            state.healthCheckData = null;
             Explorer.computeStagedIssues();
             Explorer.refreshAfterObjectChange();
             Explorer.closeDialog();
@@ -962,7 +962,7 @@
 
             // Centralized refresh ensures all UI components stay in sync
             Explorer.saveStagedChanges();
-            Explorer.invalidateOrphanCache();
+            state.healthCheckData = null;
             Explorer.computeStagedIssues();
             Explorer.refreshAfterObjectChange();
             Explorer.closeDialog();

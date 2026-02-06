@@ -442,7 +442,7 @@
         Explorer.saveStagedChanges();
         Explorer.updateCommitUI();
         Explorer.buildTree();
-        Explorer.invalidateOrphanCache();
+        state.healthCheckData = null;
         Explorer.computeStagedIssues();
         loadIssues();
 

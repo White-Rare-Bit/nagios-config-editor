@@ -446,8 +446,7 @@ function buildTree() {
 
     // Filter by orphans
     if (orphansOnly) {
-        Explorer.buildOrphanCache(); // Ensure cache is built
-        filtered = filtered.filter(o => Explorer.isObjectOrphan(o));
+        filtered = filtered.filter(o => state.orphanIndices.has(o.global_index));
     }
 
     // Filter by issues
@@ -713,7 +712,7 @@ function buildTypeTree(container, objects) {
 function renderTreeItem(obj, showType = false) {
     const selected = Explorer.isSelectedByIndex(obj.global_index) ? 'selected' : '';
     const isTemplate = isTreeItemTemplate(obj);
-    const isOrphan = Explorer.isObjectOrphan(obj);
+    const isOrphan = state.orphanIndices.has(obj.global_index);
     const hostListInfo = getHostListInfo(obj);
     const issue = getObjectIssue(obj);
     const isDeleted = state.stagedObjectDeletions.has(obj.global_index);

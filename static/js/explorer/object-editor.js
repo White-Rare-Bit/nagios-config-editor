@@ -172,7 +172,7 @@
         document.getElementById('centerCloseBtn').style.display = 'none';
 
         const isTemplate = Explorer.isObjectTemplate(obj);
-        const isOrphan = Explorer.isObjectOrphan(obj);
+        const isOrphan = Explorer.state.orphanIndices.has(obj.global_index);
         const hostListInfo = Explorer.getHostListInfo(obj);
         const issue = Explorer.getObjectIssue(obj);
 
@@ -1330,16 +1330,19 @@
         // Render inherited attributes
         if (data.inherited && Object.keys(data.inherited).length > 0) {
             html += '<div class="inherited-attrs-table">';
-            for (const [key, value] of Object.entries(data.inherited)) {
+            for (const [key, rawValue] of Object.entries(data.inherited)) {
                 // Skip control directives
                 if (['use', 'name', 'register'].includes(key)) continue;
+
+                // Handle both old string format and new {value, source} format
+                const displayValue = (typeof rawValue === 'object' && rawValue !== null) ? rawValue.value : rawValue;
 
                 // Check if object overrides this attribute
                 const isOverridden = obj.attributes && obj.attributes.hasOwnProperty(key);
 
                 html += `<div class="attr-row ${isOverridden ? 'overridden' : ''}">`;
                 html += `<div class="attr-key inherited-attr">${escapeHtml(key)}</div>`;
-                html += `<div class="attr-value inherited-attr">${escapeHtml(value)}</div>`;
+                html += `<div class="attr-value inherited-attr">${escapeHtml(displayValue)}</div>`;
                 if (isOverridden) {
                     html += `<div class="attr-override-badge"><i class="fa-solid fa-circle-check"></i> Overridden</div>`;
                 }
