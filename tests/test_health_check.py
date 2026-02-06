@@ -697,3 +697,105 @@ define host {
             f"Response should include 'validation' when validate=true, got keys: {list(data.keys())}"
     finally:
         shutil.rmtree(test_dir, ignore_errors=True)
+
+
+class TestUnusedCommandDetection:
+    """Test that unused commands are detected by health check."""
+
+    @pytest.fixture
+    def app_with_unused_commands(self):
+        """Config with 4 commands: 2 used, 2 unused."""
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / 'nagios'
+        test_config_path.mkdir()
+
+        (test_config_path / 'commands.cfg').write_text('''
+define command {
+    command_name    check-host-alive
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+
+define command {
+    command_name    notify-by-email
+    command_line    /usr/bin/printf "%b" "Notification"
+}
+
+define command {
+    command_name    unused-check
+    command_line    $USER1$/check_dummy
+}
+
+define command {
+    command_name    unused-notify
+    command_line    /usr/bin/printf "%b" "Unused"
+}
+''')
+
+        (test_config_path / 'hosts.cfg').write_text('''
+define host {
+    host_name       test-host
+    address         10.0.0.1
+    check_command   check-host-alive
+}
+''')
+
+        (test_config_path / 'contacts.cfg').write_text('''
+define contact {
+    contact_name                    admin
+    host_notification_commands      notify-by-email
+    service_notification_commands   notify-by-email
+    host_notification_period        24x7
+    service_notification_period     24x7
+}
+''')
+
+        (test_config_path / 'timeperiods.cfg').write_text('''
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+}
+''')
+
+        app = create_app(config_path=str(test_config_path))
+        app.config['TESTING'] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_detects_unused_commands(self, app_with_unused_commands):
+        """Unused commands should be detected; used ones should not."""
+        client = app_with_unused_commands.test_client()
+        resp = client.get('/api/health-check')
+        assert resp.status_code == 200
+        data = resp.get_json()
+
+        unused_cmd_issues = [i for i in data['issues']
+                             if i['type'] == 'unused_command']
+        flagged_names = [i['object'] for i in unused_cmd_issues]
+
+        # unused-check and unused-notify should be flagged
+        assert 'unused-check' in flagged_names, \
+            f"Expected 'unused-check' flagged, got: {flagged_names}"
+        assert 'unused-notify' in flagged_names, \
+            f"Expected 'unused-notify' flagged, got: {flagged_names}"
+
+        # check-host-alive and notify-by-email should NOT be flagged
+        assert 'check-host-alive' not in flagged_names, \
+            f"False positive: 'check-host-alive' is used but was flagged"
+        assert 'notify-by-email' not in flagged_names, \
+            f"False positive: 'notify-by-email' is used but was flagged"
+
+    def test_unused_commands_are_warnings(self, app_with_unused_commands):
+        """Unused command issues should have 'warning' severity."""
+        client = app_with_unused_commands.test_client()
+        resp = client.get('/api/health-check')
+        assert resp.status_code == 200
+        data = resp.get_json()
+
+        unused_cmd_issues = [i for i in data['issues']
+                             if i['type'] == 'unused_command']
+
+        assert len(unused_cmd_issues) > 0, "Expected at least one unused_command issue"
+        for issue in unused_cmd_issues:
+            assert issue['severity'] == 'warning', \
+                f"Expected severity 'warning', got '{issue['severity']}' for {issue['object']}"

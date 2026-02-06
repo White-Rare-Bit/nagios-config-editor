@@ -706,6 +706,41 @@ def api_health_check():
                 'message': f'Notification chain broken: {"; ".join(all_problems)}'
             })
 
+    # 15. Check for unused commands
+    # A command is "used" if any object references it via check_command,
+    # event_handler, host_notification_commands, service_notification_commands,
+    # global_host_event_handler, or global_service_event_handler.
+    used_commands = set()
+    for obj in service.get_objects():
+        # Single-command fields: command name is before the first '!'
+        for cmd_field in ['check_command', 'event_handler',
+                          'global_host_event_handler', 'global_service_event_handler']:
+            if cmd_field in obj.attributes:
+                cmd_ref = obj.attributes[cmd_field].split('!')[0].strip()
+                if cmd_ref:
+                    used_commands.add(cmd_ref)
+
+        # Comma-separated command fields: each entry can have '!' args
+        for cmd_field in ['host_notification_commands', 'service_notification_commands']:
+            if cmd_field in obj.attributes:
+                for cmd_full in obj.attributes[cmd_field].split(','):
+                    cmd_ref = cmd_full.strip().split('!')[0].strip()
+                    if cmd_ref:
+                        used_commands.add(cmd_ref)
+
+    for obj in service.get_objects():
+        if obj.object_type == 'command':
+            cmd_name = obj.attributes.get('command_name', '')
+            if cmd_name and cmd_name not in used_commands:
+                issues.append({
+                    'type': 'unused_command',
+                    'severity': 'warning',
+                    'object': cmd_name,
+                    'object_type': 'command',
+                    'file': obj.source_file,
+                    'message': f'Command is not referenced by any object'
+                })
+
     # Summary
     summary = {
         'total_issues': len(issues),
