@@ -664,34 +664,22 @@ def api_health_check():
 
         return problems
 
-    # Check each non-template host/service
-    for obj in service.get_objects():
-        if obj.object_type not in ('host', 'service'):
+    # Check each contact for notification gaps (one issue per contact)
+    for cname, contact_obj in contact_objects.items():
+        if not cname:
             continue
-        if obj.attributes.get('register', '1') == '0':
-            continue
-
-        resolved = resolve_inherited_attrs(obj)
-        contact_names = resolve_contact_names(resolved)
-
-        if not contact_names:
-            continue  # No contacts -- already handled by host_without_contacts check
-
-        check_type = 'host' if obj.object_type == 'host' else 'service'
-
-        for cname in contact_names:
-            problems = check_contact_notification(cname, check_type)
-            if problems:
-                obj_name = obj.get_name() or 'unnamed'
-                for problem in problems:
-                    issues.append({
-                        'type': 'notification_gap',
-                        'severity': 'warning',
-                        'object': obj_name,
-                        'object_type': obj.object_type,
-                        'file': obj.source_file,
-                        'message': f'Notification chain broken: {problem}'
-                    })
+        all_problems = []
+        for check_type in ('host', 'service'):
+            all_problems.extend(check_contact_notification(cname, check_type))
+        if all_problems:
+            issues.append({
+                'type': 'notification_gap',
+                'severity': 'warning',
+                'object': cname,
+                'object_type': 'contact',
+                'file': contact_obj.source_file,
+                'message': f'Notification chain broken: {"; ".join(all_problems)}'
+            })
 
     # Summary
     summary = {
