@@ -1006,7 +1006,7 @@ define timeperiod {
         data = resp.get_json()
 
         dup_issues = [i for i in data['issues']
-                      if i['type'] == 'duplicate_object']
+                      if i['type'] == 'duplicate']
         flagged_names = [i['object'] for i in dup_issues]
 
         assert 'duplicate-host' in flagged_names, \
@@ -1015,16 +1015,16 @@ define timeperiod {
             f"False positive: 'unique-host' is not duplicated but was flagged"
 
     def test_duplicate_is_error_severity(self, app_with_duplicates):
-        """All duplicate_object issues should have 'error' severity."""
+        """All duplicate issues should have 'error' severity."""
         client = app_with_duplicates.test_client()
         resp = client.get('/api/health-check')
         assert resp.status_code == 200
         data = resp.get_json()
 
         dup_issues = [i for i in data['issues']
-                      if i['type'] == 'duplicate_object']
+                      if i['type'] == 'duplicate']
 
-        assert len(dup_issues) > 0, "Expected at least one duplicate_object issue"
+        assert len(dup_issues) > 0, "Expected at least one duplicate issue"
         for issue in dup_issues:
             assert issue['severity'] == 'error', \
                 f"Expected severity 'error', got '{issue['severity']}' for {issue['object']}"
@@ -1037,7 +1037,7 @@ define timeperiod {
         data = resp.get_json()
 
         dup_issues = [i for i in data['issues']
-                      if i['type'] == 'duplicate_object']
+                      if i['type'] == 'duplicate']
 
         assert len(dup_issues) >= 2, \
             f"Expected at least 2 duplicate issues (one per copy), got {len(dup_issues)}"
@@ -1050,3 +1050,477 @@ define timeperiod {
             # Should mention a .cfg file
             assert '.cfg' in issue['message'], \
                 f"Expected a .cfg filename in message, got: {issue['message']}"
+
+
+# ============================================================
+# Comprehensive fixture for new health-check analysis checks
+# ============================================================
+
+@pytest.fixture
+def comprehensive_health_app():
+    """Create Flask app with config designed to trigger every new health check.
+
+    The config includes:
+    - A duplicate host (same name in two files)
+    - An unused command, contact, contactgroup, timeperiod
+    - An orphan host (not referenced by anything)
+    - A host without contacts and no template
+    - A service with 10+ hosts
+    - Templates that some objects use (to test non-false-positives)
+    - Objects sharing attributes for template consolidation
+    """
+    test_dir = tempfile.mkdtemp()
+    test_config_path = Path(test_dir) / 'nagios'
+    test_config_path.mkdir()
+
+    # Commands: 1 used, 1 unused
+    (test_config_path / 'commands.cfg').write_text('''
+define command {
+    command_name    check_ping
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$ -w $ARG1$ -c $ARG2$
+}
+
+define command {
+    command_name    notify-email
+    command_line    /usr/bin/printf "%b" "Notification"
+}
+
+define command {
+    command_name    unused-cmd
+    command_line    /usr/bin/true
+}
+''')
+
+    # Timeperiods: 1 used, 1 unused
+    (test_config_path / 'timeperiods.cfg').write_text('''
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24 Hours
+    monday          00:00-24:00
+    tuesday         00:00-24:00
+    wednesday       00:00-24:00
+    thursday        00:00-24:00
+    friday          00:00-24:00
+    saturday        00:00-24:00
+    sunday          00:00-24:00
+}
+
+define timeperiod {
+    timeperiod_name unused-tp
+    alias           Unused Time Period
+    monday          08:00-17:00
+}
+''')
+
+    # Contacts: 1 used, 1 unused
+    (test_config_path / 'contacts.cfg').write_text('''
+define contact {
+    contact_name                    active-admin
+    host_notification_commands      notify-email
+    service_notification_commands   notify-email
+    host_notification_period        24x7
+    service_notification_period     24x7
+}
+
+define contact {
+    contact_name                    unused-contact
+    host_notification_commands      notify-email
+    service_notification_commands   notify-email
+    host_notification_period        24x7
+    service_notification_period     24x7
+}
+''')
+
+    # Contactgroups: 1 used, 1 unused
+    (test_config_path / 'contactgroups.cfg').write_text('''
+define contactgroup {
+    contactgroup_name   active-admins
+    alias               Active Admins
+    members             active-admin
+}
+
+define contactgroup {
+    contactgroup_name   unused-cg
+    alias               Unused CG
+}
+''')
+
+    # Templates
+    (test_config_path / 'templates.cfg').write_text('''
+define host {
+    name                    base-host-template
+    register                0
+    max_check_attempts      5
+    contact_groups          active-admins
+    check_period            24x7
+    notification_period     24x7
+}
+
+define service {
+    name                    base-svc-template
+    register                0
+    max_check_attempts      3
+    contact_groups          active-admins
+    check_period            24x7
+    notification_period     24x7
+}
+''')
+
+    # Duplicate host (in file 1)
+    (test_config_path / 'hosts1.cfg').write_text('''
+define host {
+    host_name       dup-host
+    alias           Duplicate Host Copy 1
+    address         10.0.0.1
+    use             base-host-template
+}
+''')
+
+    # Duplicate host (in file 2) + orphan host + host without contacts
+    (test_config_path / 'hosts2.cfg').write_text('''
+define host {
+    host_name       dup-host
+    alias           Duplicate Host Copy 2
+    address         10.0.0.2
+    use             base-host-template
+}
+
+define host {
+    host_name       orphan-host
+    alias           Nobody References Me
+    address         10.0.0.3
+    use             base-host-template
+}
+
+define host {
+    host_name       no-contacts-host
+    alias           No Contacts Defined
+    address         10.0.0.4
+    max_check_attempts  5
+    check_period    24x7
+}
+
+define host {
+    host_name       referenced-host
+    alias           Referenced Host
+    address         10.0.0.5
+    use             base-host-template
+}
+''')
+
+    # Many hosts for the long host list service
+    host_lines = []
+    for i in range(12):
+        host_lines.append(f'''
+define host {{
+    host_name       web{i:02d}
+    alias           Web Server {i}
+    address         10.1.0.{i+1}
+    use             base-host-template
+}}''')
+    (test_config_path / 'webhosts.cfg').write_text('\n'.join(host_lines))
+
+    # Services including long host list, orphan detection cases, and no-contacts service
+    (test_config_path / 'services.cfg').write_text('''
+define service {
+    host_name               referenced-host
+    service_description     PING
+    check_command           check_ping!100!500
+    use                     base-svc-template
+}
+
+define service {
+    host_name               web00,web01,web02,web03,web04,web05,web06,web07,web08,web09,web10,web11
+    service_description     Long Host List Service
+    check_command           check_ping!100!500
+    use                     base-svc-template
+}
+
+define service {
+    host_name               no-contacts-host
+    service_description     No Contacts Service
+    check_command           check_ping!100!500
+    max_check_attempts      3
+    check_period            24x7
+}
+''')
+
+    # 3+ hosts without templates sharing the same attrs (for template consolidation)
+    (test_config_path / 'consolidation.cfg').write_text('''
+define host {
+    host_name       cons-host-1
+    alias           Consolidation Host 1
+    address         10.2.0.1
+    max_check_attempts  5
+    check_period    24x7
+    notification_period 24x7
+    contact_groups  active-admins
+}
+
+define host {
+    host_name       cons-host-2
+    alias           Consolidation Host 2
+    address         10.2.0.2
+    max_check_attempts  5
+    check_period    24x7
+    notification_period 24x7
+    contact_groups  active-admins
+}
+
+define host {
+    host_name       cons-host-3
+    alias           Consolidation Host 3
+    address         10.2.0.3
+    max_check_attempts  5
+    check_period    24x7
+    notification_period 24x7
+    contact_groups  active-admins
+}
+''')
+
+    app = create_app(config_path=str(test_config_path))
+    app.config['TESTING'] = True
+
+    yield app
+
+    shutil.rmtree(test_dir, ignore_errors=True)
+
+
+@pytest.fixture
+def comp_client(comprehensive_health_app):
+    return comprehensive_health_app.test_client()
+
+
+def _get_health_issues(client):
+    """Helper to get health check issues from the API."""
+    resp = client.get('/api/health-check')
+    assert resp.status_code == 200
+    return resp.json
+
+
+class TestHealthCheckGlobalIndex:
+    """All issues should have a global_index field."""
+
+    def test_all_issues_have_global_index(self, comp_client):
+        """Every issue dict should contain a 'global_index' key."""
+        data = _get_health_issues(comp_client)
+        issues = data['issues']
+        assert len(issues) > 0, "Expected at least some issues"
+
+        for issue in issues:
+            assert 'global_index' in issue, \
+                f"Issue missing global_index: {issue}"
+
+    def test_global_index_is_int_or_none(self, comp_client):
+        """global_index should be an integer (or None for template_opportunity)."""
+        data = _get_health_issues(comp_client)
+        for issue in data['issues']:
+            gi = issue.get('global_index')
+            if issue['type'] == 'template_opportunity':
+                # template_opportunity may have None global_index
+                continue
+            assert gi is None or isinstance(gi, int), \
+                f"global_index should be int or None, got {type(gi)}: {issue}"
+
+
+class TestDuplicateDetectionEnhanced:
+    """Duplicate detection should include related_objects."""
+
+    def test_duplicate_includes_related_objects(self, comp_client):
+        """Duplicate issues should include a related_objects list."""
+        data = _get_health_issues(comp_client)
+        dup_issues = [i for i in data['issues'] if i['type'] == 'duplicate']
+        assert len(dup_issues) > 0, \
+            f"Expected duplicate issues, got types: {set(i['type'] for i in data['issues'])}"
+
+        for issue in dup_issues:
+            assert 'related_objects' in issue, \
+                f"Duplicate issue missing related_objects: {issue}"
+            assert isinstance(issue['related_objects'], list), \
+                f"related_objects should be a list"
+            assert len(issue['related_objects']) >= 2, \
+                f"related_objects should have >=2 entries for a duplicate"
+
+    def test_related_objects_have_required_fields(self, comp_client):
+        """Each related_object should have global_index, file, line."""
+        data = _get_health_issues(comp_client)
+        dup_issues = [i for i in data['issues'] if i['type'] == 'duplicate']
+        assert len(dup_issues) > 0
+
+        for issue in dup_issues:
+            for ro in issue['related_objects']:
+                assert 'global_index' in ro, f"related_object missing global_index: {ro}"
+                assert 'file' in ro, f"related_object missing file: {ro}"
+                assert 'line' in ro, f"related_object missing line: {ro}"
+
+    def test_duplicate_is_error_severity(self, comp_client):
+        """Duplicate issues should be errors."""
+        data = _get_health_issues(comp_client)
+        dup_issues = [i for i in data['issues'] if i['type'] == 'duplicate']
+        for issue in dup_issues:
+            assert issue['severity'] == 'error'
+
+    def test_finds_duplicate_host(self, comp_client):
+        """Should find dup-host as a duplicate."""
+        data = _get_health_issues(comp_client)
+        dup_issues = [i for i in data['issues'] if i['type'] == 'duplicate']
+        dup_names = [i['object'] for i in dup_issues]
+        assert 'dup-host' in dup_names, \
+            f"Expected 'dup-host' in duplicates, got: {dup_names}"
+
+
+class TestOrphanDetectionInHealthCheck:
+    """Orphan detection should be included in health-check."""
+
+    def test_finds_orphan_host(self, comp_client):
+        """orphan-host is not referenced by any service or other object."""
+        data = _get_health_issues(comp_client)
+        orphan_issues = [i for i in data['issues'] if i['type'] == 'orphan']
+        orphan_names = [i['object'] for i in orphan_issues]
+        assert 'orphan-host' in orphan_names, \
+            f"Expected 'orphan-host' flagged, got: {orphan_names}"
+
+    def test_referenced_host_not_orphan(self, comp_client):
+        """referenced-host has services, so it should not be flagged."""
+        data = _get_health_issues(comp_client)
+        orphan_issues = [i for i in data['issues'] if i['type'] == 'orphan']
+        orphan_names = [i['object'] for i in orphan_issues]
+        assert 'referenced-host' not in orphan_names, \
+            f"False positive: 'referenced-host' is referenced but was flagged as orphan"
+
+    def test_orphan_is_info_severity(self, comp_client):
+        """Orphan issues should have 'info' severity."""
+        data = _get_health_issues(comp_client)
+        orphan_issues = [i for i in data['issues'] if i['type'] == 'orphan']
+        for issue in orphan_issues:
+            assert issue['severity'] == 'info', \
+                f"Expected severity 'info', got '{issue['severity']}' for {issue['object']}"
+
+    def test_templates_not_flagged_as_orphans(self, comp_client):
+        """Templates (register=0) should not be flagged as orphans."""
+        data = _get_health_issues(comp_client)
+        orphan_issues = [i for i in data['issues'] if i['type'] == 'orphan']
+        orphan_names = [i['object'] for i in orphan_issues]
+        assert 'base-host-template' not in orphan_names
+        assert 'base-svc-template' not in orphan_names
+
+
+class TestNotificationGaps:
+    """Hosts/services without contacts, contact_groups, AND no use template."""
+
+    def test_host_without_contacts_flagged(self, comp_client):
+        """no-contacts-host has no contacts, no contact_groups, no use -- should be flagged."""
+        data = _get_health_issues(comp_client)
+        gap_issues = [i for i in data['issues']
+                      if i['type'] == 'notification_gap' and i['object_type'] in ('host', 'service')]
+        gap_objects = [i['object'] for i in gap_issues]
+        assert 'no-contacts-host' in gap_objects, \
+            f"Expected 'no-contacts-host' flagged, got: {gap_objects}"
+
+    def test_service_without_contacts_flagged(self, comp_client):
+        """No Contacts Service has no contacts, no contact_groups, no use -- should be flagged."""
+        data = _get_health_issues(comp_client)
+        gap_issues = [i for i in data['issues']
+                      if i['type'] == 'notification_gap' and i['object_type'] == 'service']
+        gap_objects = [i['object'] for i in gap_issues]
+        assert any('No Contacts Service' in o for o in gap_objects), \
+            f"Expected 'No Contacts Service' flagged, got: {gap_objects}"
+
+    def test_templated_host_not_flagged(self, comp_client):
+        """Hosts that use a template should not be flagged (contacts may come from template)."""
+        data = _get_health_issues(comp_client)
+        gap_issues = [i for i in data['issues']
+                      if i['type'] == 'notification_gap'
+                      and i['object_type'] in ('host', 'service')]
+        gap_objects = [i['object'] for i in gap_issues]
+        # referenced-host uses base-host-template which has contact_groups
+        assert 'referenced-host' not in gap_objects, \
+            f"False positive: 'referenced-host' has contacts via template but was flagged"
+
+    def test_notification_gap_is_warning(self, comp_client):
+        """Notification gap issues should be warnings."""
+        data = _get_health_issues(comp_client)
+        gap_issues = [i for i in data['issues']
+                      if i['type'] == 'notification_gap'
+                      and i['object_type'] in ('host', 'service')]
+        for issue in gap_issues:
+            assert issue['severity'] == 'warning'
+
+
+class TestLongHostList:
+    """Services with 10+ comma-separated hosts in host_name."""
+
+    def test_finds_long_host_list(self, comp_client):
+        """Long Host List Service has 12 hosts -- should be flagged."""
+        data = _get_health_issues(comp_client)
+        long_issues = [i for i in data['issues'] if i['type'] == 'long_host_list']
+        assert len(long_issues) > 0, "Expected at least one long_host_list issue"
+        names = [i['object'] for i in long_issues]
+        assert any('Long Host List' in n for n in names), \
+            f"Expected 'Long Host List Service' flagged, got: {names}"
+
+    def test_includes_host_count(self, comp_client):
+        """Long host list issues should include host_count."""
+        data = _get_health_issues(comp_client)
+        long_issues = [i for i in data['issues'] if i['type'] == 'long_host_list']
+        assert len(long_issues) > 0
+        for issue in long_issues:
+            assert 'host_count' in issue, \
+                f"long_host_list issue missing host_count: {issue}"
+            assert issue['host_count'] >= 10, \
+                f"host_count should be >= 10, got {issue['host_count']}"
+
+    def test_long_host_list_is_info(self, comp_client):
+        """Long host list issues should be info severity."""
+        data = _get_health_issues(comp_client)
+        long_issues = [i for i in data['issues'] if i['type'] == 'long_host_list']
+        for issue in long_issues:
+            assert issue['severity'] == 'info'
+
+    def test_short_host_list_not_flagged(self, comp_client):
+        """PING service on single host should NOT be flagged."""
+        data = _get_health_issues(comp_client)
+        long_issues = [i for i in data['issues'] if i['type'] == 'long_host_list']
+        flagged_names = [i['object'] for i in long_issues]
+        assert not any('PING' in n for n in flagged_names), \
+            f"False positive: single-host service flagged as long_host_list"
+
+
+class TestTemplateConsolidation:
+    """Template consolidation detection in health check."""
+
+    def test_finds_template_opportunity(self, comp_client):
+        """3 cons-host-* objects share identical attrs -- should suggest template."""
+        data = _get_health_issues(comp_client)
+        tmpl_issues = [i for i in data['issues'] if i['type'] == 'template_opportunity']
+        assert len(tmpl_issues) > 0, \
+            f"Expected at least one template_opportunity issue, got types: {set(i['type'] for i in data['issues'])}"
+
+    def test_suggestion_has_required_fields(self, comp_client):
+        """Template opportunity should include suggestion dict with required fields."""
+        data = _get_health_issues(comp_client)
+        tmpl_issues = [i for i in data['issues'] if i['type'] == 'template_opportunity']
+        assert len(tmpl_issues) > 0
+
+        for issue in tmpl_issues:
+            assert 'suggestion' in issue, \
+                f"template_opportunity missing suggestion: {issue}"
+            suggestion = issue['suggestion']
+            for field in ['suggested_name', 'type', 'attributes', 'object_indices', 'count', 'attr_count']:
+                assert field in suggestion, \
+                    f"suggestion missing field '{field}': {suggestion}"
+
+    def test_suggestion_count_at_least_3(self, comp_client):
+        """Template suggestions should have count >= 3."""
+        data = _get_health_issues(comp_client)
+        tmpl_issues = [i for i in data['issues'] if i['type'] == 'template_opportunity']
+        for issue in tmpl_issues:
+            assert issue['suggestion']['count'] >= 3, \
+                f"Expected count >= 3, got {issue['suggestion']['count']}"
+
+    def test_template_opportunity_is_info(self, comp_client):
+        """Template opportunity issues should be info severity."""
+        data = _get_health_issues(comp_client)
+        tmpl_issues = [i for i in data['issues'] if i['type'] == 'template_opportunity']
+        for issue in tmpl_issues:
+            assert issue['severity'] == 'info'

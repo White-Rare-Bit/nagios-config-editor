@@ -88,6 +88,13 @@ def api_health_check():
     issues = []
     reported_missing = set()  # Track reported missing objects to avoid duplicates
 
+    # Build object-to-index map for global_index on every issue
+    obj_to_index = {id(obj): idx for idx, obj in enumerate(p.objects)}
+
+    def strip_prefix(s):
+        """Strip +/! prefixes used in Nagios additive/exclusion syntax."""
+        return s.strip().lstrip('+!').strip()
+
     # Build lookup sets for quick reference checking
     hosts = set()
     hostgroups = set()
@@ -193,6 +200,7 @@ def api_health_check():
                             'object': obj_name,
                             'object_type': obj.object_type,
                             'file': obj.source_file,
+                            'global_index': obj_to_index.get(id(obj)),
                             'message': f'Service references non-existent host: {h}'
                         })
 
@@ -208,6 +216,7 @@ def api_health_check():
                             'object': obj_name,
                             'object_type': obj.object_type,
                             'file': obj.source_file,
+                            'global_index': obj_to_index.get(id(obj)),
                             'message': f'Service references non-existent hostgroup: {hg}'
                         })
 
@@ -235,6 +244,7 @@ def api_health_check():
                         'object': obj_name,
                         'object_type': obj.object_type,
                         'file': obj.source_file,
+                        'global_index': obj_to_index.get(id(obj)),
                         'message': f'References undefined {obj.object_type} template: {t}'
                     })
 
@@ -252,6 +262,7 @@ def api_health_check():
                         'object': obj_name,
                         'object_type': obj.object_type,
                         'file': obj.source_file,
+                        'global_index': obj_to_index.get(id(obj)),
                         'message': f'References non-existent command: {cmd_ref}'
                     })
 
@@ -266,6 +277,7 @@ def api_health_check():
                             'object': obj_name,
                             'object_type': obj.object_type,
                             'file': obj.source_file,
+                            'global_index': obj_to_index.get(id(obj)),
                             'message': f'References non-existent command: {cmd_ref}'
                         })
 
@@ -280,6 +292,7 @@ def api_health_check():
                         'object': obj_name,
                         'object_type': obj.object_type,
                         'file': obj.source_file,
+                        'global_index': obj_to_index.get(id(obj)),
                         'message': f'References non-existent timeperiod: {tp_ref}'
                     })
 
@@ -294,6 +307,7 @@ def api_health_check():
                         'object': obj_name,
                         'object_type': obj.object_type,
                         'file': obj.source_file,
+                        'global_index': obj_to_index.get(id(obj)),
                         'message': f'References non-existent contact: {c}'
                     })
 
@@ -307,6 +321,7 @@ def api_health_check():
                         'object': obj_name,
                         'object_type': obj.object_type,
                         'file': obj.source_file,
+                        'global_index': obj_to_index.get(id(obj)),
                         'message': f'References non-existent contact group: {cg}'
                     })
 
@@ -321,6 +336,7 @@ def api_health_check():
                         'object': obj_name,
                         'object_type': obj.object_type,
                         'file': obj.source_file,
+                        'global_index': obj_to_index.get(id(obj)),
                         'message': f'References non-existent hostgroup: {hg}'
                     })
 
@@ -334,6 +350,7 @@ def api_health_check():
                         'object': obj_name,
                         'object_type': obj.object_type,
                         'file': obj.source_file,
+                        'global_index': obj_to_index.get(id(obj)),
                         'message': f'References non-existent servicegroup: {sg}'
                     })
 
@@ -351,6 +368,7 @@ def api_health_check():
             'object': parent_name,
             'object_type': 'host',
             'file': first_file,
+            'global_index': None,  # Consolidated issue, not tied to a single object
             'message': f'Non-existent parent host referenced by: {host_list}'
         })
 
@@ -400,6 +418,7 @@ def api_health_check():
                         'object': obj.get_name() or obj.get_display_name(),
                         'object_type': obj.object_type,
                         'file': obj.source_file,
+                        'global_index': obj_to_index.get(id(obj)),
                         'message': 'Group has no members and is not referenced'
                     })
 
@@ -423,6 +442,7 @@ def api_health_check():
                             'object': tmpl_name,
                             'object_type': obj_type,
                             'file': obj.source_file,
+                            'global_index': obj_to_index.get(id(obj)),
                             'message': f'Template is not used by any {obj_type}'
                         })
                         break
@@ -451,6 +471,7 @@ def api_health_check():
                     'object': obj.get_name() or obj.get_display_name(),
                     'object_type': obj.object_type,
                     'file': obj.source_file,
+                    'global_index': obj_to_index.get(id(obj)),
                     'message': f'Duplicate dependency rule (also defined in {orig["file"]})'
                 })
             else:
@@ -523,6 +544,7 @@ def api_health_check():
                     'object': hname,
                     'object_type': 'host',
                     'file': obj.source_file,
+                    'global_index': obj_to_index.get(id(obj)),
                     'message': 'Host has no services assigned (directly or via hostgroup)'
                 })
 
@@ -543,6 +565,7 @@ def api_health_check():
                 'object': f'{obj_name} on {host}' if host else obj_name,
                 'object_type': 'service',
                 'file': obj.source_file,
+                'global_index': obj_to_index.get(id(obj)),
                 'message': 'Service has no check_command (directly or through template inheritance)'
             })
 
@@ -574,6 +597,7 @@ def api_health_check():
                 'object': obj_name,
                 'object_type': obj.object_type,
                 'file': obj.source_file,
+                'global_index': obj_to_index.get(id(obj)),
                 'message': f'Command {cmd_name} expects {expected_args} arg(s) but {provided_args} provided'
             })
 
@@ -628,6 +652,7 @@ def api_health_check():
                 'object': obj_name,
                 'object_type': obj.object_type,
                 'file': obj.source_file,
+                'global_index': obj_to_index.get(id(obj)),
                 'message': f'Template inheritance conflict (first template wins): {"; ".join(conflicts[:3])}'
             })
 
@@ -704,6 +729,7 @@ def api_health_check():
                 'object': cname,
                 'object_type': 'contact',
                 'file': contact_obj.source_file,
+                'global_index': obj_to_index.get(id(contact_obj)),
                 'message': f'Notification chain broken: {"; ".join(all_problems)}'
             })
 
@@ -739,6 +765,7 @@ def api_health_check():
                     'object': cmd_name,
                     'object_type': 'command',
                     'file': obj.source_file,
+                    'global_index': obj_to_index.get(id(obj)),
                     'message': f'Command is not referenced by any object'
                 })
 
@@ -776,6 +803,7 @@ def api_health_check():
                     'object': contact_name,
                     'object_type': 'contact',
                     'file': obj.source_file,
+                    'global_index': obj_to_index.get(id(obj)),
                     'message': 'Contact is not referenced by any object'
                 })
 
@@ -817,6 +845,7 @@ def api_health_check():
                     'object': cg_name,
                     'object_type': 'contactgroup',
                     'file': obj.source_file,
+                    'global_index': obj_to_index.get(id(obj)),
                     'message': 'Contact group is not referenced by any object'
                 })
 
@@ -858,6 +887,7 @@ def api_health_check():
                     'object': tp_name,
                     'object_type': 'timeperiod',
                     'file': obj.source_file,
+                    'global_index': obj_to_index.get(id(obj)),
                     'message': 'Time period is not referenced by any object'
                 })
 
@@ -876,16 +906,242 @@ def api_health_check():
         if len(objs) <= 1:
             continue
         obj_type, identity = key.split(':', 1)
+        # Build related_objects list with global_index, file, line for each copy
+        related_objects = [
+            {
+                'global_index': obj_to_index.get(id(o)),
+                'file': o.source_file,
+                'line': o.line_number,
+            }
+            for o in objs
+        ]
         files = [o.source_file.rsplit('/', 1)[-1] for o in objs]
         for obj in objs:
             other_files = [f for f, o in zip(files, objs) if o is not obj]
             issues.append({
-                'type': 'duplicate_object',
+                'type': 'duplicate',
                 'severity': 'error',
                 'object': identity,
                 'object_type': obj_type,
                 'file': obj.source_file,
+                'global_index': obj_to_index.get(id(obj)),
+                'related_objects': related_objects,
                 'message': f'Duplicate {obj_type} definition (also in {", ".join(other_files)})'
+            })
+
+    # 20. Orphan detection
+    # Build referenced-names sets by type, scanning all reference fields
+    command_fields = {f for f, t in REFERENCE_FIELDS.items() if t == 'command'}
+    referenced_names = {
+        'host': set(), 'hostgroup': set(), 'service': set(),
+        'servicegroup': set(), 'contact': set(), 'contactgroup': set(),
+        'command': set(), 'timeperiod': set()
+    }
+
+    def has_attr_in_chain(obj, attr_name, visited=None):
+        """Check if attribute exists in object or its template chain."""
+        if visited is None:
+            visited = set()
+        if attr_name in obj.attributes:
+            return True
+        use_val = obj.attributes.get('use', '')
+        if not use_val:
+            return False
+        for t_name in [t.strip() for t in use_val.split(',') if t.strip()]:
+            if t_name not in visited:
+                visited.add(t_name)
+                tmpl = template_lookup.get((obj.object_type, t_name))
+                if tmpl and has_attr_in_chain(tmpl, attr_name, visited):
+                    return True
+        return False
+
+    for obj in p.objects:
+        attrs = obj.attributes
+        own_name_field = NAME_FIELDS.get(obj.object_type)
+
+        for ref_field, target_type in REFERENCE_FIELDS.items():
+            if ref_field not in attrs:
+                continue
+            value = attrs[ref_field]
+
+            # Resolve target type for context-dependent fields
+            if ref_field == 'use':
+                resolved_type = obj.object_type
+            elif ref_field == 'members':
+                if obj.object_type == 'hostgroup':
+                    resolved_type = 'host'
+                elif obj.object_type == 'contactgroup':
+                    resolved_type = 'contact'
+                elif obj.object_type == 'servicegroup':
+                    resolved_type = 'service'
+                else:
+                    continue
+            else:
+                resolved_type = target_type
+
+            if resolved_type not in referenced_names:
+                continue
+            # Skip identity fields (e.g. host_name ON a host is its own name)
+            if ref_field == own_name_field:
+                continue
+
+            for part in value.split(','):
+                part = strip_prefix(part)
+                if not part:
+                    continue
+                if ref_field in command_fields:
+                    part = part.split('!')[0].strip()
+                if part:
+                    referenced_names[resolved_type].add(part)
+
+        # Auto-reference: hosts with hostgroups attr are in use
+        if obj.object_type == 'host' and has_attr_in_chain(obj, 'hostgroups'):
+            host_name_val = obj.get_name()
+            if host_name_val:
+                referenced_names['host'].add(host_name_val.strip())
+
+        # Auto-reference: services with host_name/hostgroup_name are in use
+        if obj.object_type == 'service':
+            if (has_attr_in_chain(obj, 'host_name') or
+                    has_attr_in_chain(obj, 'hostgroup_name')):
+                svc_name = obj.get_name()
+                if svc_name:
+                    referenced_names['service'].add(svc_name.strip())
+
+        # Auto-reference: services with servicegroups are in use
+        if obj.object_type == 'service' and has_attr_in_chain(obj, 'servicegroups'):
+            svc_name = obj.get_name()
+            if svc_name:
+                referenced_names['service'].add(svc_name.strip())
+
+    for obj in p.objects:
+        if obj.attributes.get('register', '1') == '0':
+            continue
+        obj_name = obj.get_name()
+        refs = referenced_names.get(obj.object_type)
+        if refs is None:
+            continue
+        attr_name = obj.attributes.get('name')
+        is_referenced = ((obj_name and obj_name in refs) or
+                         (attr_name and attr_name in refs))
+        if not is_referenced:
+            issues.append({
+                'type': 'orphan',
+                'severity': 'info',
+                'object': obj_name or obj.get_display_name(),
+                'object_type': obj.object_type,
+                'file': obj.source_file,
+                'global_index': obj_to_index.get(id(obj)),
+                'message': f'{obj.object_type} is not referenced by any other object'
+            })
+
+    # 21. Notification gap detection for hosts/services
+    # Flag hosts/services that have no contacts, no contact_groups, AND no use template
+    for obj in p.objects:
+        if obj.object_type not in ('host', 'service'):
+            continue
+        if obj.attributes.get('register', '1') == '0':
+            continue
+        has_contacts = 'contacts' in obj.attributes
+        has_contact_groups = 'contact_groups' in obj.attributes
+        has_use = 'use' in obj.attributes
+        if not has_contacts and not has_contact_groups and not has_use:
+            obj_name = obj.get_name() or obj.get_display_name()
+            issues.append({
+                'type': 'notification_gap',
+                'severity': 'warning',
+                'object': obj_name,
+                'object_type': obj.object_type,
+                'file': obj.source_file,
+                'global_index': obj_to_index.get(id(obj)),
+                'message': f'{obj.object_type.title()} has no contacts, contact_groups, or template (use) defined'
+            })
+
+    # 22. Long host list detection
+    for obj in p.objects:
+        if obj.object_type != 'service':
+            continue
+        if obj.attributes.get('register', '1') == '0':
+            continue
+        host_ref = obj.attributes.get('host_name', '')
+        if not host_ref:
+            continue
+        host_list = [h.strip() for h in host_ref.split(',') if h.strip()]
+        host_count = len(host_list)
+        if host_count >= 10:
+            obj_name = obj.get_name() or obj.get_display_name()
+            issues.append({
+                'type': 'long_host_list',
+                'severity': 'info',
+                'object': obj_name,
+                'object_type': 'service',
+                'file': obj.source_file,
+                'global_index': obj_to_index.get(id(obj)),
+                'host_count': host_count,
+                'message': f'Service has {host_count} hosts in host_name list (consider using a hostgroup)'
+            })
+
+    # 23. Template consolidation detection
+    # Find groups of 3+ non-templated objects sharing identical non-identity attributes
+    identity_fields_set = set(NAME_FIELDS.values()) | {
+        'name', 'register', 'alias', 'address', 'display_name'
+    }
+
+    objects_by_type = {}
+    for idx, obj in enumerate(p.objects):
+        objects_by_type.setdefault(obj.object_type, []).append((idx, obj))
+
+    for obj_type, type_entries in objects_by_type.items():
+        if len(type_entries) < 3:
+            continue
+        if obj_type in ('timeperiod', 'command'):
+            continue
+
+        signatures = {}
+        for idx, obj in type_entries:
+            if obj.attributes.get('use') or obj.attributes.get('register') == '0':
+                continue
+            attr_pairs = []
+            for k, v in sorted(obj.attributes.items()):
+                if k not in identity_fields_set:
+                    attr_pairs.append(f'{k}={v}')
+            if not attr_pairs:
+                continue
+            signature = '|'.join(attr_pairs)
+            signatures.setdefault(signature, []).append((idx, obj))
+
+        for signature, matching_entries in signatures.items():
+            if len(matching_entries) < 3:
+                continue
+            # Parse signature back to attributes
+            attrs = {}
+            for pair in signature.split('|'):
+                eq_idx = pair.index('=')
+                k = pair[:eq_idx]
+                v = pair[eq_idx + 1:]
+                attrs[k] = v
+
+            matching_objects = [obj for _, obj in matching_entries]
+            suggested_name = _generate_template_name(
+                obj_type, matching_objects, attrs)
+
+            suggestion = {
+                'suggested_name': suggested_name,
+                'type': obj_type,
+                'attributes': attrs,
+                'object_indices': [idx for idx, _ in matching_entries],
+                'count': len(matching_entries),
+                'attr_count': len(attrs),
+            }
+            issues.append({
+                'type': 'template_opportunity',
+                'severity': 'info',
+                'object': suggested_name,
+                'object_type': obj_type,
+                'file': matching_entries[0][1].source_file,
+                'global_index': None,
+                'suggestion': suggestion,
+                'message': f'{len(matching_entries)} {obj_type} objects share {len(attrs)} identical attributes'
             })
 
     # Summary
