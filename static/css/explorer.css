@@ -5117,6 +5117,74 @@ body.dragging-objects .right-pane::after {
     margin-top: 0;
 }
 
+/* Resolved attributes table (impact section) */
+.resolved-attrs-compact {
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) minmax(120px, 2fr) minmax(80px, 1fr);
+    font-size: var(--nbe-font-size-sm);
+    border: 1px solid var(--nbe-dark-border-secondary);
+    border-radius: var(--nbe-radius-sm);
+    overflow: hidden;
+    margin-top: var(--nbe-space-xs);
+}
+
+.resolved-attrs-header-row {
+    display: contents;
+}
+
+.resolved-attrs-header-row > span {
+    padding: var(--nbe-space-xs) var(--nbe-space-sm);
+    font-weight: 600;
+    font-size: var(--nbe-font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: var(--nbe-letter-spacing-wide);
+    color: var(--nbe-dark-text-secondary);
+    background: var(--nbe-dark-bg-subtle);
+    border-bottom: 1px solid var(--nbe-dark-border-secondary);
+}
+
+.resolved-attrs-row {
+    display: contents;
+}
+
+.resolved-attrs-row > span {
+    padding: var(--nbe-space-xs) var(--nbe-space-sm);
+    border-bottom: 1px solid var(--nbe-dark-border-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resolved-attrs-row:last-child > span {
+    border-bottom: none;
+}
+
+.resolved-attrs-row:hover > span {
+    background: var(--nbe-dark-bg-hover);
+}
+
+.resolved-attr-name {
+    color: var(--nbe-dark-text-primary);
+    font-family: var(--nbe-font-mono);
+}
+
+.resolved-attr-value {
+    color: var(--nbe-dark-text-primary);
+}
+
+.resolved-attr-source {
+    color: var(--nbe-dark-text-secondary);
+    font-size: var(--nbe-font-size-xs);
+}
+
+.resolved-source-self {
+    color: var(--nbe-dark-text-muted);
+}
+
+.resolved-source-inherited {
+    color: var(--nbe-dark-accent-primary);
+}
+
 /* Member count badge */
 .member-count {
     display: inline-block;
