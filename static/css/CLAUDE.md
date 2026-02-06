@@ -18,7 +18,6 @@ Design tokens, component styles, and page-specific CSS for the Nagios Bulk Edito
 | `inheritance.css`       | Inheritance tree visualization                                                                       | Modifying inheritance display, styling tree layout               |
 | `settings.css`          | Settings page forms and sections                                                                     | Styling settings page, changing config UI                        |
 | `bulk-rename.css`       | Bulk rename page styling                                                                             | Styling bulk rename UI                                           |
-| `bulk-attributes.css`   | Bulk attribute editing page                                                                          | Styling bulk attribute editor                                    |
 | `find-replace.css`      | Find/replace page styling                                                                            | Styling search/replace UI                                        |
 | `smart-grouping.css`    | Smart grouping suggestions page                                                                      | Styling smart grouping UI                                        |
 | `validate.css`          | Validation page styling                                                                              | Styling validation output display                                |

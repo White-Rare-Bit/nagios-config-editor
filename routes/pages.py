@@ -83,14 +83,6 @@ def settings():
     return render_template('settings.html', config=config)
 
 
-@bp.route('/bulk-attributes')
-def bulk_attributes():
-    """Bulk attribute editor page."""
-    p = get_service().parser
-    types = p.get_object_types()
-    return render_template('bulk_attributes.html', object_types=types)
-
-
 @bp.route('/inheritance')
 def inheritance():
     """Inheritance viewer page."""

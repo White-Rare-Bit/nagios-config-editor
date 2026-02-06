@@ -129,7 +129,7 @@ config = load_config()
 
 **Explorer:** See `static/js/explorer/CLAUDE.md` - main.js (state), app.js (tree), object-editor.js (center pane), file-operations.js (target pane), context-menu.js, dialogs.js, data-loading.js, state-management.js, drag-drop.js, analysis.js, ui-utils.js
 
-**Page-specific:** See `static/js/CLAUDE.md` - git.js, backups.js, audit-log.js, dependencies.js, settings.js, find-replace.js, bulk-rename.js, bulk-attributes.js, reorganize.js, smart-grouping.js, inheritance.js, validate.js
+**Page-specific:** See `static/js/CLAUDE.md` - git.js, backups.js, audit-log.js, dependencies.js, settings.js, find-replace.js, bulk-rename.js, reorganize.js, smart-grouping.js, inheritance.js, validate.js
 
 ## Cross-Cutting Concerns
 

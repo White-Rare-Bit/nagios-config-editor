@@ -39,7 +39,7 @@ operation_response(result, success_data=None, error_code=500)
 | **objects.py** | Object operations | GET /api/objects, POST /api/delete-objects, POST /api/clone-objects |
 | **staging.py** | Staging system API | GET/POST/DELETE /api/staging, POST /api/staging/apply, POST /api/staging/undo |
 | **files.py** | File/folder operations | GET /api/files, POST /api/files/create, POST /api/files/move, DELETE /api/files/<path> |
-| **bulk_ops.py** | Bulk operations | POST /api/search, POST /api/apply-rename, POST /api/move-objects, POST /api/bulk-attributes/apply |
+| **bulk_ops.py** | Bulk operations | POST /api/search, POST /api/apply-rename, POST /api/move-objects |
 | **git.py** | Git integration | GET /api/git/status, POST /api/git/commit, POST /api/git/restore, GET /api/git/log |
 | **backups.py** | Backup management | GET /api/backups, POST /api/backups, POST /api/backups/<name>/restore, DELETE /api/backups/<name> |
 | **analysis.py** | Dependencies & analysis | GET /api/dependencies, GET /api/inheritance/\<type>/\<name>, POST /api/smart-grouping/suggest |
@@ -157,7 +157,7 @@ with get_parser_for_modification() as p:
 - `staging.py`: True staging (changes not on disk until apply)
 
 **Bulk Operations:**
-- `bulk_ops.py`: Rename, find/replace, move, bulk attributes
+- `bulk_ops.py`: Rename, find/replace, move
 
 **File Operations:**
 - `files.py`: Create/move/delete files and folders (staged)

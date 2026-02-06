@@ -15,7 +15,6 @@ All page modules use the IIFE pattern for scope isolation and extract configurat
 | ---- | ---- | ---- |
 | `audit-log.js` | Audit log filtering, pagination. Constants: `ENTRIES_PER_PAGE` | Modifying audit log page |
 | `backups.js` | Backup list/restore/delete UI | Modifying backup page |
-| `bulk-attributes.js` | Bulk attribute editing, batch updates | Modifying bulk attribute page |
 | `bulk-rename.js` | Pattern-based bulk rename, preview | Modifying bulk rename page |
 | `dependencies.js` | Cytoscape graph visualization, edge categories, quick view presets. Utilities: `getEdgesInSubgraph()`, `getConnectedNodeIdsFromEdges()` | Modifying dependency graph page |
 | `find-replace.js` | Search, preview, bulk replacement. Constants: `MIN_SEARCH_CHARS`, `DEBOUNCE_MS`, `MAX_SUGGESTIONS` | Modifying find/replace page |
