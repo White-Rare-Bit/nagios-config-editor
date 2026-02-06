@@ -21,7 +21,6 @@ All page modules use the IIFE pattern for scope isolation and extract configurat
 | `find-replace.js` | Search, preview, bulk replacement. Constants: `MIN_SEARCH_CHARS`, `DEBOUNCE_MS`, `MAX_SUGGESTIONS` | Modifying find/replace page |
 | `git.js` | File list, diff viewer, commit/discard UI | Modifying git page |
 | `inheritance.js` | Inheritance tree visualization | Modifying inheritance page |
-| `objects.js` | Legacy object browser (DEPRECATED - use Explorer). IIFE-wrapped | Maintaining legacy objects page |
 | `reorganize.js` | File/folder restructuring UI. Helper: `performBulkOperation()` for move/clone/delete | Modifying reorganize page |
 | `settings.js` | Identity config, git preferences, config paths | Modifying settings page |
 | `smart-grouping.js` | Auto-suggest grouping patterns. Constants: `TYPE_COLORS`, `TYPE_LABELS`, `PREVIEW_LIMIT` | Modifying smart grouping page |

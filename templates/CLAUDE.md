@@ -18,8 +18,7 @@ base.html (master template - 2496 lines)
   ├─ reorganize.html (File reorganization)
   ├─ smart_grouping.html (Smart grouping suggestions)
   ├─ inheritance.html (Template inheritance analysis)
-  ├─ validate.html (Nagios -v validation)
-  └─ objects.html (Simple object browser - deprecated)
+  └─ validate.html (Nagios -v validation)
 ```
 
 ## base.html Blocks

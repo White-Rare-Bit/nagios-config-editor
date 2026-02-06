@@ -36,7 +36,7 @@ operation_response(result, success_data=None, error_code=500)
 | Module | What | Routes |
 |--------|------|--------|
 | **pages.py** | HTML page rendering | GET /, /explorer, /backups, /git, /settings, /validate, etc. |
-| **objects.py** | Object CRUD operations | GET /api/objects, POST /api/objects/create, POST /api/object/update, DELETE /api/delete-objects |
+| **objects.py** | Object operations | GET /api/objects, POST /api/delete-objects, POST /api/clone-objects |
 | **staging.py** | Staging system API | GET/POST/DELETE /api/staging, POST /api/staging/apply, POST /api/staging/undo |
 | **files.py** | File/folder operations | GET /api/files, POST /api/files/create, POST /api/files/move, DELETE /api/files/<path> |
 | **bulk_ops.py** | Bulk operations | POST /api/search, POST /api/apply-rename, POST /api/move-objects, POST /api/bulk-attributes/apply |

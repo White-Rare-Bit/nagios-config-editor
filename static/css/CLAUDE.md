@@ -17,7 +17,6 @@ Design tokens, component styles, and page-specific CSS for the Nagios Bulk Edito
 | `audit_log.css`         | Audit log table, filter chips                                                                        | Styling audit log page, changing log display                     |
 | `inheritance.css`       | Inheritance tree visualization                                                                       | Modifying inheritance display, styling tree layout               |
 | `settings.css`          | Settings page forms and sections                                                                     | Styling settings page, changing config UI                        |
-| `objects.css`           | Legacy object browser page                                                                           | Maintaining legacy object browser                                |
 | `bulk-rename.css`       | Bulk rename page styling                                                                             | Styling bulk rename UI                                           |
 | `bulk-attributes.css`   | Bulk attribute editing page                                                                          | Styling bulk attribute editor                                    |
 | `find-replace.css`      | Find/replace page styling                                                                            | Styling search/replace UI                                        |
