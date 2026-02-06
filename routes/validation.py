@@ -852,12 +852,13 @@ def api_health_check():
     # 18. Check for unused timeperiods
     # A timeperiod is "used" if any non-template object references it in:
     # check_period, notification_period, host_notification_period,
-    # service_notification_period, dependency_period, or exclude (comma-separated).
+    # service_notification_period, dependency_period, escalation_period,
+    # or exclude (comma-separated).
     used_timeperiods = set()
     tp_fields_single = [
         'check_period', 'notification_period',
         'host_notification_period', 'service_notification_period',
-        'dependency_period',
+        'dependency_period', 'escalation_period',
     ]
     for obj in service.get_objects():
         is_template = obj.attributes.get('register', '1') == '0'
