@@ -3,6 +3,7 @@
 import re
 
 from flask import Blueprint, jsonify
+from nagios_model import NAME_FIELDS, REFERENCE_FIELDS
 from validator import NagiosValidator
 from .helpers import get_service, get_config
 
@@ -944,7 +945,9 @@ def api_analysis_orphans():
         """Strip +/! prefixes used in Nagios additive/exclusion syntax."""
         return s.strip().lstrip('+!').strip()
 
-    # Phase 1: Build reference sets
+    # Phase 1: Build reference sets using REFERENCE_FIELDS as single source of truth
+    command_fields = {f for f, t in REFERENCE_FIELDS.items() if t == 'command'}
+
     referenced_names = {
         'host': set(), 'hostgroup': set(), 'service': set(),
         'servicegroup': set(), 'contact': set(), 'contactgroup': set(),
@@ -953,78 +956,46 @@ def api_analysis_orphans():
 
     for obj in objects:
         attrs = obj.attributes
+        own_name_field = NAME_FIELDS.get(obj.object_type)
 
-        # Template references
-        if 'use' in attrs:
-            for t in attrs['use'].split(','):
-                name = t.strip()
-                if name and obj.object_type in referenced_names:
-                    referenced_names[obj.object_type].add(name)
+        for field, target_type in REFERENCE_FIELDS.items():
+            if field not in attrs:
+                continue
 
-        # Host references
-        for field in ['host_name', 'parents', 'dependent_host_name']:
-            if field in attrs:
-                for h in attrs[field].split(','):
-                    referenced_names['host'].add(strip_prefix(h))
+            value = attrs[field]
 
-        # Hostgroup members -> hosts
-        if 'members' in attrs and obj.object_type == 'hostgroup':
-            for h in attrs['members'].split(','):
-                referenced_names['host'].add(strip_prefix(h))
+            # Resolve target type for context-dependent fields
+            if field == 'use':
+                resolved_type = obj.object_type
+            elif field == 'members':
+                if obj.object_type == 'hostgroup':
+                    resolved_type = 'host'
+                elif obj.object_type == 'contactgroup':
+                    resolved_type = 'contact'
+                elif obj.object_type == 'servicegroup':
+                    resolved_type = 'service'
+                else:
+                    continue
+            else:
+                resolved_type = target_type
 
-        # Hostgroup references
-        for field in ['hostgroup_name', 'hostgroups', 'hostgroup_members',
-                       'dependent_hostgroup_name']:
-            if field in attrs:
-                for h in attrs[field].split(','):
-                    referenced_names['hostgroup'].add(strip_prefix(h))
+            if resolved_type not in referenced_names:
+                continue
 
-        # Service references
-        if 'dependent_service_description' in attrs:
-            referenced_names['service'].add(
-                strip_prefix(attrs['dependent_service_description']))
+            # Skip identity fields (e.g. host_name ON a host is its own name)
+            if field == own_name_field:
+                continue
 
-        # Servicegroup references
-        for field in ['servicegroups', 'servicegroup_members']:
-            if field in attrs:
-                for s in attrs[field].split(','):
-                    referenced_names['servicegroup'].add(strip_prefix(s))
-
-        # Contact references
-        if 'contacts' in attrs:
-            for c in attrs['contacts'].split(','):
-                referenced_names['contact'].add(strip_prefix(c))
-        if 'members' in attrs and obj.object_type == 'contactgroup':
-            for c in attrs['members'].split(','):
-                referenced_names['contact'].add(strip_prefix(c))
-
-        # Contactgroup references
-        for field in ['contact_groups', 'contactgroup_members']:
-            if field in attrs:
-                for c in attrs[field].split(','):
-                    referenced_names['contactgroup'].add(strip_prefix(c))
-
-        # Command references
-        for field in ['check_command', 'event_handler']:
-            if field in attrs:
-                cmd_name = attrs[field].split('!')[0].strip()
-                if cmd_name:
-                    referenced_names['command'].add(cmd_name)
-        for field in ['host_notification_commands',
-                       'service_notification_commands',
-                       'notification_commands']:
-            if field in attrs:
-                for cmd in attrs[field].split(','):
-                    cmd_name = cmd.strip().split('!')[0]
-                    if cmd_name:
-                        referenced_names['command'].add(cmd_name)
-
-        # Timeperiod references
-        for field in ['check_period', 'notification_period',
-                       'host_notification_period',
-                       'service_notification_period']:
-            if field in attrs:
-                referenced_names['timeperiod'].add(attrs[field].strip())
+            # Parse the value: comma-separated, with optional +/! prefixes
+            for part in value.split(','):
+                part = part.strip().lstrip('+!').strip()
+                if not part:
+                    continue
+                # For command fields, strip arguments after !
+                if field in command_fields:
+                    part = part.split('!')[0].strip()
+                if part:
+                    referenced_names[resolved_type].add(part)
 
         # Auto-reference: hosts with hostgroups attr are in use
         if obj.object_type == 'host' and has_attr_in_chain(obj, 'hostgroups'):

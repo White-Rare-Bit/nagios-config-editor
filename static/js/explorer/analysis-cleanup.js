@@ -6,14 +6,14 @@
  * - Duplicate objects
  * - Empty groups
  *
+ * Reads backend orphan detection from Explorer.buildOrphanCache().
  * Runs client-side analysis for:
- * - Orphan objects (needs Explorer.getEffectiveAttributes() for pending edits)
  * - Long host lists (UI-only suggestion with "Create Hostgroup" action)
  *
  * Dependencies:
  * - window.Explorer (from main.js)
  * - Explorer.state (shared state)
- * - Explorer.buildOrphanCache (from orphan-detection.js)
+ * - Explorer.buildOrphanCache (from orphan-detection.js, backed by /api/analysis/orphans)
  * - Explorer.getHostListInfo, Explorer.getEffectiveName (from app.js)
  * - Explorer.isObjectMarkedForDeletion (from state-management.js)
  */
