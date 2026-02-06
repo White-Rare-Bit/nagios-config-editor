@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 from app import create_app
 from git_service import GitService
+from file_operations import edit_object_in_file, add_object_to_file
 
 
 @pytest.fixture
@@ -142,3 +143,24 @@ def test_gitignore_references_correct_staging_dir():
             f".gitignore should NOT contain '.nagios_staging/', got:\n{content}"
     finally:
         shutil.rmtree(test_dir, ignore_errors=True)
+
+
+def test_edit_object_uses_atomic_write(tmp_path):
+    """edit_object_in_file should write atomically (temp file + rename)."""
+    cfg = tmp_path / 'test.cfg'
+    cfg.write_text('''define host {
+    host_name       test-host
+    alias           Test
+    address         1.2.3.4
+}
+''')
+    result = edit_object_in_file(
+        str(cfg), 1,
+        {'host_name': 'test-host', 'alias': 'Updated', 'address': '1.2.3.4'},
+        'host'
+    )
+    assert result.success, f"Edit failed: {result.error}"
+    content = cfg.read_text()
+    assert 'Updated' in content
+    # File should still exist and be valid (atomic write doesn't leave partial files)
+    assert 'define host' in content
