@@ -117,10 +117,13 @@ function mapHealthCheckToState(data) {
     // 4. Call filterIssues to build groupedErrors
     Explorer.filterIssues();
 
-    // 5. Loop through issues and distribute to appropriate state arrays
+    // 5. Build index lookup for O(1) object resolution
+    const objectsByIndex = new Map();
+    state.allObjects.forEach(o => objectsByIndex.set(o.global_index, o));
+
+    // 6. Loop through issues and distribute to appropriate state arrays
     for (const issue of state.allIssues) {
-        // Find the matching object in allObjects
-        const obj = state.allObjects.find(o => o.global_index === issue.global_index);
+        const obj = issue.global_index != null ? objectsByIndex.get(issue.global_index) : null;
 
         switch (issue.type) {
             case 'duplicate': {
@@ -128,7 +131,7 @@ function mapHealthCheckToState(data) {
                 let duplicateGroup = [];
                 if (issue.related_objects) {
                     duplicateGroup = issue.related_objects
-                        .map(ro => state.allObjects.find(o => o.global_index === ro.global_index))
+                        .map(ro => objectsByIndex.get(ro.global_index))
                         .filter(Boolean);
                 } else if (obj) {
                     // Fallback: find all matching objects by name/type
@@ -842,8 +845,8 @@ async function loadCleanupSuggestions(forceRefresh = false) {
         container.innerHTML = '<div class="tab-placeholder">Analyzing configuration...</div>';
     }
 
-    // Ensure health-check data is loaded
-    if (!state.healthCheckData) {
+    // Ensure health-check data is loaded (force re-fetch if forceRefresh)
+    if (!state.healthCheckData || forceRefresh) {
         try {
             const result = await ApiClient.get('/api/health-check');
             if (result.success) {
@@ -875,7 +878,7 @@ async function loadCleanupSuggestions(forceRefresh = false) {
 }
 
 // =============================================================================
-// Cleanup Analysis - Implementation moved to analysis-cleanup.js
+// Cleanup Analysis Rendering
 // =============================================================================
 
 function renderCleanupSuggestions() {
@@ -1431,8 +1434,8 @@ async function loadNotificationSuggestions(forceRefresh = false) {
     const container = document.getElementById('notificationsContent');
     const badge = document.getElementById('notificationsSectionBadge');
 
-    // Ensure health-check data is loaded
-    if (!state.healthCheckData) {
+    // Ensure health-check data is loaded (force re-fetch if forceRefresh)
+    if (!state.healthCheckData || forceRefresh) {
         try {
             const result = await ApiClient.get('/api/health-check');
             if (result.success) {
@@ -1531,7 +1534,6 @@ Explorer.updateSuggestionsBadge = updateSuggestionsBadge;
 // Template & grouping functions exported from analysis-suggestions.js
 Explorer.mapHealthCheckToState = mapHealthCheckToState;
 Explorer.loadCleanupSuggestions = loadCleanupSuggestions;
-// analyzeCleanupIssues exported from analysis-cleanup.js
 Explorer.renderCleanupSuggestions = renderCleanupSuggestions;
 Explorer.toggleCleanupSection = toggleCleanupSection;
 Explorer.bulkDeleteCleanupGroup = bulkDeleteCleanupGroup;
