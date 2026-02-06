@@ -112,7 +112,7 @@ class NagiosService:
         Returns:
             Dict with success=True, count, errors, and optional details
         """
-        result = {'success': True, f'{operation}_count': count, 'errors': errors}
+        result = {'success': True, 'count': count, 'errors': errors}
         if details is not None:
             result['details'] = details
         return result
