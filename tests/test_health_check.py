@@ -318,6 +318,117 @@ def test_edit_object_uses_atomic_write(tmp_path):
     assert 'define host' in content
 
 
+class TestCheckCommandInheritance:
+    """Test that services missing check_command are detected even through inheritance."""
+
+    @pytest.fixture
+    def app_with_missing_check_cmd(self):
+        """Config where a service inherits but never gets check_command."""
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / 'nagios'
+        test_config_path.mkdir()
+
+        (test_config_path / 'commands.cfg').write_text('''
+define command {
+    command_name    check-host-alive
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+define command {
+    command_name    check_http
+    command_line    $USER1$/check_http -H $HOSTADDRESS$
+}
+''')
+
+        (test_config_path / 'templates.cfg').write_text('''
+define service {
+    name                    no-cmd-template
+    register                0
+    max_check_attempts      3
+    contact_groups          admins
+}
+
+define service {
+    name                    has-cmd-template
+    register                0
+    max_check_attempts      3
+    check_command           check_http
+    contact_groups          admins
+}
+''')
+
+        (test_config_path / 'hosts.cfg').write_text('''
+define host {
+    host_name       test-host
+    address         10.0.0.1
+    max_check_attempts 5
+    contact_groups  admins
+}
+''')
+
+        (test_config_path / 'contacts.cfg').write_text('''
+define contact {
+    contact_name    admin
+    host_notification_commands  check-host-alive
+    service_notification_commands check-host-alive
+    host_notification_period    24x7
+    service_notification_period 24x7
+}
+define contactgroup {
+    contactgroup_name admins
+    members           admin
+}
+define timeperiod {
+    timeperiod_name 24x7
+    monday          00:00-24:00
+}
+''')
+
+        (test_config_path / 'services.cfg').write_text('''
+define service {
+    host_name               test-host
+    service_description     Missing Check Command
+    use                     no-cmd-template
+}
+
+define service {
+    host_name               test-host
+    service_description     Has Check Command
+    use                     has-cmd-template
+}
+
+define service {
+    host_name               test-host
+    service_description     Direct Check Command
+    check_command           check_http
+    max_check_attempts      3
+    contact_groups          admins
+}
+''')
+
+        app = create_app(config_path=str(test_config_path))
+        app.config['TESTING'] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_detects_service_missing_check_command_through_inheritance(self, app_with_missing_check_cmd):
+        """Service inheriting from template without check_command is flagged."""
+        client = app_with_missing_check_cmd.test_client()
+        resp = client.get('/api/health-check')
+        assert resp.status_code == 200
+        data = resp.get_json()
+
+        missing_cmd_issues = [i for i in data['issues']
+                              if i['type'] == 'missing_check_command']
+
+        # "Missing Check Command" service should be flagged
+        flagged_names = [i['object'] for i in missing_cmd_issues]
+        assert any('Missing Check Command' in n for n in flagged_names)
+
+        # "Has Check Command" and "Direct Check Command" should NOT be flagged
+        assert not any('Has Check Command' in n for n in flagged_names)
+        assert not any('Direct Check Command' in n for n in flagged_names)
+
+
 def test_apply_staging_with_validate_flag():
     """Apply staging should include validation result when validate=true."""
     test_dir = tempfile.mkdtemp()

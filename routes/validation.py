@@ -96,6 +96,33 @@ def api_health_check():
     timeperiods = set()
     templates = {}  # type -> set of template names
 
+    # Build template lookup for inheritance resolution
+    template_lookup = {}
+    for obj in service.get_objects():
+        tmpl_name = obj.attributes.get('name')
+        if tmpl_name:
+            template_lookup[(obj.object_type, tmpl_name)] = obj
+
+    def resolve_inherited_attrs(obj, visited=None):
+        """Resolve attributes including inherited ones from templates."""
+        if visited is None:
+            visited = set()
+        resolved = {}
+        use_templates = obj.attributes.get('use', '')
+        if use_templates:
+            for tmpl_name in [t.strip() for t in use_templates.split(',') if t.strip()]:
+                if tmpl_name not in visited:
+                    visited.add(tmpl_name)
+                    tmpl = template_lookup.get((obj.object_type, tmpl_name))
+                    if tmpl:
+                        tmpl_attrs = resolve_inherited_attrs(tmpl, visited)
+                        for key, value in tmpl_attrs.items():
+                            if key not in ('use', 'name', 'register'):
+                                resolved[key] = value
+        for key, value in obj.attributes.items():
+            resolved[key] = value
+        return resolved
+
     for obj in service.get_objects():
         name = obj.get_name()
         if not name:
@@ -460,6 +487,26 @@ def api_health_check():
                     'file': obj.source_file,
                     'message': 'Host has no services assigned (directly or via hostgroup)'
                 })
+
+    # 11. Check for services missing check_command (including inheritance)
+    for obj in service.get_objects():
+        if obj.object_type != 'service':
+            continue
+        if obj.attributes.get('register', '1') == '0':
+            continue  # Skip templates
+
+        resolved = resolve_inherited_attrs(obj)
+        if 'check_command' not in resolved:
+            obj_name = obj.get_name() or 'unnamed'
+            host = resolved.get('host_name', resolved.get('hostgroup_name', ''))
+            issues.append({
+                'type': 'missing_check_command',
+                'severity': 'error',
+                'object': f'{obj_name} on {host}' if host else obj_name,
+                'object_type': 'service',
+                'file': obj.source_file,
+                'message': 'Service has no check_command (directly or through template inheritance)'
+            })
 
     # Summary
     summary = {
