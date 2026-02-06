@@ -615,7 +615,6 @@
      * Load members for a group or template object.
      */
     async function loadCenterMembers(obj) {
-        const container = document.getElementById('membersContent');
         if (!obj || obj.global_index == null) {
             renderCenterMembers([], obj);
             return;

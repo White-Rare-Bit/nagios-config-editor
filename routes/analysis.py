@@ -1052,6 +1052,8 @@ def api_object_references(global_index):
                 incoming.append({**obj_summary(o, idx), 'field': field})
 
     # --- Dependency rules ---
+    # master_of = this object is the master → goes in outgoing (object depends on this rule)
+    # dependent_of = this object is the dependent → goes in incoming
     if obj.object_type == 'host':
         for idx, o in enumerate(objects):
             if o.object_type != 'hostdependency':
@@ -1059,7 +1061,7 @@ def api_object_references(global_index):
             master_hosts = [h.strip() for h in o.attributes.get('host_name', '').split(',') if h.strip()]
             dependent_hosts = [h.strip() for h in o.attributes.get('dependent_host_name', '').split(',') if h.strip()]
             if obj_name in master_hosts:
-                incoming.append({
+                outgoing.append({
                     **obj_summary(o, idx), 'field': 'dependency_rule',
                     'is_dependency_rule': True, 'role': 'master_of',
                 })
@@ -1080,7 +1082,7 @@ def api_object_references(global_index):
                 dep_svc = o.attributes.get('dependent_service_description', '')
                 dep_hosts = [h.strip() for h in o.attributes.get('dependent_host_name', '').split(',') if h.strip()]
                 if master_svc == svc_name and (not master_hosts or host_name in master_hosts):
-                    incoming.append({
+                    outgoing.append({
                         **obj_summary(o, idx), 'field': 'dependency_rule',
                         'is_dependency_rule': True, 'role': 'master_of',
                     })
