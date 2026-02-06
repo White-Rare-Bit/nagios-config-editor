@@ -605,6 +605,94 @@ def api_health_check():
                 'message': f'Template inheritance conflict (first template wins): {"; ".join(conflicts[:3])}'
             })
 
+    # 14. Notification chain validation (SAFETY-2)
+    # Trace: host/service -> contacts/contact_groups -> contact members ->
+    #   contact's notification commands -> notification periods
+
+    # Build contact and contactgroup lookups
+    contact_objects = {}   # contact_name -> NagiosObject
+    cg_objects = {}        # contactgroup_name -> NagiosObject
+    for obj in service.get_objects():
+        if obj.object_type == 'contact' and obj.attributes.get('register', '1') != '0':
+            contact_objects[obj.attributes.get('contact_name', '')] = obj
+        elif obj.object_type == 'contactgroup':
+            cg_objects[obj.attributes.get('contactgroup_name', '')] = obj
+
+    def resolve_contact_names(obj_or_resolved):
+        """Get all contact names for a host/service (direct + via contactgroups)."""
+        attrs = obj_or_resolved if isinstance(obj_or_resolved, dict) else obj_or_resolved.attributes
+        result = set()
+        # Direct contacts
+        if 'contacts' in attrs:
+            for c in attrs['contacts'].split(','):
+                c = c.strip().lstrip('+!')
+                if c:
+                    result.add(c)
+        # Via contact groups
+        if 'contact_groups' in attrs:
+            for cg_name in attrs['contact_groups'].split(','):
+                cg_name = cg_name.strip().lstrip('+!')
+                cg = cg_objects.get(cg_name)
+                if cg and 'members' in cg.attributes:
+                    for m in cg.attributes['members'].split(','):
+                        m = m.strip()
+                        if m:
+                            result.add(m)
+        return result
+
+    def check_contact_notification(contact_name, check_type):
+        """Check if a contact can deliver notifications for host or service.
+
+        check_type is 'host' or 'service'.
+        Returns list of problem descriptions (empty = OK).
+        """
+        problems = []
+        contact_obj = contact_objects.get(contact_name)
+        if not contact_obj:
+            return []  # Contact not found -- already reported by missing_contact check
+
+        resolved_contact = resolve_inherited_attrs(contact_obj)
+
+        cmd_field = f'{check_type}_notification_commands'
+        period_field = f'{check_type}_notification_period'
+
+        if cmd_field not in resolved_contact:
+            problems.append(f'{contact_name} has no {cmd_field}')
+
+        if period_field not in resolved_contact:
+            problems.append(f'{contact_name} has no {period_field}')
+
+        return problems
+
+    # Check each non-template host/service
+    for obj in service.get_objects():
+        if obj.object_type not in ('host', 'service'):
+            continue
+        if obj.attributes.get('register', '1') == '0':
+            continue
+
+        resolved = resolve_inherited_attrs(obj)
+        contact_names = resolve_contact_names(resolved)
+
+        if not contact_names:
+            continue  # No contacts -- already handled by host_without_contacts check
+
+        check_type = 'host' if obj.object_type == 'host' else 'service'
+
+        for cname in contact_names:
+            problems = check_contact_notification(cname, check_type)
+            if problems:
+                obj_name = obj.get_name() or 'unnamed'
+                for problem in problems:
+                    issues.append({
+                        'type': 'notification_gap',
+                        'severity': 'warning',
+                        'object': obj_name,
+                        'object_type': obj.object_type,
+                        'file': obj.source_file,
+                        'message': f'Notification chain broken: {problem}'
+                    })
+
     # Summary
     summary = {
         'total_issues': len(issues),
