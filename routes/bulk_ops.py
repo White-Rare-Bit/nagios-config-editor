@@ -19,6 +19,142 @@ import file_operations
 bp = Blueprint('bulk_ops', __name__)
 
 
+# ─────────────────────────────────────────────────────────────────────
+# api_move_objects helpers
+# ─────────────────────────────────────────────────────────────────────
+
+def _validate_move_objects_input(data):
+    """Validate move-objects request data. Returns (object_data, target_file, create_new, error_response)."""
+    object_data = data.get('objects', [])
+    target_file = data.get('target_file', '')
+    create_new = data.get('create_new', False)
+
+    if not isinstance(object_data, list):
+        return None, None, None, (jsonify({'error': 'Objects must be a list'}), 400)
+    if not object_data or not target_file:
+        return None, None, None, (jsonify({'error': 'Objects and target file required'}), 400)
+
+    return object_data, target_file, create_new, None
+
+
+def _resolve_and_validate_target(target_file, config_path):
+    """Resolve target file path and validate it's within config directory. Returns (resolved_path, error_response)."""
+    if not os.path.isabs(target_file):
+        target_file = os.path.join(config_path, target_file)
+    target_file = os.path.realpath(target_file)
+
+    try:
+        common = os.path.commonpath([config_path, target_file])
+        if common != config_path:
+            return None, (jsonify({'error': 'Target file must be within config directory'}), 400)
+    except ValueError:
+        return None, (jsonify({'error': 'Target file must be within config directory'}), 400)
+
+    return target_file, None
+
+
+def _create_target_file_if_needed(target_file, create_new):
+    """Create target file if it doesn't exist and create_new is True. Returns (file_created, error_response)."""
+    if not create_new or os.path.exists(target_file):
+        return False, None
+    try:
+        parent_dir = os.path.dirname(target_file)
+        if not os.path.exists(parent_dir):
+            os.makedirs(parent_dir, exist_ok=True)
+        with open(target_file, 'w') as f:
+            f.write("# Nagios configuration file\n")
+            f.write("# Created by Nagios Bulk Editor\n\n")
+        return True, None
+    except OSError as e:
+        return False, (jsonify({'error': f'Could not create file: {e}'}), 400)
+
+
+def _move_objects_in_parser(object_data, p_objects, target_file):
+    """Move objects to target file. Returns (moved_count, skipped)."""
+    moved_count = 0
+    skipped = []
+    for item in object_data:
+        idx, position = _parse_move_item(item)
+        if idx is None:
+            skipped.append(str(item))
+            continue
+
+        if 0 <= idx < len(p_objects):
+            old_file = p_objects[idx].source_file
+            p_objects[idx].source_file = target_file
+            if position is not None:
+                p_objects[idx].line_number = position
+            moved_count += 1
+            print(f"Moved object {idx} from {old_file} to {target_file} at position {position}")
+        else:
+            skipped.append(idx)
+            print(f"Invalid index {idx}, max is {len(p_objects)-1}")
+    return moved_count, skipped
+
+
+def _parse_move_item(item):
+    """Parse a move item (int or dict) into (index, position). Returns (None, None) on error."""
+    if isinstance(item, dict):
+        idx = item.get('index')
+        position = item.get('position')
+    else:
+        idx = item
+        position = None
+    try:
+        idx = int(idx)
+    except (ValueError, TypeError):
+        return None, None
+    return idx, position
+
+
+# ─────────────────────────────────────────────────────────────────────
+# api_diff_rename helpers
+# ─────────────────────────────────────────────────────────────────────
+
+def _group_objects_by_file(objects):
+    """Group a list of objects by source_file. Returns {filepath: [objects]}."""
+    by_file = {}
+    for obj in objects:
+        if obj.source_file not in by_file:
+            by_file[obj.source_file] = []
+        by_file[obj.source_file].append(obj)
+    return by_file
+
+
+def _apply_renames_to_objects(objects, object_type, rename_params):
+    """Apply rename transforms to a list of objects in-place."""
+    name_field = NAME_FIELDS.get(object_type, 'name')
+    find_pattern, replace_with, add_prefix, add_suffix, use_regex = rename_params
+    for obj in objects:
+        if obj.object_type == object_type and name_field in obj.attributes:
+            old_name = obj.attributes[name_field]
+            new_name = get_service().transform_name(
+                old_name, find_pattern, replace_with,
+                add_prefix, add_suffix, use_regex
+            )
+            if new_name is not None and new_name != old_name:
+                obj.attributes[name_field] = new_name
+                get_service().update_references(objects, old_name, new_name)
+
+
+def _generate_file_diffs(original_by_file, original_content, modified_by_file, writer):
+    """Generate diff output for files that changed."""
+    diffs = []
+    all_files = set(list(original_by_file.keys()) + list(modified_by_file.keys()))
+    for filepath in all_files:
+        orig = original_content.get(filepath, '')
+        mod_objs = modified_by_file.get(filepath, [])
+        mod = writer.objects_to_string(mod_objs) if mod_objs else ''
+        if orig != mod:
+            diff_lines = file_operations.generate_diff(orig, mod, os.path.basename(filepath))
+            diffs.append({'file': filepath, 'diff': ''.join(diff_lines)})
+    return diffs
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Route handlers
+# ═══════════════════════════════════════════════════════════════════════
+
 @bp.route('/api/search', methods=['POST'])
 def api_search():
     """Search for objects."""
@@ -149,93 +285,36 @@ def api_move_objects():
     bm = get_backup_manager()
     data = request.get_json() or {}
 
-    object_data = data.get('objects', [])
     if op_log:
-        op_log.info('app', 'move_objects', params={'object_count': len(data.get('objects', [])), 'target_file': data.get('target_file', '')})
-    target_file = data.get('target_file', '')
-    create_new = data.get('create_new', False)
+        op_log.info('app', 'move_objects', params={
+            'object_count': len(data.get('objects', [])),
+            'target_file': data.get('target_file', '')
+        })
 
-    # Validate types
-    if not isinstance(object_data, list):
-        return jsonify({'error': 'Objects must be a list'}), 400
-    if not object_data or not target_file:
-        return jsonify({'error': 'Objects and target file required'}), 400
+    object_data, target_file, create_new, err = _validate_move_objects_input(data)
+    if err:
+        return err
 
     config_path = os.path.realpath(get_config_path())
-
-    # Resolve target path - if relative, make it relative to config_path
-    if not os.path.isabs(target_file):
-        target_file = os.path.join(config_path, target_file)
-    target_file = os.path.realpath(target_file)
-
-    # Security check: ensure target is within config directory
-    try:
-        # Use commonpath to verify target is under config_path
-        common = os.path.commonpath([config_path, target_file])
-        if common != config_path:
-            return jsonify({'error': 'Target file must be within config directory'}), 400
-    except ValueError:
-        # commonpath raises ValueError if paths are on different drives (Windows)
-        return jsonify({'error': 'Target file must be within config directory'}), 400
+    target_file, err = _resolve_and_validate_target(target_file, config_path)
+    if err:
+        return err
 
     with get_parser_for_modification() as p:
-        # Create backup
         backup_path = bm.create_backup("move_objects")
 
-        file_created = False
-        # Create new file if it doesn't exist
-        if create_new and not os.path.exists(target_file):
-            try:
-                # Ensure parent directory exists
-                parent_dir = os.path.dirname(target_file)
-                if not os.path.exists(parent_dir):
-                    os.makedirs(parent_dir, exist_ok=True)
-                # Create empty file with header comment
-                with open(target_file, 'w') as f:
-                    f.write(f"# Nagios configuration file\n")
-                    f.write(f"# Created by Nagios Bulk Editor\n\n")
-                file_created = True
-            except OSError as e:
-                return jsonify({'error': f'Could not create file: {e}'}), 400
+        file_created, err = _create_target_file_if_needed(target_file, create_new)
+        if err:
+            return err
 
-        # Move objects - handle both old format (list of ints) and new format (list of {index, position})
-        moved_count = 0
-        skipped = []
-        for item in object_data:
-            # Handle both formats: plain int or object with index/position
-            if isinstance(item, dict):
-                idx = item.get('index')
-                position = item.get('position')
-            else:
-                idx = item
-                position = None
+        moved_count, skipped = _move_objects_in_parser(object_data, p.objects, target_file)
 
-            try:
-                idx = int(idx)  # Ensure integer
-            except (ValueError, TypeError):
-                skipped.append(str(idx))
-                continue
-
-            if 0 <= idx < len(p.objects):
-                old_file = p.objects[idx].source_file
-                p.objects[idx].source_file = target_file
-                # Update line_number to control position in new file
-                if position is not None:
-                    p.objects[idx].line_number = position
-                moved_count += 1
-                print(f"Moved object {idx} from {old_file} to {target_file} at position {position}")
-            else:
-                skipped.append(idx)
-                print(f"Invalid index {idx}, max is {len(p.objects)-1}")
-
-        # Write changes
         try:
             writer = NagiosConfigWriter()
             writer.write_objects_to_original_files(p.objects)
         except (IOError, OSError, PermissionError) as e:
             return jsonify({'error': f'Failed to write changes: {str(e)}'}), 500
 
-    # Reload config
     try:
         get_service().reload()
     except (IOError, OSError) as e:
@@ -259,67 +338,30 @@ def api_diff_rename():
     data = request.get_json() or {}
 
     object_type = data.get('type')
-    find_pattern = data.get('find', '')
-    replace_with = data.get('replace', '')
-    use_regex = data.get('regex', False)
-    add_prefix = data.get('prefix', '')
-    add_suffix = data.get('suffix', '')
-
     if not object_type:
         return jsonify({'error': 'Object type required'}), 400
 
-    # Create deep copy of objects
-    original_objects = copy.deepcopy(service.get_objects())
+    rename_params = (
+        data.get('find', ''),
+        data.get('replace', ''),
+        data.get('prefix', ''),
+        data.get('suffix', ''),
+        data.get('regex', False),
+    )
+
     writer = NagiosConfigWriter()
 
     # Generate original content by file
-    original_by_file = {}
-    for obj in original_objects:
-        if obj.source_file not in original_by_file:
-            original_by_file[obj.source_file] = []
-        original_by_file[obj.source_file].append(obj)
-
-    original_content = {}
-    for filepath, objs in original_by_file.items():
-        original_content[filepath] = writer.objects_to_string(objs)
+    original_objects = copy.deepcopy(service.get_objects())
+    original_by_file = _group_objects_by_file(original_objects)
+    original_content = {fp: writer.objects_to_string(objs) for fp, objs in original_by_file.items()}
 
     # Apply changes to copy
-    name_field = NAME_FIELDS.get(object_type, 'name')
     modified_objects = copy.deepcopy(service.get_objects())
-
-    for obj in modified_objects:
-        if obj.object_type == object_type and name_field in obj.attributes:
-            old_name = obj.attributes[name_field]
-            new_name = get_service().transform_name(old_name, find_pattern, replace_with,
-                                      add_prefix, add_suffix, use_regex)
-            if new_name is None:
-                continue  # Skip invalid regex
-
-            if new_name != old_name:
-                obj.attributes[name_field] = new_name
-                get_service().update_references(modified_objects, old_name, new_name)
-
-    # Generate modified content
-    modified_by_file = {}
-    for obj in modified_objects:
-        if obj.source_file not in modified_by_file:
-            modified_by_file[obj.source_file] = []
-        modified_by_file[obj.source_file].append(obj)
+    _apply_renames_to_objects(modified_objects, object_type, rename_params)
+    modified_by_file = _group_objects_by_file(modified_objects)
 
     # Generate diffs
-    diffs = []
-    for filepath in set(list(original_by_file.keys()) + list(modified_by_file.keys())):
-        orig = original_content.get(filepath, '')
-        mod_objs = modified_by_file.get(filepath, [])
-        mod = writer.objects_to_string(mod_objs) if mod_objs else ''
-
-        if orig != mod:
-            diff_lines = file_operations.generate_diff(orig, mod, os.path.basename(filepath))
-            diffs.append({
-                'file': filepath,
-                'diff': ''.join(diff_lines)
-            })
+    diffs = _generate_file_diffs(original_by_file, original_content, modified_by_file, writer)
 
     return jsonify({'diffs': diffs})
-
-

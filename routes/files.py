@@ -64,6 +64,87 @@ def ensure_staging_lock(session_id: str) -> tuple:
     }), 423)
 
 
+# ─────────────────────────────────────────────────────────────────────
+# Validation helpers (reduce return counts in route handlers)
+# ─────────────────────────────────────────────────────────────────────
+
+def _validate_move_paths(data):
+    """Validate sourcePath and targetFolder from request data.
+
+    Returns (abs_source, abs_target_folder, error_response).
+    error_response is None on success, or a (jsonify, status) tuple on failure.
+    """
+    source_path = data.get('sourcePath')
+    target_folder = data.get('targetFolder')
+
+    if not source_path:
+        return None, None, (jsonify({'error': 'sourcePath required'}), 400)
+    if not target_folder:
+        return None, None, (jsonify({'error': 'targetFolder required'}), 400)
+
+    config_path = get_config_path()
+    abs_source = os.path.abspath(source_path)
+    abs_target_folder = os.path.abspath(target_folder)
+
+    if not abs_source.startswith(os.path.abspath(config_path)):
+        return None, None, (jsonify({'error': 'Source path must be within config directory'}), 400)
+    if not abs_target_folder.startswith(os.path.abspath(config_path)):
+        return None, None, (jsonify({'error': 'Target folder must be within config directory'}), 400)
+
+    return abs_source, abs_target_folder, None
+
+
+def _validate_relocate_paths(data):
+    """Validate source_path and target_folder from relocate request data.
+
+    Returns (source_path, target_folder, error_response).
+    error_response is None on success, or a (jsonify, status) tuple on failure.
+    """
+    source_path = data.get('source_path')
+    target_folder = data.get('target_folder')
+
+    if not source_path:
+        return None, None, (jsonify({'error': 'source_path is required'}), 400)
+    if not target_folder:
+        return None, None, (jsonify({'error': 'target_folder is required'}), 400)
+
+    return os.path.normpath(source_path), os.path.normpath(target_folder), None
+
+
+def _validate_relocate_file_exists(source_path, new_path):
+    """Validate that source exists, is a file, and target doesn't already exist.
+
+    Returns error_response (None on success, or a (jsonify, status) tuple on failure).
+    """
+    if not os.path.exists(source_path):
+        return (jsonify({'error': f'Source file not found: {source_path}'}), 404)
+    if not os.path.isfile(source_path):
+        return (jsonify({'error': f'Source is not a file: {source_path}'}), 400)
+    if os.path.exists(new_path):
+        return (jsonify({'error': f'Target file already exists: {new_path}'}), 400)
+    return None
+
+
+def _validate_relocate_folder_exists(source_path, target_folder, new_path):
+    """Validate that source exists, is a folder, target is valid, and doesn't already exist.
+
+    Returns error_response (None on success, or a (jsonify, status) tuple on failure).
+    """
+    if not os.path.exists(source_path):
+        return (jsonify({'error': f'Source folder not found: {source_path}'}), 404)
+    if not os.path.isdir(source_path):
+        return (jsonify({'error': f'Source is not a folder: {source_path}'}), 400)
+    if target_folder == source_path or target_folder.startswith(source_path + os.sep):
+        return (jsonify({'error': 'Cannot move folder into itself'}), 400)
+    if os.path.exists(new_path):
+        return (jsonify({'error': f'Target folder already exists: {new_path}'}), 400)
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Route handlers
+# ═══════════════════════════════════════════════════════════════════════
+
 @bp.route('/api/files')
 def api_files():
     """Get list of all .cfg files in the config directory."""
@@ -219,25 +300,10 @@ def api_move_file():
 
     The file will be moved when user clicks "Apply".
     """
-    # S-04: Validate BEFORE acquiring lock to prevent lock on validation failure
     data = request.get_json() or {}
-    source_path = data.get('sourcePath')
-    target_folder = data.get('targetFolder')
-
-    if not source_path:
-        return jsonify({'error': 'sourcePath required'}), 400
-    if not target_folder:
-        return jsonify({'error': 'targetFolder required'}), 400
-
-    # Security: ensure paths are within config directory
-    config_path = get_config_path()
-    abs_source = os.path.abspath(source_path)
-    abs_target_folder = os.path.abspath(target_folder)
-
-    if not abs_source.startswith(os.path.abspath(config_path)):
-        return jsonify({'error': 'Source path must be within config directory'}), 400
-    if not abs_target_folder.startswith(os.path.abspath(config_path)):
-        return jsonify({'error': 'Target folder must be within config directory'}), 400
+    abs_source, abs_target_folder, err = _validate_move_paths(data)
+    if err:
+        return err
 
     if not os.path.isfile(abs_source):
         return jsonify({'error': 'Source file does not exist'}), 404
@@ -279,25 +345,10 @@ def api_move_folder():
 
     The folder will be moved when user clicks "Apply".
     """
-    # S-04: Validate BEFORE acquiring lock to prevent lock on validation failure
     data = request.get_json() or {}
-    source_path = data.get('sourcePath')
-    target_folder = data.get('targetFolder')
-
-    if not source_path:
-        return jsonify({'error': 'sourcePath required'}), 400
-    if not target_folder:
-        return jsonify({'error': 'targetFolder required'}), 400
-
-    # Security: ensure paths are within config directory
-    config_path = get_config_path()
-    abs_source = os.path.abspath(source_path)
-    abs_target_folder = os.path.abspath(target_folder)
-
-    if not abs_source.startswith(os.path.abspath(config_path)):
-        return jsonify({'error': 'Source path must be within config directory'}), 400
-    if not abs_target_folder.startswith(os.path.abspath(config_path)):
-        return jsonify({'error': 'Target folder must be within config directory'}), 400
+    abs_source, abs_target_folder, err = _validate_move_paths(data)
+    if err:
+        return err
 
     if not os.path.isdir(abs_source):
         return jsonify({'error': 'Source folder does not exist'}), 404
@@ -339,30 +390,17 @@ def api_relocate_file():
         bm = get_backup_manager()
         data = request.get_json() or {}
 
-        source_path = data.get('source_path')
-        target_folder = data.get('target_folder')
-
-        if not source_path:
-            return jsonify({'error': 'source_path is required'}), 400
-        if not target_folder:
-            return jsonify({'error': 'target_folder is required'}), 400
-
-        # Validate and normalize paths
-        source_path = os.path.normpath(source_path)
-        target_folder = os.path.normpath(target_folder)
-
-        if not os.path.exists(source_path):
-            return jsonify({'error': f'Source file not found: {source_path}'}), 404
-
-        if not os.path.isfile(source_path):
-            return jsonify({'error': f'Source is not a file: {source_path}'}), 400
+        source_path, target_folder, err = _validate_relocate_paths(data)
+        if err:
+            return err
 
         # Calculate new path
         file_name = os.path.basename(source_path)
         new_path = os.path.join(target_folder, file_name)
 
-        if os.path.exists(new_path):
-            return jsonify({'error': f'Target file already exists: {new_path}'}), 400
+        err = _validate_relocate_file_exists(source_path, new_path)
+        if err:
+            return err
 
         with get_parser_for_modification() as p:
             # Create backup before moving
@@ -401,31 +439,11 @@ def api_relocate_folder():
         bm = get_backup_manager()
         data = request.get_json() or {}
 
-        source_path = data.get('source_path')
-        target_folder = data.get('target_folder')
+        source_path, target_folder, err = _validate_relocate_paths(data)
+        if err:
+            return err
 
         print(f"[folder-relocate] source_path: {source_path}, target_folder: {target_folder}")
-
-        if not source_path:
-            return jsonify({'error': 'source_path is required'}), 400
-        if not target_folder:
-            return jsonify({'error': 'target_folder is required'}), 400
-
-        # Validate and normalize paths
-        source_path = os.path.normpath(source_path)
-        target_folder = os.path.normpath(target_folder)
-
-        print(f"[folder-relocate] normalized - source: {source_path}, target: {target_folder}")
-
-        if not os.path.exists(source_path):
-            return jsonify({'error': f'Source folder not found: {source_path}'}), 404
-
-        if not os.path.isdir(source_path):
-            return jsonify({'error': f'Source is not a folder: {source_path}'}), 400
-
-        # Prevent moving folder into itself
-        if target_folder == source_path or target_folder.startswith(source_path + os.sep):
-            return jsonify({'error': 'Cannot move folder into itself'}), 400
 
         # Calculate new path
         folder_name = os.path.basename(source_path)
@@ -433,8 +451,9 @@ def api_relocate_folder():
 
         print(f"[folder-relocate] new_path: {new_path}")
 
-        if os.path.exists(new_path):
-            return jsonify({'error': f'Target folder already exists: {new_path}'}), 400
+        err = _validate_relocate_folder_exists(source_path, target_folder, new_path)
+        if err:
+            return err
 
         with get_parser_for_modification() as p:
             # Create backup before moving

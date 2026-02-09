@@ -4,6 +4,7 @@ Debug Routes - Development-only debugging endpoints.
 These endpoints are only active when Flask is running in debug mode.
 """
 
+import json
 import logging
 import os
 from logging.handlers import RotatingFileHandler
@@ -49,6 +50,50 @@ def _ensure_log_handler():
     logger.propagate = False
 
 
+def _format_message_part(msg):
+    """Format a single console message part to string."""
+    if isinstance(msg, str):
+        return msg
+    if msg is None:
+        return 'null'
+    if isinstance(msg, bool):
+        return 'true' if msg else 'false'
+    if isinstance(msg, (int, float)):
+        return str(msg)
+    if isinstance(msg, (dict, list)):
+        return _format_json_value(msg)
+    return str(msg)
+
+
+def _format_json_value(value):
+    """Format a dict or list as truncated JSON string."""
+    try:
+        s = json.dumps(value, default=str)
+        if len(s) > 500:
+            s = s[:500] + '...'
+        return s
+    except Exception:
+        return '[Object]' if isinstance(value, dict) else '[Array]'
+
+
+_LOG_LEVEL_MAP = {
+    'error': logging.ERROR,
+    'warn': logging.WARNING,
+    'warning': logging.WARNING,
+    'info': logging.INFO,
+    'debug': logging.DEBUG,
+    'log': logging.INFO,
+}
+
+
+def _extract_page_path(url):
+    """Extract just the path portion from a URL."""
+    page = url.split('?')[0].split('#')[0] if url else 'unknown'
+    if '://' in page:
+        page = '/' + '/'.join(page.split('/')[3:])
+    return page
+
+
 @debug_bp.before_request
 def check_debug_mode():
     """Block all debug endpoints unless Flask is in debug mode."""
@@ -79,64 +124,13 @@ def receive_console_log():
 
         level = data.get('level', 'log')
         messages = data.get('messages', [])
-        timestamp = data.get('timestamp', '')
         url = data.get('url', '')
 
-        # Format the message parts into a single string
-        formatted_parts = []
-        for msg in messages:
-            if isinstance(msg, str):
-                formatted_parts.append(msg)
-            elif msg is None:
-                formatted_parts.append('null')
-            elif isinstance(msg, bool):
-                formatted_parts.append('true' if msg else 'false')
-            elif isinstance(msg, (int, float)):
-                formatted_parts.append(str(msg))
-            elif isinstance(msg, dict):
-                # Truncate large objects
-                import json
-                try:
-                    s = json.dumps(msg, default=str)
-                    if len(s) > 500:
-                        s = s[:500] + '...'
-                    formatted_parts.append(s)
-                except Exception:
-                    formatted_parts.append('[Object]')
-            elif isinstance(msg, list):
-                import json
-                try:
-                    s = json.dumps(msg, default=str)
-                    if len(s) > 500:
-                        s = s[:500] + '...'
-                    formatted_parts.append(s)
-                except Exception:
-                    formatted_parts.append('[Array]')
-            else:
-                formatted_parts.append(str(msg))
-
-        message_str = ' '.join(formatted_parts)
-
-        # Extract just the path from URL for cleaner logs
-        page = url.split('?')[0].split('#')[0] if url else 'unknown'
-        if '://' in page:
-            page = '/' + '/'.join(page.split('/')[3:])
-
-        # Format: [FRONTEND:level] (page) message
+        message_str = ' '.join(_format_message_part(msg) for msg in messages)
+        page = _extract_page_path(url)
         log_prefix = f'[FRONTEND:{level.upper()}] ({page})'
+        log_level = _LOG_LEVEL_MAP.get(level.lower(), logging.INFO)
 
-        # Map frontend level to Python logging level
-        log_level_map = {
-            'error': logging.ERROR,
-            'warn': logging.WARNING,
-            'warning': logging.WARNING,
-            'info': logging.INFO,
-            'debug': logging.DEBUG,
-            'log': logging.INFO,
-        }
-        log_level = log_level_map.get(level.lower(), logging.INFO)
-
-        # Log to server
         logger.log(log_level, f'{log_prefix} {message_str}')
 
         return jsonify({'ok': True})

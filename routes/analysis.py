@@ -15,6 +15,1173 @@ from nagios_writer import NagiosConfigWriter
 
 bp = Blueprint('analysis', __name__)
 
+# --- Shared constants ---
+
+_RELATIONSHIP_FIELDS = {
+    'host_name': 'host',
+    'hostgroup_name': 'hostgroup',
+    'hostgroups': 'hostgroup',
+    'hostgroup_members': 'hostgroup',
+    'service_description': 'service',
+    'dependent_service_description': 'service',
+    'dependent_host_name': 'host',
+    'dependent_hostgroup_name': 'hostgroup',
+    'master_host_name': 'host',
+    'master_hostgroup_name': 'hostgroup',
+    'master_service_description': 'service',
+    'servicegroup_name': 'servicegroup',
+    'servicegroups': 'servicegroup',
+    'servicegroup_members': 'servicegroup',
+    'contact_name': 'contact',
+    'contacts': 'contact',
+    'contact_groups': 'contactgroup',
+    'contactgroup_name': 'contactgroup',
+    'contactgroup_members': 'contactgroup',
+    'escalation_contacts': 'contact',
+    'escalation_contact_groups': 'contactgroup',
+    'use': 'template',
+    'members': 'member',
+    'parents': 'host',
+    'check_command': 'command',
+    'event_handler': 'command',
+    'host_notification_commands': 'command',
+    'service_notification_commands': 'command',
+    'check_period': 'timeperiod',
+    'notification_period': 'timeperiod',
+    'host_notification_period': 'timeperiod',
+    'service_notification_period': 'timeperiod',
+    'escalation_period': 'timeperiod',
+    'dependency_period': 'timeperiod',
+    'exclude': 'timeperiod',
+}
+
+_TYPE_COLORS = {
+    'host': '#4CAF50',
+    'hostgroup': '#8BC34A',
+    'service': '#2196F3',
+    'servicegroup': '#03A9F4',
+    'contact': '#FF9800',
+    'contactgroup': '#FFC107',
+    'command': '#9C27B0',
+    'timeperiod': '#607D8B',
+    'servicedependency': '#E91E63',
+    'hostdependency': '#F44336',
+    'serviceescalation': '#00BCD4',
+    'hostescalation': '#009688',
+}
+
+_IDENTITY_FIELDS = {
+    'host': 'host_name',
+    'hostgroup': 'hostgroup_name',
+    'servicegroup': 'servicegroup_name',
+    'contact': 'contact_name',
+    'contactgroup': 'contactgroup_name',
+}
+
+_REVERSE_EDGE_FIELDS = {
+    'parents'  # Network topology: parent reaches child
+}
+
+_GROUPING_TYPE_WEIGHTS = {
+    'ip-subnet': 1.5,
+    'hostname-prefix': 1.3,
+    'hostname-suffix': 1.2,
+    'network-parent': 1.4,
+    'check-command': 1.0,
+    'common-services': 0.9,
+    'ungrouped': 0.5,
+}
+
+
+# ─────────────────────────────────────────────────────────────────────
+# api_dependencies helpers
+# ─────────────────────────────────────────────────────────────────────
+
+def _build_template_lookup(objects):
+    """Build a lookup of (object_type, template_name) -> obj."""
+    lookup = {}
+    for obj in objects:
+        template_name = obj.attributes.get('name')
+        if template_name:
+            lookup[(obj.object_type, template_name)] = obj
+    return lookup
+
+
+def _resolve_inherited_attributes(obj, template_lookup):
+    """Resolve attributes including inherited ones from templates."""
+    resolved = {}
+    use_templates = obj.attributes.get('use', '')
+    if use_templates:
+        for tmpl_name in [t.strip() for t in use_templates.split(',') if t.strip()]:
+            tmpl = template_lookup.get((obj.object_type, tmpl_name))
+            if tmpl:
+                tmpl_attrs = _resolve_inherited_attributes(tmpl, template_lookup)
+                for key, value in tmpl_attrs.items():
+                    if key not in ['use', 'name', 'register']:
+                        resolved[key] = value
+    for key, value in obj.attributes.items():
+        resolved[key] = value
+    return resolved
+
+
+def _build_template_names_set(objects):
+    """Build set of (object_type, name) for template objects."""
+    template_names = set()
+    for obj in objects:
+        if obj.attributes.get('register', '1') == '0':
+            obj_name = obj.attributes.get('name')
+            if obj_name:
+                template_names.add((obj.object_type, obj_name))
+    return template_names
+
+
+def _make_service_node_id(obj):
+    """Compute the node ID for a service object."""
+    target = obj.attributes.get('hostgroup_name') or obj.attributes.get('host_name', '')
+    target = ','.join([t.strip().lstrip('+').strip() for t in target.split(',')
+                       if not t.strip().startswith('!')])
+    if target:
+        return f"service:{target}:{obj.get_name()}"
+    return f"service:{obj.get_name()}"
+
+
+def _add_or_update_node(obj, node_id, template_names, graph_state):
+    """Add a new node or update an existing one for an object.
+
+    graph_state is a dict with keys: nodes, node_ids, defined_node_ids.
+    """
+    nodes = graph_state['nodes']
+    node_ids = graph_state['node_ids']
+
+    if node_id not in node_ids:
+        is_template = (obj.object_type, obj.get_name()) in template_names
+        node_data = {
+            'id': node_id,
+            'label': obj.get_name(),
+            'type': obj.object_type,
+            'color': _TYPE_COLORS.get(obj.object_type, '#999999'),
+            'exists': True
+        }
+        if is_template:
+            node_data['is_template'] = True
+        nodes.append(node_data)
+        node_ids.add(node_id)
+    else:
+        for existing_node in nodes:
+            if existing_node['id'] == node_id:
+                existing_node['exists'] = True
+                if (obj.object_type, obj.get_name()) in template_names:
+                    existing_node['is_template'] = True
+                break
+    graph_state['defined_node_ids'].add(node_id)
+
+
+def _parse_relationship_targets(field, target_type, raw_value):
+    """Parse the target values from a relationship field value."""
+    if target_type == 'command':
+        command_name = raw_value.split('!')[0].strip()
+        return [command_name] if command_name else []
+    return [t.strip().lstrip('+').strip() for t in raw_value.split(',')
+            if t.strip() and not t.strip().startswith('!')]
+
+
+def _compute_target_node_id(field, target_type, target, obj, resolved_attrs):
+    """Compute the node ID for a relationship target."""
+    if target_type == 'template':
+        t_type = obj.object_type
+    elif target_type == 'member':
+        t_type = obj.object_type.replace('group', '')
+    else:
+        t_type = target_type
+
+    if t_type == 'service' and field in ('service_description', 'dependent_service_description'):
+        if field == 'dependent_service_description':
+            svc_context = resolved_attrs.get('dependent_hostgroup_name') or resolved_attrs.get('dependent_host_name', '')
+        else:
+            svc_context = resolved_attrs.get('hostgroup_name') or resolved_attrs.get('host_name', '')
+        svc_context = ','.join([t.strip().lstrip('+').strip() for t in svc_context.split(',')
+                                if not t.strip().startswith('!')])
+        if svc_context:
+            return f"service:{svc_context}:{target}", t_type
+        return f"service:{target}", t_type
+
+    return f"{t_type}:{target}", t_type
+
+
+def _process_obj_relationships(obj, node_id, resolved_attrs, graph_state):
+    """Process all relationship fields for one object, adding edges and target nodes.
+
+    graph_state is a dict with keys: nodes, node_ids, edges.
+    """
+    nodes = graph_state['nodes']
+    node_ids = graph_state['node_ids']
+    edges = graph_state['edges']
+
+    for field, target_type in _RELATIONSHIP_FIELDS.items():
+        if field not in resolved_attrs:
+            continue
+        if _IDENTITY_FIELDS.get(obj.object_type) == field:
+            continue
+
+        raw_value = resolved_attrs[field]
+        targets = _parse_relationship_targets(field, target_type, raw_value)
+
+        for target in targets:
+            if not target:
+                continue
+            target_id, t_type = _compute_target_node_id(field, target_type, target, obj, resolved_attrs)
+            if target_id == node_id:
+                continue
+
+            if target_id not in node_ids:
+                nodes.append({
+                    'id': target_id,
+                    'label': target,
+                    'type': t_type,
+                    'color': _TYPE_COLORS.get(t_type, '#999999'),
+                    'exists': False
+                })
+                node_ids.add(target_id)
+
+            if field in _REVERSE_EDGE_FIELDS:
+                edges.append({'from': target_id, 'to': node_id, 'label': field, 'arrows': 'to'})
+            else:
+                edges.append({'from': node_id, 'to': target_id, 'label': field, 'arrows': 'to'})
+
+
+# ─────────────────────────────────────────────────────────────────────
+# api_smart_grouping_suggest helpers
+# ─────────────────────────────────────────────────────────────────────
+
+def _collect_subnet_suggestions(hosts, existing_groups):
+    """Collect suggestions based on IP subnet grouping."""
+    subnet_groups = defaultdict(list)
+    for host in hosts:
+        addr = host.attributes.get('address', '')
+        if addr and '.' in addr:
+            parts = addr.rsplit('.', 1)
+            if len(parts) == 2:
+                subnet_groups[parts[0]].append(host.get_name())
+
+    suggestions = []
+    for subnet, members in subnet_groups.items():
+        if len(members) >= 3:
+            suggested_name = f"subnet-{subnet.replace('.', '-')}"
+            if suggested_name.lower() not in existing_groups:
+                suggestions.append({
+                    'type': 'ip-subnet',
+                    'name': suggested_name,
+                    'description': f'Hosts in {subnet}.0/24 subnet',
+                    'members': sorted(members),
+                    'count': len(members),
+                    'pattern': f'{subnet}.x'
+                })
+    return suggestions
+
+
+def _collect_prefix_suggestions(hosts, existing_groups):
+    """Collect suggestions based on hostname prefix grouping."""
+    prefix_groups = defaultdict(list)
+    for host in hosts:
+        name = host.get_name()
+        if name and '-' in name:
+            prefix_groups[name.split('-')[0]].append(name)
+
+    suggestions = []
+    for prefix, members in prefix_groups.items():
+        if len(members) >= 3:
+            suggested_name = f"{prefix}-servers"
+            if suggested_name.lower() not in existing_groups:
+                suggestions.append({
+                    'type': 'hostname-prefix',
+                    'name': suggested_name,
+                    'description': f'Hosts with prefix "{prefix}-"',
+                    'members': sorted(members),
+                    'count': len(members),
+                    'pattern': f'{prefix}-*'
+                })
+    return suggestions
+
+
+def _collect_suffix_suggestions(hosts, existing_groups):
+    """Collect suggestions based on hostname suffix grouping."""
+    suffix_groups = defaultdict(list)
+    for host in hosts:
+        name = host.get_name()
+        if name and '-' in name:
+            suffix_groups[name.split('-')[-1]].append(name)
+
+    suggestions = []
+    for suffix, members in suffix_groups.items():
+        if len(members) >= 3:
+            suggested_name = f"{suffix}-systems"
+            if suggested_name.lower() not in existing_groups:
+                suggestions.append({
+                    'type': 'hostname-suffix',
+                    'name': suggested_name,
+                    'description': f'Hosts with suffix "-{suffix}"',
+                    'members': sorted(members),
+                    'count': len(members),
+                    'pattern': f'*-{suffix}'
+                })
+    return suggestions
+
+
+def _collect_command_suggestions(hosts, existing_groups):
+    """Collect suggestions based on check command grouping."""
+    command_groups = defaultdict(list)
+    for host in hosts:
+        name = host.get_name()
+        check_cmd = host.attributes.get('check_command', '')
+        if name and check_cmd:
+            command_groups[check_cmd.split('!')[0]].append(name)
+
+    suggestions = []
+    for cmd, members in command_groups.items():
+        if len(members) >= 3:
+            suggested_name = f"{cmd.replace('check_', '').replace('check-', '')}-checked"
+            if suggested_name.lower() not in existing_groups:
+                suggestions.append({
+                    'type': 'check-command',
+                    'name': suggested_name,
+                    'description': f'Hosts using check command "{cmd}"',
+                    'members': sorted(members),
+                    'count': len(members),
+                    'pattern': cmd
+                })
+    return suggestions
+
+
+def _collect_parent_suggestions(hosts, existing_groups):
+    """Collect suggestions based on network parent grouping."""
+    parent_groups = defaultdict(list)
+    for host in hosts:
+        name = host.get_name()
+        parents = host.attributes.get('parents', '')
+        if name and parents:
+            for parent in parents.split(','):
+                parent = parent.strip()
+                if parent:
+                    parent_groups[parent].append(name)
+
+    suggestions = []
+    for parent, members in parent_groups.items():
+        if len(members) >= 2:
+            suggested_name = f"behind-{parent}"
+            if suggested_name.lower() not in existing_groups:
+                suggestions.append({
+                    'type': 'network-parent',
+                    'name': suggested_name,
+                    'description': f'Hosts behind "{parent}"',
+                    'members': sorted(members),
+                    'count': len(members),
+                    'pattern': f'parents={parent}'
+                })
+    return suggestions
+
+
+def _find_ungrouped_hosts(hosts, service_objects):
+    """Find hosts not in any hostgroup and return as a suggestion (or empty list)."""
+    hosts_in_groups = set()
+    for obj in service_objects:
+        if obj.object_type == 'hostgroup':
+            members = obj.attributes.get('members', '')
+            for m in members.split(','):
+                m = m.strip()
+                if m.startswith('!'):
+                    continue
+                m = m.lstrip('+').strip()
+                if m:
+                    hosts_in_groups.add(m)
+
+    for host in hosts:
+        if 'hostgroups' in host.attributes:
+            hosts_in_groups.add(host.get_name())
+
+    ungrouped = [h.get_name() for h in hosts if h.get_name() and h.get_name() not in hosts_in_groups]
+    if len(ungrouped) >= 2:
+        return [{
+            'type': 'ungrouped',
+            'name': 'ungrouped-hosts',
+            'description': 'Hosts not currently in any hostgroup',
+            'members': sorted(ungrouped),
+            'count': len(ungrouped),
+            'pattern': 'No hostgroup membership'
+        }]
+    return []
+
+
+def _score_and_rank_suggestions(suggestions):
+    """Compute confidence scores and overlap info for suggestions."""
+    host_suggestion_counts = defaultdict(int)
+    for suggestion in suggestions:
+        for member in suggestion['members']:
+            host_suggestion_counts[member] += 1
+
+    for suggestion in suggestions:
+        base_score = suggestion['count']
+        type_weight = _GROUPING_TYPE_WEIGHTS.get(suggestion['type'], 1.0)
+        overlap_bonus = sum(0.1 for m in suggestion['members'] if host_suggestion_counts[m] > 1)
+        overlap_bonus = min(overlap_bonus, suggestion['count'] * 0.3)
+        suggestion['confidence'] = round((base_score * type_weight) + overlap_bonus, 2)
+
+        overlap_types = set()
+        for other in suggestions:
+            if other is not suggestion:
+                shared = set(suggestion['members']) & set(other['members'])
+                if len(shared) >= 2:
+                    overlap_types.add(other['type'])
+        suggestion['overlaps_with'] = list(overlap_types)
+
+    suggestions.sort(key=lambda x: x['confidence'], reverse=True)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# api_smart_grouping_create helpers
+# ─────────────────────────────────────────────────────────────────────
+
+def _find_hostgroup_target_file(objects, config_path):
+    """Find the best target file for a new hostgroup."""
+    for obj in objects:
+        if obj.object_type == 'hostgroup':
+            return obj.source_file
+    for obj in objects:
+        if obj.object_type == 'host':
+            return obj.source_file.replace('.cfg', '-hostgroups.cfg')
+    return os.path.join(config_path, 'hostgroups.cfg')
+
+
+# ─────────────────────────────────────────────────────────────────────
+# api_add_to_group helpers
+# ─────────────────────────────────────────────────────────────────────
+
+def _merge_hosts_into_member_list(hosts_to_add, current_list):
+    """Add hosts to member list, skipping duplicates. Returns (updated_list, added_count)."""
+    current_normalized = [m.lstrip('+!').strip() for m in current_list]
+    added_count = 0
+    for host in hosts_to_add:
+        if host not in current_normalized:
+            current_list.append(host)
+            current_normalized.append(host)
+            added_count += 1
+    return current_list, added_count
+
+
+def _update_host_hostgroups_attr(hosts_to_add, group_name, objects):
+    """Update the hostgroups attribute on each host object to include the group."""
+    for host_name in hosts_to_add:
+        for obj in objects:
+            if obj.object_type == 'host' and obj.get_name() == host_name:
+                current_hostgroups = obj.attributes.get('hostgroups', '')
+                hostgroups_list = [hg.strip() for hg in current_hostgroups.split(',') if hg.strip()]
+                hostgroups_normalized = [hg.lstrip('+!').strip() for hg in hostgroups_list]
+                if group_name not in hostgroups_normalized:
+                    hostgroups_list.append(group_name)
+                    obj.attributes['hostgroups'] = ','.join(hostgroups_list)
+                    print(f"[add-to-group] Updated host {host_name} hostgroups: {obj.attributes['hostgroups']}")
+                break
+
+
+# ─────────────────────────────────────────────────────────────────────
+# get_template_issues helpers
+# ─────────────────────────────────────────────────────────────────────
+
+def _build_template_index(objects):
+    """Build templates_by_type dict and all_templates set."""
+    templates_by_type = {}
+    all_templates = set()
+    for obj in objects:
+        if obj.attributes.get('register', '1') == '0':
+            obj_type = obj.object_type
+            if obj_type not in templates_by_type:
+                templates_by_type[obj_type] = {}
+            name = obj.attributes.get('name')
+            if name:
+                templates_by_type[obj_type][name] = obj
+                all_templates.add((obj_type, name))
+    return templates_by_type, all_templates
+
+
+def _find_invalid_use_refs(objects, templates_by_type):
+    """Find objects referencing non-existent templates. Returns (issues, referenced_templates)."""
+    issues = []
+    referenced_templates = set()
+    for obj in objects:
+        use_value = obj.attributes.get('use', '')
+        if not use_value:
+            continue
+        obj_type = obj.object_type
+        for tmpl_name in [t.strip() for t in use_value.split(',') if t.strip()]:
+            referenced_templates.add((obj_type, tmpl_name))
+            if obj_type not in templates_by_type or tmpl_name not in templates_by_type[obj_type]:
+                issues.append({
+                    'object_name': obj.get_name(),
+                    'object_type': obj_type,
+                    'source_file': obj.source_file,
+                    'template_name': tmpl_name,
+                    'message': f"{obj_type.capitalize()} '{obj.get_name()}' references unknown template '{tmpl_name}'"
+                })
+    return issues, referenced_templates
+
+
+def _get_template_chain(templates_by_type, obj_type, tmpl_name, visited=None):
+    """Iteratively get all templates in chain to avoid recursion limits."""
+    if visited is None:
+        visited = set()
+    chain = []
+    stack = [(obj_type, tmpl_name)]
+    while stack:
+        curr_type, curr_name = stack.pop()
+        if (curr_type, curr_name) in visited:
+            continue
+        visited.add((curr_type, curr_name))
+        chain.append((curr_type, curr_name))
+        if curr_type in templates_by_type and curr_name in templates_by_type[curr_type]:
+            tmpl_obj = templates_by_type[curr_type][curr_name]
+            use_value = tmpl_obj.attributes.get('use', '')
+            if use_value:
+                for parent_name in [t.strip() for t in use_value.split(',') if t.strip()]:
+                    stack.append((curr_type, parent_name))
+    return chain
+
+
+def _detect_template_cycles(templates_by_type, all_templates):
+    """Detect circular template dependencies using DFS with path tracking."""
+    WHITE, GRAY, BLACK = 0, 1, 2
+    color = {}
+    cycles = []
+
+    def dfs(node, path):
+        if color.get(node) == BLACK:
+            return
+        if color.get(node) == GRAY:
+            cycle_start = path.index(node)
+            cycles.append(path[cycle_start:] + [node])
+            return
+        color[node] = GRAY
+        path.append(node)
+        obj_type, tmpl_name = node
+        if obj_type in templates_by_type and tmpl_name in templates_by_type[obj_type]:
+            tmpl_obj = templates_by_type[obj_type][tmpl_name]
+            use_value = tmpl_obj.attributes.get('use', '')
+            if use_value:
+                for parent_name in [t.strip() for t in use_value.split(',') if t.strip()]:
+                    parent_node = (obj_type, parent_name)
+                    if obj_type in templates_by_type and parent_name in templates_by_type[obj_type]:
+                        dfs(parent_node, path)
+        path.pop()
+        color[node] = BLACK
+
+    for node in all_templates:
+        if color.get(node) == WHITE or node not in color:
+            dfs(node, [])
+    return cycles
+
+
+def _format_cycle_issues(detected_cycles):
+    """Convert raw cycle data into issue dicts, deduplicating."""
+    issues = []
+    seen_cycles = set()
+    for cycle in detected_cycles:
+        cycle_key = tuple(sorted(cycle[:-1]))
+        if cycle_key not in seen_cycles:
+            seen_cycles.add(cycle_key)
+            cycle_names = [name for _, name in cycle]
+            issues.append({
+                'cycle': cycle_names,
+                'object_type': cycle[0][0],
+                'message': f"Circular template inheritance: {' -> '.join(cycle_names)}"
+            })
+    return issues
+
+
+def _find_unused_templates(all_templates, referenced_templates, templates_by_type):
+    """Find templates not referenced by any object (directly or transitively)."""
+    indirect_refs = set()
+    for obj_type, tmpl_name in referenced_templates:
+        chain = _get_template_chain(templates_by_type, obj_type, tmpl_name)
+        indirect_refs.update(chain)
+    all_refs = referenced_templates | indirect_refs
+
+    issues = []
+    for obj_type, tmpl_name in all_templates:
+        if (obj_type, tmpl_name) not in all_refs:
+            issues.append({
+                'template_name': tmpl_name,
+                'object_type': obj_type,
+                'message': f"Template '{tmpl_name}' is not used by any {obj_type}"
+            })
+    return issues
+
+
+# ─────────────────────────────────────────────────────────────────────
+# api_escalation_path helpers
+# ─────────────────────────────────────────────────────────────────────
+
+def _find_escalation_target(objects, object_type, name, service_desc):
+    """Find the target host or service object."""
+    for obj in objects:
+        if object_type == 'host':
+            if obj.object_type == 'host' and obj.get_name() == name:
+                return obj
+        elif object_type == 'service' and service_desc:
+            if obj.object_type == 'service':
+                host_attr = obj.attributes.get('host_name', '')
+                svc_desc = obj.attributes.get('service_description', '')
+                if name in [h.strip() for h in host_attr.split(',')] and svc_desc == service_desc:
+                    return obj
+    return None
+
+
+def _build_escalation_lookups(objects):
+    """Build template, contact, and contactgroup lookups."""
+    template_lookup = {}
+    contact_objects = {}
+    cg_objects = {}
+    for obj in objects:
+        tmpl_name = obj.attributes.get('name')
+        if tmpl_name:
+            template_lookup[(obj.object_type, tmpl_name)] = obj
+        if obj.object_type == 'contact' and obj.attributes.get('register', '1') != '0':
+            contact_objects[obj.attributes.get('contact_name', '')] = obj
+        elif obj.object_type == 'contactgroup':
+            cg_objects[obj.attributes.get('contactgroup_name', '')] = obj
+    return template_lookup, contact_objects, cg_objects
+
+
+def _resolve_attrs_with_templates(obj, template_lookup, visited=None):
+    """Resolve an object's attributes including inherited ones from templates."""
+    if visited is None:
+        visited = set()
+    resolved = {}
+    use_templates = obj.attributes.get('use', '')
+    if use_templates:
+        for t in [t.strip() for t in use_templates.split(',') if t.strip()]:
+            if t not in visited:
+                visited.add(t)
+                tmpl = template_lookup.get((obj.object_type, t))
+                if tmpl:
+                    for k, v in _resolve_attrs_with_templates(tmpl, template_lookup, visited).items():
+                        if k not in ('use', 'name', 'register'):
+                            resolved[k] = v
+    for k, v in obj.attributes.items():
+        resolved[k] = v
+    return resolved
+
+
+def _resolve_cg_members(cg_name, cg_objects):
+    """Resolve contactgroup to individual contact names."""
+    cg = cg_objects.get(cg_name)
+    if not cg:
+        return []
+    members = []
+    if 'members' in cg.attributes:
+        members.extend([m.strip() for m in cg.attributes['members'].split(',') if m.strip()])
+    return members
+
+
+def _get_contact_info(cname, contact_objects, template_lookup):
+    """Get contact notification info."""
+    cobj = contact_objects.get(cname)
+    if not cobj:
+        return {'name': cname, 'exists': False}
+    resolved = _resolve_attrs_with_templates(cobj, template_lookup)
+    return {
+        'name': cname,
+        'exists': True,
+        'host_notification_commands': resolved.get('host_notification_commands', ''),
+        'service_notification_commands': resolved.get('service_notification_commands', ''),
+        'host_notification_period': resolved.get('host_notification_period', ''),
+        'service_notification_period': resolved.get('service_notification_period', ''),
+    }
+
+
+def _resolve_base_contacts(resolved_target, cg_objects, contact_objects, template_lookup):
+    """Resolve the base contacts for a target object."""
+    base_contact_names = set()
+    if 'contacts' in resolved_target:
+        for c in resolved_target['contacts'].split(','):
+            c = c.strip().lstrip('+!')
+            if c:
+                base_contact_names.add(c)
+    if 'contact_groups' in resolved_target:
+        for cg in resolved_target['contact_groups'].split(','):
+            cg = cg.strip().lstrip('+!')
+            for m in _resolve_cg_members(cg, cg_objects):
+                base_contact_names.add(m)
+    return [_get_contact_info(c, contact_objects, template_lookup) for c in sorted(base_contact_names)]
+
+
+def _escalation_matches_target(obj, object_type, name, service_desc):
+    """Check if an escalation object matches the target host/service."""
+    if object_type == 'host':
+        esc_hosts = obj.attributes.get('host_name', '')
+        return name in [h.strip() for h in esc_hosts.split(',')]
+    esc_hosts = obj.attributes.get('host_name', '')
+    esc_svc = obj.attributes.get('service_description', '')
+    if service_desc and esc_svc == service_desc:
+        return name in [h.strip() for h in esc_hosts.split(',')]
+    return False
+
+
+def _collect_escalation_contacts(obj, cg_objects):
+    """Collect all contact names from an escalation object."""
+    esc_contact_names = set()
+    if 'contact_groups' in obj.attributes:
+        for cg in obj.attributes['contact_groups'].split(','):
+            for m in _resolve_cg_members(cg.strip(), cg_objects):
+                esc_contact_names.add(m)
+    if 'contacts' in obj.attributes:
+        for c in obj.attributes['contacts'].split(','):
+            c = c.strip()
+            if c:
+                esc_contact_names.add(c)
+    return esc_contact_names
+
+
+def _find_matching_escalations(objects, object_type, name, service_desc, lookups):
+    """Find all escalations matching target, return sorted list.
+
+    lookups is a dict with keys: cg_objects, contact_objects, template_lookup.
+    """
+    cg_objects = lookups['cg_objects']
+    contact_objects = lookups['contact_objects']
+    template_lookup = lookups['template_lookup']
+
+    esc_type = 'hostescalation' if object_type == 'host' else 'serviceescalation'
+    escalations = []
+    for obj in objects:
+        if obj.object_type != esc_type:
+            continue
+        if not _escalation_matches_target(obj, object_type, name, service_desc):
+            continue
+        esc_contact_names = _collect_escalation_contacts(obj, cg_objects)
+        escalations.append({
+            'first_notification': int(obj.attributes.get('first_notification', 0)),
+            'last_notification': int(obj.attributes.get('last_notification', 0)),
+            'notification_interval': int(obj.attributes.get('notification_interval', 0)),
+            'escalation_period': obj.attributes.get('escalation_period', ''),
+            'contacts': [_get_contact_info(c, contact_objects, template_lookup) for c in sorted(esc_contact_names)],
+            'source_file': obj.source_file,
+        })
+    escalations.sort(key=lambda e: e['first_notification'])
+    return escalations
+
+
+# ─────────────────────────────────────────────────────────────────────
+# api_object_references helpers
+# ─────────────────────────────────────────────────────────────────────
+
+def _strip_prefix(s):
+    """Strip leading whitespace, '+', '!' from a value."""
+    return s.strip().lstrip('+!').strip()
+
+
+_COMMAND_FIELDS = [
+    'check_command', 'event_handler', 'notification_commands',
+    'host_notification_commands', 'service_notification_commands',
+    'obsess_over_host_command', 'obsess_over_service_command',
+    'global_host_event_handler', 'global_service_event_handler'
+]
+
+
+def _obj_summary(o, idx):
+    """Return a summary dict for an object."""
+    return {
+        'global_index': idx,
+        'object_type': o.object_type,
+        'name': o.get_name() or o.get_display_name(),
+        'file': o.source_file,
+    }
+
+
+def _collect_outgoing_refs(obj, global_index, objects, reference_fields):
+    """Collect outgoing references from obj to other objects."""
+    outgoing = []
+    for field, ref_type in reference_fields.items():
+        val = obj.attributes.get(field)
+        if not val:
+            continue
+        actual_type = ref_type if ref_type else obj.object_type
+        for v in val.split(','):
+            v = _strip_prefix(v)
+            if not v or v == '*':
+                continue
+            lookup_val = v.split('!')[0] if field in _COMMAND_FIELDS else v
+            for idx, o in enumerate(objects):
+                if o.object_type != actual_type:
+                    continue
+                o_name = o.get_name() or o.get_display_name()
+                o_template = o.attributes.get('name')
+                if o_name == lookup_val or o_template == lookup_val:
+                    if idx != global_index:
+                        outgoing.append({**_obj_summary(o, idx), 'field': field})
+                    break
+    return outgoing
+
+
+def _collect_incoming_refs(obj, obj_identity, global_index, objects, reference_fields):
+    """Collect incoming references from other objects to obj.
+
+    obj_identity is a dict with keys: name, template_name.
+    """
+    obj_name = obj_identity['name']
+    obj_template_name = obj_identity['template_name']
+
+    incoming = []
+    for idx, o in enumerate(objects):
+        if idx == global_index:
+            continue
+        for field, ref_type in reference_fields.items():
+            val = o.attributes.get(field)
+            if not val:
+                continue
+            actual_type = ref_type if ref_type else o.object_type
+            is_escalation_ref = (
+                o.object_type in ('hostescalation', 'serviceescalation') and
+                obj.object_type in ('contact', 'contactgroup') and
+                field in ('escalation_contacts', 'escalation_contact_groups', 'contacts', 'contact_groups')
+            )
+            if actual_type != obj.object_type and ref_type is not None and not is_escalation_ref:
+                continue
+            values = [_strip_prefix(v) for v in val.split(',')]
+            if field in _COMMAND_FIELDS:
+                values = [v.split('!')[0] if '!' in v else v for v in values]
+            if obj_name in values or (obj_template_name and obj_template_name in values):
+                incoming.append({**_obj_summary(o, idx), 'field': field})
+    return incoming
+
+
+def _collect_host_dependency_rules(obj_name, global_index, objects):
+    """Collect dependency rules for a host object."""
+    outgoing = []
+    incoming = []
+    for idx, o in enumerate(objects):
+        if o.object_type != 'hostdependency':
+            continue
+        master_hosts = [h.strip() for h in o.attributes.get('host_name', '').split(',') if h.strip()]
+        dependent_hosts = [h.strip() for h in o.attributes.get('dependent_host_name', '').split(',') if h.strip()]
+        if obj_name in master_hosts:
+            outgoing.append({
+                **_obj_summary(o, idx), 'field': 'dependency_rule',
+                'is_dependency_rule': True, 'role': 'master_of',
+            })
+        if obj_name in dependent_hosts:
+            incoming.append({
+                **_obj_summary(o, idx), 'field': 'dependency_rule',
+                'is_dependency_rule': True, 'role': 'dependent_of',
+            })
+    return outgoing, incoming
+
+
+def _collect_service_dependency_rules(obj_name, host_name, objects):
+    """Collect dependency rules for a service object."""
+    outgoing = []
+    incoming = []
+    for idx, o in enumerate(objects):
+        if o.object_type != 'servicedependency':
+            continue
+        master_svc = o.attributes.get('service_description', '')
+        master_hosts = [h.strip() for h in o.attributes.get('host_name', '').split(',') if h.strip()]
+        dep_svc = o.attributes.get('dependent_service_description', '')
+        dep_hosts = [h.strip() for h in o.attributes.get('dependent_host_name', '').split(',') if h.strip()]
+        if master_svc == obj_name and (not master_hosts or host_name in master_hosts):
+            outgoing.append({
+                **_obj_summary(o, idx), 'field': 'dependency_rule',
+                'is_dependency_rule': True, 'role': 'master_of',
+            })
+        if dep_svc == obj_name and (not dep_hosts or host_name in dep_hosts):
+            incoming.append({
+                **_obj_summary(o, idx), 'field': 'dependency_rule',
+                'is_dependency_rule': True, 'role': 'dependent_of',
+            })
+    return outgoing, incoming
+
+
+def _is_host_in_hostgroup(host_name, hostgroup_name, objects, visited=None):
+    """Check if a host belongs to a hostgroup (directly or via nesting)."""
+    if visited is None:
+        visited = set()
+    if hostgroup_name in visited:
+        return False
+    visited.add(hostgroup_name)
+    for o in objects:
+        if o.object_type != 'hostgroup':
+            continue
+        if (o.get_name() or '') != hostgroup_name:
+            continue
+        members = [m.strip() for m in o.attributes.get('members', '').split(',') if m.strip()]
+        if host_name in members:
+            return True
+        if _host_in_group_via_attr(host_name, hostgroup_name, objects):
+            return True
+        nested = [g.strip().lstrip('+!').strip() for g in o.attributes.get('hostgroup_members', '').split(',') if g.strip()]
+        for ng in nested:
+            if _is_host_in_hostgroup(host_name, ng, objects, visited):
+                return True
+    return False
+
+
+def _host_in_group_via_attr(host_name, hostgroup_name, objects):
+    """Check if a host has the hostgroup in its hostgroups attribute."""
+    for ho in objects:
+        if ho.object_type == 'host' and (ho.get_name() or '') == host_name:
+            hgs = [g.strip().lstrip('+!').strip() for g in ho.attributes.get('hostgroups', '').split(',') if g.strip()]
+            return hostgroup_name in hgs
+    return False
+
+
+def _collect_host_escalation_rules(obj_name, objects):
+    """Collect escalation rules that apply to a host."""
+    incoming = []
+    for idx, o in enumerate(objects):
+        if o.object_type != 'hostescalation':
+            continue
+        esc_host = o.attributes.get('host_name', '')
+        esc_hg = o.attributes.get('hostgroup_name', '')
+        if esc_host and obj_name in [h.strip() for h in esc_host.split(',')]:
+            incoming.append({**_obj_summary(o, idx), 'field': 'escalation_rule', 'is_escalation_rule': True})
+        elif esc_hg:
+            for g in [g.strip() for g in esc_hg.split(',') if g.strip()]:
+                if _is_host_in_hostgroup(obj_name, g, objects):
+                    incoming.append({**_obj_summary(o, idx), 'field': 'escalation_rule', 'is_escalation_rule': True})
+                    break
+    return incoming
+
+
+def _collect_service_escalation_rules(obj_name, host_name, objects):
+    """Collect escalation rules that apply to a service."""
+    incoming = []
+    for idx, o in enumerate(objects):
+        if o.object_type != 'serviceescalation':
+            continue
+        esc_svc = o.attributes.get('service_description', '')
+        esc_host = o.attributes.get('host_name', '')
+        esc_hg = o.attributes.get('hostgroup_name', '')
+        if not esc_svc or obj_name not in [s.strip() for s in esc_svc.split(',')]:
+            continue
+        if _service_escalation_matches(host_name, esc_host, esc_hg, objects):
+            incoming.append({**_obj_summary(o, idx), 'field': 'escalation_rule', 'is_escalation_rule': True})
+    return incoming
+
+
+def _service_escalation_matches(host_name, esc_host, esc_hg, objects):
+    """Check if a service escalation matches via host_name, hostgroup, or wildcard."""
+    if esc_host and host_name in [h.strip() for h in esc_host.split(',')]:
+        return True
+    if esc_hg:
+        for g in [g.strip() for g in esc_hg.split(',') if g.strip()]:
+            if _is_host_in_hostgroup(host_name, g, objects):
+                return True
+        return False
+    if not esc_host and not esc_hg:
+        return True
+    return False
+
+
+def _collect_hostgroup_service_bindings(obj_name, objects):
+    """Collect services bound to a hostgroup."""
+    incoming = []
+    for idx, o in enumerate(objects):
+        if o.object_type != 'service':
+            continue
+        hg_name = o.attributes.get('hostgroup_name', '')
+        if hg_name:
+            groups = [g.strip().lstrip('+!').strip() for g in hg_name.split(',')]
+            if obj_name in groups:
+                incoming.append({**_obj_summary(o, idx), 'field': 'hostgroup_name', 'is_service_binding': True})
+    return incoming
+
+
+def _collect_host_service_bindings_via_hostgroup(obj_name, objects):
+    """Collect services bound to a host via hostgroup_name (no direct host_name)."""
+    incoming = []
+    for idx, o in enumerate(objects):
+        if o.object_type != 'service':
+            continue
+        if o.attributes.get('host_name'):
+            continue
+        hg_name = o.attributes.get('hostgroup_name', '')
+        if hg_name:
+            for g in [g.strip().lstrip('+!').strip() for g in hg_name.split(',') if g.strip()]:
+                if _is_host_in_hostgroup(obj_name, g, objects):
+                    incoming.append({**_obj_summary(o, idx), 'field': 'hostgroup_name', 'is_service_binding': True, 'via_group': g})
+                    break
+    return incoming
+
+
+def _collect_group_members(obj, obj_name, global_index, objects):
+    """Collect members for a group or template object."""
+    if obj.object_type == 'hostgroup':
+        return _collect_hostgroup_members(obj, obj_name, objects)
+    if obj.object_type == 'contactgroup':
+        return _collect_contactgroup_members(obj, obj_name, objects)
+    if obj.object_type == 'servicegroup':
+        return _collect_servicegroup_members(obj, obj_name, objects)
+    if obj.attributes.get('register', '1') == '0':
+        return _collect_template_inheritors(obj, global_index, objects)
+    return []
+
+
+def _collect_hostgroup_members(obj, obj_name, objects):
+    """Collect host members of a hostgroup."""
+    direct = [m.strip() for m in obj.attributes.get('members', '').split(',') if m.strip()]
+    members = []
+    for idx, o in enumerate(objects):
+        if o.object_type != 'host':
+            continue
+        h_name = o.get_name() or ''
+        if h_name in direct:
+            members.append({**_obj_summary(o, idx), 'via': 'members'})
+        else:
+            hgs = [g.strip().lstrip('+!').strip() for g in o.attributes.get('hostgroups', '').split(',') if g.strip()]
+            if obj_name in hgs:
+                members.append({**_obj_summary(o, idx), 'via': 'hostgroups attr'})
+    return members
+
+
+def _collect_contactgroup_members(obj, obj_name, objects):
+    """Collect contact members of a contactgroup."""
+    direct = [m.strip().lstrip('+!').strip() for m in obj.attributes.get('members', '').split(',') if m.strip()]
+    members = []
+    for idx, o in enumerate(objects):
+        if o.object_type != 'contact':
+            continue
+        c_name = o.get_name() or ''
+        if c_name in direct:
+            members.append({**_obj_summary(o, idx), 'via': 'members'})
+        else:
+            cgs = [g.strip().lstrip('+!').strip() for g in o.attributes.get('contactgroups', '').split(',') if g.strip()]
+            if obj_name in cgs:
+                members.append({**_obj_summary(o, idx), 'via': 'contactgroups attr'})
+    return members
+
+
+def _collect_servicegroup_members(obj, obj_name, objects):
+    """Collect service members of a servicegroup."""
+    direct = [m.strip().lstrip('+!').strip() for m in obj.attributes.get('members', '').split(',') if m.strip()]
+    members = []
+    for idx, o in enumerate(objects):
+        if o.object_type != 'service':
+            continue
+        s_name = o.get_name() or ''
+        if s_name in direct:
+            members.append({**_obj_summary(o, idx), 'via': 'members'})
+        else:
+            sgs = [g.strip().lstrip('+!').strip() for g in o.attributes.get('servicegroups', '').split(',') if g.strip()]
+            if obj_name in sgs:
+                members.append({**_obj_summary(o, idx), 'via': 'servicegroups attr'})
+    return members
+
+
+def _collect_template_inheritors(obj, global_index, objects):
+    """Collect objects that inherit from this template."""
+    template_name = obj.attributes.get('name', '')
+    if not template_name:
+        return []
+    members = []
+    for idx, o in enumerate(objects):
+        if idx == global_index:
+            continue
+        uses = [u.strip() for u in o.attributes.get('use', '').split(',') if u.strip()]
+        if template_name in uses:
+            members.append({**_obj_summary(o, idx), 'via': 'inherits'})
+    return members
+
+
+def _collect_host_member_of(obj, obj_name, objects):
+    """Collect hostgroups that a host belongs to."""
+    member_of = []
+    hgs = [g.strip().lstrip('+!').strip() for g in obj.attributes.get('hostgroups', '').split(',') if g.strip()]
+    for idx, o in enumerate(objects):
+        if o.object_type == 'hostgroup' and (o.get_name() or '') in hgs:
+            member_of.append({**_obj_summary(o, idx), 'via': 'hostgroups'})
+    for idx, o in enumerate(objects):
+        if o.object_type != 'hostgroup':
+            continue
+        direct = [m.strip() for m in o.attributes.get('members', '').split(',') if m.strip()]
+        if obj_name in direct:
+            g_name = o.get_name() or ''
+            if not any(m['name'] == g_name for m in member_of):
+                member_of.append({**_obj_summary(o, idx), 'via': 'members'})
+    return member_of
+
+
+def _collect_service_member_of(obj, objects):
+    """Collect servicegroups that a service belongs to."""
+    member_of = []
+    sgs = [g.strip().lstrip('+!').strip() for g in obj.attributes.get('servicegroups', '').split(',') if g.strip()]
+    for idx, o in enumerate(objects):
+        if o.object_type == 'servicegroup' and (o.get_name() or '') in sgs:
+            member_of.append({**_obj_summary(o, idx), 'via': 'servicegroups'})
+    return member_of
+
+
+def _collect_contact_member_of(obj, objects):
+    """Collect contactgroups that a contact belongs to."""
+    member_of = []
+    cgs = [g.strip().lstrip('+!').strip() for g in obj.attributes.get('contactgroups', '').split(',') if g.strip()]
+    for idx, o in enumerate(objects):
+        if o.object_type == 'contactgroup' and (o.get_name() or '') in cgs:
+            member_of.append({**_obj_summary(o, idx), 'via': 'contactgroups'})
+    return member_of
+
+
+def _build_parent_tree(host_obj, objects, obj_to_index, visited=None):
+    """Build the parent host tree recursively."""
+    if visited is None:
+        visited = set()
+    h_idx = obj_to_index.get(id(host_obj))
+    h_name = host_obj.get_name() or host_obj.get_display_name()
+    if h_idx in visited:
+        return {'name': h_name, 'global_index': h_idx, 'circular': True}
+    visited.add(h_idx)
+    p_attr = host_obj.attributes.get('parents', '')
+    parent_names = [p.strip() for p in p_attr.split(',') if p.strip()]
+    parent_nodes = []
+    for pn in parent_names:
+        parent_obj = _find_host_by_name(pn, objects)
+        if parent_obj:
+            parent_nodes.append(_build_parent_tree(parent_obj, objects, obj_to_index, set(visited)))
+        else:
+            parent_nodes.append({'name': pn, 'missing': True})
+    return {
+        'name': h_name,
+        'global_index': h_idx,
+        'file': host_obj.source_file,
+        'parents': parent_nodes,
+    }
+
+
+def _find_host_by_name(name, objects):
+    """Find a host object by name."""
+    for o in objects:
+        if o.object_type == 'host' and (o.get_name() or '') == name:
+            return o
+    return None
+
+
+# ─────────────────────────────────────────────────────────────────────
+# api_inheritance_chain helpers
+# ─────────────────────────────────────────────────────────────────────
+
+def _walk_inheritance_chain(obj, templates, visited=None):
+    """Walk the template inheritance chain recursively."""
+    if visited is None:
+        visited = set()
+    chain = [obj.to_dict()]
+    uses = obj.attributes.get('use', '')
+    if uses:
+        for tmpl_name in [t.strip() for t in uses.split(',') if t.strip()]:
+            if tmpl_name in templates and tmpl_name not in visited:
+                visited.add(tmpl_name)
+                chain.extend(_walk_inheritance_chain(templates[tmpl_name], templates, visited))
+    return chain
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Route handlers
+# ═══════════════════════════════════════════════════════════════════════
 
 @bp.route('/api/dependencies')
 def api_dependencies():
@@ -23,231 +1190,29 @@ def api_dependencies():
     p = service.parser
     object_type = request.args.get('type')
 
-    nodes = []
-    edges = []
-    node_ids = set()
-    defined_node_ids = set()  # Track nodes that have actual object definitions
+    graph = {'nodes': [], 'edges': [], 'node_ids': set(), 'defined_node_ids': set()}
 
-    template_lookup = {}
-    for obj in service.get_objects():
-        template_name = obj.attributes.get('name')
-        if template_name:
-            template_lookup[(obj.object_type, template_name)] = obj
-
-    def resolve_inherited_attributes(obj):
-        """Resolve attributes including inherited ones from templates."""
-        resolved = {}
-
-        use_templates = obj.attributes.get('use', '')
-        if use_templates:
-            template_names = [t.strip() for t in use_templates.split(',') if t.strip()]
-            for tmpl_name in template_names:
-                tmpl = template_lookup.get((obj.object_type, tmpl_name))
-                if tmpl:
-                    tmpl_attrs = resolve_inherited_attributes(tmpl)
-                    for key, value in tmpl_attrs.items():
-                        if key not in ['use', 'name', 'register']:
-                            resolved[key] = value
-
-        for key, value in obj.attributes.items():
-            resolved[key] = value
-
-        return resolved
-
-    relationship_fields = {
-        'host_name': 'host',
-        'hostgroup_name': 'hostgroup',
-        'hostgroups': 'hostgroup',
-        'hostgroup_members': 'hostgroup',
-        'service_description': 'service',
-        'dependent_service_description': 'service',
-        'dependent_host_name': 'host',
-        'dependent_hostgroup_name': 'hostgroup',
-        'master_host_name': 'host',
-        'master_hostgroup_name': 'hostgroup',
-        'master_service_description': 'service',
-        'servicegroup_name': 'servicegroup',
-        'servicegroups': 'servicegroup',
-        'servicegroup_members': 'servicegroup',
-        'contact_name': 'contact',
-        'contacts': 'contact',
-        'contact_groups': 'contactgroup',
-        'contactgroup_name': 'contactgroup',
-        'contactgroup_members': 'contactgroup',
-        'escalation_contacts': 'contact',
-        'escalation_contact_groups': 'contactgroup',
-        'use': 'template',
-        'members': 'member',
-        'parents': 'host',
-        'check_command': 'command',
-        'event_handler': 'command',
-        'host_notification_commands': 'command',
-        'service_notification_commands': 'command',
-        'check_period': 'timeperiod',
-        'notification_period': 'timeperiod',
-        'host_notification_period': 'timeperiod',
-        'service_notification_period': 'timeperiod',
-        'escalation_period': 'timeperiod',
-        'dependency_period': 'timeperiod',
-        'exclude': 'timeperiod',
-    }
-
-    type_colors = {
-        'host': '#4CAF50',
-        'hostgroup': '#8BC34A',
-        'service': '#2196F3',
-        'servicegroup': '#03A9F4',
-        'contact': '#FF9800',
-        'contactgroup': '#FFC107',
-        'command': '#9C27B0',
-        'timeperiod': '#607D8B',
-        'servicedependency': '#E91E63',
-        'hostdependency': '#F44336',
-        'serviceescalation': '#00BCD4',
-        'hostescalation': '#009688',
-    }
-
-    # Build template lookup for marking template nodes
-    template_names = set()
-    for obj in service.get_objects():
-        if obj.attributes.get('register', '1') == '0':
-            obj_name = obj.attributes.get('name')
-            if obj_name:
-                template_names.add((obj.object_type, obj_name))
+    template_lookup = _build_template_lookup(service.get_objects())
+    template_names = _build_template_names_set(service.get_objects())
 
     for obj in p.objects:
         if object_type and obj.object_type != object_type:
             continue
-
         obj_name = obj.get_name()
         if not obj_name:
             continue
 
         if obj.object_type == 'service':
-            target = obj.attributes.get('hostgroup_name') or obj.attributes.get('host_name', '')
-            target = ','.join([t.strip().lstrip('+').strip() for t in target.split(',') if not t.strip().startswith('!')])
-            if target:
-                node_id = f"service:{target}:{obj_name}"
-            else:
-                node_id = f"service:{obj_name}"
+            node_id = _make_service_node_id(obj)
         else:
             node_id = f"{obj.object_type}:{obj_name}"
-        if node_id not in node_ids:
-            is_template = (obj.object_type, obj_name) in template_names
-            node_data = {
-                'id': node_id,
-                'label': obj_name,
-                'type': obj.object_type,
-                'color': type_colors.get(obj.object_type, '#999999'),
-                'exists': True  # This node has an actual object definition
-            }
-            if is_template:
-                node_data['is_template'] = True
-            nodes.append(node_data)
-            node_ids.add(node_id)
-            defined_node_ids.add(node_id)
-        else:
-            # Node was already created (possibly as orphan reference) - update it
-            # to mark it as existing and set template flag if applicable
-            for existing_node in nodes:
-                if existing_node['id'] == node_id:
-                    existing_node['exists'] = True
-                    if (obj.object_type, obj_name) in template_names:
-                        existing_node['is_template'] = True
-                    break
-            defined_node_ids.add(node_id)
 
-        resolved_attrs = resolve_inherited_attributes(obj)
+        _add_or_update_node(obj, node_id, template_names, graph)
 
-        for field, target_type in relationship_fields.items():
-            if field in resolved_attrs:
-                identity_fields = {
-                    'host': 'host_name',
-                    'hostgroup': 'hostgroup_name',
-                    'servicegroup': 'servicegroup_name',
-                    'contact': 'contact_name',
-                    'contactgroup': 'contactgroup_name',
-                }
-                if identity_fields.get(obj.object_type) == field:
-                    continue
+        resolved_attrs = _resolve_inherited_attributes(obj, template_lookup)
+        _process_obj_relationships(obj, node_id, resolved_attrs, graph)
 
-                raw_value = resolved_attrs[field]
-
-                # Command fields use ! to separate command name from arguments
-                # e.g., check_ping!100.0,20%!500.0,60% - only the part before first ! is the command
-                if target_type == 'command':
-                    command_name = raw_value.split('!')[0].strip()
-                    targets = [command_name] if command_name else []
-                else:
-                    targets = [t.strip().lstrip('+').strip() for t in raw_value.split(',')
-                              if t.strip() and not t.strip().startswith('!')]
-                for target in targets:
-                    if not target:
-                        continue
-
-                    if target_type == 'template':
-                        # Template relationships use the object's type for the target node ID
-                        t_type = obj.object_type
-                    elif target_type == 'member':
-                        t_type = obj.object_type.replace('group', '')
-                    else:
-                        t_type = target_type
-
-                    if t_type == 'service' and field in ('service_description', 'dependent_service_description'):
-                        if field == 'dependent_service_description':
-                            svc_context = resolved_attrs.get('dependent_hostgroup_name') or resolved_attrs.get('dependent_host_name', '')
-                        else:
-                            svc_context = resolved_attrs.get('hostgroup_name') or resolved_attrs.get('host_name', '')
-                        svc_context = ','.join([t.strip().lstrip('+').strip() for t in svc_context.split(',') if not t.strip().startswith('!')])
-                        if svc_context:
-                            target_id = f"service:{svc_context}:{target}"
-                        else:
-                            target_id = f"service:{target}"
-                    else:
-                        target_id = f"{t_type}:{target}"
-
-                    if target_id == node_id:
-                        continue
-
-                    if target_id not in node_ids:
-                        nodes.append({
-                            'id': target_id,
-                            'label': target,
-                            'type': t_type,
-                            'color': type_colors.get(t_type, '#999999'),
-                            'exists': False  # Referenced but not defined - orphan reference
-                        })
-                        node_ids.add(target_id)
-
-                    # Fields where edge direction is reversed (target points to source)
-                    # - parents: parent → child shows reachability path (network topology)
-                    # Note: Most fields use standard direction (source depends on target)
-                    # - 'use': object → template (object depends on template)
-                    # - 'host_name': service → host (service depends on host)
-                    # - 'check_command': object → command (object uses command)
-                    reverse_edge_fields = {
-                        'parents'  # Network topology: parent reaches child
-                    }
-
-                    if field in reverse_edge_fields:
-                        edges.append({
-                            'from': target_id,
-                            'to': node_id,
-                            'label': field,
-                            'arrows': 'to'
-                        })
-                    else:
-                        edges.append({
-                            'from': node_id,
-                            'to': target_id,
-                            'label': field,
-                            'arrows': 'to'
-                        })
-
-    return jsonify({
-        'nodes': nodes,
-        'edges': edges
-    })
+    return jsonify({'nodes': graph['nodes'], 'edges': graph['edges']})
 
 
 @bp.route('/api/inheritance/list/<object_type>')
@@ -280,35 +1245,14 @@ def api_inheritance_chain(object_type, name):
         if obj.object_type == object_type and 'name' in obj.attributes:
             templates[obj.attributes['name']] = obj
 
-    def get_chain(obj, visited=None):
-        if visited is None:
-            visited = set()
-
-        chain = [obj.to_dict()]
-        uses = obj.attributes.get('use', '')
-
-        if uses:
-            template_names = [t.strip() for t in uses.split(',') if t.strip()]
-            for tmpl_name in template_names:
-                if tmpl_name in templates and tmpl_name not in visited:
-                    visited.add(tmpl_name)
-                    chain.extend(get_chain(templates[tmpl_name], visited))
-
-        return chain
-
-    chain = get_chain(target)
-
-    return jsonify({
-        'chain': chain,
-        'depth': len(chain)
-    })
+    chain = _walk_inheritance_chain(target, templates)
+    return jsonify({'chain': chain, 'depth': len(chain)})
 
 
 @bp.route('/api/smart-grouping/suggest')
 def api_smart_grouping_suggest():
     """Suggest hostgroups based on common patterns."""
     service = get_service()
-
     MAX_SUGGESTIONS = 20
 
     hosts = [obj for obj in service.get_objects()
@@ -325,180 +1269,14 @@ def api_smart_grouping_suggest():
                 existing_groups.add(name.lower())
 
     suggestions = []
+    suggestions.extend(_collect_subnet_suggestions(hosts, existing_groups))
+    suggestions.extend(_collect_prefix_suggestions(hosts, existing_groups))
+    suggestions.extend(_collect_suffix_suggestions(hosts, existing_groups))
+    suggestions.extend(_collect_command_suggestions(hosts, existing_groups))
+    suggestions.extend(_collect_parent_suggestions(hosts, existing_groups))
+    suggestions.extend(_find_ungrouped_hosts(hosts, service.get_objects()))
 
-    subnet_groups = defaultdict(list)
-    for host in hosts:
-        addr = host.attributes.get('address', '')
-        if addr and '.' in addr:
-            parts = addr.rsplit('.', 1)
-            if len(parts) == 2:
-                subnet_groups[parts[0]].append(host.get_name())
-
-    for subnet, members in subnet_groups.items():
-        if len(members) >= 3:
-            suggested_name = f"subnet-{subnet.replace('.', '-')}"
-            if suggested_name.lower() not in existing_groups:
-                suggestions.append({
-                    'type': 'ip-subnet',
-                    'name': suggested_name,
-                    'description': f'Hosts in {subnet}.0/24 subnet',
-                    'members': sorted(members),
-                    'count': len(members),
-                    'pattern': f'{subnet}.x'
-                })
-
-    prefix_groups = defaultdict(list)
-    for host in hosts:
-        name = host.get_name()
-        if name and '-' in name:
-            prefix = name.split('-')[0]
-            prefix_groups[prefix].append(name)
-
-    for prefix, members in prefix_groups.items():
-        if len(members) >= 3:
-            suggested_name = f"{prefix}-servers"
-            if suggested_name.lower() not in existing_groups:
-                suggestions.append({
-                    'type': 'hostname-prefix',
-                    'name': suggested_name,
-                    'description': f'Hosts with prefix "{prefix}-"',
-                    'members': sorted(members),
-                    'count': len(members),
-                    'pattern': f'{prefix}-*'
-                })
-
-    suffix_groups = defaultdict(list)
-    for host in hosts:
-        name = host.get_name()
-        if name and '-' in name:
-            suffix = name.split('-')[-1]
-            suffix_groups[suffix].append(name)
-
-    for suffix, members in suffix_groups.items():
-        if len(members) >= 3:
-            suggested_name = f"{suffix}-systems"
-            if suggested_name.lower() not in existing_groups:
-                suggestions.append({
-                    'type': 'hostname-suffix',
-                    'name': suggested_name,
-                    'description': f'Hosts with suffix "-{suffix}"',
-                    'members': sorted(members),
-                    'count': len(members),
-                    'pattern': f'*-{suffix}'
-                })
-
-    command_groups = defaultdict(list)
-    for host in hosts:
-        name = host.get_name()
-        check_cmd = host.attributes.get('check_command', '')
-        if name and check_cmd:
-            cmd_name = check_cmd.split('!')[0]
-            command_groups[cmd_name].append(name)
-
-    for cmd, members in command_groups.items():
-        if len(members) >= 3:
-            suggested_name = f"{cmd.replace('check_', '').replace('check-', '')}-checked"
-            if suggested_name.lower() not in existing_groups:
-                suggestions.append({
-                    'type': 'check-command',
-                    'name': suggested_name,
-                    'description': f'Hosts using check command "{cmd}"',
-                    'members': sorted(members),
-                    'count': len(members),
-                    'pattern': cmd
-                })
-
-    parent_groups = defaultdict(list)
-    for host in hosts:
-        name = host.get_name()
-        parents = host.attributes.get('parents', '')
-        if name and parents:
-            for parent in parents.split(','):
-                parent = parent.strip()
-                if parent:
-                    parent_groups[parent].append(name)
-
-    for parent, members in parent_groups.items():
-        if len(members) >= 2:
-            suggested_name = f"behind-{parent}"
-            if suggested_name.lower() not in existing_groups:
-                suggestions.append({
-                    'type': 'network-parent',
-                    'name': suggested_name,
-                    'description': f'Hosts behind "{parent}"',
-                    'members': sorted(members),
-                    'count': len(members),
-                    'pattern': f'parents={parent}'
-                })
-
-    hosts_in_groups = set()
-    for obj in service.get_objects():
-        if obj.object_type == 'hostgroup':
-            members = obj.attributes.get('members', '')
-            for m in members.split(','):
-                m = m.strip()
-                if m.startswith('!'):
-                    continue
-                m = m.lstrip('+').strip()
-                if m:
-                    hosts_in_groups.add(m)
-
-    for host in hosts:
-        if 'hostgroups' in host.attributes:
-            hosts_in_groups.add(host.get_name())
-
-    ungrouped = [h.get_name() for h in hosts if h.get_name() and h.get_name() not in hosts_in_groups]
-    if len(ungrouped) >= 2:
-        suggestions.append({
-            'type': 'ungrouped',
-            'name': 'ungrouped-hosts',
-            'description': 'Hosts not currently in any hostgroup',
-            'members': sorted(ungrouped),
-            'count': len(ungrouped),
-            'pattern': 'No hostgroup membership'
-        })
-
-    type_weights = {
-        'ip-subnet': 1.5,
-        'hostname-prefix': 1.3,
-        'hostname-suffix': 1.2,
-        'network-parent': 1.4,
-        'check-command': 1.0,
-        'common-services': 0.9,
-        'ungrouped': 0.5,
-    }
-
-    host_suggestion_counts = defaultdict(int)
-    for suggestion in suggestions:
-        for member in suggestion['members']:
-            host_suggestion_counts[member] += 1
-
-    for suggestion in suggestions:
-        base_score = suggestion['count']
-        type_weight = type_weights.get(suggestion['type'], 1.0)
-
-        overlap_bonus = 0
-        for member in suggestion['members']:
-            if host_suggestion_counts[member] > 1:
-                overlap_bonus += 0.1
-
-        overlap_bonus = min(overlap_bonus, suggestion['count'] * 0.3)
-
-        confidence = (base_score * type_weight) + overlap_bonus
-        suggestion['confidence'] = round(confidence, 2)
-
-        overlap_types = set()
-        for other in suggestions:
-            if other is suggestion:
-                continue
-            shared = set(suggestion['members']) & set(other['members'])
-            if len(shared) >= 2:
-                overlap_types.add(other['type'])
-
-        suggestion['overlaps_with'] = list(overlap_types)
-
-    suggestions.sort(key=lambda x: x['confidence'], reverse=True)
-
+    _score_and_rank_suggestions(suggestions)
     limited_suggestions = suggestions[:MAX_SUGGESTIONS]
 
     return jsonify({
@@ -530,21 +1308,7 @@ def api_smart_grouping_create():
                 return jsonify({'error': f'Hostgroup "{group_name}" already exists'}), 400
 
         backup_path = bm.create_backup("create_hostgroup")
-
-        target_file = None
-        for obj in p.objects:
-            if obj.object_type == 'hostgroup':
-                target_file = obj.source_file
-                break
-
-        if not target_file:
-            for obj in p.objects:
-                if obj.object_type == 'host':
-                    target_file = obj.source_file.replace('.cfg', '-hostgroups.cfg')
-                    break
-
-        if not target_file:
-            target_file = os.path.join(get_config_path(), 'hostgroups.cfg')
+        target_file = _find_hostgroup_target_file(p.objects, get_config_path())
 
         new_group = NagiosObject(
             object_type='hostgroup',
@@ -603,29 +1367,13 @@ def api_add_to_group():
         current_list = [m.strip() for m in current_members.split(',') if m.strip()]
         print(f"[add-to-group] Current members of {group_name}: {current_list}")
 
-        current_normalized = [m.lstrip('+!').strip() for m in current_list]
-        added_count = 0
-        for host in hosts_to_add:
-            if host not in current_normalized:
-                current_list.append(host)
-                current_normalized.append(host)
-                added_count += 1
+        current_list, added_count = _merge_hosts_into_member_list(hosts_to_add, current_list)
 
         new_members = ','.join(current_list)
         hostgroup.attributes['members'] = new_members
         print(f"[add-to-group] New members: {new_members}")
 
-        for host_name in hosts_to_add:
-            for obj in p.objects:
-                if obj.object_type == 'host' and obj.get_name() == host_name:
-                    current_hostgroups = obj.attributes.get('hostgroups', '')
-                    hostgroups_list = [hg.strip() for hg in current_hostgroups.split(',') if hg.strip()]
-                    hostgroups_normalized = [hg.lstrip('+!').strip() for hg in hostgroups_list]
-                    if group_name not in hostgroups_normalized:
-                        hostgroups_list.append(group_name)
-                        obj.attributes['hostgroups'] = ','.join(hostgroups_list)
-                        print(f"[add-to-group] Updated host {host_name} hostgroups: {obj.attributes['hostgroups']}")
-                    break
+        _update_host_hostgroups_attr(hosts_to_add, group_name, p.objects)
 
         writer = NagiosConfigWriter()
         files_written = writer.write_objects_to_original_files(p.objects)
@@ -665,153 +1413,19 @@ def get_template_issues():
     - unused_templates: Templates not used by any object (directly or transitively)
     """
     service = get_service()
-    issues = {
-        'invalid_use': [],
-        'circular_dependencies': [],
-        'unused_templates': []
-    }
+    objects = service.get_objects()
 
-    # Build template lookup by type
-    templates_by_type = {}
-    all_templates = set()
-    for obj in service.get_objects():
-        if obj.attributes.get('register', '1') == '0':
-            obj_type = obj.object_type
-            if obj_type not in templates_by_type:
-                templates_by_type[obj_type] = {}
-            name = obj.attributes.get('name')
-            if name:
-                templates_by_type[obj_type][name] = obj
-                all_templates.add((obj_type, name))
+    templates_by_type, all_templates = _build_template_index(objects)
+    invalid_use, referenced_templates = _find_invalid_use_refs(objects, templates_by_type)
+    detected_cycles = _detect_template_cycles(templates_by_type, all_templates)
+    circular_deps = _format_cycle_issues(detected_cycles)
+    unused = _find_unused_templates(all_templates, referenced_templates, templates_by_type)
 
-    # Track all referenced templates
-    referenced_templates = set()
-
-    # Check for invalid use references and track referenced templates
-    for obj in service.get_objects():
-        use_value = obj.attributes.get('use', '')
-        if use_value:
-            obj_type = obj.object_type
-            template_names = [t.strip() for t in use_value.split(',') if t.strip()]
-
-            for tmpl_name in template_names:
-                # Track reference
-                referenced_templates.add((obj_type, tmpl_name))
-
-                # Check if template exists
-                if obj_type not in templates_by_type or tmpl_name not in templates_by_type[obj_type]:
-                    issues['invalid_use'].append({
-                        'object_name': obj.get_name(),
-                        'object_type': obj_type,
-                        'source_file': obj.source_file,
-                        'template_name': tmpl_name,
-                        'message': f"{obj_type.capitalize()} '{obj.get_name()}' references unknown template '{tmpl_name}'"
-                    })
-
-    def get_template_chain(obj_type, tmpl_name, visited=None):
-        """Iteratively get all templates in chain to avoid recursion limits."""
-        if visited is None:
-            visited = set()
-
-        chain = []
-        stack = [(obj_type, tmpl_name)]
-
-        while stack:
-            curr_type, curr_name = stack.pop()
-
-            if (curr_type, curr_name) in visited:
-                continue  # Already processed (cycle detection is separate)
-
-            visited.add((curr_type, curr_name))
-            chain.append((curr_type, curr_name))
-
-            if curr_type in templates_by_type and curr_name in templates_by_type[curr_type]:
-                tmpl_obj = templates_by_type[curr_type][curr_name]
-                use_value = tmpl_obj.attributes.get('use', '')
-                if use_value:
-                    for parent_name in [t.strip() for t in use_value.split(',') if t.strip()]:
-                        stack.append((curr_type, parent_name))
-
-        return chain
-
-    # N-02: Detect circular dependencies using DFS with path tracking
-    # A cycle exists when we revisit a node that's still in the current traversal path
-    def detect_cycles():
-        """Detect circular template dependencies using DFS."""
-        WHITE, GRAY, BLACK = 0, 1, 2
-        color = {}  # node -> color
-        cycles = []  # List of detected cycles
-
-        def dfs(node, path):
-            """DFS with path tracking for cycle detection."""
-            if color.get(node) == BLACK:
-                return  # Already fully processed
-            if color.get(node) == GRAY:
-                # Found a cycle - extract the cycle from path
-                cycle_start = path.index(node)
-                cycle = path[cycle_start:] + [node]
-                cycles.append(cycle)
-                return
-
-            color[node] = GRAY
-            path.append(node)
-
-            obj_type, tmpl_name = node
-            if obj_type in templates_by_type and tmpl_name in templates_by_type[obj_type]:
-                tmpl_obj = templates_by_type[obj_type][tmpl_name]
-                use_value = tmpl_obj.attributes.get('use', '')
-                if use_value:
-                    for parent_name in [t.strip() for t in use_value.split(',') if t.strip()]:
-                        parent_node = (obj_type, parent_name)
-                        # Only follow edges to existing templates
-                        if obj_type in templates_by_type and parent_name in templates_by_type[obj_type]:
-                            dfs(parent_node, path)
-
-            path.pop()
-            color[node] = BLACK
-
-        # Run DFS from all templates
-        for node in all_templates:
-            if color.get(node) == WHITE or node not in color:
-                dfs(node, [])
-
-        return cycles
-
-    # Detect and report circular dependencies
-    detected_cycles = detect_cycles()
-    seen_cycles = set()  # Track unique cycles (avoid duplicates)
-    for cycle in detected_cycles:
-        # Create a canonical representation for deduplication
-        cycle_key = tuple(sorted(cycle[:-1]))  # Exclude duplicate end node
-        if cycle_key not in seen_cycles:
-            seen_cycles.add(cycle_key)
-            cycle_names = [name for _, name in cycle]
-            issues['circular_dependencies'].append({
-                'cycle': cycle_names,
-                'object_type': cycle[0][0],
-                'message': f"Circular template inheritance: {' -> '.join(cycle_names)}"
-            })
-
-    # Expand referenced_templates to include indirect references
-    # Unused template definition: template not in ANY inheritance chain (direct or transitive)
-    # Example: A uses B, B uses C -> all three are "used" even if only A is directly referenced
-    indirect_refs = set()
-    for obj_type, tmpl_name in referenced_templates:
-        chain = get_template_chain(obj_type, tmpl_name)
-        indirect_refs.update(chain)
-
-    referenced_templates.update(indirect_refs)
-
-    # Find unused templates (not in any inheritance chain)
-    for obj_type, tmpl_name in all_templates:
-        if (obj_type, tmpl_name) not in referenced_templates:
-            issues['unused_templates'].append({
-                'template_name': tmpl_name,
-                'object_type': obj_type,
-                'message': f"Template '{tmpl_name}' is not used by any {obj_type}"
-            })
-
-    return jsonify(issues)
+    return jsonify({
+        'invalid_use': invalid_use,
+        'circular_dependencies': circular_deps,
+        'unused_templates': unused
+    })
 
 
 @bp.route('/api/escalation-path/<object_type>/<name>')
@@ -822,144 +1436,23 @@ def api_escalation_path(object_type, name, service_desc=None):
     Returns base contacts and escalation levels in notification order.
     """
     service = get_service()
+    objects = service.get_objects()
 
-    # Find target object
-    target = None
-    for obj in service.get_objects():
-        if object_type == 'host':
-            if obj.object_type == 'host' and obj.get_name() == name:
-                target = obj
-                break
-        elif object_type == 'service' and service_desc:
-            if obj.object_type == 'service':
-                host_attr = obj.attributes.get('host_name', '')
-                svc_desc = obj.attributes.get('service_description', '')
-                if name in [h.strip() for h in host_attr.split(',')] and svc_desc == service_desc:
-                    target = obj
-                    break
-
+    target = _find_escalation_target(objects, object_type, name, service_desc)
     if not target:
         return jsonify({'error': 'Object not found'}), 404
 
-    # Build lookups
-    template_lookup = {}
-    contact_objects = {}
-    cg_objects = {}
-    for obj in service.get_objects():
-        tmpl_name = obj.attributes.get('name')
-        if tmpl_name:
-            template_lookup[(obj.object_type, tmpl_name)] = obj
-        if obj.object_type == 'contact' and obj.attributes.get('register', '1') != '0':
-            contact_objects[obj.attributes.get('contact_name', '')] = obj
-        elif obj.object_type == 'contactgroup':
-            cg_objects[obj.attributes.get('contactgroup_name', '')] = obj
-
-    def resolve_attrs(obj, visited=None):
-        if visited is None:
-            visited = set()
-        resolved = {}
-        use_templates = obj.attributes.get('use', '')
-        if use_templates:
-            for t in [t.strip() for t in use_templates.split(',') if t.strip()]:
-                if t not in visited:
-                    visited.add(t)
-                    tmpl = template_lookup.get((obj.object_type, t))
-                    if tmpl:
-                        for k, v in resolve_attrs(tmpl, visited).items():
-                            if k not in ('use', 'name', 'register'):
-                                resolved[k] = v
-        for k, v in obj.attributes.items():
-            resolved[k] = v
-        return resolved
-
-    def resolve_cg_members(cg_name):
-        """Resolve contactgroup to individual contact names."""
-        cg = cg_objects.get(cg_name)
-        if not cg:
-            return []
-        members = []
-        if 'members' in cg.attributes:
-            members.extend([m.strip() for m in cg.attributes['members'].split(',') if m.strip()])
-        return members
-
-    def contact_info(cname):
-        """Get contact notification info."""
-        cobj = contact_objects.get(cname)
-        if not cobj:
-            return {'name': cname, 'exists': False}
-        resolved = resolve_attrs(cobj)
-        return {
-            'name': cname,
-            'exists': True,
-            'host_notification_commands': resolved.get('host_notification_commands', ''),
-            'service_notification_commands': resolved.get('service_notification_commands', ''),
-            'host_notification_period': resolved.get('host_notification_period', ''),
-            'service_notification_period': resolved.get('service_notification_period', ''),
-        }
-
-    # Resolve base contacts
-    resolved_target = resolve_attrs(target)
-    base_contact_names = set()
-    if 'contacts' in resolved_target:
-        for c in resolved_target['contacts'].split(','):
-            c = c.strip().lstrip('+!')
-            if c:
-                base_contact_names.add(c)
-    if 'contact_groups' in resolved_target:
-        for cg in resolved_target['contact_groups'].split(','):
-            cg = cg.strip().lstrip('+!')
-            for m in resolve_cg_members(cg):
-                base_contact_names.add(m)
-
-    base_contacts = [contact_info(c) for c in sorted(base_contact_names)]
-
-    # Find matching escalations
-    esc_type = 'hostescalation' if object_type == 'host' else 'serviceescalation'
-    escalations = []
-    for obj in service.get_objects():
-        if obj.object_type != esc_type:
-            continue
-
-        # Check if escalation matches our target
-        matches = False
-        if object_type == 'host':
-            esc_hosts = obj.attributes.get('host_name', '')
-            if name in [h.strip() for h in esc_hosts.split(',')]:
-                matches = True
-        else:
-            esc_hosts = obj.attributes.get('host_name', '')
-            esc_svc = obj.attributes.get('service_description', '')
-            if service_desc and esc_svc == service_desc:
-                if name in [h.strip() for h in esc_hosts.split(',')]:
-                    matches = True
-
-        if not matches:
-            continue
-
-        # Resolve escalation contacts
-        esc_contact_names = set()
-        if 'contact_groups' in obj.attributes:
-            for cg in obj.attributes['contact_groups'].split(','):
-                cg = cg.strip()
-                for m in resolve_cg_members(cg):
-                    esc_contact_names.add(m)
-        if 'contacts' in obj.attributes:
-            for c in obj.attributes['contacts'].split(','):
-                c = c.strip()
-                if c:
-                    esc_contact_names.add(c)
-
-        escalations.append({
-            'first_notification': int(obj.attributes.get('first_notification', 0)),
-            'last_notification': int(obj.attributes.get('last_notification', 0)),
-            'notification_interval': int(obj.attributes.get('notification_interval', 0)),
-            'escalation_period': obj.attributes.get('escalation_period', ''),
-            'contacts': [contact_info(c) for c in sorted(esc_contact_names)],
-            'source_file': obj.source_file,
-        })
-
-    # Sort escalations by first_notification
-    escalations.sort(key=lambda e: e['first_notification'])
+    template_lookup, contact_objects, cg_objects = _build_escalation_lookups(objects)
+    resolved_target = _resolve_attrs_with_templates(target, template_lookup)
+    base_contacts = _resolve_base_contacts(resolved_target, cg_objects, contact_objects, template_lookup)
+    lookups = {
+        'cg_objects': cg_objects,
+        'contact_objects': contact_objects,
+        'template_lookup': template_lookup,
+    }
+    escalations = _find_matching_escalations(
+        objects, object_type, name, service_desc, lookups
+    )
 
     return jsonify({
         'object_type': object_type,
@@ -984,303 +1477,37 @@ def api_object_references(global_index):
     obj_name = obj.get_name() or obj.get_display_name()
     obj_template_name = obj.attributes.get('name')
 
-    from nagios_model import REFERENCE_FIELDS, NAME_FIELDS
-
-    def strip_prefix(s):
-        return s.strip().lstrip('+!').strip()
-
-    command_fields = [
-        'check_command', 'event_handler', 'notification_commands',
-        'host_notification_commands', 'service_notification_commands',
-        'obsess_over_host_command', 'obsess_over_service_command',
-        'global_host_event_handler', 'global_service_event_handler'
-    ]
-
-    def obj_summary(o, idx):
-        return {
-            'global_index': idx,
-            'object_type': o.object_type,
-            'name': o.get_name() or o.get_display_name(),
-            'file': o.source_file,
-        }
+    from nagios_model import REFERENCE_FIELDS
 
     obj_to_index = {id(o): idx for idx, o in enumerate(objects)}
 
-    # --- Outgoing references ---
-    outgoing = []
-    for field, ref_type in REFERENCE_FIELDS.items():
-        val = obj.attributes.get(field)
-        if not val:
-            continue
-        actual_type = ref_type if ref_type else obj.object_type
-        for v in val.split(','):
-            v = strip_prefix(v)
-            if not v or v == '*':
-                continue
-            lookup_val = v.split('!')[0] if field in command_fields else v
-            for idx, o in enumerate(objects):
-                if o.object_type != actual_type:
-                    continue
-                o_name = o.get_name() or o.get_display_name()
-                o_template = o.attributes.get('name')
-                if o_name == lookup_val or o_template == lookup_val:
-                    if idx != global_index:
-                        outgoing.append({**obj_summary(o, idx), 'field': field})
-                    break
-
-    # --- Incoming references ---
-    incoming = []
-    for idx, o in enumerate(objects):
-        if idx == global_index:
-            continue
-        for field, ref_type in REFERENCE_FIELDS.items():
-            val = o.attributes.get(field)
-            if not val:
-                continue
-            actual_type = ref_type if ref_type else o.object_type
-            is_escalation_ref = (
-                o.object_type in ('hostescalation', 'serviceescalation') and
-                obj.object_type in ('contact', 'contactgroup') and
-                field in ('escalation_contacts', 'escalation_contact_groups', 'contacts', 'contact_groups')
-            )
-            if actual_type != obj.object_type and ref_type is not None and not is_escalation_ref:
-                continue
-            values = [strip_prefix(v) for v in val.split(',')]
-            if field in command_fields:
-                values = [v.split('!')[0] if '!' in v else v for v in values]
-            if obj_name in values or (obj_template_name and obj_template_name in values):
-                incoming.append({**obj_summary(o, idx), 'field': field})
+    # --- Outgoing / Incoming references ---
+    outgoing = _collect_outgoing_refs(obj, global_index, objects, REFERENCE_FIELDS)
+    obj_identity = {'name': obj_name, 'template_name': obj_template_name}
+    incoming = _collect_incoming_refs(obj, obj_identity, global_index,
+                                     objects, REFERENCE_FIELDS)
 
     # --- Dependency rules ---
-    # master_of = this object is the master → goes in outgoing (object depends on this rule)
-    # dependent_of = this object is the dependent → goes in incoming
-    if obj.object_type == 'host':
-        for idx, o in enumerate(objects):
-            if o.object_type != 'hostdependency':
-                continue
-            master_hosts = [h.strip() for h in o.attributes.get('host_name', '').split(',') if h.strip()]
-            dependent_hosts = [h.strip() for h in o.attributes.get('dependent_host_name', '').split(',') if h.strip()]
-            if obj_name in master_hosts:
-                outgoing.append({
-                    **obj_summary(o, idx), 'field': 'dependency_rule',
-                    'is_dependency_rule': True, 'role': 'master_of',
-                })
-            if obj_name in dependent_hosts:
-                incoming.append({
-                    **obj_summary(o, idx), 'field': 'dependency_rule',
-                    'is_dependency_rule': True, 'role': 'dependent_of',
-                })
-    elif obj.object_type == 'service':
-        host_name = obj.attributes.get('host_name')
-        if host_name:
-            svc_name = obj_name
-            for idx, o in enumerate(objects):
-                if o.object_type != 'servicedependency':
-                    continue
-                master_svc = o.attributes.get('service_description', '')
-                master_hosts = [h.strip() for h in o.attributes.get('host_name', '').split(',') if h.strip()]
-                dep_svc = o.attributes.get('dependent_service_description', '')
-                dep_hosts = [h.strip() for h in o.attributes.get('dependent_host_name', '').split(',') if h.strip()]
-                if master_svc == svc_name and (not master_hosts or host_name in master_hosts):
-                    outgoing.append({
-                        **obj_summary(o, idx), 'field': 'dependency_rule',
-                        'is_dependency_rule': True, 'role': 'master_of',
-                    })
-                if dep_svc == svc_name and (not dep_hosts or host_name in dep_hosts):
-                    incoming.append({
-                        **obj_summary(o, idx), 'field': 'dependency_rule',
-                        'is_dependency_rule': True, 'role': 'dependent_of',
-                    })
+    dep_out, dep_in = _collect_dependency_rules(obj, obj_name, global_index, objects)
+    outgoing.extend(dep_out)
+    incoming.extend(dep_in)
 
     # --- Escalation rules ---
-    def is_host_in_hostgroup(host_name, hostgroup_name, visited=None):
-        if visited is None:
-            visited = set()
-        if hostgroup_name in visited:
-            return False
-        visited.add(hostgroup_name)
-        for o in objects:
-            if o.object_type != 'hostgroup':
-                continue
-            if (o.get_name() or '') != hostgroup_name:
-                continue
-            members = [m.strip() for m in o.attributes.get('members', '').split(',') if m.strip()]
-            if host_name in members:
-                return True
-            for ho in objects:
-                if ho.object_type == 'host' and (ho.get_name() or '') == host_name:
-                    hgs = [g.strip().lstrip('+!').strip() for g in ho.attributes.get('hostgroups', '').split(',') if g.strip()]
-                    if hostgroup_name in hgs:
-                        return True
-                    break
-            nested = [g.strip().lstrip('+!').strip() for g in o.attributes.get('hostgroup_members', '').split(',') if g.strip()]
-            for ng in nested:
-                if is_host_in_hostgroup(host_name, ng, visited):
-                    return True
-        return False
+    incoming.extend(_collect_escalation_rules(obj, obj_name, objects))
 
-    if obj.object_type == 'host':
-        for idx, o in enumerate(objects):
-            if o.object_type != 'hostescalation':
-                continue
-            esc_host = o.attributes.get('host_name', '')
-            esc_hg = o.attributes.get('hostgroup_name', '')
-            if esc_host and obj_name in [h.strip() for h in esc_host.split(',')]:
-                incoming.append({**obj_summary(o, idx), 'field': 'escalation_rule', 'is_escalation_rule': True})
-            elif esc_hg:
-                for g in [g.strip() for g in esc_hg.split(',') if g.strip()]:
-                    if is_host_in_hostgroup(obj_name, g):
-                        incoming.append({**obj_summary(o, idx), 'field': 'escalation_rule', 'is_escalation_rule': True})
-                        break
-    elif obj.object_type == 'service':
-        host_name = obj.attributes.get('host_name')
-        if host_name:
-            for idx, o in enumerate(objects):
-                if o.object_type != 'serviceescalation':
-                    continue
-                esc_svc = o.attributes.get('service_description', '')
-                esc_host = o.attributes.get('host_name', '')
-                esc_hg = o.attributes.get('hostgroup_name', '')
-                if not esc_svc or obj_name not in [s.strip() for s in esc_svc.split(',')]:
-                    continue
-                if esc_host and host_name in [h.strip() for h in esc_host.split(',')]:
-                    incoming.append({**obj_summary(o, idx), 'field': 'escalation_rule', 'is_escalation_rule': True})
-                elif esc_hg:
-                    for g in [g.strip() for g in esc_hg.split(',') if g.strip()]:
-                        if is_host_in_hostgroup(host_name, g):
-                            incoming.append({**obj_summary(o, idx), 'field': 'escalation_rule', 'is_escalation_rule': True})
-                            break
-                elif not esc_host and not esc_hg:
-                    incoming.append({**obj_summary(o, idx), 'field': 'escalation_rule', 'is_escalation_rule': True})
-
-    # --- Services via hostgroup (for hosts and hostgroups) ---
-    if obj.object_type == 'hostgroup':
-        for idx, o in enumerate(objects):
-            if o.object_type != 'service':
-                continue
-            hg_name = o.attributes.get('hostgroup_name', '')
-            if hg_name:
-                groups = [g.strip().lstrip('+!').strip() for g in hg_name.split(',')]
-                if obj_name in groups:
-                    incoming.append({**obj_summary(o, idx), 'field': 'hostgroup_name', 'is_service_binding': True})
-    elif obj.object_type == 'host':
-        for idx, o in enumerate(objects):
-            if o.object_type != 'service':
-                continue
-            if o.attributes.get('host_name'):
-                continue
-            hg_name = o.attributes.get('hostgroup_name', '')
-            if hg_name:
-                for g in [g.strip().lstrip('+!').strip() for g in hg_name.split(',') if g.strip()]:
-                    if is_host_in_hostgroup(obj_name, g):
-                        incoming.append({**obj_summary(o, idx), 'field': 'hostgroup_name', 'is_service_binding': True, 'via_group': g})
-                        break
+    # --- Services via hostgroup ---
+    incoming.extend(_collect_service_bindings(obj, obj_name, objects))
 
     # --- Members ---
-    members = []
-    member_of = []
+    members = _collect_group_members(obj, obj_name, global_index, objects)
 
-    if obj.object_type == 'hostgroup':
-        direct = [m.strip() for m in obj.attributes.get('members', '').split(',') if m.strip()]
-        for idx, o in enumerate(objects):
-            if o.object_type == 'host':
-                h_name = o.get_name() or ''
-                if h_name in direct:
-                    members.append({**obj_summary(o, idx), 'via': 'members'})
-                else:
-                    hgs = [g.strip().lstrip('+!').strip() for g in o.attributes.get('hostgroups', '').split(',') if g.strip()]
-                    if obj_name in hgs:
-                        members.append({**obj_summary(o, idx), 'via': 'hostgroups attr'})
-    elif obj.object_type == 'contactgroup':
-        direct = [m.strip().lstrip('+!').strip() for m in obj.attributes.get('members', '').split(',') if m.strip()]
-        for idx, o in enumerate(objects):
-            if o.object_type == 'contact':
-                c_name = o.get_name() or ''
-                if c_name in direct:
-                    members.append({**obj_summary(o, idx), 'via': 'members'})
-                else:
-                    cgs = [g.strip().lstrip('+!').strip() for g in o.attributes.get('contactgroups', '').split(',') if g.strip()]
-                    if obj_name in cgs:
-                        members.append({**obj_summary(o, idx), 'via': 'contactgroups attr'})
-    elif obj.object_type == 'servicegroup':
-        direct = [m.strip().lstrip('+!').strip() for m in obj.attributes.get('members', '').split(',') if m.strip()]
-        for idx, o in enumerate(objects):
-            if o.object_type == 'service':
-                s_name = o.get_name() or ''
-                if s_name in direct:
-                    members.append({**obj_summary(o, idx), 'via': 'members'})
-                else:
-                    sgs = [g.strip().lstrip('+!').strip() for g in o.attributes.get('servicegroups', '').split(',') if g.strip()]
-                    if obj_name in sgs:
-                        members.append({**obj_summary(o, idx), 'via': 'servicegroups attr'})
-    elif obj.attributes.get('register', '1') == '0':
-        template_name = obj.attributes.get('name', '')
-        if template_name:
-            for idx, o in enumerate(objects):
-                if idx == global_index:
-                    continue
-                uses = [u.strip() for u in o.attributes.get('use', '').split(',') if u.strip()]
-                if template_name in uses:
-                    members.append({**obj_summary(o, idx), 'via': 'inherits'})
+    # --- Member-of ---
+    member_of = _collect_member_of(obj, obj_name, objects)
 
-    # Member-of
-    if obj.object_type == 'host':
-        hgs = [g.strip().lstrip('+!').strip() for g in obj.attributes.get('hostgroups', '').split(',') if g.strip()]
-        for idx, o in enumerate(objects):
-            if o.object_type == 'hostgroup' and (o.get_name() or '') in hgs:
-                member_of.append({**obj_summary(o, idx), 'via': 'hostgroups'})
-        for idx, o in enumerate(objects):
-            if o.object_type != 'hostgroup':
-                continue
-            direct = [m.strip() for m in o.attributes.get('members', '').split(',') if m.strip()]
-            if obj_name in direct:
-                g_name = o.get_name() or ''
-                if not any(m['name'] == g_name for m in member_of):
-                    member_of.append({**obj_summary(o, idx), 'via': 'members'})
-    elif obj.object_type == 'service':
-        sgs = [g.strip().lstrip('+!').strip() for g in obj.attributes.get('servicegroups', '').split(',') if g.strip()]
-        for idx, o in enumerate(objects):
-            if o.object_type == 'servicegroup' and (o.get_name() or '') in sgs:
-                member_of.append({**obj_summary(o, idx), 'via': 'servicegroups'})
-    elif obj.object_type == 'contact':
-        cgs = [g.strip().lstrip('+!').strip() for g in obj.attributes.get('contactgroups', '').split(',') if g.strip()]
-        for idx, o in enumerate(objects):
-            if o.object_type == 'contactgroup' and (o.get_name() or '') in cgs:
-                member_of.append({**obj_summary(o, idx), 'via': 'contactgroups'})
-
-    # --- Parent hosts (for hosts only) ---
+    # --- Parent hosts ---
     parent_hosts = None
-    if obj.object_type == 'host':
-        parents_attr = obj.attributes.get('parents', '').strip()
-        if parents_attr:
-            def build_parent_tree(host_obj, visited=None):
-                if visited is None:
-                    visited = set()
-                h_idx = obj_to_index.get(id(host_obj))
-                h_name = host_obj.get_name() or host_obj.get_display_name()
-                if h_idx in visited:
-                    return {'name': h_name, 'global_index': h_idx, 'circular': True}
-                visited.add(h_idx)
-                p_attr = host_obj.attributes.get('parents', '')
-                parent_names = [p.strip() for p in p_attr.split(',') if p.strip()]
-                parent_nodes = []
-                for pn in parent_names:
-                    parent_obj = None
-                    for o in objects:
-                        if o.object_type == 'host' and (o.get_name() or '') == pn:
-                            parent_obj = o
-                            break
-                    if parent_obj:
-                        parent_nodes.append(build_parent_tree(parent_obj, set(visited)))
-                    else:
-                        parent_nodes.append({'name': pn, 'missing': True})
-                return {
-                    'name': h_name,
-                    'global_index': h_idx,
-                    'file': host_obj.source_file,
-                    'parents': parent_nodes,
-                }
-            parent_hosts = build_parent_tree(obj)
+    if obj.object_type == 'host' and obj.attributes.get('parents', '').strip():
+        parent_hosts = _build_parent_tree(obj, objects, obj_to_index)
 
     return jsonify({
         'outgoing': outgoing,
@@ -1289,3 +1516,45 @@ def api_object_references(global_index):
         'member_of': member_of,
         'parent_hosts': parent_hosts,
     })
+
+
+def _collect_dependency_rules(obj, obj_name, global_index, objects):
+    """Dispatch to host or service dependency rule collectors."""
+    if obj.object_type == 'host':
+        return _collect_host_dependency_rules(obj_name, global_index, objects)
+    if obj.object_type == 'service':
+        host_name = obj.attributes.get('host_name')
+        if host_name:
+            return _collect_service_dependency_rules(obj_name, host_name, objects)
+    return [], []
+
+
+def _collect_escalation_rules(obj, obj_name, objects):
+    """Dispatch to host or service escalation rule collectors."""
+    if obj.object_type == 'host':
+        return _collect_host_escalation_rules(obj_name, objects)
+    if obj.object_type == 'service':
+        host_name = obj.attributes.get('host_name')
+        if host_name:
+            return _collect_service_escalation_rules(obj_name, host_name, objects)
+    return []
+
+
+def _collect_service_bindings(obj, obj_name, objects):
+    """Dispatch to hostgroup or host service binding collectors."""
+    if obj.object_type == 'hostgroup':
+        return _collect_hostgroup_service_bindings(obj_name, objects)
+    if obj.object_type == 'host':
+        return _collect_host_service_bindings_via_hostgroup(obj_name, objects)
+    return []
+
+
+def _collect_member_of(obj, obj_name, objects):
+    """Dispatch to the appropriate member-of collector by object type."""
+    if obj.object_type == 'host':
+        return _collect_host_member_of(obj, obj_name, objects)
+    if obj.object_type == 'service':
+        return _collect_service_member_of(obj, objects)
+    if obj.object_type == 'contact':
+        return _collect_contact_member_of(obj, objects)
+    return []
