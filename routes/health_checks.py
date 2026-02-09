@@ -10,6 +10,41 @@ from nagios_model import NAME_FIELDS, REFERENCE_FIELDS
 
 
 # ---------------------------------------------------------------------------
+# Shared utilities (used by both health checks and validation routes)
+# ---------------------------------------------------------------------------
+
+def _generate_template_name(obj_type, objects, attrs):
+    """Generate a suggested template name from object patterns."""
+    # Try common prefix from object names
+    name_field = NAME_FIELDS.get(obj_type)
+    names = []
+    for obj in objects:
+        n = obj.attributes.get(name_field, '') if name_field else ''
+        if not n:
+            n = obj.attributes.get('name', '')
+        if n:
+            names.append(n)
+
+    if names:
+        prefix = names[0]
+        for name in names[1:]:
+            while prefix and not name.startswith(prefix):
+                prefix = prefix[:-1]
+        if prefix and len(prefix) >= 3:
+            # Clean trailing dashes, underscores, digits
+            prefix = re.sub(r'[-_\d]+$', '', prefix)
+            if len(prefix) >= 3:
+                return f'{prefix}-{obj_type}-template'
+
+    # Fallback: use check_command name
+    if 'check_command' in attrs:
+        cmd = attrs['check_command'].split('!')[0]
+        return f'{cmd}-{obj_type}-template'
+
+    return f'common-{obj_type}-template'
+
+
+# ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
 
@@ -1100,13 +1135,15 @@ def check_duplicate_objects(ctx):
 # Check 20: Orphan detection
 # ---------------------------------------------------------------------------
 
-def check_orphan_objects(ctx):
-    """Check 20: Non-template objects not referenced by any other object."""
-    issues = []
-    objects = ctx['objects']
-    obj_to_index = ctx['obj_to_index']
-    template_lookup = ctx['template_lookup']
+def detect_orphans(objects, template_lookup):
+    """Shared orphan detection logic used by both health check and analysis endpoint.
 
+    Returns:
+        tuple: (orphan_indices, by_type, orphan_objects)
+            - orphan_indices: list of global indices of orphan objects
+            - by_type: dict mapping object_type -> count
+            - orphan_objects: list of (global_index, obj) tuples for orphan objects
+    """
     command_fields = {f for f, t in REFERENCE_FIELDS.items() if t == 'command'}
     referenced_names = {
         'host': set(), 'hostgroup': set(), 'service': set(),
@@ -1117,7 +1154,10 @@ def check_orphan_objects(ctx):
     for obj in objects:
         _collect_references(obj, referenced_names, command_fields, template_lookup)
 
-    for obj in objects:
+    orphan_indices = []
+    by_type = {}
+    orphan_objects = []
+    for global_idx, obj in enumerate(objects):
         if obj.attributes.get('register', '1') == '0':
             continue
         obj_name = obj.get_name()
@@ -1128,15 +1168,33 @@ def check_orphan_objects(ctx):
         is_referenced = ((obj_name and obj_name in refs) or
                          (attr_name and attr_name in refs))
         if not is_referenced:
-            issues.append({
-                'type': 'orphan',
-                'severity': 'info',
-                'object': obj_name or obj.get_display_name(),
-                'object_type': obj.object_type,
-                'file': obj.source_file,
-                'global_index': obj_to_index.get(id(obj)),
-                'message': f'{obj.object_type} is not referenced by any other object'
-            })
+            orphan_indices.append(global_idx)
+            by_type[obj.object_type] = by_type.get(obj.object_type, 0) + 1
+            orphan_objects.append((global_idx, obj))
+
+    return orphan_indices, by_type, orphan_objects
+
+
+def check_orphan_objects(ctx):
+    """Check 20: Non-template objects not referenced by any other object."""
+    objects = ctx['objects']
+    obj_to_index = ctx['obj_to_index']
+    template_lookup = ctx['template_lookup']
+
+    _, _, orphan_objects = detect_orphans(objects, template_lookup)
+
+    issues = []
+    for _global_idx, obj in orphan_objects:
+        obj_name = obj.get_name()
+        issues.append({
+            'type': 'orphan',
+            'severity': 'info',
+            'object': obj_name or obj.get_display_name(),
+            'object_type': obj.object_type,
+            'file': obj.source_file,
+            'global_index': obj_to_index.get(id(obj)),
+            'message': f'{obj.object_type} is not referenced by any other object'
+        })
     return issues
 
 
@@ -1299,8 +1357,6 @@ def check_template_opportunities(ctx):
 
 def _check_type_for_consolidation(obj_type, type_entries, identity_fields_set, issues):
     """Check a single object type for template consolidation opportunities."""
-    from .validation import _generate_template_name
-
     signatures = {}
     for idx, obj in type_entries:
         if obj.attributes.get('use') or obj.attributes.get('register') == '0':

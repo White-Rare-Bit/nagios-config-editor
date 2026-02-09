@@ -1,7 +1,5 @@
 """Validation and health-check routes."""
 
-import re
-
 from flask import Blueprint, jsonify
 from nagios_model import NAME_FIELDS, REFERENCE_FIELDS, REQUIRED_FIELDS
 from validator import NagiosValidator
@@ -138,130 +136,13 @@ def api_analysis_orphans():
     - Services with 'servicegroups' attr (direct or inherited) are in-use
     - Templates (register=0) are excluded from analysis entirely
     """
+    from .health_checks import build_template_lookup, detect_orphans
+
     service = get_service()
     objects = service.get_objects()
+    template_lookup = build_template_lookup(objects)
 
-    # Build template lookup for inheritance resolution
-    template_lookup = {}
-    for obj in objects:
-        tmpl_name = obj.attributes.get('name')
-        if tmpl_name:
-            template_lookup[(obj.object_type, tmpl_name)] = obj
-
-    def has_attr_in_chain(obj, attr_name, visited=None):
-        """Check if attribute exists in object or its template chain."""
-        if visited is None:
-            visited = set()
-        if attr_name in obj.attributes:
-            return True
-        use_val = obj.attributes.get('use', '')
-        if not use_val:
-            return False
-        for tmpl_name in [t.strip() for t in use_val.split(',') if t.strip()]:
-            if tmpl_name in visited:
-                continue
-            visited.add(tmpl_name)
-            tmpl = template_lookup.get((obj.object_type, tmpl_name))
-            if tmpl and has_attr_in_chain(tmpl, attr_name, visited):
-                return True
-        return False
-
-    def strip_prefix(s):
-        """Strip +/! prefixes used in Nagios additive/exclusion syntax."""
-        return s.strip().lstrip('+!').strip()
-
-    # Phase 1: Build reference sets using REFERENCE_FIELDS as single source of truth
-    command_fields = {f for f, t in REFERENCE_FIELDS.items() if t == 'command'}
-
-    referenced_names = {
-        'host': set(), 'hostgroup': set(), 'service': set(),
-        'servicegroup': set(), 'contact': set(), 'contactgroup': set(),
-        'command': set(), 'timeperiod': set()
-    }
-
-    for obj in objects:
-        attrs = obj.attributes
-        own_name_field = NAME_FIELDS.get(obj.object_type)
-
-        for field, target_type in REFERENCE_FIELDS.items():
-            if field not in attrs:
-                continue
-
-            value = attrs[field]
-
-            # Resolve target type for context-dependent fields
-            if field == 'use':
-                resolved_type = obj.object_type
-            elif field == 'members':
-                if obj.object_type == 'hostgroup':
-                    resolved_type = 'host'
-                elif obj.object_type == 'contactgroup':
-                    resolved_type = 'contact'
-                elif obj.object_type == 'servicegroup':
-                    resolved_type = 'service'
-                else:
-                    continue
-            else:
-                resolved_type = target_type
-
-            if resolved_type not in referenced_names:
-                continue
-
-            # Skip identity fields (e.g. host_name ON a host is its own name)
-            if field == own_name_field:
-                continue
-
-            # Parse the value: comma-separated, with optional +/! prefixes
-            for part in value.split(','):
-                part = part.strip().lstrip('+!').strip()
-                if not part:
-                    continue
-                # For command fields, strip arguments after !
-                if field in command_fields:
-                    part = part.split('!')[0].strip()
-                if part:
-                    referenced_names[resolved_type].add(part)
-
-        # Auto-reference: hosts with hostgroups attr are in use
-        if obj.object_type == 'host' and has_attr_in_chain(obj, 'hostgroups'):
-            host_name = obj.get_name()
-            if host_name:
-                referenced_names['host'].add(host_name.strip())
-
-        # Auto-reference: services with host_name/hostgroup_name are in use
-        if obj.object_type == 'service':
-            if (has_attr_in_chain(obj, 'host_name') or
-                    has_attr_in_chain(obj, 'hostgroup_name')):
-                svc_name = obj.get_name()
-                if svc_name:
-                    referenced_names['service'].add(svc_name.strip())
-
-        # Auto-reference: services with servicegroups are in use
-        if obj.object_type == 'service' and has_attr_in_chain(
-                obj, 'servicegroups'):
-            svc_name = obj.get_name()
-            if svc_name:
-                referenced_names['service'].add(svc_name.strip())
-
-    # Phase 2: Find orphans
-    orphan_indices = []
-    by_type = {}
-    for global_idx, obj in enumerate(objects):
-        # Skip templates
-        if obj.attributes.get('register', '1') == '0':
-            continue
-
-        obj_name = obj.get_name()
-        attr_name = obj.attributes.get('name')
-        refs = referenced_names.get(obj.object_type)
-        if refs is None:
-            continue
-
-        is_referenced = ((obj_name and obj_name in refs) or
-                         (attr_name and attr_name in refs))
-        if not is_referenced:
-            orphan_indices.append(global_idx)
-            by_type[obj.object_type] = by_type.get(obj.object_type, 0) + 1
+    orphan_indices, by_type, _ = detect_orphans(objects, template_lookup)
 
     return jsonify({
         'orphan_indices': orphan_indices,
@@ -288,100 +169,70 @@ def api_analysis_template_suggestions():
         'contactgroup_name', 'command_name', 'timeperiod_name'
     }
 
-    # Group objects by type, tracking global indices
-    objects_by_type = {}  # type -> [(global_index, obj)]
+    objects_by_type = {}
     for idx, obj in enumerate(objects):
         objects_by_type.setdefault(obj.object_type, []).append((idx, obj))
 
     suggestions = []
-
     for obj_type, type_entries in objects_by_type.items():
-        if len(type_entries) < 3:
+        if len(type_entries) < 3 or obj_type in ('timeperiod', 'command'):
             continue
-        if obj_type in ('timeperiod', 'command'):
-            continue
+        signatures = _build_type_signatures(type_entries, identity_fields)
+        _collect_suggestions(obj_type, signatures, suggestions)
 
-        # Build signatures
-        signatures = {}  # signature -> [(global_index, obj)]
-
-        for idx, obj in type_entries:
-            if obj.attributes.get('use') or obj.attributes.get('register') == '0':
-                continue
-
-            attr_pairs = []
-            for key, value in sorted(obj.attributes.items()):
-                if key not in identity_fields and key != 'register':
-                    attr_pairs.append(f'{key}={value}')
-
-            if not attr_pairs:
-                continue
-
-            signature = '|'.join(attr_pairs)
-
-            if signature not in signatures:
-                signatures[signature] = []
-            signatures[signature].append((idx, obj))
-
-        for signature, matching_entries in signatures.items():
-            if len(matching_entries) < 3:
-                continue
-
-            # Parse signature back to attributes
-            attrs = {}
-            for pair in signature.split('|'):
-                eq_idx = pair.index('=')
-                key = pair[:eq_idx]
-                value = pair[eq_idx + 1:]
-                attrs[key] = value
-
-            matching_objects = [obj for _, obj in matching_entries]
-            suggested_name = _generate_template_name(obj_type, matching_objects, attrs)
-
-            suggestions.append({
-                'type': obj_type,
-                'suggested_name': suggested_name,
-                'attributes': attrs,
-                'object_indices': [idx for idx, _ in matching_entries],
-                'count': len(matching_entries),
-                'attr_count': len(attrs)
-            })
-
-    # Sort by impact (count * attr_count) descending
     suggestions.sort(key=lambda s: s['count'] * s['attr_count'], reverse=True)
+    return jsonify({'suggestions': suggestions})
 
-    return jsonify({
-        'suggestions': suggestions
-    })
+
+def _build_type_signatures(type_entries, identity_fields):
+    """Build attribute signatures for objects that could share a template."""
+    signatures = {}
+    for idx, obj in type_entries:
+        if obj.attributes.get('use') or obj.attributes.get('register') == '0':
+            continue
+        attr_pairs = []
+        for key, value in sorted(obj.attributes.items()):
+            if key not in identity_fields and key != 'register':
+                attr_pairs.append(f'{key}={value}')
+        if not attr_pairs:
+            continue
+        signature = '|'.join(attr_pairs)
+        signatures.setdefault(signature, []).append((idx, obj))
+    return signatures
+
+
+def _collect_suggestions(obj_type, signatures, suggestions):
+    """Convert matching signature groups into template suggestions."""
+    for signature, matching_entries in signatures.items():
+        if len(matching_entries) < 3:
+            continue
+        attrs = _parse_signature(signature)
+        matching_objects = [obj for _, obj in matching_entries]
+        suggested_name = _generate_template_name(obj_type, matching_objects, attrs)
+        suggestions.append({
+            'type': obj_type,
+            'suggested_name': suggested_name,
+            'attributes': attrs,
+            'object_indices': [idx for idx, _ in matching_entries],
+            'count': len(matching_entries),
+            'attr_count': len(attrs),
+        })
+
+
+def _parse_signature(signature):
+    """Parse a pipe-delimited key=value signature back to a dict."""
+    attrs = {}
+    for pair in signature.split('|'):
+        eq_idx = pair.index('=')
+        attrs[pair[:eq_idx]] = pair[eq_idx + 1:]
+    return attrs
 
 
 def _generate_template_name(obj_type, objects, attrs):
-    """Generate a suggested template name from object patterns."""
-    from nagios_model import NAME_FIELDS
+    """Generate a suggested template name from object patterns.
 
-    # Try common prefix from object names
-    name_field = NAME_FIELDS.get(obj_type)
-    names = []
-    for obj in objects:
-        n = obj.attributes.get(name_field, '') if name_field else ''
-        if not n:
-            n = obj.attributes.get('name', '')
-        if n:
-            names.append(n)
-
-    if names:
-        prefix = names[0]
-        for name in names[1:]:
-            while prefix and not name.startswith(prefix):
-                prefix = prefix[:-1]
-        if prefix and len(prefix) >= 3:
-            # Clean trailing dashes, underscores, digits
-            prefix = re.sub(r'[-_\d]+$', '', prefix)
-            if len(prefix) >= 3:
-                return f'{prefix}-{obj_type}-template'
-
-    # Fallback: use check_command name
-    if 'check_command' in attrs:
-        cmd = attrs['check_command'].split('!')[0]
-        return f'{cmd}-{obj_type}-template'
-
-    return f'common-{obj_type}-template'
+    Delegates to the canonical implementation in health_checks to avoid duplication.
+    Kept as a module-level function for backward compatibility.
+    """
+    from .health_checks import _generate_template_name as _impl
+    return _impl(obj_type, objects, attrs)
