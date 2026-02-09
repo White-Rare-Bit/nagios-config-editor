@@ -9,7 +9,7 @@ import pytest
 import tempfile
 import shutil
 from pathlib import Path
-from app import create_app
+from app import create_app, get_config_path
 from nagios_parser import NagiosConfigParser
 
 
@@ -39,9 +39,8 @@ define host {
 }
 ''')
 
-    app = create_app()
+    app = create_app(config_path=str(test_config_path))
     app.config['TESTING'] = True
-    app.config['NAGIOS_CONFIG_PATH'] = str(test_config_path)
 
     yield app
 
@@ -69,7 +68,7 @@ def client(app):
             sm.clear_staging()
 
 
-def test_staging_round_trip_dict_format(client):
+def test_staging_round_trip_dict_format(client, app):
     """Test full staging round-trip with dict format."""
     # Get initial objects
     resp = client.get('/api/objects')
@@ -114,14 +113,28 @@ def test_staging_round_trip_dict_format(client):
                        headers={'X-Session-Id': 'test-session'})
     assert resp.status_code == 200
 
+    # Verify the edit was written to disk
+    config_path = Path(get_config_path())
+    written_content = (config_path / 'hosts.cfg').read_text()
+    assert 'Updated Alias' in written_content
+    assert 'Test Host 1' not in written_content  # Original alias replaced
+
+    # Verify re-parsed objects reflect the edit
+    resp = client.get('/api/objects')
+    assert resp.status_code == 200
+    updated_objects = resp.json
+    edited_obj = next(o for o in updated_objects
+                      if o['attributes'].get('host_name') == 'test-host-1')
+    assert edited_obj['attributes']['alias'] == 'Updated Alias'
+
 
 def test_reject_old_list_format(client):
-    """Test that old list format is rejected with clear error."""
+    """Test that list format for pendingEdits is rejected with clear error."""
     # Try to save staging with old list format
     old_format_data = {
         'sessionId': 'test-session',
         'pendingEdits': [
-            ['key1', {'object': {}, 'edited': {}}]
+            {'object': {}, 'edited': {}}
         ]
     }
 
@@ -131,7 +144,7 @@ def test_reject_old_list_format(client):
                        headers={'X-Session-Id': 'test-session'})
     assert resp.status_code == 400
     assert 'Invalid staging format' in resp.json['error']
-    assert 'array of dicts' in resp.json['error']
+    assert 'dict' in resp.json['error']
 
 
 def test_undo_operations_dict_format(client):
@@ -181,7 +194,7 @@ def test_undo_operations_dict_format(client):
     assert info['totalCount'] == 0
 
 
-def test_multi_operation_workflow(client):
+def test_multi_operation_workflow(client, app):
     """Test create, edit, move, delete workflow."""
     session_id = 'test-session'
     headers = {'X-Session-Id': session_id}
@@ -197,7 +210,7 @@ def test_multi_operation_workflow(client):
         'sessionId': session_id,
         'stagedCreations': [{
             'id': 'create-1',
-            'type': 'host',
+            'object_type': 'host',
             'targetFile': 'hosts.cfg',
             'attributes': {
                 'host_name': 'new-host',
@@ -233,6 +246,27 @@ def test_multi_operation_workflow(client):
                        content_type='application/json',
                        headers=headers)
     assert resp.status_code == 200
+
+    # Verify changes were written to disk
+    config_path = Path(get_config_path())
+    written_content = (config_path / 'hosts.cfg').read_text()
+    assert 'Modified' in written_content        # Edit applied
+    assert 'new-host' in written_content        # Creation applied
+    assert '192.168.1.100' in written_content   # New host address
+
+    # Verify re-parsed objects reflect both changes
+    resp = client.get('/api/objects')
+    assert resp.status_code == 200
+    updated_objects = resp.json
+
+    edited_obj = next(o for o in updated_objects
+                      if o['attributes'].get('host_name') == 'test-host-1')
+    assert edited_obj['attributes']['alias'] == 'Modified'
+
+    created_obj = next(o for o in updated_objects
+                       if o['attributes'].get('host_name') == 'new-host')
+    assert created_obj['attributes']['alias'] == 'New Host'
+    assert created_obj['attributes']['address'] == '192.168.1.100'
 
 
 def test_conflict_detection(client):

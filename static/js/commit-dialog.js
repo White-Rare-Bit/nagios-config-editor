@@ -641,14 +641,7 @@ function buildEditsMap(pendingEdits) {
  * Processes a single staged move, adding removal to source file and addition to target file.
  */
 function processStagedMove(moveEntry, allObjects, editsMap, fileChanges, configPath) {
-    let moveKey, move;
-    if (Array.isArray(moveEntry)) {
-        moveKey = moveEntry[0];
-        move = moveEntry[1];
-    } else {
-        moveKey = moveEntry.globalIndex || moveEntry.key;
-        move = moveEntry;
-    }
+    const [moveKey, move] = moveEntry;
 
     // Find object by stable key (Base64-encoded or plain) or by global_index
     let obj = findObjectByKey(moveKey, allObjects);
@@ -698,14 +691,7 @@ function processStagedMove(moveEntry, allObjects, editsMap, fileChanges, configP
  * Processes a single pending edit (for objects not being moved).
  */
 function processPendingEdit(editEntry, allObjects, movedIndices, fileChanges, configPath) {
-    let editIdx, edit;
-    if (Array.isArray(editEntry)) {
-        editIdx = editEntry[0];
-        edit = editEntry[1];
-    } else {
-        editIdx = editEntry.globalIndex;
-        edit = editEntry;
-    }
+    const [editIdx, edit] = editEntry;
 
     if (movedIndices.has(editIdx)) return;
 
@@ -774,19 +760,10 @@ function buildGlobalFileBasedChanges(pendingEdits, stagedMoves, stagedCreations,
     const fileChanges = new Map();
     const editsMap = buildEditsMap(pendingEdits);
 
-    // Helper to iterate over moves - handles both array and object formats
+    // Iterate over moves dict {stableKey: moveData, ...}
     const iterateMoves = (moves, callback) => {
-        if (Array.isArray(moves)) {
-            // Array format: [{stableKey: "...", ...}, ...]
-            for (const move of moves) {
-                const key = move.stableKey || move.key || '';
-                callback(key, move);
-            }
-        } else {
-            // Object format: {"stableKey": {...}, ...}
-            for (const [key, move] of Object.entries(moves)) {
-                callback(key, move);
-            }
+        for (const [key, move] of Object.entries(moves || {})) {
+            callback(key, move);
         }
     };
 
@@ -808,17 +785,10 @@ function buildGlobalFileBasedChanges(pendingEdits, stagedMoves, stagedCreations,
         movedIndices.add(moveKey);
     });
 
-    // Helper to iterate over edits - handles both array and object formats
+    // Iterate over edits dict {globalIndex: editData, ...}
     const iterateEdits = (edits, callback) => {
-        if (Array.isArray(edits)) {
-            for (const edit of edits) {
-                const key = edit.globalIndex !== undefined ? edit.globalIndex : (edit.stableKey || edit.key || '');
-                callback(key, edit);
-            }
-        } else {
-            for (const [key, edit] of Object.entries(edits)) {
-                callback(key, edit);
-            }
+        for (const [key, edit] of Object.entries(edits || {})) {
+            callback(key, edit);
         }
     };
 

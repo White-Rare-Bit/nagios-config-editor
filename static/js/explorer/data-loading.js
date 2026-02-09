@@ -109,8 +109,8 @@
                 userName: identity.userName || '',
                 userEmail: identity.userEmail || '',
                 // Object operations
-                pendingEdits: Array.from(state.pendingEdits.entries()).map(([key, val]) => ({...val, globalIndex: key})),
-                stagedMoves: Array.from(state.stagedMoves.entries()).map(([key, val]) => ({...val, stableKey: key})).sort((a, b) => (a.insertPosition || 0) - (b.insertPosition || 0)),
+                pendingEdits: Object.fromEntries(state.pendingEdits),
+                stagedMoves: Object.fromEntries(state.stagedMoves),
                 stagedCreations: state.stagedCreations,
                 newFiles: Array.from(state.newFiles),
                 stagedObjectDeletions: Array.from(state.stagedObjectDeletions),
@@ -179,30 +179,15 @@
                 Explorer.updateEditingLockedUI();
             }
 
-            // Object operations - handle both array format (new) and dict format (legacy)
+            // Object operations - dict format: {key: entry, ...}
             if (data.pendingEdits) {
-                if (Array.isArray(data.pendingEdits)) {
-                    // Array format: [{globalIndex: key, ...}, ...]
-                    const validEdits = data.pendingEdits
-                        .filter(edit => edit && edit.object && edit.object.source_file)
-                        .map(edit => [String(edit.globalIndex), edit]);
-                    state.pendingEdits = new Map(validEdits);
-                } else {
-                    // Legacy dict format: {key: data, ...}
-                    const validEdits = Object.entries(data.pendingEdits).filter(([key, edit]) => {
-                        return edit && edit.object && edit.object.source_file;
-                    });
-                    state.pendingEdits = new Map(validEdits);
-                }
+                const validEdits = Object.entries(data.pendingEdits).filter(([key, edit]) => {
+                    return edit && edit.object && edit.object.source_file;
+                });
+                state.pendingEdits = new Map(validEdits);
             }
             if (data.stagedMoves) {
-                if (Array.isArray(data.stagedMoves)) {
-                    // Array format: [{stableKey: key, ...}, ...]
-                    state.stagedMoves = new Map(data.stagedMoves.map(move => [move.stableKey, move]));
-                } else {
-                    // Legacy dict format: {key: data, ...}
-                    state.stagedMoves = new Map(Object.entries(data.stagedMoves));
-                }
+                state.stagedMoves = new Map(Object.entries(data.stagedMoves));
             }
             if (data.stagedCreations) {
                 state.stagedCreations = data.stagedCreations;

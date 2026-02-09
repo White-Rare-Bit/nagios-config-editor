@@ -26,26 +26,11 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 from nagios_model import OperationResult
 
-# Current schema version for migration support
-STAGING_SCHEMA_VERSION = 2
+# Schema version
+STAGING_SCHEMA_VERSION = 3
 
 # Set up structured logging
 logger = logging.getLogger('nagios_bulk_editor.staging')
-
-
-def _ensure_dict_format(entry):
-    """Ensure entry is dict format, logging warning for non-dict entries.
-
-    Args:
-        entry: Entry that should be a dict
-
-    Returns:
-        The entry if it's a dict, otherwise empty dict
-    """
-    if not isinstance(entry, dict):
-        logger.warning(f"Non-dict entry encountered in staging data: type={type(entry).__name__}, preview={str(entry)[:100]}")
-        return {}
-    return entry
 
 
 # =============================================================================
@@ -140,8 +125,8 @@ class StagingState:
     schema_version: int = STAGING_SCHEMA_VERSION
     user_name: str = ''
     user_email: str = ''
-    pending_edits: List[Any] = field(default_factory=list)
-    staged_moves: List[Any] = field(default_factory=list)
+    pending_edits: Dict[str, Any] = field(default_factory=dict)
+    staged_moves: Dict[str, Any] = field(default_factory=dict)
     staged_creations: List[Any] = field(default_factory=list)
     staged_object_deletions: List[Any] = field(default_factory=list)
     new_files: List[str] = field(default_factory=list)
@@ -200,8 +185,8 @@ class StagingState:
             schema_version=data.get('schemaVersion', STAGING_SCHEMA_VERSION),
             user_name=data.get('userName', ''),
             user_email=data.get('userEmail', ''),
-            pending_edits=data.get('pendingEdits', []),
-            staged_moves=data.get('stagedMoves', []),
+            pending_edits=data.get('pendingEdits', {}),
+            staged_moves=data.get('stagedMoves', {}),
             staged_creations=data.get('stagedCreations', []),
             staged_object_deletions=data.get('stagedObjectDeletions', []),
             new_files=data.get('newFiles', []),
@@ -930,11 +915,11 @@ class StagingManager:
         counts = {}
 
         # Object operations
-        pending_edits = data.get('pendingEdits', [])
+        pending_edits = data.get('pendingEdits', {})
         if pending_edits:
             counts['edits'] = len(pending_edits)
 
-        staged_moves = data.get('stagedMoves', [])
+        staged_moves = data.get('stagedMoves', {})
         if staged_moves:
             counts['moves'] = len(staged_moves)
 
@@ -1103,30 +1088,23 @@ class StagingManager:
         return StagingState().to_dict()
 
     def migrate_staging_schema(self, data: Dict) -> Dict:
-        """Migrate staging data to the current schema version.
+        """Ensure staging data has all required fields.
 
         Args:
             data: Existing staging data
 
         Returns:
-            Migrated staging data with all required fields
+            Staging data with all required fields populated
         """
         if not data:
             return self.get_empty_staging_structure()
 
-        current_version = data.get('schemaVersion', 1)
-
-        if current_version >= STAGING_SCHEMA_VERSION:
-            return data
-
-        # Migrate from v1 to v2: add new file/folder staging fields
-        if current_version < 2:
-            defaults = self.get_empty_staging_structure()
-            for key in defaults:
-                if key not in data:
-                    data[key] = defaults[key]
-            data['schemaVersion'] = STAGING_SCHEMA_VERSION
-            logger.info(f"Migrated staging schema from v{current_version} to v{STAGING_SCHEMA_VERSION}")
+        # Ensure all fields exist
+        defaults = self.get_empty_staging_structure()
+        for key in defaults:
+            if key not in data:
+                data[key] = defaults[key]
+        data['schemaVersion'] = STAGING_SCHEMA_VERSION
 
         # Determine status from content if not explicitly set by caller
         if data.get('status') == StagingStatus.EMPTY.value:
@@ -1287,26 +1265,22 @@ class UndoKeyError(ValueError):
 
 
 def _filter_staged_entries(entries, target_key):
-    """Filter staged entries, keeping those that don't match target_key.
-
-    Handles both formats:
-    - Dict format {key: data, ...}: removes key from dict
-    - List format [{...}, ...]: filters list entries
+    """Remove an entry from a staged dict by key.
 
     Raises UndoKeyError if target_key is empty/None (prevents silent no-op).
 
     Args:
-        entries: Dict or list of staged entries to filter
+        entries: Dict {key: data, ...} of staged entries
         target_key: Key to match for removal
 
     Returns:
-        Filtered entries (same type as input)
+        New dict with target_key removed
 
     Raises:
         UndoKeyError: If target_key is None or empty string
     """
-    if entries is None:
-        return {} if isinstance(entries, dict) else []
+    if not entries:
+        return {}
 
     if target_key is None or target_key == '':
         raise UndoKeyError(
@@ -1314,21 +1288,10 @@ def _filter_staged_entries(entries, target_key):
             "This indicates corrupted undo data or a bug in undo entry creation."
         )
 
-    # Dict format: remove key directly
-    if isinstance(entries, dict):
-        result = dict(entries)  # Copy to avoid mutation
-        str_key = str(target_key)
-        if str_key in result:
-            del result[str_key]
-        return result
-
-    # List format: filter entries
-    filtered = []
-    for entry in entries:
-        entry_key = str(entry.get('key', '')) or str(entry.get('globalIndex', ''))
-        if entry_key != str(target_key):
-            filtered.append(entry)
-    return filtered
+    result = dict(entries)
+    str_key = str(target_key)
+    result.pop(str_key, None)
+    return result
 
 
 def _remove_by_op_id(staging: Dict, field: str, op_id: str) -> int:
@@ -1388,19 +1351,16 @@ def _undo_folder_move(staging, action_data):
 
 def _undo_edit(staging, action_data):
     """Remove pending edit."""
-    # F-02: Use explicit None check instead of `or` to handle globalIndex=0 correctly
-    # Entries use either dict-format (with 'key' field) or list-format (with 'globalIndex')
     edit_key = str(action_data['key']) if 'key' in action_data else str(action_data.get('globalIndex', ''))
-    pending_edits = staging.get('pendingEdits', [])
+    pending_edits = staging.get('pendingEdits', {})
     staging['pendingEdits'] = _filter_staged_entries(pending_edits, edit_key)
     return f"Unstaged edit: {action_data.get('object', {}).get('name', 'unknown')}"
 
 
 def _undo_move(staging, action_data):
     """Remove staged move."""
-    # F-02: Use explicit None check instead of `or` to handle globalIndex=0 correctly
     move_key = str(action_data['key']) if 'key' in action_data else str(action_data.get('globalIndex', ''))
-    staged_moves = staging.get('stagedMoves', [])
+    staged_moves = staging.get('stagedMoves', {})
     staging['stagedMoves'] = _filter_staged_entries(staged_moves, move_key)
     return f"Unstaged move: {action_data.get('object', {}).get('name', 'unknown')}"
 
@@ -1418,10 +1378,14 @@ def _undo_creation(staging, action_data):
 
 def _undo_deletion(staging, action_data):
     """Remove staged deletion."""
-    # F-02: Use explicit None check instead of `or` to handle globalIndex=0 correctly
     deletion_key = str(action_data['key']) if 'key' in action_data else str(action_data.get('globalIndex', ''))
     staged_deletions = staging.get('stagedObjectDeletions', [])
-    staging['stagedObjectDeletions'] = _filter_staged_entries(staged_deletions, deletion_key)
+    # stagedObjectDeletions is an array of ints — filter by int comparison
+    try:
+        target_int = int(deletion_key)
+        staging['stagedObjectDeletions'] = [d for d in staged_deletions if d != target_int]
+    except (ValueError, TypeError):
+        pass
     return f"Unstaged deletion: {action_data.get('deletion', {}).get('name', 'unknown')}"
 
 
@@ -1438,9 +1402,8 @@ def _undo_bulk_move(staging, action_data):
     items = action_data.get('items', [])
     count = 0
     for item in items:
-        # F-02: Use explicit None check instead of `or` to handle globalIndex=0 correctly
         move_key = str(item['key']) if 'key' in item else str(item.get('globalIndex', ''))
-        staged_moves = staging.get('stagedMoves', [])
+        staged_moves = staging.get('stagedMoves', {})
         before_len = len(staged_moves)
         staging['stagedMoves'] = _filter_staged_entries(staged_moves, move_key)
         if len(staging['stagedMoves']) < before_len:
@@ -1453,9 +1416,8 @@ def _undo_bulk_edit(staging, action_data):
     items = action_data.get('items', [])
     count = 0
     for item in items:
-        # F-02: Use explicit None check instead of `or` to handle globalIndex=0 correctly
         edit_key = str(item['key']) if 'key' in item else str(item.get('globalIndex', ''))
-        pending_edits = staging.get('pendingEdits', [])
+        pending_edits = staging.get('pendingEdits', {})
         before_len = len(pending_edits)
         staging['pendingEdits'] = _filter_staged_entries(pending_edits, edit_key)
         if len(staging['pendingEdits']) < before_len:
@@ -1480,15 +1442,18 @@ def _undo_bulk_creation(staging, action_data):
 def _undo_bulk_deletion(staging, action_data):
     """Remove all staged deletions from a bulk operation."""
     items = action_data.get('items', [])
-    count = 0
+    # Collect all int keys to remove
+    keys_to_remove = set()
     for item in items:
-        # F-02: Use explicit None check instead of `or` to handle globalIndex=0 correctly
         deletion_key = str(item['key']) if 'key' in item else str(item.get('globalIndex', ''))
-        staged_deletions = staging.get('stagedObjectDeletions', [])
-        before_len = len(staged_deletions)
-        staging['stagedObjectDeletions'] = _filter_staged_entries(staged_deletions, deletion_key)
-        if len(staging['stagedObjectDeletions']) < before_len:
-            count += 1
+        try:
+            keys_to_remove.add(int(deletion_key))
+        except (ValueError, TypeError):
+            pass
+    staged_deletions = staging.get('stagedObjectDeletions', [])
+    before_len = len(staged_deletions)
+    staging['stagedObjectDeletions'] = [d for d in staged_deletions if d not in keys_to_remove]
+    count = before_len - len(staging['stagedObjectDeletions'])
     return f"Unstaged bulk deletion: {count} object(s)"
 
 

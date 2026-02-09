@@ -21,7 +21,6 @@ from staging_manager import (
     parse_stable_key,
     StagingState,
     StagingManager,
-    _ensure_dict_format
 )
 from pathlib import Path
 import os
@@ -654,20 +653,23 @@ class NagiosService:
         self._log_apply_result('apply_object_deletions', count, errors)
         return OperationResult(True, data=result)
 
-    def _normalize_staged_moves(self, staged_moves: List[dict]) -> List[dict]:
+    def _normalize_staged_moves(self, staging_data: dict) -> List[dict]:
         """Normalize staged move entries into a consistent format.
 
         Args:
-            staged_moves: Array of move entries, pre-sorted by insertPosition
+            staging_data: Staging data dict containing stagedMoves
 
         Returns:
-            List of normalized move dicts with target_file, source_file,
-            obj_type, attrs, and insert_position keys
+            List of normalized move dicts sorted by insertPosition
         """
+        staged_moves = staging_data.get('stagedMoves', {})
+        move_list = list(staged_moves.values()) if isinstance(staged_moves, dict) else staged_moves
+        move_list.sort(key=lambda e: (e.get('insertPosition') or 0) if isinstance(e, dict) else 0)
+
         moves = []
-        # Frontend sends array sorted by insertPosition
-        for entry in staged_moves:
-            move_data = _ensure_dict_format(entry)
+        for move_data in move_list:
+            if not isinstance(move_data, dict):
+                continue
             target_file = move_data.get('targetFile')
             obj_info = move_data.get('object', {})
             source_file = obj_info.get('source_file')
@@ -742,17 +744,17 @@ class NagiosService:
         """
         if self._op_logger:
             self._op_logger.debug('service', 'apply_object_moves', result='started')
-        staged_moves = staging_data.get('stagedMoves', [])
         count = 0
         errors = []
         details = []
 
+        staged_moves = staging_data.get('stagedMoves', {})
         if not staged_moves:
             self._log_apply_result('apply_object_moves', count, errors)
             return OperationResult(True, data={'count': count, 'errors': errors, 'details': details})
 
-        # Normalize all moves
-        moves = self._normalize_staged_moves(staged_moves)
+        # Normalize all moves (extracts from staging_data, sorts by insertPosition)
+        moves = self._normalize_staged_moves(staging_data)
         if not moves:
             self._log_apply_result('apply_object_moves', count, errors)
             return OperationResult(True, data={'count': count, 'errors': errors, 'details': details})
@@ -846,7 +848,7 @@ class NagiosService:
         """Edit staged objects."""
         if self._op_logger:
             self._op_logger.debug('service', 'apply_object_edits', result='started')
-        pending_edits = staging_data.get('pendingEdits', [])
+        pending_edits = staging_data.get('pendingEdits', {})
         count = 0
         errors = []
         details = []
@@ -857,15 +859,18 @@ class NagiosService:
             return OperationResult(True, data=result)
 
         p = self.parser
-        # Frontend sends array with globalIndex included in each entry
-        for entry in pending_edits:
-            edit_data = _ensure_dict_format(entry)
+        # pendingEdits is a dict {globalIndex: entry}
+        for gi_str, entry in pending_edits.items():
+            if not isinstance(entry, dict):
+                continue
+            if 'globalIndex' not in entry:
+                entry['globalIndex'] = gi_str
 
-            edited_attrs = edit_data.get('edited', {})
+            edited_attrs = entry.get('edited', {})
             if not edited_attrs:
                 continue
 
-            target_obj = self._find_object_by_entry(edit_data, "edit")
+            target_obj = self._find_object_by_entry(entry, "edit")
 
             if target_obj:
                 old_attrs = dict(target_obj.attributes)
