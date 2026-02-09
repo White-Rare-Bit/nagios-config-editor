@@ -1,179 +1,33 @@
-# Explorer Module Reference
+# Explorer Modules
 
-Modular architecture for Nagios config explorer: shared namespace, three-pane UI (tree/editor/files), staging system integration.
+All modules attach to `window.Explorer` namespace. State in `Explorer.state`.
 
 ## Module Index
 
-| File | What | When |
-|------|------|------|
-| `constants.js` | Centralized configuration: type labels, name fields, notification options, required fields, reference field mappings | Adding new object types or reference fields |
-| `main.js` | Namespace definition (`window.Explorer`), state structure (allObjects, selections, staging maps, undo stack) | Understanding state or initialization |
-| `state-management.js` | Stable key helpers, pending edit getters/setters, refresh coordination (`refreshAfterObjectChange`) | Modifying staging or refresh logic |
-| `app.js` | Tree pane: rendering, filtering, selection, autocomplete, references/inheritance display | Tree UI or object relationships |
-| `object-editor.js` | Center pane: attribute editor, validation, edit staging, create/delete workflows | Object editing UI |
-| `file-operations.js` | Target pane: file tree rendering, navigation, folder operations. Helper: `afterStagingChange()` | File tree or move operations |
-| `context-menu.js` | Right-click menus, bulk actions, preview modal. Helper: `getOrCreatePendingEdit()` | Context menus or bulk operations |
-| `dialogs.js` | Create/delete/rename dialogs, validation. Helpers: `buildWarningBox()`, `buildTypeDropdown()` | Dialog UI |
-| `data-loading.js` | API calls, staging sync/polling, initial load. Helpers: `handleApiError()`, `toDisplayPath()` | Data loading or sync |
-| `drag-drop.js` | Unified drag-drop handler (objects and files), drop zones, visual feedback | Drag-drop behavior |
-| `analysis.js` | Suggestions tab: template detection, validation errors. Utilities: `filterActiveSuggestions()` | Analysis features |
-| `analysis-cleanup.js` | Cleanup analysis: unused templates/commands/contacts, duplicates, orphans, empty groups | Cleanup suggestions |
-| `analysis-issues.js` | Validation issues: grouped errors, batch create missing objects, issue resolution | Validation errors |
-| `analysis-suggestions.js` | Template consolidation and hostgroup suggestions, create dialogs | Suggestions UI |
-| `badge-issues.js` | Issue badge rendering and counts for tree nodes | Issue indicators |
-| `orphan-detection.js` | Orphan object analysis and cache building | Orphan detection |
-| `relations-loader.js` | Reference and inheritance loading for center pane | Object relationships |
-| `impact-section.js` | Impact analysis UI in center pane | Impact display |
-| `ui-utils.js` | Icons, formatting (formatObjectName, buildBreadcrumb), tab switching | UI utilities |
+| File | What |
+|------|------|
+| `main.js` | Namespace, state structure (allObjects, selections, staging maps, undo stack) |
+| `constants.js` | Domain metadata from `/api/metadata`, UI-only constants, shared helpers |
+| `state-management.js` | Stable key helpers, pending edit get/set, `refreshAfterObjectChange()` |
+| `app.js` | Left pane: tree rendering, filtering, selection, autocomplete |
+| `object-editor.js` | Center pane: attribute editor, validation, create/delete workflows |
+| `file-operations.js` | Right pane: file tree, navigation, folder ops. Helper: `afterStagingChange()` |
+| `context-menu.js` | Right-click menus, bulk actions. Helper: `getOrCreatePendingEdit(obj)` |
+| `dialogs.js` | Create/delete/rename dialogs, `buildWarningBox()`, `buildTypeDropdown()` |
+| `data-loading.js` | API calls, staging sync/polling, initial load |
+| `drag-drop.js` | Drag-drop cleanup utilities (handlers in context-menu.js and file-operations.js) |
+| `analysis.js` | Suggestions tab: template detection, validation errors |
+| `analysis-issues.js` | Grouped validation errors, batch create missing objects |
+| `analysis-suggestions.js` | Template consolidation and hostgroup suggestions |
+| `badge-issues.js` | Issue badge rendering and counts for tree nodes |
+| `relations-loader.js` | Reference and inheritance loading for center pane |
+| `impact-section.js` | Impact analysis and resolved attributes in center pane |
+| `ui-utils.js` | Icons, `formatObjectName()`, `buildBreadcrumb()`, tab switching |
 
-## State Management
+## Constants: Metadata vs Hardcoded
 
-**Namespace**: All modules attach to `window.Explorer` and access `Explorer.state`.
+From `/api/metadata` (source of truth: `nagios_model.py`):
+`typeLabels`, `nameFields`, `REQUIRED_FIELDS`, `referenceFields`, `ATTR_REFERENCE_MAP`, `NAGIOS_ATTRIBUTES`, `defaultAttributes`, `groupStructure`, notification options, failure criteria
 
-**Shared State** (`Explorer.state`):
-- `allObjects`, `allFiles` - Server data
-- `selectedKeys` (Set) - Selected object stable keys
-- `pendingEdits` (Map) - `global_index -> {original, edited, object}`
-- `stagedMoves` (Map) - `stableKey -> {targetFile, originalFile, object}`
-- `stagedCreations`, `stagedObjectDeletions`, `stagedFileCreations`, etc. - Staging operations
-- `undoStack` - Operation history
-- `editedObject`, `isNewObject` - Center pane edit state
-
-**Stable Keys**: Objects identified by `"source_file|object_type|name"` instead of global_index for staging persistence.
-
-## Key Patterns
-
-### Refresh After Changes
-
-```javascript
-Explorer.refreshAfterObjectChange({
-    skipTree: false,      // Refresh tree pane
-    skipCenter: false,    // Refresh center editor
-    skipTarget: false,    // Refresh target file pane
-    skipSuggestions: false, // Refresh analysis
-    skipCommit: false     // Update commit button badge
-});
-```
-
-Call after ANY object mutation (create, edit, delete, move, undo).
-
-### Staging Integration
-
-All operations use staging system - changes NOT written to disk until "Apply".
-
-```javascript
-// Stage object edit
-Explorer.setPendingEdit(obj.global_index, {original, edited, object});
-
-// Stage object move
-state.stagedMoves.set(stableKey, {targetFile, originalFile, object});
-
-// Stage object creation
-state.stagedCreations.push({object_type, attributes, targetFile, displayName});
-
-// Stage object deletion
-state.stagedObjectDeletions.add(global_index);
-```
-
-### Three-Pane Architecture
-
-| Pane | Module | Purpose |
-|------|--------|---------|
-| Left (Tree) | `app.js` | Browse objects by file or type, filter, select |
-| Center (Editor) | `object-editor.js` | Edit attributes, view inheritance/references |
-| Right (Files) | `file-operations.js` | File tree, move targets, folder operations |
-
-### Selection
-
-Uses stable keys (`Set`). Helper functions:
-- `Explorer.isSelectedByKey(key)` / `Explorer.isSelectedByIndex(index)`
-- `Explorer.getSelectedIndices()` - Returns array of global_index values
-- `Explorer.clearSelection()`, `Explorer.selectObjectByKey(key)`
-
-### Cross-Module Communication
-
-Modules delegate via `Explorer` namespace:
-
-```javascript
-// app.js delegates to object-editor.js
-function showCenterPaneObject(obj) { Explorer.showCenterPaneObject(obj); }
-
-// object-editor.js delegates to state-management.js
-Explorer.refreshAfterObjectChange({ skipTree: true });
-```
-
-## Constants Module (constants.js)
-
-All domain metadata is served by `GET /api/metadata` and populated into `Explorer.constants` at startup via `Explorer.applyMetadata()`. **Never hardcode domain metadata in JS files.**
-
-```javascript
-const constants = Explorer.constants;
-
-// --- Populated from /api/metadata (nagios_model.py is source of truth) ---
-constants.typeLabels          // { host: 'Hosts', ... }
-constants.nameFields          // { host: 'host_name', ... }
-constants.REQUIRED_FIELDS     // { host: ['host_name'], ... }
-constants.referenceFields     // { host_name: 'host', check_command: 'command', ... }
-constants.ATTR_REFERENCE_MAP  // Built from referenceFields (for autocomplete)
-constants.NAGIOS_ATTRIBUTES   // { host: ['host_name', 'alias', ...], ... }
-constants.defaultAttributes   // { host: {host_name: '', ...}, ... }
-constants.groupStructure      // { hostgroup: {name_attr, member_attrs, ...}, ... }
-constants.HOST_NOTIFICATION_OPTIONS
-constants.SERVICE_NOTIFICATION_OPTIONS
-constants.NOTIFICATION_OPTION_ATTRS
-constants.HOST_FAILURE_CRITERIA
-constants.SERVICE_FAILURE_CRITERIA
-
-// --- UI-only (hardcoded, no backend equivalent) ---
-constants.identityFields      // Fields that define object identity in UI
-constants.inheritanceAttrs    // ['use', 'parents']
-constants.referenceAttrs      // Attrs that trigger reference section refresh
-```
-
-### Shared Helpers (constants.js)
-
-```javascript
-Explorer.isObjectTemplate(obj)      // Detect templates (register=0 or name without type-specific name)
-Explorer.getFieldsForType(type)     // Get all fields referencing a type (e.g., 'command' → ['check_command', ...])
-Explorer.stripPrefix(val)           // Strip +/! prefixes from values
-Explorer.applyMetadata(meta)        // Populate constants from /api/metadata response
-```
-
-## Key Helpers
-
-### afterStagingChange (file-operations.js)
-Consolidates the common staging update pattern:
-```javascript
-// Full refresh (default)
-afterStagingChange();
-
-// Skip tree rebuild (file-only changes)
-afterStagingChange({ tree: false });
-
-// After API calls (don't save, data already persisted)
-afterStagingChange({ save: false, tree: false });
-```
-
-### getOrCreatePendingEdit (context-menu.js)
-Gets existing pending edit or creates new one from object:
-```javascript
-const { original, edited } = getOrCreatePendingEdit(obj);
-edited.someAttr = 'new value';
-Explorer.setPendingEdit(obj.global_index, { original, edited, object: obj });
-```
-
-### Dialog HTML Helpers (dialogs.js)
-```javascript
-buildWarningBox('Warning message', 'warning')  // or 'danger', 'info'
-buildTypeDropdown(currentType)  // Object type selector HTML
-```
-
-### Shared Utilities (constants.js)
-```javascript
-Explorer.stripPrefix('+value')  // → 'value' (removes +/! prefixes)
-```
-
-### Analysis Utilities (analysis.js)
-```javascript
-filterActiveSuggestions(suggestions)  // Excludes deleted objects
-```
+Hardcoded (UI-only, no backend equivalent):
+`identityFields`, `inheritanceAttrs`, `referenceAttrs`
