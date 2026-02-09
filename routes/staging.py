@@ -982,21 +982,22 @@ def _create_pre_apply_backup(staging_data, log):
             log.warning(f"Failed to create pre-apply backup: {e}")
 
 
-def _handle_apply_failure(service, failed_phase, applied_summary, errors, session_id, op_log, log):
+def _handle_apply_failure(service, failed_phase, apply_ctx):
     """Handle a failed apply phase: log, reload parser, return error response.
 
     Args:
         service: NagiosService instance
         failed_phase: Name of the phase that failed
-        applied_summary: Dict of phase -> count applied so far
-        errors: List of error messages
-        session_id: Session ID
-        op_log: Operation logger (may be None)
-        log: Standard logger
+        apply_ctx: Dict with 'applied_summary', 'errors', 'session_id', 'op_log', 'log'
 
     Returns:
         Flask response tuple (jsonify, status_code)
     """
+    errors = apply_ctx['errors']
+    session_id = apply_ctx['session_id']
+    op_log = apply_ctx['op_log']
+    log = apply_ctx['log']
+
     log.error(f"Staging apply failed at phase '{failed_phase}': {errors}")
     if op_log:
         op_log.error('app', 'staging_apply', session_id=session_id,
@@ -1009,7 +1010,7 @@ def _handle_apply_failure(service, failed_phase, applied_summary, errors, sessio
         'success': False,
         'error': f"Apply failed during {failed_phase} phase. Staging preserved for retry.",
         'failedPhase': failed_phase,
-        'applied': applied_summary,
+        'applied': apply_ctx['applied_summary'],
         'errors': errors,
         'stagingPreserved': True
     }), 500
@@ -1076,35 +1077,29 @@ def _run_post_apply_validation():
         }
 
 
-def _build_apply_success_response(applied_summary, all_details, errors, refs_updated,
-                                   staging_cleared, defer_clear, staging_data,
-                                   session_id, validate_after, log):
+def _build_apply_success_response(result_ctx, audit_ctx):
     """Build the success response for a completed apply operation.
 
     Handles audit logging, optional validation, and response construction.
 
     Args:
-        applied_summary: Dict of phase -> count
-        all_details: Dict of phase -> details
-        errors: List of error/warning messages
-        refs_updated: Number of references updated
-        staging_cleared: Whether staging was cleared
-        defer_clear: Whether clearing was deferred
-        staging_data: Original staging data (for audit log)
-        session_id: Session ID (for audit log)
-        validate_after: Whether to run nagios validation
-        log: Logger instance
+        result_ctx: Dict with 'applied_summary', 'all_details', 'errors',
+                    'refs_updated', 'staging_cleared', 'defer_clear', 'validate_after'
+        audit_ctx: Dict with 'staging_data', 'session_id', 'log'
 
     Returns:
         Flask jsonify response
     """
+    applied_summary = result_ctx['applied_summary']
+    errors = result_ctx['errors']
     total_changes = sum(applied_summary.values())
 
     # C-10: Track audit log write result and include failure in response
     audit_failed = False
     if total_changes > 0:
         audit_success, audit_error = _write_apply_audit_log(
-            staging_data, session_id, all_details, errors, log
+            audit_ctx['staging_data'], audit_ctx['session_id'],
+            result_ctx['all_details'], errors, audit_ctx['log']
         )
         if not audit_success:
             audit_failed = True
@@ -1113,14 +1108,14 @@ def _build_apply_success_response(applied_summary, all_details, errors, refs_upd
     response_data = {
         'success': True, 'applied': applied_summary,
         'totalChanges': total_changes, 'errors': errors if errors else None,
-        'referencesUpdated': refs_updated,
-        'stagingCleared': staging_cleared,
-        'stagingDeferred': defer_clear
+        'referencesUpdated': result_ctx['refs_updated'],
+        'stagingCleared': result_ctx['staging_cleared'],
+        'stagingDeferred': result_ctx['defer_clear']
     }
     if audit_failed:
         response_data['warnings'] = ['Audit log write failed - changes applied but not logged']
 
-    if validate_after:
+    if result_ctx['validate_after']:
         response_data['validation'] = _run_post_apply_validation()
 
     return jsonify(response_data)
@@ -1194,9 +1189,11 @@ def api_apply_staging():
         )
 
         if failed_phase:
-            return _handle_apply_failure(
-                service, failed_phase, applied_summary, errors, session_id, op_log, log
-            )
+            apply_ctx = {
+                'applied_summary': applied_summary, 'errors': errors,
+                'session_id': session_id, 'op_log': op_log, 'log': log
+            }
+            return _handle_apply_failure(service, failed_phase, apply_ctx)
 
         # All phases succeeded - reload parser, apply reference updates, then clear staging
         service.reload()
@@ -1210,11 +1207,14 @@ def api_apply_staging():
         if staging_cleared:
             sm.clear_staging()
 
-        return _build_apply_success_response(
-            applied_summary, all_details, errors, refs_updated,
-            staging_cleared, defer_clear, staging_data,
-            session_id, validate_after, log
-        )
+        result_ctx = {
+            'applied_summary': applied_summary, 'all_details': all_details,
+            'errors': errors, 'refs_updated': refs_updated,
+            'staging_cleared': staging_cleared, 'defer_clear': defer_clear,
+            'validate_after': validate_after
+        }
+        audit_ctx = {'staging_data': staging_data, 'session_id': session_id, 'log': log}
+        return _build_apply_success_response(result_ctx, audit_ctx)
 
     except Exception as e:
         # Unexpected exception - do NOT clear staging
@@ -1435,40 +1435,18 @@ def api_staging_undo():
     sm = get_staging_manager()
     session_id = request.headers.get('X-Session-Id')
 
-    if not session_id:
-        return jsonify({'error': 'X-Session-Id header required'}), 400
-
-    if not sm.can_modify(session_id):
-        return jsonify({'error': 'Staging is locked by another user'}), 423
-
-    # C-04 FIX: Peek first, don't pop yet
-    undo_entry = sm.peek_undo_stack()
-    if not undo_entry:
-        return jsonify({'error': 'Nothing to undo'}), 404
-
-    # Get staging for modification
-    staging = sm.get_staging()
-    if not staging:
-        return jsonify({'error': 'No staging data'}), 400
+    error_response, undo_entry, staging = _validate_undo_preconditions(sm, session_id)
+    if error_response:
+        return error_response
 
     action_type = undo_entry.get('type')
     action_data = undo_entry.get('data', {})
 
     try:
-        op_type = OperationType(action_type)
-        handler = UNDO_HANDLERS.get(op_type)
-        if handler:
-            reversed_action = handler(staging, action_data)
-        else:
-            logger.warning(f"Unknown undo action_type: {action_type}, skipping")
-            reversed_action = f"Skipped unknown action: {action_type}"
+        reversed_action = _execute_undo_action(staging, action_type, action_data)
     except UndoKeyError as e:
-        # C-05 FIX: Catch empty key errors and report to user instead of silent failure
         logger.error(f"Undo failed due to invalid key: {e}")
         return jsonify({'error': f'Undo failed: {e}'}), 400
-    except ValueError:
-        logger.warning(f"Invalid undo action_type: {action_type}, skipping")
-        reversed_action = f"Skipped invalid action: {action_type}"
 
     # C-04 FIX: Now remove from stack (in memory) after successful reversal
     undo_stack = staging.get('undoStack', [])
@@ -1484,9 +1462,53 @@ def api_staging_undo():
             'action': reversed_action,
             'undoCount': len(staging.get('undoStack', []))
         })
-    else:
-        # If save fails, nothing was changed - entry still in stack, no data loss
-        return jsonify({'error': 'Failed to save staging'}), 500
+    return jsonify({'error': 'Failed to save staging'}), 500
+
+
+def _validate_undo_preconditions(sm, session_id):
+    """Validate preconditions for an undo operation.
+
+    Returns:
+        Tuple of (error_response, undo_entry, staging).
+        error_response is None if all preconditions are met.
+    """
+    if not session_id:
+        return (jsonify({'error': 'X-Session-Id header required'}), 400), None, None
+    if not sm.can_modify(session_id):
+        return (jsonify({'error': 'Staging is locked by another user'}), 423), None, None
+
+    undo_entry = sm.peek_undo_stack()
+    if not undo_entry:
+        return (jsonify({'error': 'Nothing to undo'}), 404), None, None
+
+    staging = sm.get_staging()
+    if not staging:
+        return (jsonify({'error': 'No staging data'}), 400), None, None
+
+    return None, undo_entry, staging
+
+
+def _execute_undo_action(staging, action_type, action_data):
+    """Execute a single undo action by dispatching to the appropriate handler.
+
+    Returns:
+        Description of the reversed action.
+
+    Raises:
+        UndoKeyError: If undo data has invalid keys.
+    """
+    try:
+        op_type = OperationType(action_type)
+    except ValueError:
+        logger.warning(f"Invalid undo action_type: {action_type}, skipping")
+        return f"Skipped invalid action: {action_type}"
+
+    handler = UNDO_HANDLERS.get(op_type)
+    if handler:
+        return handler(staging, action_data)
+
+    logger.warning(f"Unknown undo action_type: {action_type}, skipping")
+    return f"Skipped unknown action: {action_type}"
 
 
 @bp.route('/api/staging/conflicts', methods=['GET'])

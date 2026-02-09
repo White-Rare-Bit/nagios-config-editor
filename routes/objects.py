@@ -43,81 +43,101 @@ def api_delete_objects():
     bm = get_backup_manager()
     data = request.get_json() or {}
 
-    # Validate input is a dictionary
-    if not isinstance(data, dict):
-        return jsonify({'error': 'Request body must be a JSON object'}), 400
+    validation_error = _validate_delete_request(data)
+    if validation_error:
+        return validation_error
 
-    object_indices = data.get('objects', [])
+    object_indices = _validate_indices(data.get('objects', []))
+    if isinstance(object_indices, tuple):
+        return object_indices  # Error response
+
     update_references_flag = data.get('update_references', True)
 
-    if not object_indices:
+    with get_parser_for_modification() as p:
+        backup_path = bm.create_backup("bulk_delete")
+        objects_to_delete = _collect_objects_to_delete(p, object_indices)
+        deleted_count = _remove_objects(p, object_indices)
+        references_cleaned = (
+            _clean_references(p, objects_to_delete) if update_references_flag else 0
+        )
+
+        writer = NagiosConfigWriter()
+        writer.write_objects_to_original_files(p.objects)
+
+    return jsonify({
+        'success': True, 'deleted': deleted_count,
+        'references_cleaned': references_cleaned, 'backup': backup_path
+    })
+
+
+def _validate_delete_request(data):
+    """Validate the basic structure of a delete request.
+
+    Returns:
+        Error response tuple if invalid, or None if valid.
+    """
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Request body must be a JSON object'}), 400
+    if not data.get('objects'):
         return jsonify({'error': 'No objects specified'}), 400
-
-    # Validate all indices are integers
-    if not isinstance(object_indices, list):
+    if not isinstance(data.get('objects'), list):
         return jsonify({'error': 'objects must be an array'}), 400
+    return None
 
-    validated_indices = []
-    for idx in object_indices:
+
+def _validate_indices(raw_indices):
+    """Validate and convert object indices to integers.
+
+    Returns:
+        List of validated int indices, or error response tuple if invalid.
+    """
+    validated = []
+    for idx in raw_indices:
         if isinstance(idx, bool) or not isinstance(idx, (int, float)):
             return jsonify({'error': 'All object indices must be integers'}), 400
         if isinstance(idx, float) and not idx.is_integer():
             return jsonify({'error': 'All object indices must be integers'}), 400
-        validated_indices.append(int(idx))
-    object_indices = validated_indices
+        validated.append(int(idx))
+    return validated
 
-    # Use lock for entire modification operation
-    with get_parser_for_modification() as p:
-        # Create backup
-        backup_path = bm.create_backup("bulk_delete")
 
-        # Get objects to delete and their names for reference cleanup
-        objects_to_delete = []
-        for idx in sorted(object_indices, reverse=True):
-            if 0 <= idx < len(p.objects):
-                obj = p.objects[idx]
-                objects_to_delete.append({
-                    'type': obj.object_type,
-                    'name': obj.get_name()
-                })
+def _collect_objects_to_delete(parser, indices):
+    """Collect object info for reference cleanup before deletion."""
+    objects_to_delete = []
+    for idx in sorted(indices, reverse=True):
+        if 0 <= idx < len(parser.objects):
+            obj = parser.objects[idx]
+            objects_to_delete.append({'type': obj.object_type, 'name': obj.get_name()})
+    return objects_to_delete
 
-        # Remove objects (in reverse order to maintain indices)
-        deleted_count = 0
-        for idx in sorted(object_indices, reverse=True):
-            if 0 <= idx < len(p.objects):
-                del p.objects[idx]
-                deleted_count += 1
 
-        # Clean up references if requested
-        references_cleaned = 0
-        if update_references_flag:
-            for deleted in objects_to_delete:
-                if not deleted['name']:
-                    continue
-                for obj in p.objects:
-                    for field_name, value in list(obj.attributes.items()):
-                        values = [v.strip() for v in value.split(',')]
-                        if deleted['name'] in values:
-                            new_values = [v for v in values if v != deleted['name']]
-                            if new_values:
-                                obj.attributes[field_name] = ','.join(new_values)
-                            else:
-                                del obj.attributes[field_name]
-                            references_cleaned += 1
+def _remove_objects(parser, indices):
+    """Remove objects by index in reverse order to maintain indices."""
+    deleted_count = 0
+    for idx in sorted(indices, reverse=True):
+        if 0 <= idx < len(parser.objects):
+            del parser.objects[idx]
+            deleted_count += 1
+    return deleted_count
 
-        # Write changes
-        writer = NagiosConfigWriter()
-        writer.write_objects_to_original_files(p.objects)
 
-        # Reset parser to force reload on next access
-        parser = None
-
-    return jsonify({
-        'success': True,
-        'deleted': deleted_count,
-        'references_cleaned': references_cleaned,
-        'backup': backup_path
-    })
+def _clean_references(parser, objects_to_delete):
+    """Clean up references to deleted objects in remaining objects."""
+    references_cleaned = 0
+    for deleted in objects_to_delete:
+        if not deleted['name']:
+            continue
+        for obj in parser.objects:
+            for field_name, value in list(obj.attributes.items()):
+                values = [v.strip() for v in value.split(',')]
+                if deleted['name'] in values:
+                    new_values = [v for v in values if v != deleted['name']]
+                    if new_values:
+                        obj.attributes[field_name] = ','.join(new_values)
+                    else:
+                        del obj.attributes[field_name]
+                    references_cleaned += 1
+    return references_cleaned
 
 
 @bp.route('/api/clone-objects', methods=['POST'])

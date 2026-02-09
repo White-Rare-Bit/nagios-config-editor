@@ -48,93 +48,19 @@ def api_update_settings():
         return jsonify({'error': 'Server config not initialized'}), 500
 
     data = request.get_json() or {}
-
     updated = []
     errors = []
 
-    # Update config path
     if 'nagios_config_path' in data:
-        path = data['nagios_config_path']
-        if os.path.isdir(path):
-            # F-05: Create all services BEFORE updating config to prevent inconsistent state
-            # If any service fails to initialize, roll back entirely
-            op_logger = get_op_logger()
-            from staging_manager import StagingManager
-            from nagios_service import NagiosService
-            from backup_manager import BackupManager
-            from git_service import GitService
-            import file_operations
-
-            normalized_path = os.path.abspath(path)
-            old_config_path = server_config.paths.nagios_config_path
-
-            try:
-                # Create all services with new path (may fail if config is invalid)
-                new_staging = StagingManager(normalized_path, op_logger=op_logger)
-                new_service = NagiosService(normalized_path, new_staging, op_logger=op_logger)
-                # Force parser initialization to catch config errors early
-                _ = new_service.parser
-                new_backup = BackupManager(normalized_path, server_config.backup_path, op_logger=op_logger)
-                new_git = GitService(normalized_path, op_logger=op_logger)
-
-                # All services created successfully - now safe to update config and extensions
-                server_config.paths.nagios_config_path = normalized_path
-                file_operations.set_logger(op_logger)
-                current_app.extensions['service'] = new_service
-                current_app.extensions['staging'] = new_staging
-                current_app.extensions['backup'] = new_backup
-                current_app.extensions['git'] = new_git
-
-                updated.append('nagios_config_path')
-            except Exception as e:
-                # Service initialization failed - config remains unchanged
-                errors.append(f'Failed to initialize services for path: {e}')
-        else:
-            errors.append(f'Invalid directory: {path}')
-
-    # Update backup path
+        _update_config_path(server_config, data['nagios_config_path'], updated, errors)
     if 'backup_path' in data:
-        path = data['backup_path']
-        if path and not os.path.isdir(path):
-            try:
-                os.makedirs(path, exist_ok=True)
-            except OSError as e:
-                errors.append(f'Cannot create backup directory: {e}')
-        if not errors or 'backup' not in str(errors[-1]):
-            server_config.paths.backup_path = path or None
-
-            # Reinitialize backup manager with new path
-            op_logger = get_op_logger()
-            from backup_manager import BackupManager
-            backup_manager = BackupManager(server_config.nagios_config_path, server_config.backup_path, op_logger=op_logger)
-            current_app.extensions['backup'] = backup_manager
-
-            updated.append('backup_path')
-
-    # Update Nagios binary path
+        _update_backup_path(server_config, data['backup_path'], updated, errors)
     if 'nagios_bin' in data:
-        path = data['nagios_bin']
-        if path:
-            # Security: Verify the binary is actually Nagios before saving
-            # This prevents command injection via malicious binary paths
-            result = verify_nagios_binary(path)
-            if result.success:
-                server_config.paths.nagios_bin = path
-                updated.append('nagios_bin')
-            else:
-                errors.append(f'Invalid Nagios binary: {result.error}')
-        else:
-            # Allow clearing the path
-            server_config.paths.nagios_bin = path
-            updated.append('nagios_bin')
-
-    # Update Nagios config file path
+        _update_nagios_bin(server_config, data['nagios_bin'], updated, errors)
     if 'nagios_cfg' in data:
-        path = data['nagios_cfg']
-        server_config.paths.nagios_cfg = path
+        server_config.paths.nagios_cfg = data['nagios_cfg']
         updated.append('nagios_cfg')
 
-    # Persist changes to config/settings.json
     if updated and not errors:
         try:
             save_server_config(server_config)
@@ -152,6 +78,78 @@ def api_update_settings():
             'nagios_cfg': server_config.nagios_cfg,
         }
     })
+
+
+def _update_config_path(server_config, path, updated, errors):
+    """Update the Nagios config directory path.
+
+    F-05: Creates all services BEFORE updating config to prevent inconsistent state.
+    Appends to updated/errors lists in place.
+    """
+    if not os.path.isdir(path):
+        errors.append(f'Invalid directory: {path}')
+        return
+
+    op_logger = get_op_logger()
+    from staging_manager import StagingManager
+    from nagios_service import NagiosService
+    from backup_manager import BackupManager
+    from git_service import GitService
+    import file_operations
+
+    normalized_path = os.path.abspath(path)
+
+    try:
+        new_staging = StagingManager(normalized_path, op_logger=op_logger)
+        new_service = NagiosService(normalized_path, new_staging, op_logger=op_logger)
+        _ = new_service.parser  # Force init to catch config errors early
+        new_backup = BackupManager(normalized_path, server_config.backup_path, op_logger=op_logger)
+        new_git = GitService(normalized_path, op_logger=op_logger)
+
+        server_config.paths.nagios_config_path = normalized_path
+        file_operations.set_logger(op_logger)
+        current_app.extensions['service'] = new_service
+        current_app.extensions['staging'] = new_staging
+        current_app.extensions['backup'] = new_backup
+        current_app.extensions['git'] = new_git
+        updated.append('nagios_config_path')
+    except Exception as e:
+        errors.append(f'Failed to initialize services for path: {e}')
+
+
+def _update_backup_path(server_config, path, updated, errors):
+    """Update the backup directory path. Creates directory if needed."""
+    if path and not os.path.isdir(path):
+        try:
+            os.makedirs(path, exist_ok=True)
+        except OSError as e:
+            errors.append(f'Cannot create backup directory: {e}')
+            return
+
+    server_config.paths.backup_path = path or None
+
+    op_logger = get_op_logger()
+    from backup_manager import BackupManager
+    backup_manager = BackupManager(
+        server_config.nagios_config_path, server_config.backup_path, op_logger=op_logger
+    )
+    current_app.extensions['backup'] = backup_manager
+    updated.append('backup_path')
+
+
+def _update_nagios_bin(server_config, path, updated, errors):
+    """Update the Nagios binary path with security verification."""
+    if path:
+        result = verify_nagios_binary(path)
+        if result.success:
+            server_config.paths.nagios_bin = path
+            updated.append('nagios_bin')
+        else:
+            errors.append(f'Invalid Nagios binary: {result.error}')
+    else:
+        # Allow clearing the path
+        server_config.paths.nagios_bin = path
+        updated.append('nagios_bin')
 
 
 @bp.route('/api/settings/browse', methods=['POST'])
