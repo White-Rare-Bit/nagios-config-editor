@@ -1,5 +1,4 @@
-"""
-Backup Manager for Nagios Configuration
+"""Backup Manager for Nagios Configuration
 
 Creates timestamped zip backups before any changes and provides restore functionality.
 """
@@ -11,13 +10,13 @@ import uuid
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict
+import contextlib
 
 
 class BackupManager:
     """Manages backups of Nagios configuration files as zip archives."""
 
-    def __init__(self, config_path: str, backup_path: Optional[str] = None, op_logger=None):
+    def __init__(self, config_path: str, backup_path: str | None = None, op_logger=None):
         self.config_path = Path(config_path)
         self.backup_path = Path(backup_path) if backup_path else self.config_path / "backups"
         self._op_logger = op_logger
@@ -26,7 +25,7 @@ class BackupManager:
         if self.backup_path.resolve() == self.config_path.resolve():
             raise ValueError(
                 f"backup_path ({self.backup_path}) must not equal config_path ({self.config_path}). "
-                "This would cause empty backups since all .cfg files would be skipped."
+                "This would cause empty backups since all .cfg files would be skipped.",
             )
 
     def _collect_config_files(self):
@@ -49,7 +48,7 @@ class BackupManager:
                 pass
 
             for filename in files:
-                if not filename.endswith('.cfg'):
+                if not filename.endswith(".cfg"):
                     continue
                 cfg_file = root_path / filename
 
@@ -64,7 +63,7 @@ class BackupManager:
     def create_backup(self, description: str = "", user_name: str = "", user_email: str = "") -> str:
         """Create a timestamped zip backup of all configuration files."""
         if self._op_logger:
-            self._op_logger.info('backup', 'create_backup', params={'description': description}, user_name=user_name, user_email=user_email)
+            self._op_logger.info("backup", "create_backup", params={"description": description}, user_name=user_name, user_email=user_email)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         # C-02: Add UUID suffix to prevent filename collision on concurrent creates
         unique_id = uuid.uuid4().hex[:8]
@@ -83,14 +82,14 @@ class BackupManager:
         # Create zip with all .cfg files
         copied_files = 0
         skipped_symlinks = 0
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for cfg_file, rel_path, is_symlink in self._collect_config_files():
                 if is_symlink:
                     skipped_symlinks += 1
                     if self._op_logger:
-                        self._op_logger.warning('backup', 'create_backup',
-                            params={'skipped_symlink': str(cfg_file)},
-                            error='Symlink skipped for security')
+                        self._op_logger.warning("backup", "create_backup",
+                            params={"skipped_symlink": str(cfg_file)},
+                            error="Symlink skipped for security")
                     continue
                 zf.write(cfg_file, str(rel_path))
                 copied_files += 1
@@ -103,7 +102,7 @@ class BackupManager:
 
         return str(zip_path)
 
-    def _build_metadata_lines(self, description: str, user_name: str, user_email: str) -> List[str]:
+    def _build_metadata_lines(self, description: str, user_name: str, user_email: str) -> list[str]:
         """Build metadata lines for backup info file."""
         lines = [
             f"Backup created: {datetime.now().isoformat()}",
@@ -116,42 +115,42 @@ class BackupManager:
             lines.append(f"User email: {user_email}")
         return lines
 
-    def _parse_backup_metadata(self, zip_path: Path) -> Dict:
+    def _parse_backup_metadata(self, zip_path: Path) -> dict:
         """Read metadata from a backup zip file.
 
         Returns a dict with keys: name, path, created, description, file_count,
         user_name, user_email.
         """
         info = {
-            'name': zip_path.name,
-            'path': str(zip_path),
-            'created': None,
-            'description': '',
-            'file_count': 0,
-            'user_name': '',
-            'user_email': ''
+            "name": zip_path.name,
+            "path": str(zip_path),
+            "created": None,
+            "description": "",
+            "file_count": 0,
+            "user_name": "",
+            "user_email": "",
         }
 
         try:
-            with zipfile.ZipFile(zip_path, 'r') as zf:
-                if '_backup_info.txt' in zf.namelist():
-                    self._parse_metadata_text(info, zf.read('_backup_info.txt').decode('utf-8'))
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                if "_backup_info.txt" in zf.namelist():
+                    self._parse_metadata_text(info, zf.read("_backup_info.txt").decode("utf-8"))
                 else:
-                    info['created'] = datetime.fromtimestamp(zip_path.stat().st_mtime).isoformat()
-                    info['file_count'] = len([n for n in zf.namelist() if n.endswith('.cfg')])
+                    info["created"] = datetime.fromtimestamp(zip_path.stat().st_mtime).isoformat()
+                    info["file_count"] = len([n for n in zf.namelist() if n.endswith(".cfg")])
         except (zipfile.BadZipFile, OSError):
-            info['created'] = datetime.fromtimestamp(zip_path.stat().st_mtime).isoformat()
+            info["created"] = datetime.fromtimestamp(zip_path.stat().st_mtime).isoformat()
 
         return info
 
     @staticmethod
-    def _parse_metadata_text(info: Dict, metadata: str) -> None:
+    def _parse_metadata_text(info: dict, metadata: str) -> None:
         """Parse _backup_info.txt content into info dict."""
         _METADATA_FIELDS = {
-            "Backup created:": 'created',
-            "Description:": 'description',
-            "User name:": 'user_name',
-            "User email:": 'user_email',
+            "Backup created:": "created",
+            "Description:": "description",
+            "User name:": "user_name",
+            "User email:": "user_email",
         }
         for line in metadata.splitlines():
             for prefix, key in _METADATA_FIELDS.items():
@@ -160,12 +159,10 @@ class BackupManager:
                     break
             else:
                 if line.startswith("Files backed up:"):
-                    try:
-                        info['file_count'] = int(line.split(":")[1].strip())
-                    except ValueError:
-                        pass
+                    with contextlib.suppress(ValueError):
+                        info["file_count"] = int(line.split(":")[1].strip())
 
-    def list_backups(self) -> List[Dict]:
+    def list_backups(self) -> list[dict]:
         """List all available backups, most recent first."""
         backups = []
 
@@ -178,7 +175,7 @@ class BackupManager:
                 backups.append(self._parse_backup_metadata(item))
 
         # Sort by creation time, most recent first
-        backups.sort(key=lambda x: x['created'] or '', reverse=True)
+        backups.sort(key=lambda x: x["created"] or "", reverse=True)
         return backups
 
     def _validate_backup_request(self, backup_name: str) -> Path:
@@ -188,7 +185,7 @@ class BackupManager:
         Raises ValueError for invalid names, missing files, or directory backups.
         """
         # Validate backup_name to prevent path traversal
-        if '..' in backup_name or backup_name.startswith('/'):
+        if ".." in backup_name or backup_name.startswith("/"):
             raise ValueError(f"Invalid backup name: {backup_name}")
 
         backup_path = self.backup_path / backup_name
@@ -197,10 +194,10 @@ class BackupManager:
         if backup_path.is_dir():
             raise ValueError(
                 f"Directory-based backups are no longer supported. "
-                f"Please restore from a zip backup or manually copy files from {backup_path}"
+                f"Please restore from a zip backup or manually copy files from {backup_path}",
             )
 
-        if not (backup_name.endswith('.zip') and backup_path.is_file()):
+        if not (backup_name.endswith(".zip") and backup_path.is_file()):
             raise ValueError(f"Backup not found: {backup_name}")
 
         # Verify path is actually under backup_path
@@ -220,13 +217,13 @@ class BackupManager:
         restored_count = 0
         skipped_count = 0
 
-        with zipfile.ZipFile(zip_path, 'r') as zf:
+        with zipfile.ZipFile(zip_path, "r") as zf:
             for member in zf.namelist():
-                if member == '_backup_info.txt' or not member.endswith('.cfg'):
+                if member == "_backup_info.txt" or not member.endswith(".cfg"):
                     continue
 
                 member_path = Path(member)
-                if '..' in member_path.parts:
+                if ".." in member_path.parts:
                     skipped_count += 1
                     continue
 
@@ -238,7 +235,7 @@ class BackupManager:
                     continue
 
                 dest_path.parent.mkdir(parents=True, exist_ok=True)
-                with zf.open(member) as src, open(dest_path, 'wb') as dst:
+                with zf.open(member) as src, open(dest_path, "wb") as dst:
                     dst.write(src.read())
                 restored_count += 1
 
@@ -264,7 +261,7 @@ class BackupManager:
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(cfg_file), str(dest_path))
 
-    def restore_backup(self, backup_name: str, user_name: str = "", user_email: str = "") -> Dict:
+    def restore_backup(self, backup_name: str, user_name: str = "", user_email: str = "") -> dict:
         """Restore configuration from a zip backup.
 
         C-01 FIX: Uses atomic restore pattern - extracts to temp dir first, validates,
@@ -278,7 +275,7 @@ class BackupManager:
         Or manually extract the safety backup zip to config directory.
         """
         if self._op_logger:
-            self._op_logger.info('backup', 'restore_backup', params={'backup_name': backup_name}, user_name=user_name, user_email=user_email)
+            self._op_logger.info("backup", "restore_backup", params={"backup_name": backup_name}, user_name=user_name, user_email=user_email)
 
         backup_path = self._validate_backup_request(backup_name)
 
@@ -288,7 +285,7 @@ class BackupManager:
         # C-01 FIX: Extract to temp directory first, validate, then replace
         temp_dir = None
         try:
-            temp_dir = tempfile.mkdtemp(prefix='nagios_restore_')
+            temp_dir = tempfile.mkdtemp(prefix="nagios_restore_")
             temp_path = Path(temp_dir)
 
             # Phase 1: Extract backup to temporary directory
@@ -302,31 +299,29 @@ class BackupManager:
             self._replace_config_files(temp_path)
 
             return {
-                'restored_from': backup_name,
-                'files_restored': restored_count,
-                'files_skipped': skipped_count,
-                'safety_backup': safety_backup
+                "restored_from": backup_name,
+                "files_restored": restored_count,
+                "files_skipped": skipped_count,
+                "safety_backup": safety_backup,
             }
         except Exception as e:
             raise ValueError(
                 f"Restore failed: {e}. "
                 f"Safety backup available at: {safety_backup}. "
-                f"Recovery: DELETE /api/staging to clear lock, then POST /api/backups/<safety_backup>/restore"
+                f"Recovery: DELETE /api/staging to clear lock, then POST /api/backups/<safety_backup>/restore",
             ) from e
         finally:
             # Clean up temp directory
             if temp_dir and os.path.exists(temp_dir):
-                try:
-                    shutil.rmtree(temp_dir)
-                except OSError:
-                    pass  # Best effort cleanup
+                with contextlib.suppress(OSError):
+                    shutil.rmtree(temp_dir)  # Best effort cleanup
 
     def delete_backup(self, backup_name: str) -> bool:
         """Delete a specific zip backup."""
         if self._op_logger:
-            self._op_logger.info('backup', 'delete_backup', params={'backup_name': backup_name})
+            self._op_logger.info("backup", "delete_backup", params={"backup_name": backup_name})
         # Validate backup_name to prevent path traversal
-        if '..' in backup_name or backup_name.startswith('/'):
+        if ".." in backup_name or backup_name.startswith("/"):
             raise ValueError(f"Invalid backup name: {backup_name}")
 
         backup_path = self.backup_path / backup_name
@@ -337,7 +332,7 @@ class BackupManager:
         except ValueError:
             raise ValueError(f"Backup outside backup path: {backup_name}")
 
-        if backup_path.is_file() and backup_name.endswith('.zip'):
+        if backup_path.is_file() and backup_name.endswith(".zip"):
             backup_path.unlink()
             return True
         return False
@@ -345,13 +340,13 @@ class BackupManager:
     def cleanup_old_backups(self, keep_count: int = 10) -> int:
         """Remove old backups, keeping only the most recent ones."""
         if self._op_logger:
-            self._op_logger.info('backup', 'cleanup_old_backups', params={'keep_count': keep_count})
+            self._op_logger.info("backup", "cleanup_old_backups", params={"keep_count": keep_count})
         backups = self.list_backups()
         deleted = 0
 
         if len(backups) > keep_count:
             for backup in backups[keep_count:]:
-                if self.delete_backup(backup['name']):
+                if self.delete_backup(backup["name"]):
                     deleted += 1
 
         return deleted

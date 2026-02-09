@@ -1,16 +1,16 @@
-"""
-File Operations for Direct Editing
+"""File Operations for Direct Editing
 
 Provides atomic file operations for editing, creating, deleting, and moving
 Nagios configuration objects directly in files (no shadow copies).
 """
 
+import difflib
 import os
 import re
-import difflib
 from pathlib import Path
-from typing import Dict, Tuple, Optional, List
-from nagios_model import format_object_block, OperationResult
+
+from nagios_model import OperationResult, format_object_block
+import contextlib
 
 # Module-level operation logger (set via set_logger)
 _op_logger = None
@@ -25,7 +25,7 @@ def set_logger(logger):
 def _compute_checksum(content: str) -> str:
     """Compute SHA256 checksum of content string."""
     import hashlib
-    return hashlib.sha256(content.encode('utf-8')).hexdigest()
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
 def _atomic_write(file_path: str, content: str) -> None:
@@ -37,23 +37,21 @@ def _atomic_write(file_path: str, content: str) -> None:
     """
     import tempfile
     dir_name = os.path.dirname(os.path.abspath(file_path))
-    fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix='.tmp')
+    fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
     try:
-        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(content)
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp_path, file_path)
     except:
         # Clean up temp file on failure
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp_path)
-        except OSError:
-            pass
         raise
 
 
-def _read_file_content(file_path: str, expected_checksum: Optional[str] = None) -> OperationResult:
+def _read_file_content(file_path: str, expected_checksum: str | None = None) -> OperationResult:
     """Read file content with standard error handling and optional checksum validation.
 
     Args:
@@ -64,6 +62,7 @@ def _read_file_content(file_path: str, expected_checksum: Optional[str] = None) 
     Returns:
         OperationResult with success=True and data=content on success,
         or success=False with error details on failure
+
     """
     path = Path(file_path)
     if not path.exists():
@@ -76,7 +75,7 @@ def _read_file_content(file_path: str, expected_checksum: Optional[str] = None) 
                 return OperationResult(False,
                     f"Conflict: {file_path} was modified externally. Aborting to prevent data loss.")
         return OperationResult(True, data=content)
-    except (IOError, OSError) as e:
+    except OSError as e:
         return OperationResult(False, f"Read error: {e}")
 
 
@@ -95,21 +94,21 @@ def _normalize_block_spacing(before: str, middle: str, after: str) -> str:
 
     Returns:
         Normalized content with proper spacing
+
     """
-    before = before.rstrip('\n')
-    after = after.lstrip('\n')
+    before = before.rstrip("\n")
+    after = after.lstrip("\n")
     parts = [s for s in (before, middle, after) if s]
     if not parts:
-        return ''
-    result = '\n\n'.join(parts)
+        return ""
+    result = "\n\n".join(parts)
     # Add trailing newline when content ends with our sections (not raw after content)
-    if before or middle:
-        if not after:
-            result += '\n'
+    if (before or middle) and not after:
+        result += "\n"
     return result
 
 
-def _find_matching_brace(content: str, brace_open: int) -> Optional[int]:
+def _find_matching_brace(content: str, brace_open: int) -> int | None:
     """Find the position after the matching closing brace, respecting quotes.
 
     Args:
@@ -118,6 +117,7 @@ def _find_matching_brace(content: str, brace_open: int) -> Optional[int]:
 
     Returns:
         Position after closing brace, or None if unmatched
+
     """
     brace_count = 1
     pos = brace_open + 1
@@ -125,9 +125,9 @@ def _find_matching_brace(content: str, brace_open: int) -> Optional[int]:
     in_single_quote = False
     while pos < len(content) and brace_count > 0:
         char = content[pos]
-        prev_char = content[pos - 1] if pos > 0 else ''
+        prev_char = content[pos - 1] if pos > 0 else ""
 
-        if prev_char == '\\':
+        if prev_char == "\\":
             pos += 1
             continue
 
@@ -136,9 +136,9 @@ def _find_matching_brace(content: str, brace_open: int) -> Optional[int]:
         elif char == "'" and not in_double_quote:
             in_single_quote = not in_single_quote
         elif not in_double_quote and not in_single_quote:
-            if char == '{':
+            if char == "{":
                 brace_count += 1
-            elif char == '}':
+            elif char == "}":
                 brace_count -= 1
         pos += 1
 
@@ -158,28 +158,29 @@ def _locate_define_pos(content: str, char_pos: int, target_line: int, lines: lis
 
     Returns:
         Character position of 'define', or -1 if not found
+
     """
-    line_content = lines[target_line - 1] if target_line <= len(lines) else ''
-    define_on_line = line_content.strip().startswith('define')
+    line_content = lines[target_line - 1] if target_line <= len(lines) else ""
+    define_on_line = line_content.strip().startswith("define")
 
     if define_on_line:
-        define_pos = content.find('define', char_pos)
+        define_pos = content.find("define", char_pos)
         if define_pos >= 0:
-            define_line = content[:define_pos].count('\n') + 1
+            define_line = content[:define_pos].count("\n") + 1
             if define_line != target_line:
                 define_pos = -1
         if define_pos >= 0:
             return define_pos
     else:
-        define_pos = content.rfind('define', 0, char_pos)
+        define_pos = content.rfind("define", 0, char_pos)
         if define_pos >= 0:
             return define_pos
 
     # Last resort: search forward
-    return content.find('define', char_pos)
+    return content.find("define", char_pos)
 
 
-def find_block_range(content: str, target_line: int) -> Optional[Tuple[int, int]]:
+def find_block_range(content: str, target_line: int) -> tuple[int, int] | None:
     """Find the character range of a define block at or containing target_line.
 
     Args:
@@ -188,8 +189,9 @@ def find_block_range(content: str, target_line: int) -> Optional[Tuple[int, int]
 
     Returns:
         Tuple of (start_char, end_char) or None if not found
+
     """
-    lines = content.split('\n')
+    lines = content.split("\n")
     if target_line < 1 or target_line > len(lines):
         return None
 
@@ -199,11 +201,11 @@ def find_block_range(content: str, target_line: int) -> Optional[Tuple[int, int]
         return None
 
     remaining = content[define_pos:]
-    match = re.match(r'define\s+\w+\s*\{', remaining)
+    match = re.match(r"define\s+\w+\s*\{", remaining)
     if not match:
         return None
 
-    brace_open = define_pos + remaining.index('{')
+    brace_open = define_pos + remaining.index("{")
     end_pos = _find_matching_brace(content, brace_open)
     if end_pos is None:
         return None
@@ -211,8 +213,8 @@ def find_block_range(content: str, target_line: int) -> Optional[Tuple[int, int]
     return (define_pos, end_pos)
 
 
-def edit_object_in_file(file_path: str, line_number: int, new_attrs: Dict[str, str],
-                        obj_type: str, expected_checksum: Optional[str] = None) -> OperationResult:
+def edit_object_in_file(file_path: str, line_number: int, new_attrs: dict[str, str],
+                        obj_type: str, expected_checksum: str | None = None) -> OperationResult:
     """Edit an object in place in its file.
 
     Args:
@@ -225,9 +227,10 @@ def edit_object_in_file(file_path: str, line_number: int, new_attrs: Dict[str, s
 
     Returns:
         OperationResult with success=True on success, or error details on failure
+
     """
     if _op_logger:
-        _op_logger.debug('file_op', 'edit_object_in_file', params={'file_path': file_path, 'line_number': line_number, 'obj_type': obj_type})
+        _op_logger.debug("file_op", "edit_object_in_file", params={"file_path": file_path, "line_number": line_number, "obj_type": obj_type})
 
     read_result = _read_file_content(file_path, expected_checksum)
     if not read_result.success:
@@ -244,14 +247,14 @@ def edit_object_in_file(file_path: str, line_number: int, new_attrs: Dict[str, s
 
     try:
         _atomic_write(file_path, new_content)
-    except (IOError, OSError) as e:
+    except OSError as e:
         return OperationResult(False, f"Write error: {e}")
 
     return OperationResult(True)
 
 
 def delete_object_from_file(file_path: str, line_number: int,
-                            expected_checksum: Optional[str] = None) -> OperationResult:
+                            expected_checksum: str | None = None) -> OperationResult:
     """Delete an object from its file.
 
     Args:
@@ -262,9 +265,10 @@ def delete_object_from_file(file_path: str, line_number: int,
 
     Returns:
         OperationResult with success=True on success, or error details on failure
+
     """
     if _op_logger:
-        _op_logger.debug('file_op', 'delete_object_from_file', params={'file_path': file_path, 'line_number': line_number})
+        _op_logger.debug("file_op", "delete_object_from_file", params={"file_path": file_path, "line_number": line_number})
 
     read_result = _read_file_content(file_path, expected_checksum)
     if not read_result.success:
@@ -276,20 +280,20 @@ def delete_object_from_file(file_path: str, line_number: int,
         return OperationResult(False, f"Could not find define block at line {line_number} in {file_path}")
 
     start_char, end_char = block_range
-    new_content = _normalize_block_spacing(content[:start_char], '', content[end_char:])
+    new_content = _normalize_block_spacing(content[:start_char], "", content[end_char:])
 
     try:
         _atomic_write(file_path, new_content)
-    except (IOError, OSError) as e:
+    except OSError as e:
         return OperationResult(False, f"Write error: {e}")
 
     return OperationResult(True)
 
 
-def add_object_to_file(file_path: str, obj_type: str, attrs: Dict[str, str],
-                       after_block_line: Optional[int] = None,
-                       expected_checksum: Optional[str] = None,
-                       raw_block: Optional[str] = None) -> OperationResult:
+def add_object_to_file(file_path: str, obj_type: str, attrs: dict[str, str],
+                       after_block_line: int | None = None,
+                       expected_checksum: str | None = None,
+                       raw_block: str | None = None) -> OperationResult:
     """Add a new object to a file, inserting after a specific block.
 
     Args:
@@ -305,19 +309,20 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: Dict[str, str],
 
     Returns:
         OperationResult with success=True on success, or error details on failure
+
     """
     if _op_logger:
-        _op_logger.debug('file_op', 'add_object_to_file', params={'file_path': file_path, 'obj_type': obj_type})
+        _op_logger.debug("file_op", "add_object_to_file", params={"file_path": file_path, "obj_type": obj_type})
     path = Path(file_path)
-    new_block = raw_block if raw_block else format_object_block(obj_type, attrs)
+    new_block = raw_block or format_object_block(obj_type, attrs)
 
     if not path.exists():
         # New file - no checksum validation needed
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            _atomic_write(file_path, new_block + '\n')
+            _atomic_write(file_path, new_block + "\n")
             return OperationResult(True)
-        except (IOError, OSError) as e:
+        except OSError as e:
             return OperationResult(False, f"Failed to create file {file_path}: {e}")
 
     read_result = _read_file_content(file_path, expected_checksum)
@@ -327,7 +332,7 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: Dict[str, str],
 
     if after_block_line == 0:
         # Insert at beginning
-        new_content = _normalize_block_spacing('', new_block, content)
+        new_content = _normalize_block_spacing("", new_block, content)
     elif after_block_line is not None and after_block_line > 0:
         block_range = find_block_range(content, after_block_line)
 
@@ -339,14 +344,14 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: Dict[str, str],
             new_content = _normalize_block_spacing(before, new_block, after)
         else:
             # Block not found, append to end
-            new_content = _normalize_block_spacing(content, new_block, '')
+            new_content = _normalize_block_spacing(content, new_block, "")
     else:
         # Append to end
-        new_content = _normalize_block_spacing(content, new_block, '')
+        new_content = _normalize_block_spacing(content, new_block, "")
 
     try:
         _atomic_write(file_path, new_content)
-    except (IOError, OSError) as e:
+    except OSError as e:
         return OperationResult(False, f"Write error: {e}")
 
     return OperationResult(True)
@@ -354,7 +359,7 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: Dict[str, str],
 
 def _move_same_file(source_file: str, source_line: int, source_content: str,
                     start_char: int, raw_block: str, obj_type: str,
-                    attrs: Dict[str, str], insert_line: Optional[int]) -> OperationResult:
+                    attrs: dict[str, str], insert_line: int | None) -> OperationResult:
     """Handle same-file reorder: delete first, then re-add at new position.
 
     Args:
@@ -369,8 +374,9 @@ def _move_same_file(source_file: str, source_line: int, source_content: str,
 
     Returns:
         OperationResult
+
     """
-    source_start = source_content[:start_char].count('\n') + 1
+    source_start = source_content[:start_char].count("\n") + 1
 
     del_result = delete_object_from_file(source_file, source_line)
     if not del_result.success:
@@ -381,9 +387,9 @@ def _move_same_file(source_file: str, source_line: int, source_content: str,
     if insert_line is not None and insert_line > source_start:
         try:
             new_content = Path(source_file).read_text()
-        except (IOError, OSError) as e:
+        except OSError as e:
             return OperationResult(False, f"Read error after delete: {e}")
-        actual_shift = len(source_content.split('\n')) - len(new_content.split('\n'))
+        actual_shift = len(source_content.split("\n")) - len(new_content.split("\n"))
         adjusted_insert_line = insert_line - actual_shift
         if adjusted_insert_line < 1:
             adjusted_insert_line = None
@@ -406,29 +412,30 @@ def _rollback_target_add(target_file: str, raw_block: str, del_error: str) -> Op
 
     Returns:
         OperationResult with appropriate error message
+
     """
     try:
         target_content = Path(target_file).read_text()
         if raw_block in target_content:
-            rollback_content = target_content.replace(raw_block, '', 1)
-            rollback_content = re.sub(r'\n{3,}', '\n\n', rollback_content)
+            rollback_content = target_content.replace(raw_block, "", 1)
+            rollback_content = re.sub(r"\n{3,}", "\n\n", rollback_content)
             _atomic_write(target_file, rollback_content)
         if _op_logger:
-            _op_logger.info('file_op', 'move_rollback',
-                           params={'target': target_file}, result='success')
+            _op_logger.info("file_op", "move_rollback",
+                           params={"target": target_file}, result="success")
         return OperationResult(False, f"Failed to delete from source after add: {del_error}")
-    except (IOError, OSError) as e:
+    except OSError as e:
         if _op_logger:
-            _op_logger.error('file_op', 'move_rollback',
-                            params={'target': target_file}, error=str(e))
+            _op_logger.error("file_op", "move_rollback",
+                            params={"target": target_file}, error=str(e))
         return OperationResult(False,
             f"Failed to delete from source: {del_error}. "
             f"CRITICAL: Rollback failed, object may be duplicated in both files: {e}")
 
 
 def move_object_between_files(source_file: str, source_line: int,
-                              target_file: str, obj_type: str, attrs: Dict[str, str],
-                              insert_line: Optional[int] = None) -> OperationResult:
+                              target_file: str, obj_type: str, attrs: dict[str, str],
+                              insert_line: int | None = None) -> OperationResult:
     """Move an object from one file to another, preserving original formatting.
 
     This uses surgical operations: extract block from source, delete from source,
@@ -444,14 +451,15 @@ def move_object_between_files(source_file: str, source_line: int,
 
     Returns:
         OperationResult with success=True on success, or error details on failure
+
     """
     if _op_logger:
-        _op_logger.debug('file_op', 'move_object_between_files',
-                        params={'source_file': source_file, 'target_file': target_file, 'obj_type': obj_type})
+        _op_logger.debug("file_op", "move_object_between_files",
+                        params={"source_file": source_file, "target_file": target_file, "obj_type": obj_type})
 
     try:
         source_content = Path(source_file).read_text()
-    except (IOError, OSError) as e:
+    except OSError as e:
         return OperationResult(False, f"Read error on source: {e}")
 
     block_range = find_block_range(source_content, source_line)
@@ -477,9 +485,8 @@ def move_object_between_files(source_file: str, source_line: int,
     return OperationResult(True)
 
 
-def is_safe_path(path: str, base_dir: Optional[str] = None) -> OperationResult:
-    """
-    Validate that a path is safe and within the allowed directory.
+def is_safe_path(path: str, base_dir: str | None = None) -> OperationResult:
+    """Validate that a path is safe and within the allowed directory.
 
     Security checks performed:
     - Null byte injection
@@ -493,12 +500,13 @@ def is_safe_path(path: str, base_dir: Optional[str] = None) -> OperationResult:
 
     Returns:
         OperationResult with success=True if safe, success=False with error if unsafe.
+
     """
     if base_dir is None:
         return OperationResult(False, "base_dir parameter is required")
 
     # Check for null bytes
-    if '\x00' in path:
+    if "\x00" in path:
         return OperationResult(False, "Path contains null bytes")
 
     # Resolve the base directory to handle symlinked config directories (e.g., /tmp -> /private/tmp)
@@ -541,13 +549,13 @@ def is_safe_path(path: str, base_dir: Optional[str] = None) -> OperationResult:
     return OperationResult(True)
 
 
-def generate_diff(old_content: str, new_content: str, filename: str = '') -> List[str]:
+def generate_diff(old_content: str, new_content: str, filename: str = "") -> list[str]:
     """Generate a unified diff between two strings."""
     old_lines = old_content.splitlines(keepends=True)
     new_lines = new_content.splitlines(keepends=True)
     diff = difflib.unified_diff(
         old_lines, new_lines,
-        fromfile=f'a/{filename}' if filename else 'before',
-        tofile=f'b/{filename}' if filename else 'after'
+        fromfile=f"a/{filename}" if filename else "before",
+        tofile=f"b/{filename}" if filename else "after",
     )
     return list(diff)

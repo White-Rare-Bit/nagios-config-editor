@@ -1,12 +1,11 @@
-"""
-Audit Log Service
+"""Audit Log Service
 
 Manages audit log persistence, rotation, and retrieval.
 """
 
-import os
 import json
 import multiprocessing
+import os
 from datetime import datetime
 
 # C-09: Module-level lock for process-safe audit log writes
@@ -18,7 +17,7 @@ AUDIT_LOG_MAX_ENTRIES = 1000  # Rotate after this many entries
 
 # Default audit log directory - set once at module load to project root
 # This ensures consistent paths regardless of which module calls first
-_DEFAULT_AUDIT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+_DEFAULT_AUDIT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
 
 
 def get_audit_log_dir(config_dir: str = None):
@@ -30,11 +29,12 @@ def get_audit_log_dir(config_dir: str = None):
 
     Returns:
         Path to audit log directory (config_dir/logs/ or project_root/logs/).
+
     """
     if config_dir is None:
         log_dir = _DEFAULT_AUDIT_DIR
     else:
-        log_dir = os.path.join(config_dir, 'logs')
+        log_dir = os.path.join(config_dir, "logs")
     os.makedirs(log_dir, exist_ok=True)
     return log_dir
 
@@ -48,8 +48,9 @@ def get_audit_log_path(config_dir: str = None):
 
     Returns:
         Path to audit log file.
+
     """
-    return os.path.join(get_audit_log_dir(config_dir), 'audit_log.json')
+    return os.path.join(get_audit_log_dir(config_dir), "audit_log.json")
 
 
 def rotate_audit_log(entries: list) -> list:
@@ -62,17 +63,18 @@ def rotate_audit_log(entries: list) -> list:
 
     Returns:
         Empty list if rotated, original list if not.
+
     """
     if len(entries) < AUDIT_LOG_MAX_ENTRIES:
         return entries
 
     log_dir = get_audit_log_dir()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    archive_path = os.path.join(log_dir, f'audit_log_{timestamp}.json')
+    archive_path = os.path.join(log_dir, f"audit_log_{timestamp}.json")
 
     # Write all current entries to archive
-    with open(archive_path, 'w', encoding='utf-8') as f:
-        json.dump({'entries': entries, 'archived_at': datetime.now().isoformat()}, f, indent=2)
+    with open(archive_path, "w", encoding="utf-8") as f:
+        json.dump({"entries": entries, "archived_at": datetime.now().isoformat()}, f, indent=2)
 
     # Return empty list to start fresh
     return []
@@ -87,6 +89,7 @@ def write_audit_log(audit_entry: dict, config_dir: str = None):
     Args:
         audit_entry: Audit entry dictionary to log.
         config_dir: Configuration directory path. If None, uses current directory.
+
     """
     audit_path = get_audit_log_path(config_dir)
 
@@ -96,10 +99,10 @@ def write_audit_log(audit_entry: dict, config_dir: str = None):
         entries = []
         if os.path.exists(audit_path):
             try:
-                with open(audit_path, 'r', encoding='utf-8') as f:
+                with open(audit_path, encoding="utf-8") as f:
                     data = json.load(f)
-                    entries = data.get('entries', [])
-            except (IOError, json.JSONDecodeError):
+                    entries = data.get("entries", [])
+            except (OSError, json.JSONDecodeError):
                 entries = []
 
         # Append new entry
@@ -109,5 +112,5 @@ def write_audit_log(audit_entry: dict, config_dir: str = None):
         entries = rotate_audit_log(entries)
 
         # Save
-        with open(audit_path, 'w', encoding='utf-8') as f:
-            json.dump({'entries': entries}, f, indent=2)
+        with open(audit_path, "w", encoding="utf-8") as f:
+            json.dump({"entries": entries}, f, indent=2)

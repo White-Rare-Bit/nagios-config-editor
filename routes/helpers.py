@@ -1,8 +1,9 @@
 """Shared helper functions for route blueprints."""
 
-from flask import current_app, request, jsonify
-from server_config import ServerConfig
+from flask import current_app, jsonify, request
+
 from nagios_model import OperationResult
+from server_config import ServerConfig
 
 
 def operation_response(result: OperationResult, success_data: dict = None, error_code: int = 500):
@@ -19,16 +20,16 @@ def operation_response(result: OperationResult, success_data: dict = None, error
     Example:
         result = service.create_object(...)
         return operation_response(result, {'path': file_path, 'staged': True})
+
     """
     if result.success:
-        response = {'success': True}
+        response = {"success": True}
         if success_data:
             response.update(success_data)
-        if result.data is not None and 'data' not in response:
-            response['data'] = result.data
+        if result.data is not None and "data" not in response:
+            response["data"] = result.data
         return jsonify(response)
-    else:
-        return jsonify({'error': result.error or 'Operation failed'}), error_code
+    return jsonify({"error": result.error or "Operation failed"}), error_code
 
 
 def get_config_path() -> str:
@@ -36,12 +37,12 @@ def get_config_path() -> str:
     server_config = get_server_config()
     if server_config:
         return server_config.nagios_config_path
-    return ''
+    return ""
 
 
 def get_server_config() -> ServerConfig:
     """Get the server configuration object."""
-    return current_app.extensions.get('server_config')
+    return current_app.extensions.get("server_config")
 
 
 def get_config() -> dict:
@@ -53,16 +54,16 @@ def get_config() -> dict:
     if not server_config:
         return {}
     return {
-        'nagios_config_path': server_config.nagios_config_path,
-        'backup_path': server_config.backup_path,
-        'nagios_bin': server_config.nagios_bin,
-        'nagios_cfg': server_config.nagios_cfg,
+        "nagios_config_path": server_config.nagios_config_path,
+        "backup_path": server_config.backup_path,
+        "nagios_bin": server_config.nagios_bin,
+        "nagios_cfg": server_config.nagios_cfg,
     }
 
 
 def get_service():
     """Get the NagiosService instance."""
-    return current_app.extensions['service']
+    return current_app.extensions["service"]
 
 
 def get_parser():
@@ -77,22 +78,22 @@ def get_parser_for_modification():
 
 def get_staging_manager():
     """Get the staging manager."""
-    return current_app.extensions['staging']
+    return current_app.extensions["staging"]
 
 
 def get_backup_manager():
     """Get the backup manager."""
-    return current_app.extensions['backup']
+    return current_app.extensions["backup"]
 
 
 def get_git_service():
     """Get the git service."""
-    return current_app.extensions['git']
+    return current_app.extensions["git"]
 
 
 def get_op_logger():
     """Get the operation logger."""
-    return current_app.extensions.get('op_logger')
+    return current_app.extensions.get("op_logger")
 
 
 def get_audit_user_identity():
@@ -102,20 +103,20 @@ def get_audit_user_identity():
     Returns dict with userName and userEmail keys.
     """
     data = request.get_json(silent=True) or {}
-    user_name = data.get('user_name') or data.get('userName')
-    user_email = data.get('user_email') or data.get('userEmail')
+    user_name = data.get("user_name") or data.get("userName")
+    user_email = data.get("user_email") or data.get("userEmail")
 
     if not user_name or not user_email:
         try:
             sm = get_staging_manager()
             staging = sm.get_staging()
             if staging:
-                user_name = user_name or staging.get('userName')
-                user_email = user_email or staging.get('userEmail')
+                user_name = user_name or staging.get("userName")
+                user_email = user_email or staging.get("userEmail")
         except Exception:
             pass
 
     return {
-        'userName': user_name,
-        'userEmail': user_email
+        "userName": user_name,
+        "userEmail": user_email,
     }

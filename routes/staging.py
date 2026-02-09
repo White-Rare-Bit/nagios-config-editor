@@ -1,32 +1,31 @@
 """Staging API routes - Shared staging for multi-user collaboration."""
 
+import logging
+import multiprocessing
 import os
 import time
 import uuid
-import logging
-import multiprocessing
 from datetime import datetime
-from flask import Blueprint, request, jsonify, current_app
-from nagios_model import NAME_FIELDS
-from staging_manager import (
-    OperationType,
-    UNDO_HANDLERS,
-    UndoKeyError
-)
-from audit_service import write_audit_log
+
+from flask import Blueprint, current_app, jsonify, request
+
 import file_operations
+from audit_service import write_audit_log
+from nagios_model import NAME_FIELDS
+from staging_manager import UNDO_HANDLERS, OperationType, UndoKeyError
+
 from .helpers import (
+    get_backup_manager,
     get_config,
     get_config_path,
+    get_git_service,
+    get_op_logger,
     get_service,
     get_staging_manager,
-    get_backup_manager,
-    get_git_service,
-    get_op_logger
 )
 
-bp = Blueprint('staging', __name__)
-logger = logging.getLogger('nagios_bulk_editor')
+bp = Blueprint("staging", __name__)
+logger = logging.getLogger("nagios_bulk_editor")
 
 # Serialize staging operations to prevent race conditions
 # Uses multiprocessing.Lock because WSGI servers may use multiple processes
@@ -38,7 +37,7 @@ def _create_undo_entry(
     operation_type: str,
     key: str,
     op_data: dict,
-    description: str
+    description: str,
 ) -> dict:
     """Create an undo entry dict.
 
@@ -50,20 +49,21 @@ def _create_undo_entry(
 
     Returns:
         Undo entry dict with id, type, data, description, and timestamp
+
     """
     return {
-        'id': str(uuid.uuid4())[:8],
-        'type': operation_type,
-        'data': op_data,
-        'description': description,
-        'timestamp': time.time()
+        "id": str(uuid.uuid4())[:8],
+        "type": operation_type,
+        "data": op_data,
+        "description": description,
+        "timestamp": time.time(),
     }
 
 
 def _create_bulk_undo_entry(
     operation_type: str,
     individual_entries: list,
-    description: str
+    description: str,
 ) -> dict:
     """Create a bulk undo entry that groups multiple operations.
 
@@ -74,22 +74,23 @@ def _create_bulk_undo_entry(
 
     Returns:
         Bulk undo entry dict with items array containing data for each operation
+
     """
     # Extract the data from each individual entry to create the items array
-    items = [entry['data'] for entry in individual_entries]
+    items = [entry["data"] for entry in individual_entries]
     return {
-        'id': str(uuid.uuid4())[:8],
-        'type': operation_type,
-        'data': {'items': items, 'count': len(items)},
-        'description': description,
-        'timestamp': time.time()
+        "id": str(uuid.uuid4())[:8],
+        "type": operation_type,
+        "data": {"items": items, "count": len(items)},
+        "description": description,
+        "timestamp": time.time(),
     }
 
 
 def _create_undo_entries_for_edits(
     pending_edits: dict,
     existing_keys: set,
-    log: logging.Logger
+    log: logging.Logger,
 ) -> list:
     """Create undo entries for new pending edits.
 
@@ -100,6 +101,7 @@ def _create_undo_entries_for_edits(
 
     Returns:
         List of undo entry dicts for new edits
+
     """
     entries = []
     for key, edit_data in pending_edits.items():
@@ -108,19 +110,19 @@ def _create_undo_entries_for_edits(
             continue
 
         if key and key not in existing_keys:
-            obj = edit_data.get('object', {})
+            obj = edit_data.get("object", {})
             op_id = str(uuid.uuid4())[:8]
-            obj_name = obj.get('name', obj.get('display_name', 'Unknown'))
-            obj_type = obj.get('object_type', 'object')
+            obj_name = obj.get("name", obj.get("display_name", "Unknown"))
+            obj_type = obj.get("object_type", "object")
 
             op_data = {
-                'key': key,
-                'globalIndex': edit_data.get('globalIndex', key),
-                'op_id': op_id,
-                'originalAttributes': edit_data.get('originalAttributes', {}),
-                'object': obj
+                "key": key,
+                "globalIndex": edit_data.get("globalIndex", key),
+                "op_id": op_id,
+                "originalAttributes": edit_data.get("originalAttributes", {}),
+                "object": obj,
             }
-            entry = _create_undo_entry('edit', key, op_data, f"Edit {obj_type} '{obj_name}'")
+            entry = _create_undo_entry("edit", key, op_data, f"Edit {obj_type} '{obj_name}'")
             entries.append(entry)
             log.debug(f"Created undo entry for edit: {obj_name}")
 
@@ -130,7 +132,7 @@ def _create_undo_entries_for_edits(
 def _create_undo_entries_for_moves(
     staged_moves: dict,
     existing_keys: set,
-    log: logging.Logger
+    log: logging.Logger,
 ) -> list:
     """Create undo entries for new staged moves.
 
@@ -141,6 +143,7 @@ def _create_undo_entries_for_moves(
 
     Returns:
         List of undo entry dicts for new moves
+
     """
     entries = []
     for key, move_data in staged_moves.items():
@@ -149,23 +152,23 @@ def _create_undo_entries_for_moves(
             continue
 
         if key and key not in existing_keys:
-            obj = move_data.get('object', {})
+            obj = move_data.get("object", {})
             op_id = str(uuid.uuid4())[:8]
-            obj_name = obj.get('name', obj.get('display_name', 'Unknown'))
-            obj_type = obj.get('object_type', 'object')
-            target_file = move_data.get('targetFile', 'unknown')
+            obj_name = obj.get("name", obj.get("display_name", "Unknown"))
+            obj_type = obj.get("object_type", "object")
+            target_file = move_data.get("targetFile", "unknown")
 
             op_data = {
-                'key': key,
-                'globalIndex': move_data.get('globalIndex'),
-                'op_id': op_id,
-                'originalFile': move_data.get('originalFile'),
-                'targetFile': target_file,
-                'object': obj
+                "key": key,
+                "globalIndex": move_data.get("globalIndex"),
+                "op_id": op_id,
+                "originalFile": move_data.get("originalFile"),
+                "targetFile": target_file,
+                "object": obj,
             }
             entry = _create_undo_entry(
-                'move', key, op_data,
-                f"Move {obj_type} '{obj_name}' to {os.path.basename(target_file)}"
+                "move", key, op_data,
+                f"Move {obj_type} '{obj_name}' to {os.path.basename(target_file)}",
             )
             entries.append(entry)
             log.debug(f"Created undo entry for move: {obj_name}")
@@ -176,7 +179,7 @@ def _create_undo_entries_for_moves(
 def _create_undo_entries_for_creations(
     staged_creations: list,
     existing_ids: set,
-    log: logging.Logger
+    log: logging.Logger,
 ) -> list:
     """Create undo entries for new staged creations.
 
@@ -187,27 +190,28 @@ def _create_undo_entries_for_creations(
 
     Returns:
         List of undo entry dicts for new creations
+
     """
     entries = []
     for creation in staged_creations:
         if not isinstance(creation, dict):
             continue
-        creation_id = str(creation.get('id', ''))
+        creation_id = str(creation.get("id", ""))
         if creation_id and creation_id not in existing_ids:
-            obj_type = creation.get('object_type', 'object')
+            obj_type = creation.get("object_type", "object")
             op_id = str(uuid.uuid4())[:8]
-            obj_name = creation.get('name', creation.get('display_name', 'New Object'))
+            obj_name = creation.get("name", creation.get("display_name", "New Object"))
 
             op_data = {
-                'op_id': op_id,
-                'creationId': creation_id,
-                'object_type': obj_type,
-                'name': obj_name,
-                'targetFile': creation.get('targetFile')
+                "op_id": op_id,
+                "creationId": creation_id,
+                "object_type": obj_type,
+                "name": obj_name,
+                "targetFile": creation.get("targetFile"),
             }
             entry = _create_undo_entry(
-                'creation', creation_id, op_data,
-                f"Create {obj_type} '{obj_name}'"
+                "creation", creation_id, op_data,
+                f"Create {obj_type} '{obj_name}'",
             )
             entries.append(entry)
             log.debug(f"Created undo entry for creation: {obj_name}")
@@ -218,7 +222,7 @@ def _create_undo_entries_for_creations(
 def _create_undo_entries_for_deletions(
     staged_deletions: list,
     existing_keys: set,
-    log: logging.Logger
+    log: logging.Logger,
 ) -> list:
     """Create undo entries for new staged deletions.
 
@@ -229,6 +233,7 @@ def _create_undo_entries_for_deletions(
 
     Returns:
         List of undo entry dicts for new deletions
+
     """
     entries = []
     service = get_service()
@@ -242,19 +247,19 @@ def _create_undo_entries_for_deletions(
         # Look up object info for undo description
         obj = service.find_object_by_index(int(deletion_entry))
         obj_name = f"Object {key}"
-        obj_type = 'object'
+        obj_type = "object"
         if obj:
             obj_name = obj.get_display_name() or obj_name
             obj_type = obj.object_type
 
         op_data = {
-            'op_id': str(uuid.uuid4())[:8],
-            'key': key,
-            'globalIndex': int(deletion_entry),
+            "op_id": str(uuid.uuid4())[:8],
+            "key": key,
+            "globalIndex": int(deletion_entry),
         }
         entry = _create_undo_entry(
-            'deletion', key, op_data,
-            f"Delete {obj_type} '{obj_name}'"
+            "deletion", key, op_data,
+            f"Delete {obj_type} '{obj_name}'",
         )
         entries.append(entry)
         log.debug(f"Created undo entry for deletion: {obj_name}")
@@ -265,7 +270,7 @@ def _create_undo_entries_for_deletions(
 def _create_undo_entries_for_new_files(
     new_files: list,
     existing_files: set,
-    log: logging.Logger
+    log: logging.Logger,
 ) -> list:
     """Create undo entries for new files.
 
@@ -276,15 +281,16 @@ def _create_undo_entries_for_new_files(
 
     Returns:
         List of undo entry dicts for new files
+
     """
     entries = []
     for new_file in new_files:
         if new_file and new_file not in existing_files:
             file_name = os.path.basename(new_file)
-            op_data = {'path': new_file}
+            op_data = {"path": new_file}
             entry = _create_undo_entry(
-                'new_file', new_file, op_data,
-                f"Create file '{file_name}'"
+                "new_file", new_file, op_data,
+                f"Create file '{file_name}'",
             )
             entries.append(entry)
             log.debug(f"Created undo entry for new file: {file_name}")
@@ -303,20 +309,21 @@ def _preserve_existing_session_data(existing, data, session_id):
         existing: Existing staging data (may be None)
         data: New staging data dict from POST request (modified in place)
         session_id: Current session ID
+
     """
-    if not existing or existing.get('sessionId') != session_id:
+    if not existing or existing.get("sessionId") != session_id:
         return
 
     # Preserve existing identity if not provided
-    if 'userName' not in data and existing.get('userName'):
-        data['userName'] = existing.get('userName')
-    if 'userEmail' not in data and existing.get('userEmail'):
-        data['userEmail'] = existing.get('userEmail')
+    if "userName" not in data and existing.get("userName"):
+        data["userName"] = existing.get("userName")
+    if "userEmail" not in data and existing.get("userEmail"):
+        data["userEmail"] = existing.get("userEmail")
 
     # Preserve existing file/folder staging operations
-    for field in ['stagedFileCreations', 'stagedFileDeletions', 'stagedFileMoves',
-                  'stagedFolderCreations', 'stagedFolderDeletions', 'stagedFolderMoves',
-                  'undoStack', 'baseFileChecksums']:
+    for field in ["stagedFileCreations", "stagedFileDeletions", "stagedFileMoves",
+                  "stagedFolderCreations", "stagedFolderDeletions", "stagedFolderMoves",
+                  "undoStack", "baseFileChecksums"]:
         if field not in data and existing.get(field):
             data[field] = existing.get(field)
 
@@ -333,12 +340,13 @@ def _collect_affected_files(data, config_path):
 
     Returns:
         Set of absolute file paths that will be affected
+
     """
     files = set()
-    _collect_files_from_edits(files, data.get('pendingEdits', {}))
-    _collect_files_from_moves(files, data.get('stagedMoves', {}))
-    _collect_files_from_creations(files, data.get('stagedCreations', []), config_path)
-    _collect_files_from_deletions(files, data.get('stagedObjectDeletions', []))
+    _collect_files_from_edits(files, data.get("pendingEdits", {}))
+    _collect_files_from_moves(files, data.get("stagedMoves", {}))
+    _collect_files_from_creations(files, data.get("stagedCreations", []), config_path)
+    _collect_files_from_deletions(files, data.get("stagedObjectDeletions", []))
     return files
 
 
@@ -346,7 +354,7 @@ def _collect_files_from_edits(files, pending_edits):
     """Add source files from pending edits to the tracking set."""
     for entry in pending_edits.values():
         if isinstance(entry, dict):
-            source = entry.get('object', {}).get('source_file')
+            source = entry.get("object", {}).get("source_file")
             if source:
                 files.add(source)
 
@@ -356,10 +364,10 @@ def _collect_files_from_moves(files, staged_moves):
     for move_data in staged_moves.values():
         if not isinstance(move_data, dict):
             continue
-        source = move_data.get('object', {}).get('source_file')
+        source = move_data.get("object", {}).get("source_file")
         if source:
             files.add(source)
-        target = move_data.get('targetFile')
+        target = move_data.get("targetFile")
         if target:
             files.add(target)
 
@@ -367,7 +375,7 @@ def _collect_files_from_moves(files, staged_moves):
 def _collect_files_from_creations(files, staged_creations, config_path):
     """Add target files from staged creations to the tracking set (if they exist)."""
     for creation in staged_creations:
-        target_file = creation.get('targetFile')
+        target_file = creation.get("targetFile")
         if not target_file:
             continue
         if not os.path.isabs(target_file):
@@ -397,20 +405,21 @@ def _get_existing_operation_keys(existing):
 
     Returns:
         Tuple of (edit_keys, move_keys, creation_ids, deletion_keys) as sets of strings
+
     """
     if not existing:
         return set(), set(), set(), set()
 
-    edit_keys = set(str(k) for k in existing.get('pendingEdits', {}).keys())
-    move_keys = set(str(k) for k in existing.get('stagedMoves', {}).keys())
+    edit_keys = set(str(k) for k in existing.get("pendingEdits", {}))
+    move_keys = set(str(k) for k in existing.get("stagedMoves", {}))
 
     creation_ids = set()
-    for creation in existing.get('stagedCreations', []):
-        if isinstance(creation, dict) and creation.get('id'):
-            creation_ids.add(str(creation['id']))
+    for creation in existing.get("stagedCreations", []):
+        if isinstance(creation, dict) and creation.get("id"):
+            creation_ids.add(str(creation["id"]))
 
     deletion_keys = set(
-        str(int(d)) for d in existing.get('stagedObjectDeletions', [])
+        str(int(d)) for d in existing.get("stagedObjectDeletions", [])
         if isinstance(d, (int, float))
     )
 
@@ -430,26 +439,27 @@ def _build_undo_entries(data, existing, log):
 
     Returns:
         List of undo entries (the complete undo stack)
+
     """
     existing_edit_keys, existing_move_keys, existing_creation_ids, existing_deletion_keys = (
         _get_existing_operation_keys(existing)
     )
 
     # Initialize undo stack from existing data
-    undo_stack = list(existing.get('undoStack', [])) if existing else []
+    undo_stack = list(existing.get("undoStack", [])) if existing else []
 
     # Create undo entries for new operations
     new_edits = _create_undo_entries_for_edits(
-        data.get('pendingEdits', {}), existing_edit_keys, log
+        data.get("pendingEdits", {}), existing_edit_keys, log,
     )
     new_moves = _create_undo_entries_for_moves(
-        data.get('stagedMoves', {}), existing_move_keys, log
+        data.get("stagedMoves", {}), existing_move_keys, log,
     )
     new_creations = _create_undo_entries_for_creations(
-        data.get('stagedCreations', []), existing_creation_ids, log
+        data.get("stagedCreations", []), existing_creation_ids, log,
     )
     new_deletions = _create_undo_entries_for_deletions(
-        data.get('stagedObjectDeletions', []), existing_deletion_keys, log
+        data.get("stagedObjectDeletions", []), existing_deletion_keys, log,
     )
 
     # Group multiple operations into single bulk undo entries
@@ -457,15 +467,15 @@ def _build_undo_entries(data, existing, log):
     # - User expectation: Multiple objects selected and edited together should undo together
     # - UI simplicity: Bulk operations appear as single "Bulk edit N objects" in undo stack
     # - Single operation stays atomic to allow granular undo when user edits one object at a time
-    _append_undo_group(undo_stack, new_edits, 'bulk_edit', 'edit')
-    _append_undo_group(undo_stack, new_moves, 'bulk_move', 'move')
-    _append_undo_group(undo_stack, new_creations, 'bulk_creation', 'create')
-    _append_undo_group(undo_stack, new_deletions, 'bulk_deletion', 'delete')
+    _append_undo_group(undo_stack, new_edits, "bulk_edit", "edit")
+    _append_undo_group(undo_stack, new_moves, "bulk_move", "move")
+    _append_undo_group(undo_stack, new_creations, "bulk_creation", "create")
+    _append_undo_group(undo_stack, new_deletions, "bulk_deletion", "delete")
 
     # Create undo entries for NEW files (newFiles set) - these remain individual
-    existing_new_files = set(existing.get('newFiles', [])) if existing else set()
+    existing_new_files = set(existing.get("newFiles", [])) if existing else set()
     undo_stack.extend(_create_undo_entries_for_new_files(
-        data.get('newFiles', []), existing_new_files, log
+        data.get("newFiles", []), existing_new_files, log,
     ))
 
     return undo_stack
@@ -482,10 +492,11 @@ def _append_undo_group(undo_stack, new_entries, bulk_type, verb):
         new_entries: List of individual undo entries
         bulk_type: Bulk operation type string (e.g. 'bulk_edit')
         verb: Verb for description (e.g. 'edit')
+
     """
     if len(new_entries) > 1:
         undo_stack.append(_create_bulk_undo_entry(
-            bulk_type, new_entries, f"Bulk {verb} {len(new_entries)} object(s)"
+            bulk_type, new_entries, f"Bulk {verb} {len(new_entries)} object(s)",
         ))
     else:
         undo_stack.extend(new_entries)
@@ -500,24 +511,25 @@ def _build_staging_data(sm, data):
 
     Returns:
         Staging data dict with schema version applied
+
     """
     return sm.migrate_staging_schema({
-        'sessionId': data['sessionId'],
-        'userName': data.get('userName', ''),
-        'userEmail': data.get('userEmail', ''),
-        'pendingEdits': data.get('pendingEdits', {}),
-        'stagedMoves': data.get('stagedMoves', {}),
-        'stagedCreations': data.get('stagedCreations', []),
-        'stagedObjectDeletions': data.get('stagedObjectDeletions', []),
-        'newFiles': data.get('newFiles', []),
-        'stagedFileCreations': data.get('stagedFileCreations', []),
-        'stagedFileDeletions': data.get('stagedFileDeletions', []),
-        'stagedFileMoves': data.get('stagedFileMoves', []),
-        'stagedFolderCreations': data.get('stagedFolderCreations', []),
-        'stagedFolderDeletions': data.get('stagedFolderDeletions', []),
-        'stagedFolderMoves': data.get('stagedFolderMoves', []),
-        'undoStack': data.get('undoStack', []),
-        'baseFileChecksums': data.get('baseFileChecksums', {}),
+        "sessionId": data["sessionId"],
+        "userName": data.get("userName", ""),
+        "userEmail": data.get("userEmail", ""),
+        "pendingEdits": data.get("pendingEdits", {}),
+        "stagedMoves": data.get("stagedMoves", {}),
+        "stagedCreations": data.get("stagedCreations", []),
+        "stagedObjectDeletions": data.get("stagedObjectDeletions", []),
+        "newFiles": data.get("newFiles", []),
+        "stagedFileCreations": data.get("stagedFileCreations", []),
+        "stagedFileDeletions": data.get("stagedFileDeletions", []),
+        "stagedFileMoves": data.get("stagedFileMoves", []),
+        "stagedFolderCreations": data.get("stagedFolderCreations", []),
+        "stagedFolderDeletions": data.get("stagedFolderDeletions", []),
+        "stagedFolderMoves": data.get("stagedFolderMoves", []),
+        "undoStack": data.get("undoStack", []),
+        "baseFileChecksums": data.get("baseFileChecksums", {}),
     })
 
 
@@ -526,16 +538,16 @@ def is_safe_path(path, base_dir=None):
 
     Returns:
         OperationResult with success=True if safe, success=False with error if unsafe.
+
     """
     if base_dir is None:
         base_dir = get_config_path()
     return file_operations.is_safe_path(path, base_dir)
 
 
-@bp.route('/api/staging', methods=['GET'])
+@bp.route("/api/staging", methods=["GET"])
 def api_get_staging():
-    """
-    Get current staged changes.
+    """Get current staged changes.
 
     Returns the full staging data if it exists, or null if no staging.
     All users see the same staging - it's shared.
@@ -543,27 +555,25 @@ def api_get_staging():
     sm = get_staging_manager()
     staging = sm.get_staging()
     return jsonify({
-        'staging': staging,
-        'hasStaging': staging is not None
+        "staging": staging,
+        "hasStaging": staging is not None,
     })
 
 
-@bp.route('/api/staging', methods=['DELETE'])
+@bp.route("/api/staging", methods=["DELETE"])
 def api_delete_staging():
-    """
-    Clear/delete current staging data.
+    """Clear/delete current staging data.
 
     Releases the staging lock and clears all pending changes.
     """
     sm = get_staging_manager()
     sm.clear_staging()
-    return jsonify({'success': True})
+    return jsonify({"success": True})
 
 
-@bp.route('/api/staging/info', methods=['GET'])
+@bp.route("/api/staging/info", methods=["GET"])
 def api_get_staging_info():
-    """
-    Get summary info about current staging.
+    """Get summary info about current staging.
 
     Lightweight endpoint for polling - just returns counts, not full data.
     """
@@ -571,39 +581,37 @@ def api_get_staging_info():
     return jsonify(sm.get_staging_info())
 
 
-@bp.route('/api/staging/lock', methods=['GET'])
+@bp.route("/api/staging/lock", methods=["GET"])
 def api_get_lock_status():
-    """
-    Get the current staging lock status.
+    """Get the current staging lock status.
 
     Returns lock information including who owns the lock and their identity.
     Used by frontend to show lock banner and disable editing UI.
     """
     sm = get_staging_manager()
-    session_id = request.headers.get('X-Session-Id')
+    session_id = request.headers.get("X-Session-Id")
 
     lock_status = sm.get_lock_status(session_id)
 
     # Add user identity if lock is held
-    if lock_status['locked']:
+    if lock_status["locked"]:
         staging = sm.get_staging()
         if staging:
-            lock_status['userName'] = staging.get('userName', '')
-            lock_status['userEmail'] = staging.get('userEmail', '')
+            lock_status["userName"] = staging.get("userName", "")
+            lock_status["userEmail"] = staging.get("userEmail", "")
         else:
-            lock_status['userName'] = ''
-            lock_status['userEmail'] = ''
+            lock_status["userName"] = ""
+            lock_status["userEmail"] = ""
     else:
-        lock_status['userName'] = None
-        lock_status['userEmail'] = None
+        lock_status["userName"] = None
+        lock_status["userEmail"] = None
 
     return jsonify(lock_status)
 
 
-@bp.route('/api/staging/lock/break', methods=['POST'])
+@bp.route("/api/staging/lock/break", methods=["POST"])
 def api_break_lock():
-    """
-    Force break the staging lock (admin action).
+    """Force break the staging lock (admin action).
 
     Discards the other user's pending changes and releases the lock.
     If there are uncommitted git changes, also discards those.
@@ -612,14 +620,14 @@ def api_break_lock():
     git_svc = get_git_service()
     op_log = get_op_logger()
 
-    session_id = request.headers.get('X-Session-Id')
+    session_id = request.headers.get("X-Session-Id")
 
     # Log the break attempt
     if op_log:
         owner = sm.get_lock_owner()
-        op_log.warning('staging', 'break_lock',
-                      params={'owner': owner, 'breaker': session_id},
-                      result='attempted')
+        op_log.warning("staging", "break_lock",
+                      params={"owner": owner, "breaker": session_id},
+                      result="attempted")
 
     # Check if there are uncommitted git changes to discard
     git_discarded = False
@@ -634,13 +642,13 @@ def api_break_lock():
     sm.clear_staging()
 
     if op_log:
-        op_log.info('staging', 'break_lock',
-                   params={'git_discarded': git_discarded},
-                   result='success')
+        op_log.info("staging", "break_lock",
+                   params={"git_discarded": git_discarded},
+                   result="success")
 
     return jsonify({
-        'success': True,
-        'gitDiscarded': git_discarded
+        "success": True,
+        "gitDiscarded": git_discarded,
     })
 
 
@@ -654,22 +662,22 @@ def _validate_staging_format(data):
 
     Returns:
         None if valid, error message string if invalid
+
     """
-    pending_edits = data.get('pendingEdits')
+    pending_edits = data.get("pendingEdits")
     if pending_edits is not None and not isinstance(pending_edits, dict):
         return "pendingEdits must be a dict {globalIndex: entry}"
 
-    staged_moves = data.get('stagedMoves')
+    staged_moves = data.get("stagedMoves")
     if staged_moves is not None and not isinstance(staged_moves, dict):
         return "stagedMoves must be a dict {stableKey: entry}"
 
     return None
 
 
-@bp.route('/api/staging', methods=['POST'])
+@bp.route("/api/staging", methods=["POST"])
 def api_save_staging():
-    """
-    Save staged changes WITHOUT applying them to files.
+    """Save staged changes WITHOUT applying them to files.
 
     TRUE STAGING APPROACH:
     This endpoint ONLY stores staging data in staging.json.
@@ -679,7 +687,7 @@ def api_save_staging():
     Accepts userName and userEmail in request body for user identification.
     """
     import logging
-    log = logging.getLogger('nagios_bulk_editor.staging')
+    log = logging.getLogger("nagios_bulk_editor.staging")
 
     sm = get_staging_manager()
     data = request.get_json() or {}
@@ -687,20 +695,20 @@ def api_save_staging():
     # Validate format before processing
     format_error = _validate_staging_format(data)
     if format_error:
-        return jsonify({'error': f'Invalid staging format: {format_error}'}), 400
+        return jsonify({"error": f"Invalid staging format: {format_error}"}), 400
 
-    session_id = request.headers.get('X-Session-Id')
+    session_id = request.headers.get("X-Session-Id")
     log.debug(f"POST /api/staging: {len(data.get('stagedMoves', {}))} moves, session={session_id}")
 
     # Require session ID for modifications
     if not session_id:
-        return jsonify({'error': 'X-Session-Id header required'}), 400
+        return jsonify({"error": "X-Session-Id header required"}), 400
 
     # Check if locked by another session
     if not sm.validate_or_acquire_lock(session_id):
-        return jsonify({'error': 'Staging is locked by another user', 'locked': True}), 423
+        return jsonify({"error": "Staging is locked by another user", "locked": True}), 423
 
-    data['sessionId'] = session_id
+    data["sessionId"] = session_id
 
     # Preserve user identity and file/folder ops from existing staging
     existing = sm.get_staging()
@@ -712,7 +720,7 @@ def api_save_staging():
         sm.update_base_checksums(list(files_to_track))
 
     # Build undo stack with entries for new operations
-    data['undoStack'] = _build_undo_entries(data, existing, log)
+    data["undoStack"] = _build_undo_entries(data, existing, log)
 
     # Build final staging data structure and save atomically
     staging_data = _build_staging_data(sm, data)
@@ -720,13 +728,12 @@ def api_save_staging():
 
     if save_result.success:
         return jsonify({
-            'success': True,
-            'message': 'Staging saved. Use POST /api/staging/apply to write changes to disk.'
+            "success": True,
+            "message": "Staging saved. Use POST /api/staging/apply to write changes to disk.",
         })
-    elif 'locked' in (save_result.error or '').lower():
-        return jsonify({'error': save_result.error, 'locked': True}), 423
-    else:
-        return jsonify({'error': save_result.error or 'Failed to save staging'}), 500
+    if "locked" in (save_result.error or "").lower():
+        return jsonify({"error": save_result.error, "locked": True}), 423
+    return jsonify({"error": save_result.error or "Failed to save staging"}), 500
 
 
 def _validate_apply_preconditions(sm, session_id, op_log):
@@ -739,26 +746,27 @@ def _validate_apply_preconditions(sm, session_id, op_log):
 
     Returns:
         Tuple of (error_response, staging_data) - error_response is None if valid
+
     """
     if not session_id:
-        return (jsonify({'error': 'X-Session-Id header required'}), 400), None
+        return (jsonify({"error": "X-Session-Id header required"}), 400), None
 
     if not sm.can_modify(session_id):
         if op_log:
-            op_log.warning('app', 'staging_apply', session_id=session_id, result='lock_conflict')
-        return (jsonify({'error': 'Staging is locked by another user', 'locked': True}), 423), None
+            op_log.warning("app", "staging_apply", session_id=session_id, result="lock_conflict")
+        return (jsonify({"error": "Staging is locked by another user", "locked": True}), 423), None
 
     staging_data = sm.get_staging()
     if not staging_data:
-        return (jsonify({'error': 'No staging data found'}), 400), None
+        return (jsonify({"error": "No staging data found"}), 400), None
 
     conflicts = sm.detect_conflicts()
     if conflicts:
         if op_log:
-            op_log.warning('app', 'staging_apply', session_id=session_id, result='conflicts_detected')
+            op_log.warning("app", "staging_apply", session_id=session_id, result="conflicts_detected")
         return (jsonify({
-            'error': 'Conflicts detected - files have been modified externally',
-            'conflicts': conflicts, 'requiresResolution': True
+            "error": "Conflicts detected - files have been modified externally",
+            "conflicts": conflicts, "requiresResolution": True,
         }), 409), None
 
     return None, staging_data
@@ -774,18 +782,19 @@ def _execute_apply_phases(service, staging_data):
     Returns:
         Tuple of (applied_summary, all_details, phase_errors, failed_phase)
         failed_phase is None if all phases succeeded
+
     """
     phases = [
-        ('folderCreations', lambda: service.apply_folder_creations(staging_data)),
-        ('fileCreations', lambda: service.apply_file_creations(staging_data)),
-        ('objectDeletions', lambda: service.apply_object_deletions(staging_data)),
-        ('objectMoves', lambda: service.apply_object_moves(staging_data)),
-        ('objectEdits', lambda: service.apply_object_edits(staging_data)),
-        ('objectCreations', lambda: service.apply_object_creations(staging_data)),
-        ('fileMoves', lambda: service.apply_file_moves(staging_data)),
-        ('folderMoves', lambda: service.apply_folder_moves(staging_data)),
-        ('fileDeletions', lambda: service.apply_file_deletions(staging_data)),
-        ('folderDeletions', lambda: service.apply_folder_deletions(staging_data)),
+        ("folderCreations", lambda: service.apply_folder_creations(staging_data)),
+        ("fileCreations", lambda: service.apply_file_creations(staging_data)),
+        ("objectDeletions", lambda: service.apply_object_deletions(staging_data)),
+        ("objectMoves", lambda: service.apply_object_moves(staging_data)),
+        ("objectEdits", lambda: service.apply_object_edits(staging_data)),
+        ("objectCreations", lambda: service.apply_object_creations(staging_data)),
+        ("fileMoves", lambda: service.apply_file_moves(staging_data)),
+        ("folderMoves", lambda: service.apply_folder_moves(staging_data)),
+        ("fileDeletions", lambda: service.apply_file_deletions(staging_data)),
+        ("folderDeletions", lambda: service.apply_folder_deletions(staging_data)),
     ]
 
     applied_summary = {}
@@ -794,9 +803,9 @@ def _execute_apply_phases(service, staging_data):
 
     for key, apply_fn in phases:
         result = apply_fn()
-        applied_summary[key] = result.data.get('count', 0)
-        errors = result.data.get('errors', [])
-        details = result.data.get('details', [])
+        applied_summary[key] = result.data.get("count", 0)
+        errors = result.data.get("errors", [])
+        details = result.data.get("details", [])
 
         if details:
             all_details[key] = details
@@ -820,35 +829,36 @@ def _build_audit_entry(staging_data, session_id, all_details, errors):
 
     Returns:
         Audit entry dict ready for write_audit_log()
+
     """
     audit_entry = {
-        'timestamp': datetime.now().isoformat(),
-        'userName': staging_data.get('userName', ''),
-        'userEmail': staging_data.get('userEmail', ''),
-        'sessionId': session_id,
+        "timestamp": datetime.now().isoformat(),
+        "userName": staging_data.get("userName", ""),
+        "userEmail": staging_data.get("userEmail", ""),
+        "sessionId": session_id,
     }
 
     # Map phase detail keys to audit entry keys
     _PHASE_TO_AUDIT_KEY = {
-        'objectEdits': 'object_edits',
-        'objectMoves': 'object_moves',
-        'objectCreations': 'object_creations',
-        'objectDeletions': 'object_deletions',
-        'folderCreations': 'folder_creations',
-        'fileMoves': 'file_moves',
-        'folderMoves': 'folder_moves',
+        "objectEdits": "object_edits",
+        "objectMoves": "object_moves",
+        "objectCreations": "object_creations",
+        "objectDeletions": "object_deletions",
+        "folderCreations": "folder_creations",
+        "fileMoves": "file_moves",
+        "folderMoves": "folder_moves",
     }
     for phase_key, audit_key in _PHASE_TO_AUDIT_KEY.items():
         if all_details.get(phase_key):
             audit_entry[audit_key] = all_details[phase_key]
 
     # Combine file and folder deletions into a single audit field
-    file_deletions = all_details.get('fileDeletions', []) + all_details.get('folderDeletions', [])
+    file_deletions = all_details.get("fileDeletions", []) + all_details.get("folderDeletions", [])
     if file_deletions:
-        audit_entry['file_deletions'] = file_deletions
+        audit_entry["file_deletions"] = file_deletions
 
     if errors:
-        audit_entry['errors'] = errors
+        audit_entry["errors"] = errors
 
     return audit_entry
 
@@ -868,6 +878,7 @@ def _write_apply_audit_log(staging_data, session_id, all_details, errors, log):
 
     Returns:
         Tuple of (success: bool, error_message: Optional[str])
+
     """
     try:
         audit_entry = _build_audit_entry(staging_data, session_id, all_details, errors)
@@ -889,15 +900,16 @@ def _extract_name_changes(staging_data):
 
     Returns:
         List of dicts with {oldName, newName, objectType} for each name change
+
     """
     name_changes = []
-    pending_edits = staging_data.get('pendingEdits', {})
+    pending_edits = staging_data.get("pendingEdits", {})
 
     for edit_data in pending_edits.values():
         if not isinstance(edit_data, dict):
             continue
-        obj_info = edit_data.get('object', {})
-        obj_type = obj_info.get('object_type')
+        obj_info = edit_data.get("object", {})
+        obj_type = obj_info.get("object_type")
         if not obj_type:
             continue
 
@@ -905,8 +917,8 @@ def _extract_name_changes(staging_data):
         if not name_field:
             continue
 
-        original = edit_data.get('original', {})
-        edited = edit_data.get('edited', {})
+        original = edit_data.get("original", {})
+        edited = edit_data.get("edited", {})
 
         # Check if name field was modified
         if name_field in edited:
@@ -914,9 +926,9 @@ def _extract_name_changes(staging_data):
             new_name = edited.get(name_field)
             if old_name and new_name and old_name != new_name:
                 name_changes.append({
-                    'oldName': old_name,
-                    'newName': new_name,
-                    'objectType': obj_type
+                    "oldName": old_name,
+                    "newName": new_name,
+                    "objectType": obj_type,
                 })
 
     return name_changes
@@ -934,6 +946,7 @@ def _apply_reference_updates(service, name_changes, log):
 
     Returns:
         Total count of references updated
+
     """
     from nagios_writer import NagiosConfigWriter
 
@@ -944,8 +957,8 @@ def _apply_reference_updates(service, name_changes, log):
     objects = service.get_objects()
 
     for change in name_changes:
-        old_name = change['oldName']
-        new_name = change['newName']
+        old_name = change["oldName"]
+        new_name = change["newName"]
         refs_updated = service.update_references(objects, old_name, new_name)
         total_refs_updated += refs_updated
         if refs_updated > 0:
@@ -969,14 +982,15 @@ def _create_pre_apply_backup(staging_data, log):
     Args:
         staging_data: Staging data dict (for user identity)
         log: Logger instance
+
     """
     bm = get_backup_manager()
     if bm:
         try:
             bm.create_backup(
-                'pre-apply',
-                user_name=staging_data.get('userName', ''),
-                user_email=staging_data.get('userEmail', '')
+                "pre-apply",
+                user_name=staging_data.get("userName", ""),
+                user_email=staging_data.get("userEmail", ""),
             )
         except Exception as e:
             log.warning(f"Failed to create pre-apply backup: {e}")
@@ -992,27 +1006,28 @@ def _handle_apply_failure(service, failed_phase, apply_ctx):
 
     Returns:
         Flask response tuple (jsonify, status_code)
+
     """
-    errors = apply_ctx['errors']
-    session_id = apply_ctx['session_id']
-    op_log = apply_ctx['op_log']
-    log = apply_ctx['log']
+    errors = apply_ctx["errors"]
+    session_id = apply_ctx["session_id"]
+    op_log = apply_ctx["op_log"]
+    log = apply_ctx["log"]
 
     log.error(f"Staging apply failed at phase '{failed_phase}': {errors}")
     if op_log:
-        op_log.error('app', 'staging_apply', session_id=session_id,
+        op_log.error("app", "staging_apply", session_id=session_id,
                      error=f"Failed at phase {failed_phase}: {errors}")
 
     # Still reload parser to reflect partial changes
     service.reload()
 
     return jsonify({
-        'success': False,
-        'error': f"Apply failed during {failed_phase} phase. Staging preserved for retry.",
-        'failedPhase': failed_phase,
-        'applied': apply_ctx['applied_summary'],
-        'errors': errors,
-        'stagingPreserved': True
+        "success": False,
+        "error": f"Apply failed during {failed_phase} phase. Staging preserved for retry.",
+        "failedPhase": failed_phase,
+        "applied": apply_ctx["applied_summary"],
+        "errors": errors,
+        "stagingPreserved": True,
     }), 500
 
 
@@ -1031,15 +1046,16 @@ def _apply_post_phase_reference_updates(service, name_changes, all_details, erro
 
     Returns:
         Number of references updated
+
     """
     if not name_changes:
         return 0
     try:
         refs_updated = _apply_reference_updates(service, name_changes, log)
         if refs_updated > 0:
-            all_details['referenceUpdates'] = {
-                'count': refs_updated,
-                'renames': name_changes
+            all_details["referenceUpdates"] = {
+                "count": refs_updated,
+                "renames": name_changes,
             }
         return refs_updated
     except Exception as ref_err:
@@ -1054,26 +1070,27 @@ def _run_post_apply_validation():
 
     Returns:
         Validation result dict, or None if validation was not requested/possible
+
     """
     try:
         config = get_config()
-        nagios_bin = config.get('nagios_bin', '')
-        nagios_cfg = config.get('nagios_cfg', '')
+        nagios_bin = config.get("nagios_bin", "")
+        nagios_cfg = config.get("nagios_cfg", "")
         if nagios_bin and nagios_cfg:
             from validator import NagiosValidator
             validator = NagiosValidator(nagios_bin, nagios_cfg)
             val_result = validator.validate()
             return val_result.to_dict()
         return {
-            'success': None,
-            'skipped': True,
-            'message': 'Nagios binary or config path not configured'
+            "success": None,
+            "skipped": True,
+            "message": "Nagios binary or config path not configured",
         }
     except Exception as e:
         return {
-            'success': None,
-            'skipped': True,
-            'message': f'Validation failed to run: {str(e)}'
+            "success": None,
+            "skipped": True,
+            "message": f"Validation failed to run: {e!s}",
         }
 
 
@@ -1089,42 +1106,42 @@ def _build_apply_success_response(result_ctx, audit_ctx):
 
     Returns:
         Flask jsonify response
+
     """
-    applied_summary = result_ctx['applied_summary']
-    errors = result_ctx['errors']
+    applied_summary = result_ctx["applied_summary"]
+    errors = result_ctx["errors"]
     total_changes = sum(applied_summary.values())
 
     # C-10: Track audit log write result and include failure in response
     audit_failed = False
     if total_changes > 0:
         audit_success, audit_error = _write_apply_audit_log(
-            audit_ctx['staging_data'], audit_ctx['session_id'],
-            result_ctx['all_details'], errors, audit_ctx['log']
+            audit_ctx["staging_data"], audit_ctx["session_id"],
+            result_ctx["all_details"], errors, audit_ctx["log"],
         )
         if not audit_success:
             audit_failed = True
             errors.append(audit_error)
 
     response_data = {
-        'success': True, 'applied': applied_summary,
-        'totalChanges': total_changes, 'errors': errors if errors else None,
-        'referencesUpdated': result_ctx['refs_updated'],
-        'stagingCleared': result_ctx['staging_cleared'],
-        'stagingDeferred': result_ctx['defer_clear']
+        "success": True, "applied": applied_summary,
+        "totalChanges": total_changes, "errors": errors or None,
+        "referencesUpdated": result_ctx["refs_updated"],
+        "stagingCleared": result_ctx["staging_cleared"],
+        "stagingDeferred": result_ctx["defer_clear"],
     }
     if audit_failed:
-        response_data['warnings'] = ['Audit log write failed - changes applied but not logged']
+        response_data["warnings"] = ["Audit log write failed - changes applied but not logged"]
 
-    if result_ctx['validate_after']:
-        response_data['validation'] = _run_post_apply_validation()
+    if result_ctx["validate_after"]:
+        response_data["validation"] = _run_post_apply_validation()
 
     return jsonify(response_data)
 
 
-@bp.route('/api/staging/apply', methods=['POST'])
+@bp.route("/api/staging/apply", methods=["POST"])
 def api_apply_staging():
-    """
-    Apply all staged changes to disk.
+    """Apply all staged changes to disk.
 
     TRUE STAGING: This endpoint writes all staged changes to the filesystem.
     Changes are applied in the correct order to avoid conflicts:
@@ -1153,17 +1170,17 @@ def api_apply_staging():
 
     Returns summary of applied changes and optionally prompts for git commit.
     """
-    log = logging.getLogger('nagios_bulk_editor.staging')
+    log = logging.getLogger("nagios_bulk_editor.staging")
     sm = get_staging_manager()
-    session_id = request.headers.get('X-Session-Id')
+    session_id = request.headers.get("X-Session-Id")
     op_log = get_op_logger()
 
     # C-06: Read updateReferences flag from request body (use silent=True to handle missing body)
     # C-10: Read deferClear flag - if true, don't clear staging on success (for atomic apply+commit)
     request_data = request.get_json(silent=True) or {}
-    update_references_flag = request_data.get('updateReferences', False)
-    defer_clear = request_data.get('deferClear', False)
-    validate_after = request_data.get('validate', False)
+    update_references_flag = request_data.get("updateReferences", False)
+    defer_clear = request_data.get("deferClear", False)
+    validate_after = request_data.get("validate", False)
 
     # Validate preconditions
     error_response, staging_data = _validate_apply_preconditions(sm, session_id, op_log)
@@ -1174,9 +1191,9 @@ def api_apply_staging():
     name_changes = _extract_name_changes(staging_data) if update_references_flag else []
 
     if op_log:
-        op_log.info('app', 'staging_apply', session_id=session_id,
-                    user_name=staging_data.get('userName', ''),
-                    user_email=staging_data.get('userEmail', ''),
+        op_log.info("app", "staging_apply", session_id=session_id,
+                    user_name=staging_data.get("userName", ""),
+                    user_email=staging_data.get("userEmail", ""),
                     update_references=update_references_flag,
                     name_changes_count=len(name_changes))
 
@@ -1185,13 +1202,13 @@ def api_apply_staging():
 
     try:
         applied_summary, all_details, errors, failed_phase = _execute_apply_phases(
-            service, staging_data
+            service, staging_data,
         )
 
         if failed_phase:
             apply_ctx = {
-                'applied_summary': applied_summary, 'errors': errors,
-                'session_id': session_id, 'op_log': op_log, 'log': log
+                "applied_summary": applied_summary, "errors": errors,
+                "session_id": session_id, "op_log": op_log, "log": log,
             }
             return _handle_apply_failure(service, failed_phase, apply_ctx)
 
@@ -1199,7 +1216,7 @@ def api_apply_staging():
         service.reload()
 
         refs_updated = _apply_post_phase_reference_updates(
-            service, name_changes, all_details, errors, log
+            service, name_changes, all_details, errors, log,
         ) if update_references_flag else 0
 
         # C-10: Only clear staging if deferClear is not requested
@@ -1208,22 +1225,22 @@ def api_apply_staging():
             sm.clear_staging()
 
         result_ctx = {
-            'applied_summary': applied_summary, 'all_details': all_details,
-            'errors': errors, 'refs_updated': refs_updated,
-            'staging_cleared': staging_cleared, 'defer_clear': defer_clear,
-            'validate_after': validate_after
+            "applied_summary": applied_summary, "all_details": all_details,
+            "errors": errors, "refs_updated": refs_updated,
+            "staging_cleared": staging_cleared, "defer_clear": defer_clear,
+            "validate_after": validate_after,
         }
-        audit_ctx = {'staging_data': staging_data, 'session_id': session_id, 'log': log}
+        audit_ctx = {"staging_data": staging_data, "session_id": session_id, "log": log}
         return _build_apply_success_response(result_ctx, audit_ctx)
 
     except Exception as e:
         # Unexpected exception - do NOT clear staging
         log.error(f"Error applying staging: {e}")
         if op_log:
-            op_log.error('app', 'staging_apply', session_id=session_id, error=str(e))
+            op_log.error("app", "staging_apply", session_id=session_id, error=str(e))
         return jsonify({
-            'error': f'Failed to apply staging: {e}',
-            'stagingPreserved': True
+            "error": f"Failed to apply staging: {e}",
+            "stagingPreserved": True,
         }), 500
 
 
@@ -1236,6 +1253,7 @@ def _apply_staged_edits_to_virtual(virtual_objects, pending_edits):
 
     Returns:
         Set of edited global indices
+
     """
     edited_indices = set()
     for gi_str, edit_data in pending_edits.items():
@@ -1244,10 +1262,10 @@ def _apply_staged_edits_to_virtual(virtual_objects, pending_edits):
         global_index = int(gi_str) if gi_str is not None else None
 
         if global_index is not None and 0 <= global_index < len(virtual_objects):
-            edited_attrs = edit_data.get('edited', {})
+            edited_attrs = edit_data.get("edited", {})
             if edited_attrs:
-                virtual_objects[global_index]['attributes'].update(edited_attrs)
-                virtual_objects[global_index]['_staged_status'] = 'edited'
+                virtual_objects[global_index]["attributes"].update(edited_attrs)
+                virtual_objects[global_index]["_staged_status"] = "edited"
                 edited_indices.add(global_index)
     return edited_indices
 
@@ -1261,13 +1279,14 @@ def _apply_staged_deletions_to_virtual(virtual_objects, staged_deletions):
 
     Returns:
         Set of deleted global indices
+
     """
     deleted_indices = set()
     for deletion_entry in staged_deletions:
         if isinstance(deletion_entry, (int, float)):
             global_index = int(deletion_entry)
             if 0 <= global_index < len(virtual_objects):
-                virtual_objects[global_index]['_staged_status'] = 'deleted'
+                virtual_objects[global_index]["_staged_status"] = "deleted"
                 deleted_indices.add(global_index)
     return deleted_indices
 
@@ -1278,20 +1297,21 @@ def _apply_staged_moves_to_virtual(virtual_objects, staged_moves):
     Args:
         virtual_objects: List of virtual object dicts (modified in place)
         staged_moves: Dict {stableKey: move_data} from staging
+
     """
     for move_data in staged_moves.values():
         if not isinstance(move_data, dict):
             continue
 
-        obj_info = move_data.get('object', {})
-        target_file = move_data.get('targetFile')
+        obj_info = move_data.get("object", {})
+        target_file = move_data.get("targetFile")
 
         for obj in virtual_objects:
-            if (obj['source_file'] == obj_info.get('source_file') and
-                obj['object_type'] == obj_info.get('object_type') and
-                obj['attributes'] == obj_info.get('attributes')):
-                obj['_staged_status'] = 'moved'
-                obj['_staged_target_file'] = target_file
+            if (obj["source_file"] == obj_info.get("source_file") and
+                obj["object_type"] == obj_info.get("object_type") and
+                obj["attributes"] == obj_info.get("attributes")):
+                obj["_staged_status"] = "moved"
+                obj["_staged_target_file"] = target_file
                 break
 
 
@@ -1301,15 +1321,16 @@ def _add_staged_creations_to_virtual(virtual_objects, staged_creations):
     Args:
         virtual_objects: List of virtual object dicts (modified in place)
         staged_creations: List of creation dicts from staging
+
     """
     for creation in staged_creations:
         virtual_objects.append({
-            'object_type': creation.get('object_type'),
-            'attributes': creation.get('attributes', {}),
-            'source_file': creation.get('targetFile'),
-            'line_number': -1,  # Doesn't exist yet
-            'global_index': -1,
-            '_staged_status': 'created'
+            "object_type": creation.get("object_type"),
+            "attributes": creation.get("attributes", {}),
+            "source_file": creation.get("targetFile"),
+            "line_number": -1,  # Doesn't exist yet
+            "global_index": -1,
+            "_staged_status": "created",
         })
 
 
@@ -1325,24 +1346,25 @@ def _collect_virtual_files(virtual_objects, staging_data):
 
     Returns:
         Set of file paths
+
     """
-    files = set(obj['source_file'] for obj in virtual_objects if obj.get('source_file'))
+    files = set(obj["source_file"] for obj in virtual_objects if obj.get("source_file"))
 
     # Add staged new files
     config_path = get_config_path()
-    for file_path in staging_data.get('newFiles', []):
+    for file_path in staging_data.get("newFiles", []):
         if not os.path.isabs(file_path):
             file_path = os.path.join(config_path, file_path)
         files.add(file_path)
 
     # Add staged file creations
-    for op in staging_data.get('stagedFileCreations', []):
-        if op.get('path'):
-            files.add(op['path'])
+    for op in staging_data.get("stagedFileCreations", []):
+        if op.get("path"):
+            files.add(op["path"])
 
     # Remove staged file deletions
-    for op in staging_data.get('stagedFileDeletions', []):
-        files.discard(op.get('path'))
+    for op in staging_data.get("stagedFileDeletions", []):
+        files.discard(op.get("path"))
 
     return files
 
@@ -1355,31 +1377,31 @@ def _count_staged_operations(staging_data):
 
     Returns:
         Dict of operation type -> count
+
     """
-    pending_edits = staging_data.get('pendingEdits', {})
-    staged_moves = staging_data.get('stagedMoves', {})
-    staged_creations = staging_data.get('stagedCreations', [])
-    staged_deletions = staging_data.get('stagedObjectDeletions', [])
-    new_files = staging_data.get('newFiles', [])
+    pending_edits = staging_data.get("pendingEdits", {})
+    staged_moves = staging_data.get("stagedMoves", {})
+    staged_creations = staging_data.get("stagedCreations", [])
+    staged_deletions = staging_data.get("stagedObjectDeletions", [])
+    new_files = staging_data.get("newFiles", [])
 
     return {
-        'edits': len(pending_edits),
-        'moves': len(staged_moves),
-        'creations': len(staged_creations),
-        'deletions': len(staged_deletions),
-        'newFiles': len(new_files) + len(staging_data.get('stagedFileCreations', [])),
-        'fileDeletes': len(staging_data.get('stagedFileDeletions', [])),
-        'fileMoves': len(staging_data.get('stagedFileMoves', [])),
-        'folderCreates': len(staging_data.get('stagedFolderCreations', [])),
-        'folderDeletes': len(staging_data.get('stagedFolderDeletions', [])),
-        'folderMoves': len(staging_data.get('stagedFolderMoves', [])),
+        "edits": len(pending_edits),
+        "moves": len(staged_moves),
+        "creations": len(staged_creations),
+        "deletions": len(staged_deletions),
+        "newFiles": len(new_files) + len(staging_data.get("stagedFileCreations", [])),
+        "fileDeletes": len(staging_data.get("stagedFileDeletions", [])),
+        "fileMoves": len(staging_data.get("stagedFileMoves", [])),
+        "folderCreates": len(staging_data.get("stagedFolderCreations", [])),
+        "folderDeletes": len(staging_data.get("stagedFolderDeletions", [])),
+        "folderMoves": len(staging_data.get("stagedFolderMoves", [])),
     }
 
 
-@bp.route('/api/staging/virtual-tree', methods=['GET'])
+@bp.route("/api/staging/virtual-tree", methods=["GET"])
 def api_get_virtual_tree():
-    """
-    Get a merged virtual view of objects with staged changes applied.
+    """Get a merged virtual view of objects with staged changes applied.
 
     This endpoint returns what the file tree and objects would look like
     AFTER all staged changes are applied, without actually writing to disk.
@@ -1394,75 +1416,74 @@ def api_get_virtual_tree():
     virtual_objects = []
     for i, obj in enumerate(service.get_objects()):
         obj_dict = obj.to_dict()
-        obj_dict['global_index'] = i
-        obj_dict['_staged_status'] = None  # Not staged
+        obj_dict["global_index"] = i
+        obj_dict["_staged_status"] = None  # Not staged
         virtual_objects.append(obj_dict)
 
     if not staging_data:
         # No staging - return current state
         return jsonify({
-            'objects': virtual_objects,
-            'files': sorted(set(obj['source_file'] for obj in virtual_objects)),
-            'stagedCounts': {}
+            "objects": virtual_objects,
+            "files": sorted(set(obj["source_file"] for obj in virtual_objects)),
+            "stagedCounts": {},
         })
 
     # Apply staged changes to virtual objects
-    _apply_staged_edits_to_virtual(virtual_objects, staging_data.get('pendingEdits', {}))
-    _apply_staged_deletions_to_virtual(virtual_objects, staging_data.get('stagedObjectDeletions', []))
-    _apply_staged_moves_to_virtual(virtual_objects, staging_data.get('stagedMoves', {}))
-    _add_staged_creations_to_virtual(virtual_objects, staging_data.get('stagedCreations', []))
+    _apply_staged_edits_to_virtual(virtual_objects, staging_data.get("pendingEdits", {}))
+    _apply_staged_deletions_to_virtual(virtual_objects, staging_data.get("stagedObjectDeletions", []))
+    _apply_staged_moves_to_virtual(virtual_objects, staging_data.get("stagedMoves", {}))
+    _add_staged_creations_to_virtual(virtual_objects, staging_data.get("stagedCreations", []))
 
     files = _collect_virtual_files(virtual_objects, staging_data)
     staged_counts = _count_staged_operations(staging_data)
 
     return jsonify({
-        'objects': virtual_objects,
-        'files': sorted(files),
-        'stagedCounts': staged_counts,
-        'undoCount': len(staging_data.get('undoStack', []))
+        "objects": virtual_objects,
+        "files": sorted(files),
+        "stagedCounts": staged_counts,
+        "undoCount": len(staging_data.get("undoStack", [])),
     })
 
 
-@bp.route('/api/staging/undo', methods=['POST'])
+@bp.route("/api/staging/undo", methods=["POST"])
 def api_staging_undo():
-    """
-    Undo the last staged operation.
+    """Undo the last staged operation.
 
     C-04 FIX: Uses atomic undo pattern - peeks at entry first, applies reversal,
     removes from stack, then saves all changes atomically. This prevents data
     loss if save fails after popping.
     """
     sm = get_staging_manager()
-    session_id = request.headers.get('X-Session-Id')
+    session_id = request.headers.get("X-Session-Id")
 
     error_response, undo_entry, staging = _validate_undo_preconditions(sm, session_id)
     if error_response:
         return error_response
 
-    action_type = undo_entry.get('type')
-    action_data = undo_entry.get('data', {})
+    action_type = undo_entry.get("type")
+    action_data = undo_entry.get("data", {})
 
     try:
         reversed_action = _execute_undo_action(staging, action_type, action_data)
     except UndoKeyError as e:
         logger.error(f"Undo failed due to invalid key: {e}")
-        return jsonify({'error': f'Undo failed: {e}'}), 400
+        return jsonify({"error": f"Undo failed: {e}"}), 400
 
     # C-04 FIX: Now remove from stack (in memory) after successful reversal
-    undo_stack = staging.get('undoStack', [])
+    undo_stack = staging.get("undoStack", [])
     if undo_stack:
         undo_stack.pop()
-        staging['undoStack'] = undo_stack
+        staging["undoStack"] = undo_stack
 
     # Save updated staging atomically (reversal + stack removal together)
     if sm.save_staging(staging).success:
         return jsonify({
-            'success': True,
-            'undone': undo_entry.get('description'),
-            'action': reversed_action,
-            'undoCount': len(staging.get('undoStack', []))
+            "success": True,
+            "undone": undo_entry.get("description"),
+            "action": reversed_action,
+            "undoCount": len(staging.get("undoStack", [])),
         })
-    return jsonify({'error': 'Failed to save staging'}), 500
+    return jsonify({"error": "Failed to save staging"}), 500
 
 
 def _validate_undo_preconditions(sm, session_id):
@@ -1471,19 +1492,20 @@ def _validate_undo_preconditions(sm, session_id):
     Returns:
         Tuple of (error_response, undo_entry, staging).
         error_response is None if all preconditions are met.
+
     """
     if not session_id:
-        return (jsonify({'error': 'X-Session-Id header required'}), 400), None, None
+        return (jsonify({"error": "X-Session-Id header required"}), 400), None, None
     if not sm.can_modify(session_id):
-        return (jsonify({'error': 'Staging is locked by another user'}), 423), None, None
+        return (jsonify({"error": "Staging is locked by another user"}), 423), None, None
 
     undo_entry = sm.peek_undo_stack()
     if not undo_entry:
-        return (jsonify({'error': 'Nothing to undo'}), 404), None, None
+        return (jsonify({"error": "Nothing to undo"}), 404), None, None
 
     staging = sm.get_staging()
     if not staging:
-        return (jsonify({'error': 'No staging data'}), 400), None, None
+        return (jsonify({"error": "No staging data"}), 400), None, None
 
     return None, undo_entry, staging
 
@@ -1496,6 +1518,7 @@ def _execute_undo_action(staging, action_type, action_data):
 
     Raises:
         UndoKeyError: If undo data has invalid keys.
+
     """
     try:
         op_type = OperationType(action_type)
@@ -1511,10 +1534,9 @@ def _execute_undo_action(staging, action_type, action_data):
     return f"Skipped unknown action: {action_type}"
 
 
-@bp.route('/api/staging/conflicts', methods=['GET'])
+@bp.route("/api/staging/conflicts", methods=["GET"])
 def api_staging_conflicts():
-    """
-    Check for conflicts between staged changes and current file state.
+    """Check for conflicts between staged changes and current file state.
 
     Compares base file checksums (stored when staging began) against
     current file checksums to detect external modifications.
@@ -1524,8 +1546,8 @@ def api_staging_conflicts():
     conflicts = sm.detect_conflicts()
 
     return jsonify({
-        'hasConflicts': len(conflicts) > 0,
-        'conflicts': conflicts
+        "hasConflicts": len(conflicts) > 0,
+        "conflicts": conflicts,
     })
 
 
@@ -1540,20 +1562,21 @@ def _build_staged_changes_summary(staging):
 
     Returns:
         Tuple of (staged_changes list, total_staged_count int)
+
     """
     # Define operation types: (staging_key, type_name, label_template)
     _OPERATION_TYPES = [
-        ('pendingEdits', 'edits', 'object edit(s)'),
-        ('stagedMoves', 'moves', 'object move(s)'),
-        ('stagedCreations', 'creations', 'new object(s)'),
-        ('stagedObjectDeletions', 'deletions', 'object deletion(s)'),
-        ('newFiles', 'newFiles', 'new file(s)'),
-        ('stagedFileCreations', 'fileCreations', 'file creation(s)'),
-        ('stagedFileDeletions', 'fileDeletions', 'file deletion(s)'),
-        ('stagedFileMoves', 'fileMoves', 'file move(s)'),
-        ('stagedFolderCreations', 'folderCreations', 'folder creation(s)'),
-        ('stagedFolderDeletions', 'folderDeletions', 'folder deletion(s)'),
-        ('stagedFolderMoves', 'folderMoves', 'folder move(s)'),
+        ("pendingEdits", "edits", "object edit(s)"),
+        ("stagedMoves", "moves", "object move(s)"),
+        ("stagedCreations", "creations", "new object(s)"),
+        ("stagedObjectDeletions", "deletions", "object deletion(s)"),
+        ("newFiles", "newFiles", "new file(s)"),
+        ("stagedFileCreations", "fileCreations", "file creation(s)"),
+        ("stagedFileDeletions", "fileDeletions", "file deletion(s)"),
+        ("stagedFileMoves", "fileMoves", "file move(s)"),
+        ("stagedFolderCreations", "folderCreations", "folder creation(s)"),
+        ("stagedFolderDeletions", "folderDeletions", "folder deletion(s)"),
+        ("stagedFolderMoves", "folderMoves", "folder move(s)"),
     ]
 
     staged_changes = []
@@ -1564,9 +1587,9 @@ def _build_staged_changes_summary(staging):
         total_staged_count += count
         if count > 0:
             staged_changes.append({
-                'type': type_name,
-                'count': count,
-                'label': f'{count} {label_template}'
+                "type": type_name,
+                "count": count,
+                "label": f"{count} {label_template}",
             })
 
     return staged_changes, total_staged_count
@@ -1580,24 +1603,24 @@ def _get_existing_folders(config_path):
 
     Returns:
         List of absolute folder paths
+
     """
     existing_folders = []
     try:
         for root, dirs, _files in os.walk(config_path):
             # Skip hidden directories
-            dirs[:] = [d for d in dirs if not d.startswith('.')]
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
             rel_path = os.path.relpath(root, config_path)
-            if rel_path != '.':
+            if rel_path != ".":
                 existing_folders.append(os.path.join(config_path, rel_path))
     except Exception:
         pass
     return existing_folders
 
 
-@bp.route('/api/staging/diff', methods=['GET'])
+@bp.route("/api/staging/diff", methods=["GET"])
 def api_staging_diff():
-    """
-    Get diff of uncommitted changes using git diff.
+    """Get diff of uncommitted changes using git diff.
 
     Changes are now applied directly to files, so this endpoint returns
     git diff information along with staging metadata for file/folder operations.
@@ -1610,17 +1633,17 @@ def api_staging_diff():
     staging = sm.get_staging() or {}
 
     # Paths to exclude from diff (backups, staging metadata, git internals)
-    excluded_paths = ['.backups/', '.staging/', '.git/']
+    excluded_paths = [".backups/", ".staging/", ".git/"]
     existing_folders = _get_existing_folders(config_path)
 
     try:
         git_svc = get_git_service()
         diff_result = git_svc.get_workspace_diff(excluded_paths)
         if not diff_result.success:
-            return jsonify({'error': diff_result.error}), 500
+            return jsonify({"error": diff_result.error}), 500
 
-        diffs = diff_result.data['diffs']
-        git_changes = diff_result.data['git_changes']
+        diffs = diff_result.data["diffs"]
+        git_changes = diff_result.data["git_changes"]
         has_git_changes = len(diffs) > 0
 
         staged_changes, total_staged_count = _build_staged_changes_summary(staging)
@@ -1629,44 +1652,43 @@ def api_staging_diff():
         # Get all objects from parser for context display in commit dialog
         service = get_service()
         all_objects = [{
-            'global_index': i,
-            'object_type': obj.object_type,
-            'name': obj.get_name(),
-            'display_name': obj.get_display_name(),
-            'source_file': obj.source_file,
-            'line_number': obj.line_number,
-            'attributes': dict(obj.attributes)
+            "global_index": i,
+            "object_type": obj.object_type,
+            "name": obj.get_name(),
+            "display_name": obj.get_display_name(),
+            "source_file": obj.source_file,
+            "line_number": obj.line_number,
+            "attributes": dict(obj.attributes),
         } for i, obj in enumerate(service.get_objects())]
 
         return jsonify({
             # For git page (simple diff view)
-            'hasDiffs': has_git_changes,
-            'diffs': diffs,
-            'count': len(diffs) + total_staged_count,
+            "hasDiffs": has_git_changes,
+            "diffs": diffs,
+            "count": len(diffs) + total_staged_count,
 
             # For commit dialog
-            'hasChanges': has_git_changes or has_staged_changes,
-            'hasGitChanges': has_git_changes,
-            'hasStagedChanges': has_staged_changes,
-            'gitChanges': git_changes,
-            'stagedChanges': staged_changes,
-            'totalStagedCount': total_staged_count,
-            'staging': staging,
-            'configPath': config_path,
-            'existingFolders': existing_folders,
+            "hasChanges": has_git_changes or has_staged_changes,
+            "hasGitChanges": has_git_changes,
+            "hasStagedChanges": has_staged_changes,
+            "gitChanges": git_changes,
+            "stagedChanges": staged_changes,
+            "totalStagedCount": total_staged_count,
+            "staging": staging,
+            "configPath": config_path,
+            "existingFolders": existing_folders,
 
             # All objects from parser for context display
-            'objects': all_objects
+            "objects": all_objects,
         })
 
     except Exception as e:
-        return jsonify({'error': f'Failed to get diff: {str(e)}'}), 500
+        return jsonify({"error": f"Failed to get diff: {e!s}"}), 500
 
 
-@bp.route('/api/staging/analyze-references', methods=['GET'])
+@bp.route("/api/staging/analyze-references", methods=["GET"])
 def api_staging_analyze_references():
-    """
-    Analyze pending name changes and count affected references.
+    """Analyze pending name changes and count affected references.
 
     Returns information about objects whose names are being changed,
     and how many references to those objects exist in the configuration.
@@ -1675,11 +1697,11 @@ def api_staging_analyze_references():
     staging = sm.get_staging()
 
     if not staging:
-        return jsonify({'nameChanges': [], 'totalReferences': 0})
+        return jsonify({"nameChanges": [], "totalReferences": 0})
 
     service = get_service()
     p = service.parser
-    pending_edits = staging.get('pendingEdits', {})
+    pending_edits = staging.get("pendingEdits", {})
     name_changes = []
     total_references = 0
 
@@ -1694,11 +1716,11 @@ def api_staging_analyze_references():
         obj = service.find_object_by_index(global_index)
         if obj is None:
             continue
-        original = edit_data.get('original', {})
-        edited = edit_data.get('edited', {})
+        original = edit_data.get("original", {})
+        edited = edit_data.get("edited", {})
 
         # Check if name field changed
-        name_field = NAME_FIELDS.get(obj.object_type, 'name')
+        name_field = NAME_FIELDS.get(obj.object_type, "name")
         if not name_field:
             continue
 
@@ -1712,32 +1734,31 @@ def api_staging_analyze_references():
             total_references += ref_count
 
             name_changes.append({
-                'globalIndex': global_index,
-                'objectType': obj.object_type,
-                'oldName': old_name,
-                'newName': new_name,
-                'referenceCount': ref_count,
-                'references': [
+                "globalIndex": global_index,
+                "objectType": obj.object_type,
+                "oldName": old_name,
+                "newName": new_name,
+                "referenceCount": ref_count,
+                "references": [
                     {
-                        'objectType': ref_obj.object_type,
-                        'objectName': ref_obj.get_display_name(),
-                        'field': ref_field
+                        "objectType": ref_obj.object_type,
+                        "objectName": ref_obj.get_display_name(),
+                        "field": ref_field,
                     }
                     for ref_obj, ref_field in refs[:10]  # Limit to 10 for display
-                ]
+                ],
             })
 
     return jsonify({
-        'nameChanges': name_changes,
-        'totalReferences': total_references,
-        'hasNameChanges': len(name_changes) > 0
+        "nameChanges": name_changes,
+        "totalReferences": total_references,
+        "hasNameChanges": len(name_changes) > 0,
     })
 
 
-@bp.route('/api/staging/commit', methods=['POST'])
+@bp.route("/api/staging/commit", methods=["POST"])
 def api_staging_commit():
-    """
-    Apply all staged changes and release the lock.
+    """Apply all staged changes and release the lock.
 
     This endpoint:
     1. Applies all staged moves (object moves between files)
@@ -1750,37 +1771,37 @@ def api_staging_commit():
     Requires X-Session-Id header matching the lock owner.
     """
     sm = get_staging_manager()
-    session_id = request.headers.get('X-Session-Id')
+    session_id = request.headers.get("X-Session-Id")
 
     # Check lock ownership before committing
     if not session_id:
-        return jsonify({'error': 'X-Session-Id header required'}), 400
+        return jsonify({"error": "X-Session-Id header required"}), 400
 
     if not sm.validate_or_acquire_lock(session_id):
         return jsonify({
-            'error': 'Cannot commit: staging is locked by another user',
-            'locked': True
+            "error": "Cannot commit: staging is locked by another user",
+            "locked": True,
         }), 423  # 423 Locked
 
     staging = sm.get_staging()
-    config = current_app.extensions.get('app_config', {})
-    config_path = config.get('nagios_config_path', '')
+    config = current_app.extensions.get("app_config", {})
+    config_path = config.get("nagios_config_path", "")
 
     # Apply staged changes to disk before committing
     if staging:
         # Pass through request JSON data (e.g., updateReferences flag)
         request_data = request.get_json(silent=True) or {}
         with current_app.test_client() as client:
-            apply_resp = client.post('/api/staging/apply',
+            apply_resp = client.post("/api/staging/apply",
                                      json=request_data,
-                                     headers={'X-Session-Id': session_id,
-                                              'Content-Type': 'application/json'})
+                                     headers={"X-Session-Id": session_id,
+                                              "Content-Type": "application/json"})
             if apply_resp.status_code >= 400:
                 apply_data = apply_resp.get_json()
-                error_msg = apply_data.get('error', 'Failed to apply staged changes') if apply_data else 'Failed to apply staged changes'
+                error_msg = apply_data.get("error", "Failed to apply staged changes") if apply_data else "Failed to apply staged changes"
                 return jsonify({
-                    'success': False,
-                    'error': error_msg
+                    "success": False,
+                    "error": error_msg,
                 }), apply_resp.status_code
 
     # Check if there are uncommitted git changes (the real indicator of pending work)
@@ -1792,18 +1813,18 @@ def api_staging_commit():
         has_changes = False
 
     if not has_changes:
-        return jsonify({'success': False, 'error': 'No changes to commit'})
+        return jsonify({"success": False, "error": "No changes to commit"})
 
     # Get user identity from staging data or empty
-    user_name = staging.get('userName', '') if staging else ''
-    user_email = staging.get('userEmail', '') if staging else ''
+    user_name = staging.get("userName", "") if staging else ""
+    user_email = staging.get("userEmail", "") if staging else ""
 
     # Note: Backup is created in /api/staging/apply BEFORE changes are written to disk
 
     audit_log = {
-        'timestamp': datetime.now().isoformat(),
-        'userName': user_name,
-        'userEmail': user_email
+        "timestamp": datetime.now().isoformat(),
+        "userName": user_name,
+        "userEmail": user_email,
     }
 
     try:
@@ -1821,14 +1842,14 @@ def api_staging_commit():
             print(f"Warning: Failed to write audit log: {e}")
 
         return jsonify({
-            'success': True,
-            'auditLog': audit_log
+            "success": True,
+            "auditLog": audit_log,
         })
 
     except Exception as e:
         print(f"Error: Commit failed: {e}")
         return jsonify({
-            'success': False,
-            'error': str(e),
-            'auditLog': audit_log
+            "success": False,
+            "error": str(e),
+            "auditLog": audit_log,
         }), 500

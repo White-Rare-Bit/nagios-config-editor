@@ -1,46 +1,46 @@
-"""
-Nagios Bulk Editor - Flask Web Application
+"""Nagios Bulk Editor - Flask Web Application
 
 A web interface for bulk editing Nagios configuration files.
 """
 
-import os
 import logging
+import os
 import warnings
-from typing import Optional
+
 from flask import Flask, current_app
-from nagios_service import NagiosService
+
+import file_operations
 from backup_manager import BackupManager
 from git_service import GitService
+from nagios_service import NagiosService
+from operation_logger import LogConfig, OperationLogger
+from server_config import ServerConfig
+from server_config import load_config as load_server_config
 from staging_manager import StagingManager
-from operation_logger import OperationLogger, LogConfig
-from server_config import load_config as load_server_config, ServerConfig
-import file_operations
 
-
-logger = logging.getLogger('nagios_bulk_editor')
+logger = logging.getLogger("nagios_bulk_editor")
 
 # Server configuration - loaded from config/settings.json with env var overrides
-_server_config: Optional[ServerConfig] = None
+_server_config: ServerConfig | None = None
 
 # Create the Flask app instance (module-level for route decorators)
 app = Flask(__name__)
 
 # Secret key: use environment variable or generate random key at startup
-_flask_secret_key = os.environ.get('FLASK_SECRET_KEY')
+_flask_secret_key = os.environ.get("FLASK_SECRET_KEY")
 if _flask_secret_key:
     app.secret_key = _flask_secret_key
 else:
     app.secret_key = os.urandom(24).hex()
     warnings.warn(
-        'FLASK_SECRET_KEY not set - using randomly generated key. '
-        'Sessions will not persist across restarts. '
-        'Set FLASK_SECRET_KEY environment variable for production use.',
-        UserWarning
+        "FLASK_SECRET_KEY not set - using randomly generated key. "
+        "Sessions will not persist across restarts. "
+        "Set FLASK_SECRET_KEY environment variable for production use.",
+        UserWarning,
     )
 
 
-def create_app(config_path: Optional[str] = None) -> Flask:
+def create_app(config_path: str | None = None) -> Flask:
     """Initialize or reinitialize Flask application services.
 
     This function initializes the module-level app's extensions with the given
@@ -52,6 +52,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
 
     Returns:
         The module-level Flask application instance with reinitialized services
+
     """
     global _server_config
 
@@ -87,18 +88,18 @@ def create_app(config_path: Optional[str] = None) -> Flask:
     git_service = GitService(nagios_config_path, op_logger=op_logger)
 
     # Store in app.extensions for access via current_app
-    app.extensions['service'] = service
-    app.extensions['staging'] = staging_manager
-    app.extensions['backup'] = backup_manager
-    app.extensions['op_logger'] = op_logger
-    app.extensions['git'] = git_service
-    app.extensions['server_config'] = _server_config
+    app.extensions["service"] = service
+    app.extensions["staging"] = staging_manager
+    app.extensions["backup"] = backup_manager
+    app.extensions["op_logger"] = op_logger
+    app.extensions["git"] = git_service
+    app.extensions["server_config"] = _server_config
 
     # Register blueprints only once
-    if 'blueprints_registered' not in app.extensions:
+    if "blueprints_registered" not in app.extensions:
         from routes import register_blueprints
         register_blueprints(app)
-        app.extensions['blueprints_registered'] = True
+        app.extensions["blueprints_registered"] = True
 
     return app
 
@@ -107,35 +108,35 @@ def get_config_path() -> str:
     """Get current Nagios config path."""
     if _server_config:
         return _server_config.nagios_config_path
-    return './sample-config'
+    return "./sample-config"
 
 
-def get_server_config() -> Optional[ServerConfig]:
+def get_server_config() -> ServerConfig | None:
     """Get the server configuration."""
     return _server_config
 
 
 def get_service() -> NagiosService:
     """Get the NagiosService instance."""
-    return current_app.extensions['service']
+    return current_app.extensions["service"]
 
 
 def get_staging_manager() -> StagingManager:
     """Get the staging manager."""
-    return current_app.extensions['staging']
+    return current_app.extensions["staging"]
 
 
 def get_op_logger() -> OperationLogger:
     """Get the operation logger."""
-    return current_app.extensions.get('op_logger')
+    return current_app.extensions.get("op_logger")
 
 
 # Initialize app services with default config
 create_app()
 
 
-if __name__ == '__main__':
-    print(f"Nagios Bulk Editor")
+if __name__ == "__main__":
+    print("Nagios Bulk Editor")
     print(f"Config path: {get_config_path()}")
-    print(f"Starting server on http://localhost:8080")
-    app.run(debug=True, host='127.0.0.1', port=8080)
+    print("Starting server on http://localhost:8080")
+    app.run(debug=True, host="127.0.0.1", port=8080)

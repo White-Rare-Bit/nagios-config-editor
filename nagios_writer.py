@@ -1,5 +1,4 @@
-"""
-Nagios Configuration Writer
+"""Nagios Configuration Writer
 
 Writes NagiosObject instances back to configuration files.
 Handles formatting and maintains consistency.
@@ -7,9 +6,9 @@ Handles formatting and maintains consistency.
 
 import os
 import tempfile
-from typing import List, Dict, Optional
 from pathlib import Path
-from nagios_model import NagiosObject, ATTRIBUTE_SORT_ORDER, format_object_block
+
+from nagios_model import NagiosObject, format_object_block
 
 
 class NagiosConfigWriter:
@@ -22,15 +21,16 @@ class NagiosConfigWriter:
     def object_to_string(self, obj: NagiosObject) -> str:
         """Convert a NagiosObject to its config file string representation."""
         return format_object_block(obj.object_type, obj.attributes, self.indent,
-                                   getattr(obj, 'inline_comments', None))
+                                   getattr(obj, "inline_comments", None))
 
-    def objects_to_string(self, objects: List[NagiosObject], preserve_order: bool = True) -> str:
+    def objects_to_string(self, objects: list[NagiosObject], preserve_order: bool = True) -> str:
         """Convert multiple objects to config file content.
 
         Args:
             objects: List of NagiosObject instances to write
             preserve_order: If True, sort by line_number to preserve file order.
                           If False, group by object type for readability.
+
         """
         if preserve_order:
             # Sort by (source_file, line_number) to preserve file order
@@ -39,7 +39,7 @@ class NagiosConfigWriter:
             return "\n\n".join(self.object_to_string(obj) for obj in sorted_objects) + "\n"
 
         # Legacy behavior: Group by object type for readability
-        by_type: Dict[str, List[NagiosObject]] = {}
+        by_type: dict[str, list[NagiosObject]] = {}
         for obj in objects:
             if obj.object_type not in by_type:
                 by_type[obj.object_type] = []
@@ -48,10 +48,10 @@ class NagiosConfigWriter:
         sections = []
 
         # Order types logically
-        type_order = ['timeperiod', 'command', 'contact', 'contactgroup',
-                      'host', 'hostgroup', 'service', 'servicegroup',
-                      'servicedependency', 'hostdependency',
-                      'serviceescalation', 'hostescalation']
+        type_order = ["timeperiod", "command", "contact", "contactgroup",
+                      "host", "hostgroup", "service", "servicegroup",
+                      "servicedependency", "hostdependency",
+                      "serviceescalation", "hostescalation"]
 
         def type_sort_key(t):
             if t in type_order:
@@ -66,19 +66,19 @@ class NagiosConfigWriter:
 
         return "\n\n".join(sections) + "\n"
 
-    def write_file(self, filepath: str, objects: List[NagiosObject]) -> None:
+    def write_file(self, filepath: str, objects: list[NagiosObject]) -> None:
         """Write objects to a configuration file atomically."""
         if self._op_logger:
-            self._op_logger.info('writer', 'write_file', params={'filepath': filepath, 'object_count': len(objects)})
+            self._op_logger.info("writer", "write_file", params={"filepath": filepath, "object_count": len(objects)})
         content = self.objects_to_string(objects)
         path = Path(filepath)
         path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write to temp file in same directory (ensures same filesystem for atomic rename)
         dir_path = path.parent
-        fd, temp_path = tempfile.mkstemp(suffix='.tmp', prefix='.nagios_', dir=dir_path)
+        fd, temp_path = tempfile.mkstemp(suffix=".tmp", prefix=".nagios_", dir=dir_path)
         try:
-            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(content)
                 f.flush()
                 os.fsync(f.fileno())  # Ensure data is written to disk
@@ -91,19 +91,19 @@ class NagiosConfigWriter:
             except OSError as cleanup_err:
                 # Log temp file cleanup failure for manual intervention
                 if self._op_logger:
-                    self._op_logger.error('writer', 'write_file',
-                        params={'filepath': filepath, 'temp_file': temp_path},
+                    self._op_logger.error("writer", "write_file",
+                        params={"filepath": filepath, "temp_file": temp_path},
                         error=f"DISK_LEAK: Temp file cleanup failed: {cleanup_err}")
             if self._op_logger:
-                self._op_logger.error('writer', 'write_file', params={'filepath': filepath}, error=str(e))
+                self._op_logger.error("writer", "write_file", params={"filepath": filepath}, error=str(e))
             raise
 
-    def write_objects_to_original_files(self, objects: List[NagiosObject]) -> Dict[str, int]:
+    def write_objects_to_original_files(self, objects: list[NagiosObject]) -> dict[str, int]:
         """Write objects back to their original source files."""
         if self._op_logger:
-            self._op_logger.info('writer', 'write_objects_to_original_files', params={'total_objects': len(objects)})
+            self._op_logger.info("writer", "write_objects_to_original_files", params={"total_objects": len(objects)})
         # Group objects by source file
-        by_file: Dict[str, List[NagiosObject]] = {}
+        by_file: dict[str, list[NagiosObject]] = {}
         for obj in objects:
             if obj.source_file not in by_file:
                 by_file[obj.source_file] = []
@@ -117,7 +117,7 @@ class NagiosConfigWriter:
         return results
 
 
-def write_config_file(filepath: str, objects: List[NagiosObject], indent: str = "    ") -> None:
+def write_config_file(filepath: str, objects: list[NagiosObject], indent: str = "    ") -> None:
     """Convenience function to write objects to a file."""
     writer = NagiosConfigWriter(indent=indent)
     writer.write_file(filepath, objects)

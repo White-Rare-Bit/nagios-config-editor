@@ -1,5 +1,4 @@
-"""
-Server Configuration - Centralized configuration management.
+"""Server Configuration - Centralized configuration management.
 
 Consolidates all server-wide settings into config/settings.json with
 automatic persistence and environment variable overrides.
@@ -7,13 +6,12 @@ automatic persistence and environment variable overrides.
 
 import json
 import os
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Optional
 
 # Config directory relative to project root
-CONFIG_DIR = Path(__file__).parent / 'config'
-CONFIG_FILE = CONFIG_DIR / 'settings.json'
+CONFIG_DIR = Path(__file__).parent / "config"
+CONFIG_FILE = CONFIG_DIR / "settings.json"
 
 # Current schema version for future migrations
 CONFIG_VERSION = 1
@@ -22,10 +20,11 @@ CONFIG_VERSION = 1
 @dataclass
 class LoggingConfig:
     """Logging configuration settings."""
+
     enabled: bool = True
-    log_level: str = 'INFO'
-    log_dir: str = 'logs'
-    log_filename: str = 'operations.jsonl'
+    log_level: str = "INFO"
+    log_dir: str = "logs"
+    log_filename: str = "operations.jsonl"
     max_file_size_mb: int = 10
     max_backup_files: int = 5
 
@@ -33,15 +32,17 @@ class LoggingConfig:
 @dataclass
 class PathsConfig:
     """Path configuration settings."""
-    nagios_config_path: str = './sample-config'
-    backup_path: Optional[str] = None
-    nagios_bin: str = '/usr/local/nagios/bin/nagios'
-    nagios_cfg: str = './sample-config/nagios.cfg'
+
+    nagios_config_path: str = "./sample-config"
+    backup_path: str | None = None
+    nagios_bin: str = "/usr/local/nagios/bin/nagios"
+    nagios_cfg: str = "./sample-config/nagios.cfg"
 
 
 @dataclass
 class ServerConfig:
     """Complete server configuration."""
+
     version: int = CONFIG_VERSION
     paths: PathsConfig = field(default_factory=PathsConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
@@ -49,32 +50,32 @@ class ServerConfig:
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
         return {
-            'version': self.version,
-            'paths': asdict(self.paths),
-            'logging': asdict(self.logging),
+            "version": self.version,
+            "paths": asdict(self.paths),
+            "logging": asdict(self.logging),
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> 'ServerConfig':
+    def from_dict(cls, data: dict) -> "ServerConfig":
         """Create from dictionary (loaded from JSON)."""
-        paths_data = data.get('paths', {})
-        logging_data = data.get('logging', {})
+        paths_data = data.get("paths", {})
+        logging_data = data.get("logging", {})
 
         return cls(
-            version=data.get('version', CONFIG_VERSION),
+            version=data.get("version", CONFIG_VERSION),
             paths=PathsConfig(
-                nagios_config_path=paths_data.get('nagios_config_path', './sample-config'),
-                backup_path=paths_data.get('backup_path'),
-                nagios_bin=paths_data.get('nagios_bin', '/usr/local/nagios/bin/nagios'),
-                nagios_cfg=paths_data.get('nagios_cfg', './sample-config/nagios.cfg'),
+                nagios_config_path=paths_data.get("nagios_config_path", "./sample-config"),
+                backup_path=paths_data.get("backup_path"),
+                nagios_bin=paths_data.get("nagios_bin", "/usr/local/nagios/bin/nagios"),
+                nagios_cfg=paths_data.get("nagios_cfg", "./sample-config/nagios.cfg"),
             ),
             logging=LoggingConfig(
-                enabled=logging_data.get('enabled', True),
-                log_level=logging_data.get('log_level', 'INFO'),
-                log_dir=logging_data.get('log_dir', 'logs'),
-                log_filename=logging_data.get('log_filename', 'operations.jsonl'),
-                max_file_size_mb=logging_data.get('max_file_size_mb', 10),
-                max_backup_files=logging_data.get('max_backup_files', 5),
+                enabled=logging_data.get("enabled", True),
+                log_level=logging_data.get("log_level", "INFO"),
+                log_dir=logging_data.get("log_dir", "logs"),
+                log_filename=logging_data.get("log_filename", "operations.jsonl"),
+                max_file_size_mb=logging_data.get("max_file_size_mb", 10),
+                max_backup_files=logging_data.get("max_backup_files", 5),
             ),
         )
 
@@ -88,11 +89,11 @@ class ServerConfig:
         self.paths.nagios_config_path = value
 
     @property
-    def backup_path(self) -> Optional[str]:
+    def backup_path(self) -> str | None:
         return self.paths.backup_path
 
     @backup_path.setter
-    def backup_path(self, value: Optional[str]):
+    def backup_path(self, value: str | None):
         self.paths.backup_path = value
 
     @property
@@ -128,19 +129,19 @@ def _apply_env_overrides(config: ServerConfig) -> ServerConfig:
     Environment variables take precedence over file settings.
     """
     # Path overrides
-    if env_val := os.environ.get('NAGIOS_CONFIG_PATH'):
+    if env_val := os.environ.get("NAGIOS_CONFIG_PATH"):
         config.paths.nagios_config_path = os.path.abspath(env_val)
     else:
         # Normalize the path from config
         config.paths.nagios_config_path = os.path.abspath(config.paths.nagios_config_path)
 
-    if env_val := os.environ.get('BACKUP_PATH'):
+    if env_val := os.environ.get("BACKUP_PATH"):
         config.paths.backup_path = env_val
 
-    if env_val := os.environ.get('NAGIOS_BIN'):
+    if env_val := os.environ.get("NAGIOS_BIN"):
         config.paths.nagios_bin = env_val
 
-    if env_val := os.environ.get('NAGIOS_CFG'):
+    if env_val := os.environ.get("NAGIOS_CFG"):
         config.paths.nagios_cfg = env_val
 
     return config
@@ -161,7 +162,7 @@ def load_config() -> ServerConfig:
     # Load from config file if it exists
     if CONFIG_FILE.exists():
         try:
-            data = json.loads(CONFIG_FILE.read_text(encoding='utf-8'))
+            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
             config = ServerConfig.from_dict(data)
         except (json.JSONDecodeError, OSError):
             pass  # Use defaults
@@ -187,8 +188,8 @@ def save_config(config: ServerConfig) -> None:
     config.version = CONFIG_VERSION
 
     CONFIG_FILE.write_text(
-        json.dumps(config.to_dict(), indent=2) + '\n',
-        encoding='utf-8'
+        json.dumps(config.to_dict(), indent=2) + "\n",
+        encoding="utf-8",
     )
 
 
@@ -200,10 +201,11 @@ def _apply_paths_updates(config: ServerConfig, paths_dict: dict) -> None:
     Args:
         config: ServerConfig to update
         paths_dict: Dictionary of path field updates
+
     """
-    if 'nagios_config_path' in paths_dict:
-        config.paths.nagios_config_path = os.path.abspath(paths_dict['nagios_config_path'])
-    for key in ('backup_path', 'nagios_bin', 'nagios_cfg'):
+    if "nagios_config_path" in paths_dict:
+        config.paths.nagios_config_path = os.path.abspath(paths_dict["nagios_config_path"])
+    for key in ("backup_path", "nagios_bin", "nagios_cfg"):
         if key in paths_dict:
             setattr(config.paths, key, paths_dict[key])
 
@@ -214,9 +216,10 @@ def _apply_logging_updates(config: ServerConfig, logging_dict: dict) -> None:
     Args:
         config: ServerConfig to update
         logging_dict: Dictionary of logging field updates
+
     """
-    for key in ('enabled', 'log_level', 'log_dir', 'log_filename',
-                'max_file_size_mb', 'max_backup_files'):
+    for key in ("enabled", "log_level", "log_dir", "log_filename",
+                "max_file_size_mb", "max_backup_files"):
         if key in logging_dict:
             setattr(config.logging, key, logging_dict[key])
 
@@ -232,6 +235,7 @@ def update_config(updates: dict) -> ServerConfig:
 
     Returns:
         Updated ServerConfig
+
     """
     config = load_config()
 
@@ -239,12 +243,12 @@ def update_config(updates: dict) -> ServerConfig:
     _apply_paths_updates(config, updates)
 
     # Handle nested paths updates
-    if 'paths' in updates and isinstance(updates['paths'], dict):
-        _apply_paths_updates(config, updates['paths'])
+    if "paths" in updates and isinstance(updates["paths"], dict):
+        _apply_paths_updates(config, updates["paths"])
 
     # Handle logging updates
-    if 'logging' in updates and isinstance(updates['logging'], dict):
-        _apply_logging_updates(config, updates['logging'])
+    if "logging" in updates and isinstance(updates["logging"], dict):
+        _apply_logging_updates(config, updates["logging"])
 
     save_config(config)
     return config
@@ -257,5 +261,5 @@ def get_logging_config() -> LoggingConfig:
 
 def update_logging_config(updates: dict) -> LoggingConfig:
     """Update just the logging configuration section."""
-    config = update_config({'logging': updates})
+    config = update_config({"logging": updates})
     return config.logging

@@ -1,5 +1,4 @@
-"""
-Operation Logger - Enterprise-grade file-based logging for filesystem operations.
+"""Operation Logger - Enterprise-grade file-based logging for filesystem operations.
 
 Uses Python's logging module with RotatingFileHandler, outputs structured JSON Lines format.
 """
@@ -10,16 +9,16 @@ import logging
 import os
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Optional, Any, Dict, List
 
 
 @dataclass
 class LogConfig:
     """Configuration for the operation logger."""
+
     level: str = "INFO"
     log_dir: str = "logs"
     filename: str = "operations.jsonl"
@@ -33,13 +32,13 @@ class JsonLineFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(timespec='milliseconds'),
+            "timestamp": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
             "level": record.levelname,
         }
 
         # Add extra fields from the record
-        for key in ('session_id', 'user_name', 'user_email', 'category',
-                    'operation', 'params', 'result', 'duration_ms', 'error'):
+        for key in ("session_id", "user_name", "user_email", "category",
+                    "operation", "params", "result", "duration_ms", "error"):
             value = getattr(record, key, None)
             if value is not None:
                 entry[key] = value
@@ -50,8 +49,9 @@ class JsonLineFormatter(logging.Formatter):
 @dataclass
 class OperationContext:
     """Context yielded by the operation() context manager."""
-    _result: Optional[str] = field(default=None, init=False)
-    _error: Optional[str] = field(default=None, init=False)
+
+    _result: str | None = field(default=None, init=False)
+    _error: str | None = field(default=None, init=False)
 
     def set_result(self, result: str) -> None:
         self._result = result
@@ -63,10 +63,10 @@ class OperationContext:
 class OperationLogger:
     """Core logging class for operation tracking."""
 
-    def __init__(self, config: Optional[LogConfig] = None):
+    def __init__(self, config: LogConfig | None = None):
         self._config = config or LogConfig()
-        self._logger = logging.getLogger('nagios_bulk_editor.operations')
-        self._handler: Optional[RotatingFileHandler] = None
+        self._logger = logging.getLogger("nagios_bulk_editor.operations")
+        self._handler: RotatingFileHandler | None = None
         self._setup_handler()
 
     def _setup_handler(self) -> None:
@@ -92,7 +92,7 @@ class OperationLogger:
             str(log_path),
             maxBytes=max_bytes,
             backupCount=self._config.max_backup_files,
-            encoding='utf-8'
+            encoding="utf-8",
         )
         self._handler.namer = self._gz_namer
         self._handler.rotator = self._gz_rotator
@@ -104,14 +104,13 @@ class OperationLogger:
     @staticmethod
     def _gz_namer(name: str) -> str:
         """Append .gz to rotated log filenames."""
-        return name + '.gz'
+        return name + ".gz"
 
     @staticmethod
     def _gz_rotator(source: str, dest: str) -> None:
         """Compress the rotated log file with gzip."""
-        with open(source, 'rb') as f_in:
-            with gzip.open(dest, 'wb') as f_out:
-                f_out.writelines(f_in)
+        with open(source, "rb") as f_in, gzip.open(dest, "wb") as f_out:
+            f_out.writelines(f_in)
         os.remove(source)
 
     def _log(self, level: int, category: str, operation: str, **kwargs) -> None:
@@ -120,18 +119,18 @@ class OperationLogger:
             return
 
         extra = {
-            'category': category,
-            'operation': operation,
-            'session_id': kwargs.get('session_id'),
-            'user_name': kwargs.get('user_name'),
-            'user_email': kwargs.get('user_email'),
-            'params': kwargs.get('params'),
-            'result': kwargs.get('result'),
-            'duration_ms': kwargs.get('duration_ms'),
-            'error': kwargs.get('error'),
+            "category": category,
+            "operation": operation,
+            "session_id": kwargs.get("session_id"),
+            "user_name": kwargs.get("user_name"),
+            "user_email": kwargs.get("user_email"),
+            "params": kwargs.get("params"),
+            "result": kwargs.get("result"),
+            "duration_ms": kwargs.get("duration_ms"),
+            "error": kwargs.get("error"),
         }
 
-        self._logger.log(level, '', extra=extra)
+        self._logger.log(level, "", extra=extra)
 
     def debug(self, category: str, operation: str, **kwargs) -> None:
         """Log a DEBUG level operation."""
@@ -155,19 +154,19 @@ class OperationLogger:
         ctx = OperationContext()
         start = time.perf_counter()
 
-        self._log(logging.DEBUG, category, operation, result='started', **kwargs)
+        self._log(logging.DEBUG, category, operation, result="started", **kwargs)
 
         try:
             yield ctx
             duration_ms = round((time.perf_counter() - start) * 1000, 2)
-            result = ctx._result or 'success'
+            result = ctx._result or "success"
             self._log(logging.INFO, category, operation,
                       result=result, duration_ms=duration_ms, **kwargs)
         except Exception as e:
             duration_ms = round((time.perf_counter() - start) * 1000, 2)
             error_msg = ctx._error or str(e)
             self._log(logging.ERROR, category, operation,
-                      result='error', error=error_msg, duration_ms=duration_ms, **kwargs)
+                      result="error", error=error_msg, duration_ms=duration_ms, **kwargs)
             raise
 
     def reconfigure(self, new_config: LogConfig) -> None:
@@ -186,7 +185,7 @@ class OperationLogger:
             return path.stat().st_size
         return 0
 
-    def get_rotated_files(self) -> List[Path]:
+    def get_rotated_files(self) -> list[Path]:
         """Get list of rotated log files (gzipped)."""
         base_path = self.get_log_file_path()
         rotated = []

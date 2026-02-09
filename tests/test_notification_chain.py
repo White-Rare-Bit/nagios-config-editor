@@ -1,9 +1,10 @@
 """Tests for notification chain validation (SAFETY-2)."""
 
-import pytest
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
+
+import pytest
 from app import create_app
 
 
@@ -11,10 +12,10 @@ from app import create_app
 def app_with_notification_gaps():
     """Config with various notification chain problems."""
     test_dir = tempfile.mkdtemp()
-    test_config_path = Path(test_dir) / 'nagios'
+    test_config_path = Path(test_dir) / "nagios"
     test_config_path.mkdir()
 
-    (test_config_path / 'commands.cfg').write_text('''
+    (test_config_path / "commands.cfg").write_text("""
 define command {
     command_name    notify-by-email
     command_line    /usr/bin/mail -s "Alert" $CONTACTEMAIL$
@@ -27,9 +28,9 @@ define command {
     command_name    check_http
     command_line    $USER1$/check_http -H $HOSTADDRESS$
 }
-''')
+""")
 
-    (test_config_path / 'timeperiods.cfg').write_text('''
+    (test_config_path / "timeperiods.cfg").write_text("""
 define timeperiod {
     timeperiod_name 24x7
     monday          00:00-24:00
@@ -40,9 +41,9 @@ define timeperiod {
     saturday        00:00-24:00
     sunday          00:00-24:00
 }
-''')
+""")
 
-    (test_config_path / 'contacts.cfg').write_text('''
+    (test_config_path / "contacts.cfg").write_text("""
 define contact {
     name                           empty-template
     register                       0
@@ -82,9 +83,9 @@ define contactgroup {
     contactgroup_name   mixed-group
     members             working-contact,broken-contact
 }
-''')
+""")
 
-    (test_config_path / 'hosts.cfg').write_text('''
+    (test_config_path / "hosts.cfg").write_text("""
 define host {
     host_name           host-with-broken-contacts
     address             10.0.0.1
@@ -100,9 +101,9 @@ define host {
     contact_groups      working-group
     check_command       check-host-alive
 }
-''')
+""")
 
-    (test_config_path / 'services.cfg').write_text('''
+    (test_config_path / "services.cfg").write_text("""
 define service {
     host_name               host-with-broken-contacts
     service_description     Broken Service
@@ -126,10 +127,10 @@ define service {
     max_check_attempts      3
     contacts                missing-svc-cmd
 }
-''')
+""")
 
     app = create_app(config_path=str(test_config_path))
-    app.config['TESTING'] = True
+    app.config["TESTING"] = True
     yield app
     shutil.rmtree(test_dir, ignore_errors=True)
 
@@ -144,38 +145,38 @@ class TestNotificationChainValidation:
 
     def test_detects_contact_missing_notification_commands(self, client):
         """Contact without notification commands through chain is flagged."""
-        resp = client.get('/api/health-check')
+        resp = client.get("/api/health-check")
         assert resp.status_code == 200
         data = resp.get_json()
 
-        chain_issues = [i for i in data['issues']
-                        if i['type'] == 'notification_gap']
+        chain_issues = [i for i in data["issues"]
+                        if i["type"] == "notification_gap"]
 
         # broken-contact (inherits from empty-template) should cause issues
-        messages = ' '.join(i['message'] for i in chain_issues)
-        assert 'broken-contact' in messages
+        messages = " ".join(i["message"] for i in chain_issues)
+        assert "broken-contact" in messages
 
     def test_working_chain_not_flagged(self, client):
         """Fully configured notification chain is not flagged."""
-        resp = client.get('/api/health-check')
+        resp = client.get("/api/health-check")
         data = resp.get_json()
 
-        chain_issues = [i for i in data['issues']
-                        if i['type'] == 'notification_gap']
+        chain_issues = [i for i in data["issues"]
+                        if i["type"] == "notification_gap"]
 
         # working-contact should not appear in any gap messages
         working_messages = [i for i in chain_issues
-                            if 'working-contact' in i['message']
-                            and 'Working Service' in i.get('object', '')]
+                            if "working-contact" in i["message"]
+                            and "Working Service" in i.get("object", "")]
         assert len(working_messages) == 0
 
     def test_detects_missing_service_notification_commands(self, client):
         """Contact with host commands but no service commands flagged for services."""
-        resp = client.get('/api/health-check')
+        resp = client.get("/api/health-check")
         data = resp.get_json()
 
-        chain_issues = [i for i in data['issues']
-                        if i['type'] == 'notification_gap']
+        chain_issues = [i for i in data["issues"]
+                        if i["type"] == "notification_gap"]
 
-        messages = ' '.join(i['message'] for i in chain_issues)
-        assert 'missing-svc-cmd' in messages
+        messages = " ".join(i["message"] for i in chain_issues)
+        assert "missing-svc-cmd" in messages

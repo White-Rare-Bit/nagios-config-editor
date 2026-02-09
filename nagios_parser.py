@@ -1,19 +1,19 @@
-"""
-Nagios Configuration Parser
+"""Nagios Configuration Parser
 
 Parses Nagios .cfg files and builds an in-memory object model.
 Supports all major object types: host, hostgroup, service, servicegroup,
 contact, contactgroup, command, timeperiod, etc.
 """
 
-import re
-import os
 import logging
-from typing import Dict, List, Optional, Any
+import os
+import re
 from pathlib import Path
-from nagios_model import NagiosObject, REFERENCE_FIELDS, ATTRIBUTE_SORT_ORDER, format_object_block as _model_format_object_block
 
-logger = logging.getLogger('nagios_bulk_editor.parser')
+from nagios_model import REFERENCE_FIELDS, NagiosObject
+from nagios_model import format_object_block as _model_format_object_block
+
+logger = logging.getLogger("nagios_bulk_editor.parser")
 
 
 class NagiosConfigParser:
@@ -23,20 +23,20 @@ class NagiosConfigParser:
     REFERENCE_FIELDS = REFERENCE_FIELDS
 
     # Regex matching a Nagios time range value (e.g. 00:00-24:00, 08:00-17:00)
-    _TIMERANGE_RE = re.compile(r'\d{1,2}:\d{2}-\d{1,2}:\d{2}')
+    _TIMERANGE_RE = re.compile(r"\d{1,2}:\d{2}-\d{1,2}:\d{2}")
 
     # Standard timeperiod attributes that use normal key/value splitting
     _TIMEPERIOD_STANDARD_ATTRS = frozenset({
-        'timeperiod_name', 'alias', 'use', 'name', 'register', 'exclude',
+        "timeperiod_name", "alias", "use", "name", "register", "exclude",
     })
 
     def __init__(self, config_path: str = "./sample-config"):
         # Always use absolute path to ensure consistent file paths
         self.config_path = Path(config_path).resolve()
-        self.objects: List[NagiosObject] = []
-        self.files_parsed: List[str] = []
+        self.objects: list[NagiosObject] = []
+        self.files_parsed: list[str] = []
 
-    def parse_all(self) -> List[NagiosObject]:
+    def parse_all(self) -> list[NagiosObject]:
         """Parse all .cfg files in the config directory, excluding backups."""
         self.objects = []
         self.files_parsed = []
@@ -47,42 +47,42 @@ class NagiosConfigParser:
         for cfg_file in self.config_path.rglob("*.cfg"):
             # Skip backup files and directories
             file_path = str(cfg_file)
-            if '/backups/' in file_path or '/backup/' in file_path:
+            if "/backups/" in file_path or "/backup/" in file_path:
                 continue
-            if '.bak' in file_path or '.backup' in file_path:
+            if ".bak" in file_path or ".backup" in file_path:
                 continue
             # Skip staging directories (shadow copies, baselines)
-            if '/.staging/' in file_path or '/.nagios_staging/' in file_path:
+            if "/.staging/" in file_path or "/.nagios_staging/" in file_path:
                 continue
             # Skip files with timestamp patterns like _20240115_ or .20240115.
             parts = cfg_file.name
-            if any(part.isdigit() and len(part) >= 8 for part in parts.replace('_', '.').split('.')):
+            if any(part.isdigit() and len(part) >= 8 for part in parts.replace("_", ".").split(".")):
                 continue
             self.parse_file(file_path)
 
         return self.objects
 
-    def parse_file(self, filepath: str) -> List[NagiosObject]:
+    def parse_file(self, filepath: str) -> list[NagiosObject]:
         """Parse a single Nagios configuration file."""
         # Normalize filepath to avoid issues with ./dir vs dir
         filepath = os.path.normpath(filepath)
         objects = []
 
         try:
-            with open(filepath, 'r', encoding='utf-8', errors='strict') as f:
+            with open(filepath, encoding="utf-8", errors="strict") as f:
                 content = f.read()
         except UnicodeDecodeError as e:
             logger.warning(
                 f"Unicode error in {filepath}: {e}. Retrying with latin-1 encoding. "
-                "File may contain non-UTF-8 characters."
+                "File may contain non-UTF-8 characters.",
             )
             try:
-                with open(filepath, 'r', encoding='latin-1') as f:
+                with open(filepath, encoding="latin-1") as f:
                     content = f.read()
-            except (IOError, OSError) as e2:
+            except OSError as e2:
                 logger.error(f"Error reading {filepath} with latin-1 fallback: {e2}")
                 return objects
-        except (IOError, OSError) as e:
+        except OSError as e:
             logger.error(f"Error reading {filepath}: {e}")
             return objects
 
@@ -121,6 +121,7 @@ class NagiosConfigParser:
             end_pos is position after closing brace (or last scanned position).
             brace_depth is 0 on balanced match, >0 if unmatched.
             nested_define_pos is position of first nested define, or None.
+
         """
         j = brace_start + 1
         brace_depth = 1
@@ -130,9 +131,9 @@ class NagiosConfigParser:
 
         while j < length and brace_depth > 0:
             char = content[j]
-            prev_char = content[j - 1] if j > 0 else ''
+            prev_char = content[j - 1] if j > 0 else ""
 
-            if prev_char == '\\':
+            if prev_char == "\\":
                 j += 1
                 continue
 
@@ -141,12 +142,12 @@ class NagiosConfigParser:
             elif char == "'" and not in_double_quote:
                 in_single_quote = not in_single_quote
             elif not in_double_quote and not in_single_quote:
-                if char == '{':
+                if char == "{":
                     brace_depth += 1
-                elif char == '}':
+                elif char == "}":
                     brace_depth -= 1
-                elif char == 'd' and content[j:j + 6] == 'define' and brace_depth == 1:
-                    define_check = re.match(r'define\s+\w+\s*\{', content[j:])
+                elif char == "d" and content[j:j + 6] == "define" and brace_depth == 1:
+                    define_check = re.match(r"define\s+\w+\s*\{", content[j:])
                     if define_check and nested_define_pos is None:
                         nested_define_pos = j
 
@@ -154,7 +155,7 @@ class NagiosConfigParser:
 
         return (j, brace_depth, nested_define_pos)
 
-    def _find_define_blocks(self, content: str) -> List[tuple]:
+    def _find_define_blocks(self, content: str) -> list[tuple]:
         """Find all define blocks handling braces in quoted strings.
 
         Returns list of (object_type, block_content, line_number) tuples.
@@ -164,14 +165,14 @@ class NagiosConfigParser:
         length = len(content)
 
         while i < length:
-            define_match = re.search(r'define\s+(\w+)\s*\{', content[i:])
+            define_match = re.search(r"define\s+(\w+)\s*\{", content[i:])
             if not define_match:
                 break
 
             start_pos = i + define_match.start()
             object_type = define_match.group(1)
             brace_start = i + define_match.end() - 1
-            line_number = content[:start_pos].count('\n') + 1
+            line_number = content[:start_pos].count("\n") + 1
 
             j, brace_depth, nested_define_pos = self._scan_block_body(content, brace_start, length)
 
@@ -202,27 +203,28 @@ class NagiosConfigParser:
             Tuple of (attributes dict, inline_comments dict).
             inline_comments maps attribute keys to their comment text (without
             the leading ';').
+
         """
         attributes = {}
         inline_comments = {}
 
         # Handle line continuations (backslash at end of line)
-        block_content = re.sub(r'\\\n\s*', ' ', block_content)
+        block_content = re.sub(r"\\\n\s*", " ", block_content)
 
-        for line in block_content.split('\n'):
+        for line in block_content.split("\n"):
             line = line.strip()
 
             # Skip empty lines and comments
-            if not line or line.startswith('#') or line.startswith(';'):
+            if not line or line.startswith("#") or line.startswith(";"):
                 continue
 
-            if object_type == 'timeperiod':
+            if object_type == "timeperiod":
                 key, value = self._parse_timeperiod_line(line)
             else:
                 # Split on first whitespace to get key/value
                 parts = line.split(None, 1)
                 key = parts[0]
-                value = parts[1] if len(parts) > 1 else ''
+                value = parts[1] if len(parts) > 1 else ""
 
             # Extract inline comment before stripping it
             comment = self._extract_inline_comment(value)
@@ -250,13 +252,14 @@ class NagiosConfigParser:
 
         Returns:
             (key, value) tuple.
+
         """
         # First, check if the line starts with a standard timeperiod attribute
         parts = line.split(None, 1)
         first_word = parts[0]
 
         if first_word in self._TIMEPERIOD_STANDARD_ATTRS:
-            value = parts[1] if len(parts) > 1 else ''
+            value = parts[1] if len(parts) > 1 else ""
             return first_word, value
 
         # For date-range directives, find the time range pattern.
@@ -270,7 +273,7 @@ class NagiosConfigParser:
 
         # Fallback: standard first-whitespace split
         key = parts[0]
-        value = parts[1] if len(parts) > 1 else ''
+        value = parts[1] if len(parts) > 1 else ""
         return key, value
 
     def _strip_inline_comment(self, value: str) -> str:
@@ -285,10 +288,10 @@ class NagiosConfigParser:
 
         while i < len(value):
             char = value[i]
-            prev_char = value[i-1] if i > 0 else ''
+            prev_char = value[i-1] if i > 0 else ""
 
             # Handle escaped characters
-            if prev_char == '\\':
+            if prev_char == "\\":
                 result.append(char)
                 i += 1
                 continue
@@ -300,7 +303,7 @@ class NagiosConfigParser:
             elif char == "'" and not in_double_quote:
                 in_single_quote = not in_single_quote
                 result.append(char)
-            elif char == ';' and not in_double_quote and not in_single_quote:
+            elif char == ";" and not in_double_quote and not in_single_quote:
                 # Found comment start outside quotes, stop here
                 break
             else:
@@ -308,9 +311,9 @@ class NagiosConfigParser:
 
             i += 1
 
-        return ''.join(result)
+        return "".join(result)
 
-    def _extract_inline_comment(self, value: str) -> Optional[str]:
+    def _extract_inline_comment(self, value: str) -> str | None:
         """Extract inline comment text from a value string.
 
         Returns the comment text (after the ';') stripped of whitespace,
@@ -322,10 +325,10 @@ class NagiosConfigParser:
 
         while i < len(value):
             char = value[i]
-            prev_char = value[i-1] if i > 0 else ''
+            prev_char = value[i-1] if i > 0 else ""
 
             # Handle escaped characters
-            if prev_char == '\\':
+            if prev_char == "\\":
                 i += 1
                 continue
 
@@ -334,37 +337,37 @@ class NagiosConfigParser:
                 in_double_quote = not in_double_quote
             elif char == "'" and not in_double_quote:
                 in_single_quote = not in_single_quote
-            elif char == ';' and not in_double_quote and not in_single_quote:
+            elif char == ";" and not in_double_quote and not in_single_quote:
                 # Found comment start outside quotes
                 comment = value[i+1:].strip()
-                return comment if comment else None
+                return comment or None
 
             i += 1
 
         return None
 
-    def get_objects_by_type(self, object_type: str) -> List[NagiosObject]:
+    def get_objects_by_type(self, object_type: str) -> list[NagiosObject]:
         """Get all objects of a specific type."""
         return [obj for obj in self.objects if obj.object_type == object_type]
 
-    def get_object_types(self) -> List[str]:
+    def get_object_types(self) -> list[str]:
         """Get a list of all object types found."""
         return sorted(set(obj.object_type for obj in self.objects))
 
-    def get_files(self) -> List[str]:
+    def get_files(self) -> list[str]:
         """Get list of all parsed config files."""
         return sorted(set(obj.source_file for obj in self.objects))
 
-    def find_objects(self, search_term: str, object_type: Optional[str] = None,
-                     field: Optional[str] = None, regex: bool = False) -> List[NagiosObject]:
-        """
-        Search for objects matching criteria.
+    def find_objects(self, search_term: str, object_type: str | None = None,
+                     field: str | None = None, regex: bool = False) -> list[NagiosObject]:
+        """Search for objects matching criteria.
 
         Args:
             search_term: Text to search for
             object_type: Limit search to this object type
             field: Search only in this field (None = all fields)
             regex: If True, treat search_term as regex pattern
+
         """
         results = []
 
@@ -389,16 +392,14 @@ class NagiosConfigParser:
                     if pattern.search(value):
                         results.append(obj)
                         break
-                else:
-                    if search_term.lower() in value.lower():
-                        results.append(obj)
-                        break
+                elif search_term.lower() in value.lower():
+                    results.append(obj)
+                    break
 
         return results
 
-    def find_references(self, object_type: str, name: str) -> List[tuple]:
-        """
-        Find all objects that reference the given object.
+    def find_references(self, object_type: str, name: str) -> list[tuple]:
+        """Find all objects that reference the given object.
 
         Returns list of tuples: (object, field_name) that reference the target.
         """
@@ -417,14 +418,14 @@ class NagiosConfigParser:
 
                 value = obj.attributes[field_name]
                 # Handle comma-separated lists
-                values = [v.strip() for v in value.split(',')]
+                values = [v.strip() for v in value.split(",")]
 
                 if name in values:
                     references.append((obj, field_name))
 
         return references
 
-    def get_summary(self) -> Dict[str, int]:
+    def get_summary(self) -> dict[str, int]:
         """Get a summary count of objects by type."""
         summary = {}
         for obj in self.objects:
@@ -433,33 +434,33 @@ class NagiosConfigParser:
 
     # ==================== Write Methods ====================
 
-    def _format_object_block(self, object_type: str, attributes: Dict[str, str]) -> str:
+    def _format_object_block(self, object_type: str, attributes: dict[str, str]) -> str:
         """Format an object as a Nagios define block."""
         return _model_format_object_block(object_type, attributes)
 
-    def _find_block_range(self, content: str, line_number: int) -> Optional[tuple]:
+    def _find_block_range(self, content: str, line_number: int) -> tuple | None:
         """Find the start and end positions of a define block starting at line_number.
 
         Returns (start_pos, end_pos) or None if not found.
         """
-        lines = content.split('\n')
+        lines = content.split("\n")
 
         # Convert line number to character position
         pos = 0
         for i, line in enumerate(lines):
             if i + 1 == line_number:
                 remaining = content[pos:]
-                match = re.match(r'\s*define\s+\w+\s*\{', remaining)
+                match = re.match(r"\s*define\s+\w+\s*\{", remaining)
                 if not match:
                     return None
 
                 start_pos = pos
-                brace_start = pos + remaining.index('{')
+                brace_start = pos + remaining.index("{")
                 j, brace_depth, _ = self._scan_block_body(content, brace_start, len(content))
 
                 if brace_depth == 0:
                     end_pos = j
-                    if end_pos < len(content) and content[end_pos] == '\n':
+                    if end_pos < len(content) and content[end_pos] == "\n":
                         end_pos += 1
                     return (start_pos, end_pos)
                 return None

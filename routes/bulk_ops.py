@@ -1,22 +1,23 @@
 """Bulk operations routes for Nagios configuration editing."""
 
-import os
 import copy
-from flask import Blueprint, request, jsonify
-from typing import List
+import os
 
-from .helpers import (
-    get_service,
-    get_parser_for_modification,
-    get_backup_manager,
-    get_op_logger,
-    get_config_path
-)
+from flask import Blueprint, jsonify, request
+
+import file_operations
 from nagios_model import NAME_FIELDS
 from nagios_writer import NagiosConfigWriter
-import file_operations
 
-bp = Blueprint('bulk_ops', __name__)
+from .helpers import (
+    get_backup_manager,
+    get_config_path,
+    get_op_logger,
+    get_parser_for_modification,
+    get_service,
+)
+
+bp = Blueprint("bulk_ops", __name__)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -25,14 +26,14 @@ bp = Blueprint('bulk_ops', __name__)
 
 def _validate_move_objects_input(data):
     """Validate move-objects request data. Returns (object_data, target_file, create_new, error_response)."""
-    object_data = data.get('objects', [])
-    target_file = data.get('target_file', '')
-    create_new = data.get('create_new', False)
+    object_data = data.get("objects", [])
+    target_file = data.get("target_file", "")
+    create_new = data.get("create_new", False)
 
     if not isinstance(object_data, list):
-        return None, None, None, (jsonify({'error': 'Objects must be a list'}), 400)
+        return None, None, None, (jsonify({"error": "Objects must be a list"}), 400)
     if not object_data or not target_file:
-        return None, None, None, (jsonify({'error': 'Objects and target file required'}), 400)
+        return None, None, None, (jsonify({"error": "Objects and target file required"}), 400)
 
     return object_data, target_file, create_new, None
 
@@ -46,9 +47,9 @@ def _resolve_and_validate_target(target_file, config_path):
     try:
         common = os.path.commonpath([config_path, target_file])
         if common != config_path:
-            return None, (jsonify({'error': 'Target file must be within config directory'}), 400)
+            return None, (jsonify({"error": "Target file must be within config directory"}), 400)
     except ValueError:
-        return None, (jsonify({'error': 'Target file must be within config directory'}), 400)
+        return None, (jsonify({"error": "Target file must be within config directory"}), 400)
 
     return target_file, None
 
@@ -61,12 +62,12 @@ def _create_target_file_if_needed(target_file, create_new):
         parent_dir = os.path.dirname(target_file)
         if not os.path.exists(parent_dir):
             os.makedirs(parent_dir, exist_ok=True)
-        with open(target_file, 'w') as f:
+        with open(target_file, "w") as f:
             f.write("# Nagios configuration file\n")
             f.write("# Created by Nagios Bulk Editor\n\n")
         return True, None
     except OSError as e:
-        return False, (jsonify({'error': f'Could not create file: {e}'}), 400)
+        return False, (jsonify({"error": f"Could not create file: {e}"}), 400)
 
 
 def _move_objects_in_parser(object_data, p_objects, target_file):
@@ -95,8 +96,8 @@ def _move_objects_in_parser(object_data, p_objects, target_file):
 def _parse_move_item(item):
     """Parse a move item (int or dict) into (index, position). Returns (None, None) on error."""
     if isinstance(item, dict):
-        idx = item.get('index')
-        position = item.get('position')
+        idx = item.get("index")
+        position = item.get("position")
     else:
         idx = item
         position = None
@@ -123,14 +124,14 @@ def _group_objects_by_file(objects):
 
 def _apply_renames_to_objects(objects, object_type, rename_params):
     """Apply rename transforms to a list of objects in-place."""
-    name_field = NAME_FIELDS.get(object_type, 'name')
+    name_field = NAME_FIELDS.get(object_type, "name")
     find_pattern, replace_with, add_prefix, add_suffix, use_regex = rename_params
     for obj in objects:
         if obj.object_type == object_type and name_field in obj.attributes:
             old_name = obj.attributes[name_field]
             new_name = get_service().transform_name(
                 old_name, find_pattern, replace_with,
-                add_prefix, add_suffix, use_regex
+                add_prefix, add_suffix, use_regex,
             )
             if new_name is not None and new_name != old_name:
                 obj.attributes[name_field] = new_name
@@ -142,12 +143,12 @@ def _generate_file_diffs(original_by_file, original_content, modified_by_file, w
     diffs = []
     all_files = set(list(original_by_file.keys()) + list(modified_by_file.keys()))
     for filepath in all_files:
-        orig = original_content.get(filepath, '')
+        orig = original_content.get(filepath, "")
         mod_objs = modified_by_file.get(filepath, [])
-        mod = writer.objects_to_string(mod_objs) if mod_objs else ''
+        mod = writer.objects_to_string(mod_objs) if mod_objs else ""
         if orig != mod:
             diff_lines = file_operations.generate_diff(orig, mod, os.path.basename(filepath))
-            diffs.append({'file': filepath, 'diff': ''.join(diff_lines)})
+            diffs.append({"file": filepath, "diff": "".join(diff_lines)})
     return diffs
 
 
@@ -155,7 +156,7 @@ def _generate_file_diffs(original_by_file, original_content, modified_by_file, w
 # Route handlers
 # ═══════════════════════════════════════════════════════════════════════
 
-@bp.route('/api/search', methods=['POST'])
+@bp.route("/api/search", methods=["POST"])
 def api_search():
     """Search for objects."""
     p = get_service().parser
@@ -163,32 +164,32 @@ def api_search():
 
     # Validate input is a dictionary
     if not isinstance(data, dict):
-        return jsonify({'error': 'Request body must be a JSON object'}), 400
+        return jsonify({"error": "Request body must be a JSON object"}), 400
 
-    search_term = data.get('search', '')
-    object_type = data.get('type')
-    field = data.get('field')
-    use_regex = data.get('regex', False)
+    search_term = data.get("search", "")
+    object_type = data.get("type")
+    field = data.get("field")
+    use_regex = data.get("regex", False)
 
     results = p.find_objects(search_term, object_type, field, use_regex)
     return jsonify([o.to_dict() for o in results])
 
 
-@bp.route('/api/preview-rename', methods=['POST'])
+@bp.route("/api/preview-rename", methods=["POST"])
 def api_preview_rename():
     """Preview bulk rename operation."""
     p = get_service().parser
     data = request.get_json() or {}
 
-    object_type = data.get('type')
-    find_pattern = data.get('find', '')
-    replace_with = data.get('replace', '')
-    use_regex = data.get('regex', False)
-    add_prefix = data.get('prefix', '')
-    add_suffix = data.get('suffix', '')
+    object_type = data.get("type")
+    find_pattern = data.get("find", "")
+    replace_with = data.get("replace", "")
+    use_regex = data.get("regex", False)
+    add_prefix = data.get("prefix", "")
+    add_suffix = data.get("suffix", "")
 
     if not object_type:
-        return jsonify({'error': 'Object type required'}), 400
+        return jsonify({"error": "Object type required"}), 400
 
     objs = p.get_objects_by_type(object_type)
     changes = []
@@ -201,50 +202,50 @@ def api_preview_rename():
         new_name = get_service().transform_name(old_name, find_pattern, replace_with,
                                   add_prefix, add_suffix, use_regex)
         if new_name is None:
-            return jsonify({'error': 'Invalid regex pattern'}), 400
+            return jsonify({"error": "Invalid regex pattern"}), 400
 
         if new_name != old_name:
             # Find references that will be updated
             refs = p.find_references(object_type, old_name)
             changes.append({
-                'object': obj.to_dict(),
-                'old_name': old_name,
-                'new_name': new_name,
-                'references': len(refs)
+                "object": obj.to_dict(),
+                "old_name": old_name,
+                "new_name": new_name,
+                "references": len(refs),
             })
 
     return jsonify({
-        'changes': changes,
-        'total': len(changes)
+        "changes": changes,
+        "total": len(changes),
     })
 
 
-@bp.route('/api/apply-rename', methods=['POST'])
+@bp.route("/api/apply-rename", methods=["POST"])
 def api_apply_rename():
     """Apply bulk rename operation."""
     op_log = get_op_logger()
     bm = get_backup_manager()
     data = request.get_json() or {}
 
-    object_type = data.get('type')
+    object_type = data.get("type")
     if op_log:
-        op_log.info('app', 'apply_rename', params={'object_type': object_type})
-    find_pattern = data.get('find', '')
-    replace_with = data.get('replace', '')
-    use_regex = data.get('regex', False)
-    add_prefix = data.get('prefix', '')
-    add_suffix = data.get('suffix', '')
+        op_log.info("app", "apply_rename", params={"object_type": object_type})
+    find_pattern = data.get("find", "")
+    replace_with = data.get("replace", "")
+    use_regex = data.get("regex", False)
+    add_prefix = data.get("prefix", "")
+    add_suffix = data.get("suffix", "")
     # Accept both camelCase and snake_case for compatibility
-    should_update_refs = data.get('updateReferences', data.get('update_references', False))
+    should_update_refs = data.get("updateReferences", data.get("update_references", False))
 
     if not object_type:
-        return jsonify({'error': 'Object type required'}), 400
+        return jsonify({"error": "Object type required"}), 400
 
     with get_parser_for_modification() as p:
         # Create backup before changes
         backup_path = bm.create_backup(f"rename_{object_type}")
 
-        name_field = NAME_FIELDS.get(object_type, 'name')
+        name_field = NAME_FIELDS.get(object_type, "name")
         renamed_count = 0
         references_updated = 0
 
@@ -271,14 +272,14 @@ def api_apply_rename():
     get_service().reload()
 
     return jsonify({
-        'success': True,
-        'renamed': renamed_count,
-        'references_updated': references_updated,
-        'backup': backup_path
+        "success": True,
+        "renamed": renamed_count,
+        "references_updated": references_updated,
+        "backup": backup_path,
     })
 
 
-@bp.route('/api/move-objects', methods=['POST'])
+@bp.route("/api/move-objects", methods=["POST"])
 def api_move_objects():
     """Move objects to a different file."""
     op_log = get_op_logger()
@@ -286,9 +287,9 @@ def api_move_objects():
     data = request.get_json() or {}
 
     if op_log:
-        op_log.info('app', 'move_objects', params={
-            'object_count': len(data.get('objects', [])),
-            'target_file': data.get('target_file', '')
+        op_log.info("app", "move_objects", params={
+            "object_count": len(data.get("objects", [])),
+            "target_file": data.get("target_file", ""),
         })
 
     object_data, target_file, create_new, err = _validate_move_objects_input(data)
@@ -312,41 +313,41 @@ def api_move_objects():
         try:
             writer = NagiosConfigWriter()
             writer.write_objects_to_original_files(p.objects)
-        except (IOError, OSError, PermissionError) as e:
-            return jsonify({'error': f'Failed to write changes: {str(e)}'}), 500
+        except (OSError, PermissionError) as e:
+            return jsonify({"error": f"Failed to write changes: {e!s}"}), 500
 
     try:
         get_service().reload()
-    except (IOError, OSError) as e:
-        return jsonify({'error': f'Failed to reload config: {str(e)}'}), 500
+    except OSError as e:
+        return jsonify({"error": f"Failed to reload config: {e!s}"}), 500
 
     return jsonify({
-        'success': True,
-        'moved': moved_count,
-        'skipped': skipped,
-        'requested': len(object_data),
-        'backup': backup_path,
-        'file_created': file_created,
-        'target_file': target_file
+        "success": True,
+        "moved": moved_count,
+        "skipped": skipped,
+        "requested": len(object_data),
+        "backup": backup_path,
+        "file_created": file_created,
+        "target_file": target_file,
     })
 
 
-@bp.route('/api/diff/rename', methods=['POST'])
+@bp.route("/api/diff/rename", methods=["POST"])
 def api_diff_rename():
     """Generate diff preview for bulk rename operation."""
     service = get_service()
     data = request.get_json() or {}
 
-    object_type = data.get('type')
+    object_type = data.get("type")
     if not object_type:
-        return jsonify({'error': 'Object type required'}), 400
+        return jsonify({"error": "Object type required"}), 400
 
     rename_params = (
-        data.get('find', ''),
-        data.get('replace', ''),
-        data.get('prefix', ''),
-        data.get('suffix', ''),
-        data.get('regex', False),
+        data.get("find", ""),
+        data.get("replace", ""),
+        data.get("prefix", ""),
+        data.get("suffix", ""),
+        data.get("regex", False),
     )
 
     writer = NagiosConfigWriter()
@@ -364,4 +365,4 @@ def api_diff_rename():
     # Generate diffs
     diffs = _generate_file_diffs(original_by_file, original_content, modified_by_file, writer)
 
-    return jsonify({'diffs': diffs})
+    return jsonify({"diffs": diffs})
