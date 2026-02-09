@@ -809,6 +809,50 @@ def _execute_apply_phases(service, staging_data):
     return applied_summary, all_details, phase_errors, None
 
 
+def _build_audit_entry(staging_data, session_id, all_details, errors):
+    """Build an audit log entry dict from apply operation results.
+
+    Args:
+        staging_data: Staging data dict
+        session_id: Session ID
+        all_details: Details from each phase
+        errors: List of errors encountered
+
+    Returns:
+        Audit entry dict ready for write_audit_log()
+    """
+    audit_entry = {
+        'timestamp': datetime.now().isoformat(),
+        'userName': staging_data.get('userName', ''),
+        'userEmail': staging_data.get('userEmail', ''),
+        'sessionId': session_id,
+    }
+
+    # Map phase detail keys to audit entry keys
+    _PHASE_TO_AUDIT_KEY = {
+        'objectEdits': 'object_edits',
+        'objectMoves': 'object_moves',
+        'objectCreations': 'object_creations',
+        'objectDeletions': 'object_deletions',
+        'folderCreations': 'folder_creations',
+        'fileMoves': 'file_moves',
+        'folderMoves': 'folder_moves',
+    }
+    for phase_key, audit_key in _PHASE_TO_AUDIT_KEY.items():
+        if all_details.get(phase_key):
+            audit_entry[audit_key] = all_details[phase_key]
+
+    # Combine file and folder deletions into a single audit field
+    file_deletions = all_details.get('fileDeletions', []) + all_details.get('folderDeletions', [])
+    if file_deletions:
+        audit_entry['file_deletions'] = file_deletions
+
+    if errors:
+        audit_entry['errors'] = errors
+
+    return audit_entry
+
+
 def _write_apply_audit_log(staging_data, session_id, all_details, errors, log):
     """Write audit log entry for apply operation.
 
@@ -826,31 +870,7 @@ def _write_apply_audit_log(staging_data, session_id, all_details, errors, log):
         Tuple of (success: bool, error_message: Optional[str])
     """
     try:
-        audit_entry = {
-            'timestamp': datetime.now().isoformat(),
-            'userName': staging_data.get('userName', ''),
-            'userEmail': staging_data.get('userEmail', ''),
-            'sessionId': session_id,
-        }
-        if all_details.get('objectEdits'):
-            audit_entry['object_edits'] = all_details['objectEdits']
-        if all_details.get('objectMoves'):
-            audit_entry['object_moves'] = all_details['objectMoves']
-        if all_details.get('objectCreations'):
-            audit_entry['object_creations'] = all_details['objectCreations']
-        if all_details.get('objectDeletions'):
-            audit_entry['object_deletions'] = all_details['objectDeletions']
-        if all_details.get('folderCreations'):
-            audit_entry['folder_creations'] = all_details['folderCreations']
-        if all_details.get('fileMoves'):
-            audit_entry['file_moves'] = all_details['fileMoves']
-        if all_details.get('folderMoves'):
-            audit_entry['folder_moves'] = all_details['folderMoves']
-        file_deletions = all_details.get('fileDeletions', []) + all_details.get('folderDeletions', [])
-        if file_deletions:
-            audit_entry['file_deletions'] = file_deletions
-        if errors:
-            audit_entry['errors'] = errors
+        audit_entry = _build_audit_entry(staging_data, session_id, all_details, errors)
         write_audit_log(audit_entry)
         return True, None
     except Exception as e:
@@ -941,6 +961,171 @@ def _apply_reference_updates(service, name_changes, log):
     return total_refs_updated
 
 
+def _create_pre_apply_backup(staging_data, log):
+    """Create a backup before applying staged changes.
+
+    Non-fatal: logs a warning if backup creation fails.
+
+    Args:
+        staging_data: Staging data dict (for user identity)
+        log: Logger instance
+    """
+    bm = get_backup_manager()
+    if bm:
+        try:
+            bm.create_backup(
+                'pre-apply',
+                user_name=staging_data.get('userName', ''),
+                user_email=staging_data.get('userEmail', '')
+            )
+        except Exception as e:
+            log.warning(f"Failed to create pre-apply backup: {e}")
+
+
+def _handle_apply_failure(service, failed_phase, applied_summary, errors, session_id, op_log, log):
+    """Handle a failed apply phase: log, reload parser, return error response.
+
+    Args:
+        service: NagiosService instance
+        failed_phase: Name of the phase that failed
+        applied_summary: Dict of phase -> count applied so far
+        errors: List of error messages
+        session_id: Session ID
+        op_log: Operation logger (may be None)
+        log: Standard logger
+
+    Returns:
+        Flask response tuple (jsonify, status_code)
+    """
+    log.error(f"Staging apply failed at phase '{failed_phase}': {errors}")
+    if op_log:
+        op_log.error('app', 'staging_apply', session_id=session_id,
+                     error=f"Failed at phase {failed_phase}: {errors}")
+
+    # Still reload parser to reflect partial changes
+    service.reload()
+
+    return jsonify({
+        'success': False,
+        'error': f"Apply failed during {failed_phase} phase. Staging preserved for retry.",
+        'failedPhase': failed_phase,
+        'applied': applied_summary,
+        'errors': errors,
+        'stagingPreserved': True
+    }), 500
+
+
+def _apply_post_phase_reference_updates(service, name_changes, all_details, errors, log):
+    """Apply reference updates after successful apply phases.
+
+    C-06: Updates references in other objects when objects are renamed.
+    Non-fatal: logs a warning and appends to errors on failure.
+
+    Args:
+        service: NagiosService instance (freshly reloaded)
+        name_changes: List of {oldName, newName, objectType} dicts
+        all_details: Phase details dict (modified in place to add referenceUpdates)
+        errors: Error list (may be appended to on failure)
+        log: Logger instance
+
+    Returns:
+        Number of references updated
+    """
+    if not name_changes:
+        return 0
+    try:
+        refs_updated = _apply_reference_updates(service, name_changes, log)
+        if refs_updated > 0:
+            all_details['referenceUpdates'] = {
+                'count': refs_updated,
+                'renames': name_changes
+            }
+        return refs_updated
+    except Exception as ref_err:
+        # Reference update failure is non-fatal - objects were already renamed
+        log.warning(f"Reference update failed (non-fatal): {ref_err}")
+        errors.append(f"Reference update warning: {ref_err}")
+        return 0
+
+
+def _run_post_apply_validation():
+    """Run nagios -v validation after a successful apply.
+
+    Returns:
+        Validation result dict, or None if validation was not requested/possible
+    """
+    try:
+        config = get_config()
+        nagios_bin = config.get('nagios_bin', '')
+        nagios_cfg = config.get('nagios_cfg', '')
+        if nagios_bin and nagios_cfg:
+            from validator import NagiosValidator
+            validator = NagiosValidator(nagios_bin, nagios_cfg)
+            val_result = validator.validate()
+            return val_result.to_dict()
+        return {
+            'success': None,
+            'skipped': True,
+            'message': 'Nagios binary or config path not configured'
+        }
+    except Exception as e:
+        return {
+            'success': None,
+            'skipped': True,
+            'message': f'Validation failed to run: {str(e)}'
+        }
+
+
+def _build_apply_success_response(applied_summary, all_details, errors, refs_updated,
+                                   staging_cleared, defer_clear, staging_data,
+                                   session_id, validate_after, log):
+    """Build the success response for a completed apply operation.
+
+    Handles audit logging, optional validation, and response construction.
+
+    Args:
+        applied_summary: Dict of phase -> count
+        all_details: Dict of phase -> details
+        errors: List of error/warning messages
+        refs_updated: Number of references updated
+        staging_cleared: Whether staging was cleared
+        defer_clear: Whether clearing was deferred
+        staging_data: Original staging data (for audit log)
+        session_id: Session ID (for audit log)
+        validate_after: Whether to run nagios validation
+        log: Logger instance
+
+    Returns:
+        Flask jsonify response
+    """
+    total_changes = sum(applied_summary.values())
+
+    # C-10: Track audit log write result and include failure in response
+    audit_failed = False
+    if total_changes > 0:
+        audit_success, audit_error = _write_apply_audit_log(
+            staging_data, session_id, all_details, errors, log
+        )
+        if not audit_success:
+            audit_failed = True
+            errors.append(audit_error)
+
+    response_data = {
+        'success': True, 'applied': applied_summary,
+        'totalChanges': total_changes, 'errors': errors if errors else None,
+        'referencesUpdated': refs_updated,
+        'stagingCleared': staging_cleared,
+        'stagingDeferred': defer_clear
+    }
+    if audit_failed:
+        response_data['warnings'] = ['Audit log write failed - changes applied but not logged']
+
+    if validate_after:
+        response_data['validation'] = _run_post_apply_validation()
+
+    return jsonify(response_data)
+
+
 @bp.route('/api/staging/apply', methods=['POST'])
 def api_apply_staging():
     """
@@ -948,7 +1133,7 @@ def api_apply_staging():
 
     TRUE STAGING: This endpoint writes all staged changes to the filesystem.
     Changes are applied in the correct order to avoid conflicts:
-    1. Create folders (parent → child)
+    1. Create folders (parent -> child)
     2. Create files
     3. Delete objects (surgical)
     4. Move objects (sorted by line desc)
@@ -957,7 +1142,7 @@ def api_apply_staging():
     7. Move files
     8. Move folders
     9. Delete files
-    10. Delete folders (child → parent)
+    10. Delete folders (child -> parent)
 
     ATOMIC BEHAVIOR:
     - Phases execute sequentially
@@ -1001,112 +1186,35 @@ def api_apply_staging():
                     name_changes_count=len(name_changes))
 
     service = get_service()
-
-    # Create backup BEFORE applying any changes
-    bm = get_backup_manager()
-    if bm:
-        try:
-            user_name = staging_data.get('userName', '')
-            user_email = staging_data.get('userEmail', '')
-            bm.create_backup('pre-apply', user_name=user_name, user_email=user_email)
-        except Exception as e:
-            log.warning(f"Failed to create pre-apply backup: {e}")
+    _create_pre_apply_backup(staging_data, log)
 
     try:
-        # Execute all phases, halting on first error
         applied_summary, all_details, errors, failed_phase = _execute_apply_phases(
             service, staging_data
         )
 
         if failed_phase:
-            # Phase failed - do NOT clear staging, allow user to retry
-            log.error(f"Staging apply failed at phase '{failed_phase}': {errors}")
-            if op_log:
-                op_log.error('app', 'staging_apply', session_id=session_id,
-                             error=f"Failed at phase {failed_phase}: {errors}")
-
-            # Still reload parser to reflect partial changes
-            service.reload()
-
-            return jsonify({
-                'success': False,
-                'error': f"Apply failed during {failed_phase} phase. Staging preserved for retry.",
-                'failedPhase': failed_phase,
-                'applied': applied_summary,
-                'errors': errors,
-                'stagingPreserved': True
-            }), 500
+            return _handle_apply_failure(
+                service, failed_phase, applied_summary, errors, session_id, op_log, log
+            )
 
         # All phases succeeded - reload parser, apply reference updates, then clear staging
         service.reload()
 
-        # C-06: Apply reference updates if requested and there are name changes
-        refs_updated = 0
-        if update_references_flag and name_changes:
-            try:
-                refs_updated = _apply_reference_updates(service, name_changes, log)
-                if refs_updated > 0:
-                    all_details['referenceUpdates'] = {
-                        'count': refs_updated,
-                        'renames': name_changes
-                    }
-            except Exception as ref_err:
-                # Reference update failure is non-fatal - objects were already renamed
-                log.warning(f"Reference update failed (non-fatal): {ref_err}")
-                errors.append(f"Reference update warning: {ref_err}")
+        refs_updated = _apply_post_phase_reference_updates(
+            service, name_changes, all_details, errors, log
+        ) if update_references_flag else 0
 
         # C-10: Only clear staging if deferClear is not requested
-        # When deferClear=true, caller will clear staging after git commit succeeds
-        staging_cleared = False
-        if not defer_clear:
+        staging_cleared = not defer_clear
+        if staging_cleared:
             sm.clear_staging()
-            staging_cleared = True
 
-        total_changes = sum(applied_summary.values())
-
-        # C-10: Track audit log write result and include failure in response
-        audit_failed = False
-        if total_changes > 0:
-            audit_success, audit_error = _write_apply_audit_log(staging_data, session_id, all_details, errors, log)
-            if not audit_success:
-                audit_failed = True
-                errors.append(audit_error)
-
-        response_data = {
-            'success': True, 'applied': applied_summary,
-            'totalChanges': total_changes, 'errors': errors if errors else None,
-            'referencesUpdated': refs_updated,
-            'stagingCleared': staging_cleared,
-            'stagingDeferred': defer_clear
-        }
-        if audit_failed:
-            response_data['warnings'] = ['Audit log write failed - changes applied but not logged']
-
-        # Optional: Run nagios -v validation after successful apply
-        if validate_after:
-            try:
-                config = get_config()
-                nagios_bin = config.get('nagios_bin', '')
-                nagios_cfg = config.get('nagios_cfg', '')
-                if nagios_bin and nagios_cfg:
-                    from validator import NagiosValidator
-                    validator = NagiosValidator(nagios_bin, nagios_cfg)
-                    val_result = validator.validate()
-                    response_data['validation'] = val_result.to_dict()
-                else:
-                    response_data['validation'] = {
-                        'success': None,
-                        'skipped': True,
-                        'message': 'Nagios binary or config path not configured'
-                    }
-            except Exception as e:
-                response_data['validation'] = {
-                    'success': None,
-                    'skipped': True,
-                    'message': f'Validation failed to run: {str(e)}'
-                }
-
-        return jsonify(response_data)
+        return _build_apply_success_response(
+            applied_summary, all_details, errors, refs_updated,
+            staging_cleared, defer_clear, staging_data,
+            session_id, validate_after, log
+        )
 
     except Exception as e:
         # Unexpected exception - do NOT clear staging
@@ -1117,6 +1225,155 @@ def api_apply_staging():
             'error': f'Failed to apply staging: {e}',
             'stagingPreserved': True
         }), 500
+
+
+def _apply_staged_edits_to_virtual(virtual_objects, pending_edits):
+    """Apply pending edits to virtual objects in place.
+
+    Args:
+        virtual_objects: List of virtual object dicts (modified in place)
+        pending_edits: Dict {globalIndex: edit_data} from staging
+
+    Returns:
+        Set of edited global indices
+    """
+    edited_indices = set()
+    for gi_str, edit_data in pending_edits.items():
+        if not isinstance(edit_data, dict):
+            continue
+        global_index = int(gi_str) if gi_str is not None else None
+
+        if global_index is not None and 0 <= global_index < len(virtual_objects):
+            edited_attrs = edit_data.get('edited', {})
+            if edited_attrs:
+                virtual_objects[global_index]['attributes'].update(edited_attrs)
+                virtual_objects[global_index]['_staged_status'] = 'edited'
+                edited_indices.add(global_index)
+    return edited_indices
+
+
+def _apply_staged_deletions_to_virtual(virtual_objects, staged_deletions):
+    """Mark objects for deletion in virtual objects list.
+
+    Args:
+        virtual_objects: List of virtual object dicts (modified in place)
+        staged_deletions: List of int global indices from staging
+
+    Returns:
+        Set of deleted global indices
+    """
+    deleted_indices = set()
+    for deletion_entry in staged_deletions:
+        if isinstance(deletion_entry, (int, float)):
+            global_index = int(deletion_entry)
+            if 0 <= global_index < len(virtual_objects):
+                virtual_objects[global_index]['_staged_status'] = 'deleted'
+                deleted_indices.add(global_index)
+    return deleted_indices
+
+
+def _apply_staged_moves_to_virtual(virtual_objects, staged_moves):
+    """Mark objects for move in virtual objects list.
+
+    Args:
+        virtual_objects: List of virtual object dicts (modified in place)
+        staged_moves: Dict {stableKey: move_data} from staging
+    """
+    for move_data in staged_moves.values():
+        if not isinstance(move_data, dict):
+            continue
+
+        obj_info = move_data.get('object', {})
+        target_file = move_data.get('targetFile')
+
+        for obj in virtual_objects:
+            if (obj['source_file'] == obj_info.get('source_file') and
+                obj['object_type'] == obj_info.get('object_type') and
+                obj['attributes'] == obj_info.get('attributes')):
+                obj['_staged_status'] = 'moved'
+                obj['_staged_target_file'] = target_file
+                break
+
+
+def _add_staged_creations_to_virtual(virtual_objects, staged_creations):
+    """Add staged object creations to virtual objects list.
+
+    Args:
+        virtual_objects: List of virtual object dicts (modified in place)
+        staged_creations: List of creation dicts from staging
+    """
+    for creation in staged_creations:
+        virtual_objects.append({
+            'object_type': creation.get('object_type'),
+            'attributes': creation.get('attributes', {}),
+            'source_file': creation.get('targetFile'),
+            'line_number': -1,  # Doesn't exist yet
+            'global_index': -1,
+            '_staged_status': 'created'
+        })
+
+
+def _collect_virtual_files(virtual_objects, staging_data):
+    """Collect the set of files for the virtual tree view.
+
+    Includes files from virtual objects, new files, file creations,
+    and removes file deletions.
+
+    Args:
+        virtual_objects: List of virtual object dicts
+        staging_data: Full staging data dict
+
+    Returns:
+        Set of file paths
+    """
+    files = set(obj['source_file'] for obj in virtual_objects if obj.get('source_file'))
+
+    # Add staged new files
+    config_path = get_config_path()
+    for file_path in staging_data.get('newFiles', []):
+        if not os.path.isabs(file_path):
+            file_path = os.path.join(config_path, file_path)
+        files.add(file_path)
+
+    # Add staged file creations
+    for op in staging_data.get('stagedFileCreations', []):
+        if op.get('path'):
+            files.add(op['path'])
+
+    # Remove staged file deletions
+    for op in staging_data.get('stagedFileDeletions', []):
+        files.discard(op.get('path'))
+
+    return files
+
+
+def _count_staged_operations(staging_data):
+    """Count all staged operations for the virtual tree summary.
+
+    Args:
+        staging_data: Full staging data dict
+
+    Returns:
+        Dict of operation type -> count
+    """
+    pending_edits = staging_data.get('pendingEdits', {})
+    staged_moves = staging_data.get('stagedMoves', {})
+    staged_creations = staging_data.get('stagedCreations', [])
+    staged_deletions = staging_data.get('stagedObjectDeletions', [])
+    new_files = staging_data.get('newFiles', [])
+
+    return {
+        'edits': len(pending_edits),
+        'moves': len(staged_moves),
+        'creations': len(staged_creations),
+        'deletions': len(staged_deletions),
+        'newFiles': len(new_files) + len(staging_data.get('stagedFileCreations', [])),
+        'fileDeletes': len(staging_data.get('stagedFileDeletions', [])),
+        'fileMoves': len(staging_data.get('stagedFileMoves', [])),
+        'folderCreates': len(staging_data.get('stagedFolderCreations', [])),
+        'folderDeletes': len(staging_data.get('stagedFolderDeletions', [])),
+        'folderMoves': len(staging_data.get('stagedFolderMoves', [])),
+    }
 
 
 @bp.route('/api/staging/virtual-tree', methods=['GET'])
@@ -1149,94 +1406,14 @@ def api_get_virtual_tree():
             'stagedCounts': {}
         })
 
-    # Apply pending edits virtually
-    pending_edits = staging_data.get('pendingEdits', {})
-    edited_indices = set()
-    for gi_str, edit_data in pending_edits.items():
-        if not isinstance(edit_data, dict):
-            continue
-        global_index = int(gi_str) if gi_str is not None else None
+    # Apply staged changes to virtual objects
+    _apply_staged_edits_to_virtual(virtual_objects, staging_data.get('pendingEdits', {}))
+    _apply_staged_deletions_to_virtual(virtual_objects, staging_data.get('stagedObjectDeletions', []))
+    _apply_staged_moves_to_virtual(virtual_objects, staging_data.get('stagedMoves', {}))
+    _add_staged_creations_to_virtual(virtual_objects, staging_data.get('stagedCreations', []))
 
-        if global_index is not None and 0 <= global_index < len(virtual_objects):
-            edited_attrs = edit_data.get('edited', {})
-            if edited_attrs:
-                virtual_objects[global_index]['attributes'].update(edited_attrs)
-                virtual_objects[global_index]['_staged_status'] = 'edited'
-                edited_indices.add(global_index)
-
-    # Mark objects for deletion (array of ints)
-    staged_deletions = staging_data.get('stagedObjectDeletions', [])
-    deleted_indices = set()
-    for deletion_entry in staged_deletions:
-        if isinstance(deletion_entry, (int, float)):
-            global_index = int(deletion_entry)
-            if 0 <= global_index < len(virtual_objects):
-                virtual_objects[global_index]['_staged_status'] = 'deleted'
-                deleted_indices.add(global_index)
-
-    # Mark objects for move
-    staged_moves = staging_data.get('stagedMoves', {})
-    for move_data in staged_moves.values():
-        if not isinstance(move_data, dict):
-            continue
-
-        obj_info = move_data.get('object', {})
-        target_file = move_data.get('targetFile')
-
-        for i, obj in enumerate(virtual_objects):
-            if (obj['source_file'] == obj_info.get('source_file') and
-                obj['object_type'] == obj_info.get('object_type') and
-                obj['attributes'] == obj_info.get('attributes')):
-                obj['_staged_status'] = 'moved'
-                obj['_staged_target_file'] = target_file
-                break
-
-    # Add staged creations
-    staged_creations = staging_data.get('stagedCreations', [])
-    for creation in staged_creations:
-        virtual_objects.append({
-            'object_type': creation.get('object_type'),
-            'attributes': creation.get('attributes', {}),
-            'source_file': creation.get('targetFile'),
-            'line_number': -1,  # Doesn't exist yet
-            'global_index': -1,
-            '_staged_status': 'created'
-        })
-
-    # Collect files (including new files)
-    files = set(obj['source_file'] for obj in virtual_objects if obj.get('source_file'))
-
-    # Add staged new files
-    new_files = staging_data.get('newFiles', [])
-    config_path = get_config_path()
-    for file_path in new_files:
-        if not os.path.isabs(file_path):
-            file_path = os.path.join(config_path, file_path)
-        files.add(file_path)
-
-    # Add staged file creations
-    for op in staging_data.get('stagedFileCreations', []):
-        if op.get('path'):
-            files.add(op['path'])
-
-    # Remove staged file deletions from file list
-    for op in staging_data.get('stagedFileDeletions', []):
-        if op.get('path') in files:
-            files.discard(op['path'])
-
-    # Calculate staged counts
-    staged_counts = {
-        'edits': len(pending_edits),
-        'moves': len(staged_moves),
-        'creations': len(staged_creations),
-        'deletions': len(staged_deletions),
-        'newFiles': len(new_files) + len(staging_data.get('stagedFileCreations', [])),
-        'fileDeletes': len(staging_data.get('stagedFileDeletions', [])),
-        'fileMoves': len(staging_data.get('stagedFileMoves', [])),
-        'folderCreates': len(staging_data.get('stagedFolderCreations', [])),
-        'folderDeletes': len(staging_data.get('stagedFolderDeletions', [])),
-        'folderMoves': len(staging_data.get('stagedFolderMoves', [])),
-    }
+    files = _collect_virtual_files(virtual_objects, staging_data)
+    staged_counts = _count_staged_operations(staging_data)
 
     return jsonify({
         'objects': virtual_objects,
@@ -1330,6 +1507,71 @@ def api_staging_conflicts():
     })
 
 
+def _build_staged_changes_summary(staging):
+    """Build a summary of staged changes for the commit dialog.
+
+    Counts each type of staged operation and builds a list of
+    {type, count, label} dicts for non-zero operation types.
+
+    Args:
+        staging: Staging data dict (or empty dict)
+
+    Returns:
+        Tuple of (staged_changes list, total_staged_count int)
+    """
+    # Define operation types: (staging_key, type_name, label_template)
+    _OPERATION_TYPES = [
+        ('pendingEdits', 'edits', 'object edit(s)'),
+        ('stagedMoves', 'moves', 'object move(s)'),
+        ('stagedCreations', 'creations', 'new object(s)'),
+        ('stagedObjectDeletions', 'deletions', 'object deletion(s)'),
+        ('newFiles', 'newFiles', 'new file(s)'),
+        ('stagedFileCreations', 'fileCreations', 'file creation(s)'),
+        ('stagedFileDeletions', 'fileDeletions', 'file deletion(s)'),
+        ('stagedFileMoves', 'fileMoves', 'file move(s)'),
+        ('stagedFolderCreations', 'folderCreations', 'folder creation(s)'),
+        ('stagedFolderDeletions', 'folderDeletions', 'folder deletion(s)'),
+        ('stagedFolderMoves', 'folderMoves', 'folder move(s)'),
+    ]
+
+    staged_changes = []
+    total_staged_count = 0
+    for staging_key, type_name, label_template in _OPERATION_TYPES:
+        data = staging.get(staging_key)
+        count = len(data) if data else 0
+        total_staged_count += count
+        if count > 0:
+            staged_changes.append({
+                'type': type_name,
+                'count': count,
+                'label': f'{count} {label_template}'
+            })
+
+    return staged_changes, total_staged_count
+
+
+def _get_existing_folders(config_path):
+    """Get list of existing non-hidden subdirectories under config_path.
+
+    Args:
+        config_path: Base configuration directory path
+
+    Returns:
+        List of absolute folder paths
+    """
+    existing_folders = []
+    try:
+        for root, dirs, _files in os.walk(config_path):
+            # Skip hidden directories
+            dirs[:] = [d for d in dirs if not d.startswith('.')]
+            rel_path = os.path.relpath(root, config_path)
+            if rel_path != '.':
+                existing_folders.append(os.path.join(config_path, rel_path))
+    except Exception:
+        pass
+    return existing_folders
+
+
 @bp.route('/api/staging/diff', methods=['GET'])
 def api_staging_diff():
     """
@@ -1347,18 +1589,7 @@ def api_staging_diff():
 
     # Paths to exclude from diff (backups, staging metadata, git internals)
     excluded_paths = ['.backups/', '.staging/', '.git/']
-
-    # Get existing folders for the commit dialog
-    existing_folders = []
-    try:
-        for root, dirs, files in os.walk(config_path):
-            # Skip hidden directories
-            dirs[:] = [d for d in dirs if not d.startswith('.')]
-            rel_path = os.path.relpath(root, config_path)
-            if rel_path != '.':
-                existing_folders.append(os.path.join(config_path, rel_path))
-    except Exception:
-        pass
+    existing_folders = _get_existing_folders(config_path)
 
     try:
         git_svc = get_git_service()
@@ -1368,56 +1599,10 @@ def api_staging_diff():
 
         diffs = diff_result.data['diffs']
         git_changes = diff_result.data['git_changes']
-
-        # With TRUE STAGING, changes are NOT on disk yet
-        # Count staged operations separately from git changes
         has_git_changes = len(diffs) > 0
 
-        # Count staged changes (not yet on disk)
-        staged_edits_count = len(staging.get('pendingEdits', {}))
-        staged_moves_count = len(staging.get('stagedMoves', {}))
-        staged_creations_count = len(staging.get('stagedCreations', []))
-        staged_deletions_count = len(staging.get('stagedObjectDeletions', []))
-        staged_file_creates = len(staging.get('stagedFileCreations', []))
-        staged_file_deletes = len(staging.get('stagedFileDeletions', []))
-        staged_file_moves = len(staging.get('stagedFileMoves', []))
-        staged_folder_creates = len(staging.get('stagedFolderCreations', []))
-        staged_folder_deletes = len(staging.get('stagedFolderDeletions', []))
-        staged_folder_moves = len(staging.get('stagedFolderMoves', []))
-        new_files_count = len(staging.get('newFiles', []))
-
-        total_staged_count = (staged_edits_count + staged_moves_count + staged_creations_count +
-                              staged_deletions_count + staged_file_creates + staged_file_deletes +
-                              staged_file_moves + staged_folder_creates + staged_folder_deletes +
-                              staged_folder_moves + new_files_count)
-
+        staged_changes, total_staged_count = _build_staged_changes_summary(staging)
         has_staged_changes = total_staged_count > 0
-        has_changes = has_git_changes or has_staged_changes
-
-        # Build staged changes summary for commit dialog
-        staged_changes = []
-        if staged_edits_count > 0:
-            staged_changes.append({'type': 'edits', 'count': staged_edits_count, 'label': f'{staged_edits_count} object edit(s)'})
-        if staged_moves_count > 0:
-            staged_changes.append({'type': 'moves', 'count': staged_moves_count, 'label': f'{staged_moves_count} object move(s)'})
-        if staged_creations_count > 0:
-            staged_changes.append({'type': 'creations', 'count': staged_creations_count, 'label': f'{staged_creations_count} new object(s)'})
-        if staged_deletions_count > 0:
-            staged_changes.append({'type': 'deletions', 'count': staged_deletions_count, 'label': f'{staged_deletions_count} object deletion(s)'})
-        if new_files_count > 0:
-            staged_changes.append({'type': 'newFiles', 'count': new_files_count, 'label': f'{new_files_count} new file(s)'})
-        if staged_file_creates > 0:
-            staged_changes.append({'type': 'fileCreations', 'count': staged_file_creates, 'label': f'{staged_file_creates} file creation(s)'})
-        if staged_file_deletes > 0:
-            staged_changes.append({'type': 'fileDeletions', 'count': staged_file_deletes, 'label': f'{staged_file_deletes} file deletion(s)'})
-        if staged_file_moves > 0:
-            staged_changes.append({'type': 'fileMoves', 'count': staged_file_moves, 'label': f'{staged_file_moves} file move(s)'})
-        if staged_folder_creates > 0:
-            staged_changes.append({'type': 'folderCreations', 'count': staged_folder_creates, 'label': f'{staged_folder_creates} folder creation(s)'})
-        if staged_folder_deletes > 0:
-            staged_changes.append({'type': 'folderDeletions', 'count': staged_folder_deletes, 'label': f'{staged_folder_deletes} folder deletion(s)'})
-        if staged_folder_moves > 0:
-            staged_changes.append({'type': 'folderMoves', 'count': staged_folder_moves, 'label': f'{staged_folder_moves} folder move(s)'})
 
         # Get all objects from parser for context display in commit dialog
         service = get_service()
@@ -1438,7 +1623,7 @@ def api_staging_diff():
             'count': len(diffs) + total_staged_count,
 
             # For commit dialog
-            'hasChanges': has_changes,
+            'hasChanges': has_git_changes or has_staged_changes,
             'hasGitChanges': has_git_changes,
             'hasStagedChanges': has_staged_changes,
             'gitChanges': git_changes,
