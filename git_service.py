@@ -69,6 +69,54 @@ class GitStatusResult:
     error: Optional[str] = None
 
 
+def _parse_log_entries(raw_output: str) -> List[GitCommit]:
+    """Parse git log output (null-byte separated) into GitCommit entries.
+
+    Args:
+        raw_output: Raw stdout from git log --format=%H%x00%an%x00%ai%x00%s.
+
+    Returns:
+        List of GitCommit entries.
+    """
+    commits = []
+    for line in raw_output.strip().split('\n'):
+        if not line:
+            continue
+        parts = line.split('\x00', 3)
+        if len(parts) >= 4:
+            commits.append(GitCommit(
+                hash=parts[0],
+                hash_short=parts[0][:7],
+                author=parts[1],
+                date=parts[2],
+                message=parts[3]
+            ))
+    return commits
+
+
+def _classify_status(staged: str, unstaged: str) -> tuple:
+    """Classify git porcelain status codes into human-readable status and code.
+
+    Args:
+        staged: The staged (index) status character.
+        unstaged: The unstaged (working tree) status character.
+
+    Returns:
+        Tuple of (status_label, status_code).
+    """
+    if staged == '?' or unstaged == '?':
+        return 'untracked', '?'
+    if staged == 'A' or unstaged == 'A':
+        return 'added', 'A'
+    if staged == 'D' or unstaged == 'D':
+        return 'deleted', 'D'
+    if staged == 'R':
+        return 'renamed', 'R'
+    if staged == 'M' or unstaged == 'M':
+        return 'modified', 'M'
+    return 'changed', (staged if staged != ' ' else unstaged)
+
+
 class GitService:
     """Centralized git operations service.
 
@@ -130,45 +178,63 @@ class GitService:
                 )
 
                 # Check for transient errors on non-zero return
-                if result.returncode != 0 and retry and attempt < max_attempts - 1:
-                    combined = result.stderr + result.stdout
-                    if any(pat in combined for pat in _TRANSIENT_PATTERNS):
-                        delay = (0.1 * (2 ** attempt)) + random.uniform(0, 0.05)
-                        if self._op_logger:
-                            self._op_logger.warning('git', 'retry',
-                                                    params={'cmd': ' '.join(args), 'attempt': attempt + 1})
-                        time.sleep(delay)
-                        continue
+                if self._should_retry_transient(result, retry, attempt, max_attempts, args):
+                    continue
 
-                if self._op_logger:
-                    if result.returncode != 0:
-                        self._op_logger.warning('git', 'run',
-                                                params={'cmd': ' '.join(args)},
-                                                error=result.stderr.strip()[:200])
+                return self._build_run_result(result, run_result, args)
 
-                # Return success=False when returncode != 0
-                if result.returncode != 0:
-                    error_msg = result.stderr.strip() or result.stdout.strip() or f'Git command failed with returncode {result.returncode}'
-                    return OperationResult(success=False, error=error_msg, data=run_result)
+            except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
+                return self._handle_git_exception(e, args, timeout)
 
-                return OperationResult(success=True, data=run_result)
+    def _should_retry_transient(self, result, retry: bool, attempt: int,
+                                max_attempts: int, args: List[str]) -> bool:
+        """Check if a failed git command should be retried due to transient errors.
 
-            except subprocess.TimeoutExpired:
-                error_msg = f'Git command timed out after {timeout}s: git {" ".join(args)}'
-                if self._op_logger:
-                    self._op_logger.error('git', 'timeout', params={'cmd': ' '.join(args)})
-                return OperationResult(success=False, error=error_msg)
-            except FileNotFoundError:
-                error_msg = 'Git is not installed or not in PATH'
-                if self._op_logger:
-                    self._op_logger.error('git', 'not_found')
-                return OperationResult(success=False, error=error_msg)
-            except Exception as e:
-                error_msg = f'Git command failed: {str(e)}'
-                if self._op_logger:
-                    self._op_logger.error('git', 'exception',
-                                          params={'cmd': ' '.join(args)}, error=str(e))
-                return OperationResult(success=False, error=error_msg)
+        Returns True if the caller should continue to the next retry attempt.
+        """
+        if result.returncode == 0 or not retry or attempt >= max_attempts - 1:
+            return False
+        combined = result.stderr + result.stdout
+        if any(pat in combined for pat in _TRANSIENT_PATTERNS):
+            delay = (0.1 * (2 ** attempt)) + random.uniform(0, 0.05)
+            if self._op_logger:
+                self._op_logger.warning('git', 'retry',
+                                        params={'cmd': ' '.join(args), 'attempt': attempt + 1})
+            time.sleep(delay)
+            return True
+        return False
+
+    def _build_run_result(self, result, run_result: GitRunResult,
+                          args: List[str]) -> OperationResult:
+        """Build OperationResult from a completed subprocess result."""
+        if self._op_logger and result.returncode != 0:
+            self._op_logger.warning('git', 'run',
+                                    params={'cmd': ' '.join(args)},
+                                    error=result.stderr.strip()[:200])
+
+        if result.returncode != 0:
+            error_msg = result.stderr.strip() or result.stdout.strip() or f'Git command failed with returncode {result.returncode}'
+            return OperationResult(success=False, error=error_msg, data=run_result)
+
+        return OperationResult(success=True, data=run_result)
+
+    def _handle_git_exception(self, exc: Exception, args: List[str],
+                              timeout: int) -> OperationResult:
+        """Handle exceptions from git subprocess execution."""
+        if isinstance(exc, subprocess.TimeoutExpired):
+            error_msg = f'Git command timed out after {timeout}s: git {" ".join(args)}'
+            if self._op_logger:
+                self._op_logger.error('git', 'timeout', params={'cmd': ' '.join(args)})
+        elif isinstance(exc, FileNotFoundError):
+            error_msg = 'Git is not installed or not in PATH'
+            if self._op_logger:
+                self._op_logger.error('git', 'not_found')
+        else:
+            error_msg = f'Git command failed: {str(exc)}'
+            if self._op_logger:
+                self._op_logger.error('git', 'exception',
+                                      params={'cmd': ' '.join(args)}, error=str(exc))
+        return OperationResult(success=False, error=error_msg)
 
     # =========================================================================
     # Query methods (no lock needed)
@@ -240,56 +306,7 @@ class GitService:
         if not status_result.success:
             return OperationResult(success=False, error=status_result.error)
 
-        files = []
-        for line in status_result.data.stdout.split('\n'):
-            line = line.rstrip('\r\n')
-            if not line or len(line) < 4:
-                continue
-
-            staged_status = line[0]
-            unstaged_status = line[1]
-            filepath = line[3:].strip()
-
-            # Handle renamed files
-            if ' -> ' in filepath:
-                filepath = filepath.split(' -> ')[1]
-
-            # Strip quotes
-            if filepath.startswith('"') and filepath.endswith('"'):
-                filepath = filepath[1:-1]
-
-            # Skip excluded paths
-            if any(filepath.startswith(exc) or filepath == exc.rstrip('/')
-                   for exc in excluded_paths):
-                continue
-
-            # Determine overall status
-            if staged_status == '?' or unstaged_status == '?':
-                status = 'untracked'
-                status_code = '?'
-            elif staged_status == 'A' or unstaged_status == 'A':
-                status = 'added'
-                status_code = 'A'
-            elif staged_status == 'D' or unstaged_status == 'D':
-                status = 'deleted'
-                status_code = 'D'
-            elif staged_status == 'R':
-                status = 'renamed'
-                status_code = 'R'
-            elif staged_status == 'M' or unstaged_status == 'M':
-                status = 'modified'
-                status_code = 'M'
-            else:
-                status = 'changed'
-                status_code = staged_status if staged_status != ' ' else unstaged_status
-
-            files.append(GitFileStatus(
-                path=filepath,
-                status=status,
-                status_code=status_code,
-                staged=staged_status != ' ' and staged_status != '?',
-                unstaged=unstaged_status != ' ' and unstaged_status != '?'
-            ))
+        files = self._parse_status_lines(status_result.data.stdout, excluded_paths)
 
         return OperationResult(success=True, data=GitStatusResult(
             is_repo=True,
@@ -297,6 +314,62 @@ class GitService:
             files=files,
             has_changes=len(files) > 0
         ))
+
+    def _parse_status_lines(self, raw_output: str,
+                            excluded_paths: List[str]) -> List[GitFileStatus]:
+        """Parse git status --porcelain output into GitFileStatus entries.
+
+        Args:
+            raw_output: Raw stdout from git status --porcelain.
+            excluded_paths: Paths to exclude from results.
+
+        Returns:
+            List of GitFileStatus entries.
+        """
+        files = []
+        for line in raw_output.split('\n'):
+            line = line.rstrip('\r\n')
+            if not line or len(line) < 4:
+                continue
+
+            entry = self._parse_single_status_line(line, excluded_paths)
+            if entry is not None:
+                files.append(entry)
+        return files
+
+    @staticmethod
+    def _parse_single_status_line(line: str,
+                                  excluded_paths: List[str]) -> Optional[GitFileStatus]:
+        """Parse a single git status porcelain line into a GitFileStatus.
+
+        Returns None if the line should be skipped (excluded path).
+        """
+        staged_status = line[0]
+        unstaged_status = line[1]
+        filepath = line[3:].strip()
+
+        # Handle renamed files
+        if ' -> ' in filepath:
+            filepath = filepath.split(' -> ')[1]
+
+        # Strip quotes
+        if filepath.startswith('"') and filepath.endswith('"'):
+            filepath = filepath[1:-1]
+
+        # Skip excluded paths
+        if any(filepath.startswith(exc) or filepath == exc.rstrip('/')
+               for exc in excluded_paths):
+            return None
+
+        status, status_code = _classify_status(staged_status, unstaged_status)
+
+        return GitFileStatus(
+            path=filepath,
+            status=status,
+            status_code=status_code,
+            staged=staged_status != ' ' and staged_status != '?',
+            unstaged=unstaged_status != ' ' and unstaged_status != '?'
+        )
 
     def get_diff(self, filepath: Optional[str] = None, staged: bool = False,
                  full_file: bool = True, context_lines: Optional[int] = None) -> OperationResult:
@@ -333,26 +406,38 @@ class GitService:
 
         # If file is untracked, show contents as a diff
         if filepath and not diff_output:
-            status_result = self._run_git(
-                ['status', '--porcelain', '--', filepath], timeout=TIMEOUT_QUERY)
-            if (status_result.success and
-                    status_result.data.stdout.startswith('??')):
-                full_path = os.path.join(self._config_path, filepath)
-                if os.path.exists(full_path):
-                    try:
-                        with open(full_path, 'r') as f:
-                            content = f.read()
-                        lines = content.split('\n')
-                        diff_output = f"diff --git a/{filepath} b/{filepath}\n"
-                        diff_output += "new file mode 100644\n"
-                        diff_output += f"--- /dev/null\n"
-                        diff_output += f"+++ b/{filepath}\n"
-                        diff_output += f"@@ -0,0 +1,{len(lines)} @@\n"
-                        diff_output += '\n'.join('+' + line for line in lines)
-                    except Exception:
-                        pass
+            diff_output = self._build_untracked_diff(filepath) or diff_output
 
         return OperationResult(success=True, data=diff_output)
+
+    def _build_untracked_diff(self, filepath: str) -> Optional[str]:
+        """Build a synthetic diff for an untracked file.
+
+        Returns the diff string, or None if the file is not untracked or unreadable.
+        """
+        status_result = self._run_git(
+            ['status', '--porcelain', '--', filepath], timeout=TIMEOUT_QUERY)
+        if not (status_result.success and
+                status_result.data.stdout.startswith('??')):
+            return None
+
+        full_path = os.path.join(self._config_path, filepath)
+        if not os.path.exists(full_path):
+            return None
+
+        try:
+            with open(full_path, 'r') as f:
+                content = f.read()
+            lines = content.split('\n')
+            diff_output = f"diff --git a/{filepath} b/{filepath}\n"
+            diff_output += "new file mode 100644\n"
+            diff_output += f"--- /dev/null\n"
+            diff_output += f"+++ b/{filepath}\n"
+            diff_output += f"@@ -0,0 +1,{len(lines)} @@\n"
+            diff_output += '\n'.join('+' + line for line in lines)
+            return diff_output
+        except Exception:
+            return None
 
     def get_workspace_diff(self, excluded_paths: Optional[List[str]] = None) -> OperationResult:
         """Get workspace diff with parsed file-based structure.
@@ -367,12 +452,38 @@ class GitService:
         if excluded_paths is None:
             excluded_paths = ['.backups/', '.staging/', '.git/']
 
-        # Get diff of tracked files using patience algorithm
+        # Get raw diff output (tries HEAD first, falls back to plain diff)
+        diff_result = self._get_raw_diff_output()
+        if not diff_result.success:
+            return diff_result
+
+        diff_output = diff_result.data
+        diffs = []
+        git_changes = []
+        diff_file_paths = set()
+
+        # Parse unified diff into file-based structure
+        self._parse_diff_into_files(diff_output, excluded_paths,
+                                    diffs, git_changes, diff_file_paths)
+
+        # Also check for untracked and deleted files not in diff
+        self._collect_untracked_changes(excluded_paths, diff_file_paths,
+                                        diffs, git_changes)
+
+        return OperationResult(success=True, data={
+            'diffs': diffs,
+            'git_changes': git_changes
+        })
+
+    def _get_raw_diff_output(self) -> OperationResult:
+        """Get raw git diff output, trying HEAD first then falling back.
+
+        Returns OperationResult with data=str (raw diff text).
+        """
         # Use HEAD to show both staged and unstaged changes (important after git restore)
         # Note: git diff returns 0 for no changes, 1 for changes - both are valid
         result = self._run_git(['diff', 'HEAD', '--patience', '-U3'], timeout=TIMEOUT_MUTATE)
         if result.data is None:
-            # Subprocess failed completely (timeout, not found, etc.)
             return result
         if result.data.returncode not in (0, 1):
             # Fall back to plain diff (e.g., no commits yet means no HEAD)
@@ -383,12 +494,20 @@ class GitService:
                 return OperationResult(success=False,
                                        error=f'Git diff failed: {result.data.stderr}')
 
-        diff_output = result.data.stdout
-        diffs = []
-        git_changes = []
-        diff_file_paths = set()
+        return OperationResult(success=True, data=result.data.stdout)
 
-        # Parse unified diff into file-based structure
+    def _parse_diff_into_files(self, diff_output: str, excluded_paths: List[str],
+                               diffs: List[dict], git_changes: List[dict],
+                               diff_file_paths: set) -> None:
+        """Parse unified diff output into per-file diff entries (mutates in place).
+
+        Args:
+            diff_output: Raw unified diff text.
+            excluded_paths: Paths to exclude.
+            diffs: List to append diff entry dicts to (mutated).
+            git_changes: List to append git change dicts to (mutated).
+            diff_file_paths: Set to add file paths to (mutated).
+        """
         current_file = None
         current_lines = []
         current_rel_path = None
@@ -419,61 +538,79 @@ class GitService:
                 self._append_diff_entry(diffs, git_changes, diff_file_paths,
                                         current_rel_path, current_lines)
 
-        # Also check for untracked files
+    def _collect_untracked_changes(self, excluded_paths: List[str],
+                                   diff_file_paths: set,
+                                   diffs: List[dict],
+                                   git_changes: List[dict]) -> None:
+        """Collect untracked (.cfg) and deleted files not already in diff (mutates in place).
+
+        Args:
+            excluded_paths: Paths to exclude.
+            diff_file_paths: Set of file paths already in diff output.
+            diffs: List to append diff entry dicts to (mutated).
+            git_changes: List to append git change dicts to (mutated).
+        """
         status_result = self._run_git(['status', '--porcelain'], timeout=TIMEOUT_STATUS)
-        if status_result.success and status_result.data.returncode == 0:
-            for line in status_result.data.stdout.split('\n'):
-                if not line:
-                    continue
-                status_code = line[:2]
-                file_path = line[3:]
+        if not (status_result.success and status_result.data.returncode == 0):
+            return
 
-                if any(file_path.startswith(exc) for exc in excluded_paths):
-                    continue
-                if file_path in diff_file_paths:
-                    continue
+        for line in status_result.data.stdout.split('\n'):
+            if not line:
+                continue
+            status_code = line[:2]
+            file_path = line[3:]
 
-                if status_code == '??':
-                    if not file_path.endswith('.cfg'):
-                        continue
-                    full_path = os.path.join(self._config_path, file_path)
-                    try:
-                        with open(full_path, 'r') as f:
-                            content = f.read()
-                        content_lines = content.split('\n')
-                        diff_lines = [
-                            f'diff --git a/{file_path} b/{file_path}',
-                            'new file mode 100644',
-                            f'--- /dev/null',
-                            f'+++ b/{file_path}',
-                            f'@@ -0,0 +1,{len(content_lines)} @@'
-                        ]
-                        diff_lines.extend(['+' + l for l in content_lines])
-                        diffs.append({
-                            'file_path': file_path,
-                            'diff': '\n'.join(diff_lines),
-                            'diff_lines': diff_lines,
-                            'status': 'added',
-                            'change_count': len(content_lines)
-                        })
-                        git_changes.append({'path': file_path, 'status': 'added'})
-                    except Exception:
-                        pass
+            if any(file_path.startswith(exc) for exc in excluded_paths):
+                continue
+            if file_path in diff_file_paths:
+                continue
 
-                elif status_code[0] == 'D' and file_path not in diff_file_paths:
-                    diffs.append({
-                        'file_path': file_path,
-                        'diff': f'diff --git a/{file_path} b/{file_path}\ndeleted file',
-                        'diff_lines': [f'diff --git a/{file_path} b/{file_path}', 'deleted file'],
-                        'status': 'deleted',
-                        'change_count': 0
-                    })
-                    git_changes.append({'path': file_path, 'status': 'deleted'})
+            if status_code == '??':
+                self._add_untracked_cfg_diff(file_path, diffs, git_changes)
+            elif status_code[0] == 'D':
+                self._add_deleted_file_diff(file_path, diffs, git_changes)
 
-        return OperationResult(success=True, data={
-            'diffs': diffs,
-            'git_changes': git_changes
+    def _add_untracked_cfg_diff(self, file_path: str, diffs: List[dict],
+                                git_changes: List[dict]) -> None:
+        """Add a synthetic diff entry for an untracked .cfg file (mutates in place)."""
+        if not file_path.endswith('.cfg'):
+            return
+        full_path = os.path.join(self._config_path, file_path)
+        try:
+            with open(full_path, 'r') as f:
+                content = f.read()
+            content_lines = content.split('\n')
+            diff_lines = [
+                f'diff --git a/{file_path} b/{file_path}',
+                'new file mode 100644',
+                f'--- /dev/null',
+                f'+++ b/{file_path}',
+                f'@@ -0,0 +1,{len(content_lines)} @@'
+            ]
+            diff_lines.extend(['+' + l for l in content_lines])
+            diffs.append({
+                'file_path': file_path,
+                'diff': '\n'.join(diff_lines),
+                'diff_lines': diff_lines,
+                'status': 'added',
+                'change_count': len(content_lines)
+            })
+            git_changes.append({'path': file_path, 'status': 'added'})
+        except Exception:
+            pass
+
+    @staticmethod
+    def _add_deleted_file_diff(file_path: str, diffs: List[dict],
+                               git_changes: List[dict]) -> None:
+        """Add a synthetic diff entry for a deleted file (mutates in place)."""
+        diffs.append({
+            'file_path': file_path,
+            'diff': f'diff --git a/{file_path} b/{file_path}\ndeleted file',
+            'diff_lines': [f'diff --git a/{file_path} b/{file_path}', 'deleted file'],
+            'status': 'deleted',
+            'change_count': 0
         })
+        git_changes.append({'path': file_path, 'status': 'deleted'})
 
     def _append_diff_entry(self,
                            diffs: List[dict],
@@ -550,43 +687,40 @@ class GitService:
             return OperationResult(success=False,
                                    error=f'Failed to get log: {result.data.stderr}')
 
-        commits = []
-        for line in result.data.stdout.strip().split('\n'):
-            if not line:
-                continue
-            parts = line.split('\x00', 3)
-            if len(parts) >= 4:
-                commits.append(GitCommit(
-                    hash=parts[0],
-                    hash_short=parts[0][:7],
-                    author=parts[1],
-                    date=parts[2],
-                    message=parts[3]
-                ))
-
-        # Check which commit matches current working directory
-        matching_commit = None
-        head_check = self._run_git(['diff', '--quiet', 'HEAD', '--'], timeout=TIMEOUT_STATUS)
-        if head_check.success and head_check.data.returncode == 0:
-            # No changes from HEAD
-            if commits:
-                commits[0].matches_working_dir = True
-                matching_commit = commits[0].hash
-        else:
-            # Check if working dir matches any recent commit (limit to first 20)
-            for commit in commits[:20]:
-                diff_check = self._run_git(
-                    ['diff', '--quiet', commit.hash, '--'], timeout=TIMEOUT_QUERY)
-                if diff_check.success and diff_check.data.returncode == 0:
-                    commit.matches_working_dir = True
-                    matching_commit = commit.hash
-                    break
+        commits = _parse_log_entries(result.data.stdout)
+        matching_commit = self._find_matching_commit(commits)
 
         return OperationResult(success=True, data={
             'is_repo': True,
             'commits': commits,
             'matching_commit': matching_commit
         })
+
+    def _find_matching_commit(self, commits: List[GitCommit]) -> Optional[str]:
+        """Find which commit (if any) matches the current working directory.
+
+        Checks HEAD first, then scans up to 20 recent commits.
+
+        Returns the matching commit hash, or None.
+        """
+        if not commits:
+            return None
+
+        head_check = self._run_git(['diff', '--quiet', 'HEAD', '--'], timeout=TIMEOUT_STATUS)
+        if head_check.success and head_check.data.returncode == 0:
+            # No changes from HEAD
+            commits[0].matches_working_dir = True
+            return commits[0].hash
+
+        # Check if working dir matches any recent commit (limit to first 20)
+        for commit in commits[:20]:
+            diff_check = self._run_git(
+                ['diff', '--quiet', commit.hash, '--'], timeout=TIMEOUT_QUERY)
+            if diff_check.success and diff_check.data.returncode == 0:
+                commit.matches_working_dir = True
+                return commit.hash
+
+        return None
 
     def has_uncommitted_changes(self) -> OperationResult:
         """Check if there are uncommitted changes.
@@ -675,63 +809,83 @@ class GitService:
             )
 
         with self._lock:
-            git_dir = os.path.join(self._config_path, '.git')
-            repo_exists = os.path.isdir(git_dir)
-            initialized = False
+            # Ensure repo exists (auto-init if requested)
+            init_error, initialized = self._ensure_repo(auto_init)
+            if init_error is not None:
+                return init_error
 
-            if not repo_exists:
-                if auto_init:
-                    init_result = self._init_repo_impl()
-                    if not init_result.success:
-                        return init_result
-                    initialized = True
-                else:
-                    return OperationResult(success=False, error='Not a git repository')
+            return self._stage_and_commit(message, files, user_name, user_email, initialized)
 
-            # Stage files
-            if files:
-                stage_cmd = ['add', '--'] + files
-            else:
-                stage_cmd = ['add', '-A']
+    def _ensure_repo(self, auto_init: bool) -> tuple:
+        """Ensure a git repo exists, optionally auto-initializing.
 
-            stage_result = self._run_git(stage_cmd, timeout=TIMEOUT_MUTATE, retry=True)
-            if not stage_result.success:
-                return stage_result
-            if stage_result.data.returncode != 0:
-                return OperationResult(success=False,
-                                       error=self._extract_error(stage_result, 'Failed to stage files'))
+        Args:
+            auto_init: If True, initialize repo when missing.
 
-            # Commit with user identity
-            commit_cmd = ['-c', f'user.name={user_name}', '-c', f'user.email={user_email}',
-                          'commit', '-m', message]
-            commit_result = self._run_git(commit_cmd, timeout=TIMEOUT_MUTATE, retry=True)
-            if not commit_result.success:
-                return commit_result
-            if commit_result.data.returncode != 0:
-                combined = commit_result.data.stdout + commit_result.data.stderr
-                if 'nothing to commit' in combined:
-                    return OperationResult(success=False, error='Nothing to commit')
-                return OperationResult(success=False,
-                                       error=f'Commit failed: {commit_result.data.stderr or commit_result.data.stdout}')
+        Returns:
+            Tuple of (error_result_or_None, initialized_bool).
+            If error_result is not None, caller should return it immediately.
+        """
+        git_dir = os.path.join(self._config_path, '.git')
+        if os.path.isdir(git_dir):
+            return None, False
 
-            # Get commit hash
-            hash_result = self._run_git(['rev-parse', '--short', 'HEAD'], timeout=TIMEOUT_QUERY)
-            commit_hash = ''
-            if hash_result.success and hash_result.data.returncode == 0:
-                commit_hash = hash_result.data.stdout.strip()
-            else:
-                # Commit succeeded but couldn't retrieve hash - log warning but don't fail
-                logger.warning(
-                    "Commit succeeded but failed to retrieve commit hash via rev-parse. "
-                    "commit_hash will be empty in response."
-                )
+        if auto_init:
+            init_result = self._init_repo_impl()
+            if not init_result.success:
+                return init_result, False
+            return None, True
 
-            return OperationResult(success=True, data={
-                'commit_hash': commit_hash,
-                'message': message,
-                'output': commit_result.data.stdout,
-                'initialized': initialized
-            })
+        return OperationResult(success=False, error='Not a git repository'), False
+
+    def _stage_and_commit(self, message: str, files: Optional[List[str]],
+                          user_name: str, user_email: str,
+                          initialized: bool) -> OperationResult:
+        """Stage files and execute a git commit (lock must be held by caller).
+
+        Returns OperationResult with data=dict containing commit info.
+        """
+        # Stage files
+        stage_cmd = ['add', '--'] + files if files else ['add', '-A']
+        stage_result = self._run_git(stage_cmd, timeout=TIMEOUT_MUTATE, retry=True)
+        if not stage_result.success:
+            return stage_result
+        if stage_result.data.returncode != 0:
+            return OperationResult(success=False,
+                                   error=self._extract_error(stage_result, 'Failed to stage files'))
+
+        # Commit with user identity
+        commit_cmd = ['-c', f'user.name={user_name}', '-c', f'user.email={user_email}',
+                      'commit', '-m', message]
+        commit_result = self._run_git(commit_cmd, timeout=TIMEOUT_MUTATE, retry=True)
+        if not commit_result.success:
+            return commit_result
+        if commit_result.data.returncode != 0:
+            combined = commit_result.data.stdout + commit_result.data.stderr
+            if 'nothing to commit' in combined:
+                return OperationResult(success=False, error='Nothing to commit')
+            return OperationResult(success=False,
+                                   error=f'Commit failed: {commit_result.data.stderr or commit_result.data.stdout}')
+
+        commit_hash = self._get_head_short_hash()
+
+        return OperationResult(success=True, data={
+            'commit_hash': commit_hash,
+            'message': message,
+            'output': commit_result.data.stdout,
+            'initialized': initialized
+        })
+
+    def _get_head_short_hash(self) -> str:
+        """Get the short hash of HEAD. Returns empty string on failure."""
+        hash_result = self._run_git(['rev-parse', '--short', 'HEAD'], timeout=TIMEOUT_QUERY)
+        if hash_result.success and hash_result.data.returncode == 0:
+            return hash_result.data.stdout.strip()
+        logger.warning(
+            "Commit succeeded but failed to retrieve commit hash via rev-parse. "
+            "commit_hash will be empty in response."
+        )
+        return ''
 
 
     def discard(self, filepath: str) -> OperationResult:
@@ -863,82 +1017,110 @@ class GitService:
             has_changes = bool(status_result.data.stdout.strip()) if status_result.data else False
 
             # Verify commit exists and get message
-            verify_result = self._run_git(['cat-file', '-t', commit_hash], timeout=TIMEOUT_QUERY)
-            if verify_result.data is None:
-                return OperationResult(success=False, error=verify_result.error)
-            if verify_result.data.returncode != 0 or verify_result.data.stdout.strip() != 'commit':
-                return OperationResult(success=False, error='Commit not found')
+            verify_error = self._verify_commit_exists(commit_hash)
+            if verify_error is not None:
+                return verify_error
 
-            msg_result = self._run_git(['log', '-1', '--format=%s', commit_hash], timeout=TIMEOUT_QUERY)
-            commit_message = (msg_result.data.stdout.strip() if (msg_result.success and
-                                                                 msg_result.data and
-                                                                 msg_result.data.returncode == 0) else '')
+            commit_message = self._get_commit_message(commit_hash)
 
             # Stash uncommitted changes if present
-            stashed = False
-            if has_changes:
-                stash_result = self._run_git(['stash', 'push', '-m', 'Auto-stash before restore'],
-                                           timeout=TIMEOUT_MUTATE)
-                stashed = stash_result.success and stash_result.data and stash_result.data.returncode == 0
+            stashed = self._stash_if_needed(has_changes)
 
-            # Helper function for error recovery
-            def handle_restore_error(base_error: str) -> OperationResult:
-                """Try to restore stash and build appropriate error message."""
-                stash_pop_error = None
-                if stashed:
-                    pop_result = self._run_git(['stash', 'pop'], timeout=TIMEOUT_STATUS)
-                    if not pop_result.success or pop_result.data.returncode != 0:
-                        stash_pop_error = (pop_result.error if not pop_result.success
-                                         else pop_result.data.stderr)
-                        logger.warning(f"Failed to restore stash: {stash_pop_error}")
+            return self._perform_restore(commit_hash, commit_message,
+                                         has_changes, stashed)
 
-                if not stashed:
-                    error_msg = base_error
-                elif stash_pop_error:
-                    error_msg = (
-                        f"{base_error} Your uncommitted changes were stashed but could not be "
-                        f"automatically restored (error: {stash_pop_error}). "
-                        "Run 'git stash pop' manually to recover your work."
-                    )
-                else:
-                    error_msg = f"{base_error} Your uncommitted changes have been restored from stash."
+    def _verify_commit_exists(self, commit_hash: str) -> Optional[OperationResult]:
+        """Verify that a commit hash exists and is a commit object.
 
-                return OperationResult(success=False, error=error_msg)
+        Returns an error OperationResult if verification fails, or None on success.
+        """
+        verify_result = self._run_git(['cat-file', '-t', commit_hash], timeout=TIMEOUT_QUERY)
+        if verify_result.data is None:
+            return OperationResult(success=False, error=verify_result.error)
+        if verify_result.data.returncode != 0 or verify_result.data.stdout.strip() != 'commit':
+            return OperationResult(success=False, error='Commit not found')
+        return None
 
-            # Get files in HEAD
-            head_result = self._run_git(['ls-tree', '-r', '--name-only', 'HEAD'],
+    def _get_commit_message(self, commit_hash: str) -> str:
+        """Get the subject line of a commit. Returns empty string on failure."""
+        msg_result = self._run_git(['log', '-1', '--format=%s', commit_hash], timeout=TIMEOUT_QUERY)
+        if msg_result.success and msg_result.data and msg_result.data.returncode == 0:
+            return msg_result.data.stdout.strip()
+        return ''
+
+    def _stash_if_needed(self, has_changes: bool) -> bool:
+        """Stash uncommitted changes if present. Returns True if stash succeeded."""
+        if not has_changes:
+            return False
+        stash_result = self._run_git(['stash', 'push', '-m', 'Auto-stash before restore'],
+                                     timeout=TIMEOUT_MUTATE)
+        return stash_result.success and stash_result.data and stash_result.data.returncode == 0
+
+    def _handle_restore_error(self, base_error: str, stashed: bool) -> OperationResult:
+        """Try to restore stash after a failed restore and build error message."""
+        if not stashed:
+            return OperationResult(success=False, error=base_error)
+
+        pop_result = self._run_git(['stash', 'pop'], timeout=TIMEOUT_STATUS)
+        if not pop_result.success or pop_result.data.returncode != 0:
+            stash_pop_error = (pop_result.error if not pop_result.success
+                               else pop_result.data.stderr)
+            logger.warning(f"Failed to restore stash: {stash_pop_error}")
+            error_msg = (
+                f"{base_error} Your uncommitted changes were stashed but could not be "
+                f"automatically restored (error: {stash_pop_error}). "
+                "Run 'git stash pop' manually to recover your work."
+            )
+        else:
+            error_msg = f"{base_error} Your uncommitted changes have been restored from stash."
+
+        return OperationResult(success=False, error=error_msg)
+
+    def _list_tree_files(self, ref: str) -> Optional[set]:
+        """List all file paths in a git tree reference (commit or HEAD).
+
+        Returns a set of file paths, or None if the command failed.
+        """
+        result = self._run_git(['ls-tree', '-r', '--name-only', ref],
+                               timeout=TIMEOUT_MUTATE)
+        if result.data is None or result.data.returncode != 0:
+            return None
+        return set(f.strip() for f in result.data.stdout.strip().split('\n') if f.strip())
+
+    def _perform_restore(self, commit_hash: str, commit_message: str,
+                         has_changes: bool, stashed: bool) -> OperationResult:
+        """Execute the restore operation (lock must be held by caller).
+
+        Lists files in HEAD and target, checks out target, and cleans up extras.
+        """
+        head_files = self._list_tree_files('HEAD')
+        if head_files is None:
+            return self._handle_restore_error('Failed to list HEAD files', stashed)
+
+        target_files = self._list_tree_files(commit_hash)
+        if target_files is None:
+            return self._handle_restore_error('Failed to list target commit files', stashed)
+
+        files_to_delete = list(head_files - target_files)
+
+        # Checkout files from target commit
+        restore_result = self._run_git(['checkout', commit_hash, '--', '.'],
                                        timeout=TIMEOUT_MUTATE)
-            if head_result.data is None or head_result.data.returncode != 0:
-                return handle_restore_error(f'Failed to list HEAD files: {head_result.error}')
-            head_files = set(f.strip() for f in head_result.data.stdout.strip().split('\n') if f.strip())
+        if restore_result.data is None or restore_result.data.returncode != 0:
+            error = (restore_result.error or
+                     (restore_result.data.stderr if restore_result.data else 'Unknown error'))
+            return self._handle_restore_error(f'Failed to restore: {error}', stashed)
 
-            # Get files in target commit
-            target_result = self._run_git(['ls-tree', '-r', '--name-only', commit_hash],
-                                        timeout=TIMEOUT_MUTATE)
-            if target_result.data is None or target_result.data.returncode != 0:
-                return handle_restore_error(f'Failed to list target commit files: {target_result.error}')
-            target_files = set(f.strip() for f in target_result.data.stdout.strip().split('\n') if f.strip())
+        # Delete files that were added after the target commit
+        deleted_files = self._cleanup_extra_files(files_to_delete)
 
-            files_to_delete = list(head_files - target_files)
-
-            # Checkout files from target commit
-            restore_result = self._run_git(['checkout', commit_hash, '--', '.'],
-                                         timeout=TIMEOUT_MUTATE)
-            if restore_result.data is None or restore_result.data.returncode != 0:
-                error = (restore_result.error or
-                        (restore_result.data.stderr if restore_result.data else 'Unknown error'))
-                return handle_restore_error(f'Failed to restore: {error}')
-
-            # Delete files that were added after the target commit
-            deleted_files = self._cleanup_extra_files(files_to_delete)
-
-            return OperationResult(success=True, data={
-                'commit': commit_hash,
-                'message': commit_message,
-                'had_uncommitted_changes': has_changes,
-                'stashed': stashed,
-                'deleted_files': deleted_files
-            })
+        return OperationResult(success=True, data={
+            'commit': commit_hash,
+            'message': commit_message,
+            'had_uncommitted_changes': has_changes,
+            'stashed': stashed,
+            'deleted_files': deleted_files
+        })
 
     def clear_history(self, user_name: str, user_email: str) -> OperationResult:
         """Clear all git history and reinitialize with a fresh commit.
