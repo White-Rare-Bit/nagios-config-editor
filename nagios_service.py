@@ -561,33 +561,62 @@ class NagiosService:
         self._log_apply_result('apply_folder_creations', count, errors)
         return OperationResult(True, data=result)
 
-    def apply_file_creations(self, staging_data: dict) -> OperationResult:
-        """Create staged files."""
-        if self._op_logger:
-            self._op_logger.debug('service', 'apply_file_creations', result='started')
-        file_creations = staging_data.get('stagedFileCreations', [])
-        count = 0
-        errors = []
+    def _create_staged_file(self, file_path: str) -> tuple[bool, str]:
+        """Create a single staged file with header content.
 
+        Returns:
+            Tuple of (success, error_message). error_message is empty on success.
+        """
+        try:
+            parent_dir = os.path.dirname(file_path)
+            if parent_dir:
+                os.makedirs(parent_dir, exist_ok=True)
+            if not os.path.exists(file_path):
+                with open(file_path, 'w') as f:
+                    f.write(f"# Nagios configuration file: {os.path.basename(file_path)}\n\n")
+                return (True, '')
+            return (False, '')  # Already exists, not an error but no count
+        except Exception as e:
+            return (False, f"Failed to create file {file_path}: {e}")
+
+    def _create_new_file(self, file_path: str) -> tuple[bool, str]:
+        """Create a new empty file, resolving relative paths.
+
+        Returns:
+            Tuple of (success, error_message). error_message is empty on success.
+        """
+        try:
+            parent_dir = os.path.dirname(file_path)
+            if parent_dir:
+                os.makedirs(parent_dir, exist_ok=True)
+            if not os.path.exists(file_path):
+                Path(file_path).touch()
+                return (True, '')
+            return (False, '')  # Already exists
+        except Exception as e:
+            return (False, f"Failed to create file {file_path}: {e}")
+
+    def _apply_staged_file_creations(self, file_creations: list, errors: list) -> int:
+        """Process stagedFileCreations entries, returning count of files created."""
+        count = 0
         for op in file_creations:
             file_path = op.get('path')
-            if file_path:
-                is_safe, error_msg = self._validate_path_safety(file_path, "file")
-                if not is_safe:
-                    errors.append(error_msg)
-                    continue
-                try:
-                    parent_dir = os.path.dirname(file_path)
-                    if parent_dir:
-                        os.makedirs(parent_dir, exist_ok=True)
-                    if not os.path.exists(file_path):
-                        with open(file_path, 'w') as f:
-                            f.write(f"# Nagios configuration file: {os.path.basename(file_path)}\n\n")
-                        count += 1
-                except Exception as e:
-                    errors.append(f"Failed to create file {file_path}: {e}")
+            if not file_path:
+                continue
+            is_safe, error_msg = self._validate_path_safety(file_path, "file")
+            if not is_safe:
+                errors.append(error_msg)
+                continue
+            success, error = self._create_staged_file(file_path)
+            if success:
+                count += 1
+            elif error:
+                errors.append(error)
+        return count
 
-        new_files = staging_data.get('newFiles', [])
+    def _apply_new_files(self, new_files: list, errors: list) -> int:
+        """Process newFiles entries, resolving relative paths. Returns count created."""
+        count = 0
         for file_path in new_files:
             if not os.path.isabs(file_path):
                 file_path = os.path.join(self._config_path, file_path)
@@ -595,16 +624,24 @@ class NagiosService:
             if not is_safe:
                 errors.append(error_msg)
                 continue
-            try:
-                parent_dir = os.path.dirname(file_path)
-                if parent_dir:
-                    os.makedirs(parent_dir, exist_ok=True)
-                if not os.path.exists(file_path):
-                    Path(file_path).touch()
-                    count += 1
-            except Exception as e:
-                errors.append(f"Failed to create file {file_path}: {e}")
+            success, error = self._create_new_file(file_path)
+            if success:
+                count += 1
+            elif error:
+                errors.append(error)
+        return count
 
+    def apply_file_creations(self, staging_data: dict) -> OperationResult:
+        """Create staged files."""
+        if self._op_logger:
+            self._op_logger.debug('service', 'apply_file_creations', result='started')
+        errors = []
+        count = self._apply_staged_file_creations(
+            staging_data.get('stagedFileCreations', []), errors
+        )
+        count += self._apply_new_files(
+            staging_data.get('newFiles', []), errors
+        )
         result = self._build_apply_result('file_creations', count, errors)
         self._log_apply_result('apply_file_creations', count, errors)
         return OperationResult(True, data=result)
@@ -736,6 +773,61 @@ class NagiosService:
 
         return insert_after_obj.line_number
 
+    def _find_object_by_attrs(self, source_file: str, obj_type: str,
+                              attrs: dict, objects: list) -> Optional[NagiosObject]:
+        """Find an object by source file, type, and full attribute match.
+
+        Attribute matching is required for same-file reordering: line numbers
+        shift as objects are moved, making line-number lookup unreliable.
+
+        Args:
+            source_file: Source file path (resolved for comparison)
+            obj_type: Object type to match
+            attrs: Full attribute dict to match
+            objects: Parser objects list to search
+
+        Returns:
+            Matching NagiosObject or None
+        """
+        source_real = os.path.realpath(source_file)
+        for obj in objects:
+            if (os.path.realpath(obj.source_file) == source_real and
+                obj.object_type == obj_type and
+                obj.attributes == attrs):
+                return obj
+        return None
+
+    def _determine_insert_line(self, move: dict, target_file_real: str,
+                                last_insert_line: dict, target_obj, p) -> Optional[int]:
+        """Determine the insert line for a move operation.
+
+        Uses tracked position if we've already inserted to this file,
+        otherwise resolves from insertPosition.
+
+        Returns:
+            Line number to insert after, or None for end of file
+        """
+        if target_file_real in last_insert_line:
+            return last_insert_line[target_file_real]
+        return self._resolve_insert_position(
+            move['target_file'], move['insert_position'],
+            p.objects, exclude_obj=target_obj
+        )
+
+    def _track_inserted_position(self, move: dict, target_file_real: str,
+                                  last_insert_line: dict) -> None:
+        """Track where an object was inserted for subsequent moves.
+
+        Reloads parser and finds the moved object to get its new line number.
+        """
+        self._parser = NagiosConfigParser(self._config_path)
+        self._parser.parse_all()
+        found = self._find_object_by_attrs(
+            move['target_file'], move['obj_type'], move['attrs'], self._parser.objects
+        )
+        if found:
+            last_insert_line[target_file_real] = found.line_number
+
     def apply_object_moves(self, staging_data: dict) -> OperationResult:
         """Move staged objects using surgical file operations.
 
@@ -753,63 +845,31 @@ class NagiosService:
             self._log_apply_result('apply_object_moves', count, errors)
             return OperationResult(True, data={'count': count, 'errors': errors, 'details': details})
 
-        # Normalize all moves (extracts from staging_data, sorts by insertPosition)
         moves = self._normalize_staged_moves(staging_data)
         if not moves:
             self._log_apply_result('apply_object_moves', count, errors)
             return OperationResult(True, data={'count': count, 'errors': errors, 'details': details})
 
-        # Frontend sends moves pre-sorted by insertPosition. Track last inserted line per target
-        # file so subsequent moves to same file go after the previous insertion.
-        last_insert_line = {}  # target_file -> line number of last inserted object
+        last_insert_line = {}
 
-        # Process each move individually using surgical operations
         for move in moves:
-            # Reload parser to get current line numbers after previous moves
             self._parser = NagiosConfigParser(self._config_path)
             self._parser.parse_all()
             p = self.parser
 
-            # Attribute matching required for same-file reordering: line numbers shift as objects
-            # are moved, making line-number lookup unreliable. Full attribute comparison ensures
-            # correct object identification regardless of intermediate line number changes.
-            source_real = os.path.realpath(move['source_file'])
-            target_obj = None
-            for obj in p.objects:
-                if (os.path.realpath(obj.source_file) == source_real and
-                    obj.object_type == move['obj_type'] and
-                    obj.attributes == move['attrs']):
-                    target_obj = obj
-                    break
-
+            target_obj = self._find_object_by_attrs(
+                move['source_file'], move['obj_type'], move['attrs'], p.objects
+            )
             if not target_obj:
                 errors.append(f"Could not find object to move: {move['obj_type']} in {move['source_file']}")
                 continue
 
             target_file_real = os.path.realpath(move['target_file'])
+            insert_line = self._determine_insert_line(move, target_file_real, last_insert_line, target_obj, p)
 
-            # Determine insert position: use tracked position if we've already inserted to this file,
-            # otherwise resolve from insertPosition (for first move to a file)
-            if target_file_real in last_insert_line:
-                # Insert after the last object we put in this file
-                insert_line = last_insert_line[target_file_real]
-            else:
-                # First move to this file - resolve insertPosition to actual line
-                insert_line = self._resolve_insert_position(
-                    move['target_file'],
-                    move['insert_position'],
-                    p.objects,
-                    exclude_obj=target_obj
-                )
-
-            # Perform the move using surgical operation
             result = move_object_between_files(
-                target_obj.source_file,
-                target_obj.line_number,
-                move['target_file'],
-                move['obj_type'],
-                move['attrs'],
-                insert_line
+                target_obj.source_file, target_obj.line_number,
+                move['target_file'], move['obj_type'], move['attrs'], insert_line
             )
 
             if result.success:
@@ -817,22 +877,10 @@ class NagiosService:
                 name_field = NAME_FIELDS.get(move['obj_type'])
                 obj_name = move['attrs'].get(name_field, '') if name_field else ''
                 details.append({
-                    'object_type': move['obj_type'],
-                    'object_name': obj_name,
-                    'from_file': move['source_file'],
-                    'to_file': move['target_file']
+                    'object_type': move['obj_type'], 'object_name': obj_name,
+                    'from_file': move['source_file'], 'to_file': move['target_file']
                 })
-
-                # Track where we inserted so subsequent moves to same file go after this one.
-                # Reload parser and find the moved object to get its new line number.
-                self._parser = NagiosConfigParser(self._config_path)
-                self._parser.parse_all()
-                for obj in self._parser.objects:
-                    if (os.path.realpath(obj.source_file) == target_file_real and
-                        obj.object_type == move['obj_type'] and
-                        obj.attributes == move['attrs']):
-                        last_insert_line[target_file_real] = obj.line_number
-                        break
+                self._track_inserted_position(move, target_file_real, last_insert_line)
             else:
                 errors.append(f"Move failed: {result.error}")
 
@@ -843,6 +891,38 @@ class NagiosService:
         result = self._build_apply_result('object_moves', count, errors, details)
         self._log_apply_result('apply_object_moves', count, errors)
         return OperationResult(True, data=result)
+
+    def _build_edit_detail(self, target_obj, old_attrs: dict, edited_attrs: dict) -> dict:
+        """Build detail entry for an applied edit, tracking individual attribute changes.
+
+        Args:
+            target_obj: The NagiosObject being edited
+            old_attrs: Original attributes before edit
+            edited_attrs: Only the changed attributes
+
+        Returns:
+            Detail dict with object_type, object_name, changes, and optional renamed_to
+        """
+        changes = []
+        for key, new_val in edited_attrs.items():
+            old_val = old_attrs.get(key)
+            if old_val is None:
+                changes.append({'type': 'add', 'key': key, 'value': new_val})
+            elif old_val != new_val:
+                changes.append({'type': 'modify', 'key': key, 'from': old_val, 'to': new_val})
+
+        name_field = NAME_FIELDS.get(target_obj.object_type)
+        obj_name = old_attrs.get(name_field, '') if name_field else ''
+        detail_entry = {
+            'object_type': target_obj.object_type,
+            'object_name': obj_name,
+            'changes': changes
+        }
+        if name_field and name_field in edited_attrs:
+            new_name = edited_attrs.get(name_field)
+            if new_name and new_name != obj_name:
+                detail_entry['renamed_to'] = new_name
+        return detail_entry
 
     def apply_object_edits(self, staging_data: dict) -> OperationResult:
         """Edit staged objects."""
@@ -858,7 +938,6 @@ class NagiosService:
             self._log_apply_result('apply_object_edits', count, errors)
             return OperationResult(True, data=result)
 
-        p = self.parser
         # pendingEdits is a dict {globalIndex: entry}
         for gi_str, entry in pending_edits.items():
             if not isinstance(entry, dict):
@@ -871,37 +950,19 @@ class NagiosService:
                 continue
 
             target_obj = self._find_object_by_entry(entry, "edit")
+            if not target_obj:
+                continue
 
-            if target_obj:
-                old_attrs = dict(target_obj.attributes)
-                merged_attrs = dict(target_obj.attributes)
-                merged_attrs.update(edited_attrs)
-                result = self.update_object(target_obj.source_file, target_obj.line_number,
-                                            merged_attrs, target_obj.object_type)
-                if result.success:
-                    count += 1
-                    changes = []
-                    for key, new_val in edited_attrs.items():
-                        old_val = old_attrs.get(key)
-                        if old_val is None:
-                            changes.append({'type': 'add', 'key': key, 'value': new_val})
-                        elif old_val != new_val:
-                            changes.append({'type': 'modify', 'key': key, 'from': old_val, 'to': new_val})
-                    name_field = NAME_FIELDS.get(target_obj.object_type)
-                    obj_name = old_attrs.get(name_field, '') if name_field else ''
-                    detail_entry = {
-                        'object_type': target_obj.object_type,
-                        'object_name': obj_name,
-                        'changes': changes
-                    }
-                    if name_field and name_field in edited_attrs:
-                        new_name = edited_attrs.get(name_field)
-                        if new_name and new_name != obj_name:
-                            detail_entry['renamed_to'] = new_name
-                    details.append(detail_entry)
-                    p = self.parser
-                elif result.error:
-                    errors.append(f"Failed to edit object: {result.error}")
+            old_attrs = dict(target_obj.attributes)
+            merged_attrs = dict(target_obj.attributes)
+            merged_attrs.update(edited_attrs)
+            result = self.update_object(target_obj.source_file, target_obj.line_number,
+                                        merged_attrs, target_obj.object_type)
+            if result.success:
+                count += 1
+                details.append(self._build_edit_detail(target_obj, old_attrs, edited_attrs))
+            elif result.error:
+                errors.append(f"Failed to edit object: {result.error}")
 
         result = self._build_apply_result('object_edits', count, errors, details)
         self._log_apply_result('apply_object_edits', count, errors)

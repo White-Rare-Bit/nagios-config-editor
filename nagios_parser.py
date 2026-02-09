@@ -105,6 +105,55 @@ class NagiosConfigParser:
 
         return objects
 
+    def _scan_block_body(self, content: str, brace_start: int, length: int) -> tuple:
+        """Scan from opening brace to find closing brace and nested defines.
+
+        Respects quoted strings and escape sequences. Detects nested 'define'
+        keywords that indicate malformed config.
+
+        Args:
+            content: Full file content
+            brace_start: Position of the opening brace
+            length: Total content length
+
+        Returns:
+            Tuple of (end_pos, brace_depth, nested_define_pos).
+            end_pos is position after closing brace (or last scanned position).
+            brace_depth is 0 on balanced match, >0 if unmatched.
+            nested_define_pos is position of first nested define, or None.
+        """
+        j = brace_start + 1
+        brace_depth = 1
+        in_double_quote = False
+        in_single_quote = False
+        nested_define_pos = None
+
+        while j < length and brace_depth > 0:
+            char = content[j]
+            prev_char = content[j - 1] if j > 0 else ''
+
+            if prev_char == '\\':
+                j += 1
+                continue
+
+            if char == '"' and not in_single_quote:
+                in_double_quote = not in_double_quote
+            elif char == "'" and not in_double_quote:
+                in_single_quote = not in_single_quote
+            elif not in_double_quote and not in_single_quote:
+                if char == '{':
+                    brace_depth += 1
+                elif char == '}':
+                    brace_depth -= 1
+                elif char == 'd' and content[j:j + 6] == 'define' and brace_depth == 1:
+                    define_check = re.match(r'define\s+\w+\s*\{', content[j:])
+                    if define_check and nested_define_pos is None:
+                        nested_define_pos = j
+
+            j += 1
+
+        return (j, brace_depth, nested_define_pos)
+
     def _find_define_blocks(self, content: str) -> List[tuple]:
         """Find all define blocks handling braces in quoted strings.
 
@@ -115,71 +164,27 @@ class NagiosConfigParser:
         length = len(content)
 
         while i < length:
-            # Skip to next 'define' keyword
             define_match = re.search(r'define\s+(\w+)\s*\{', content[i:])
             if not define_match:
                 break
 
             start_pos = i + define_match.start()
             object_type = define_match.group(1)
-            brace_start = i + define_match.end() - 1  # Position of opening brace
-
-            # Count line number
+            brace_start = i + define_match.end() - 1
             line_number = content[:start_pos].count('\n') + 1
 
-            # Find matching closing brace, respecting quotes
-            # Also detect nested 'define' keywords which indicate malformed config
-            j = brace_start + 1
-            brace_depth = 1
-            in_double_quote = False
-            in_single_quote = False
-            nested_define_pos = None
+            j, brace_depth, nested_define_pos = self._scan_block_body(content, brace_start, length)
 
-            while j < length and brace_depth > 0:
-                char = content[j]
-                prev_char = content[j-1] if j > 0 else ''
-
-                # Handle escape sequences
-                if prev_char == '\\':
-                    j += 1
-                    continue
-
-                # Track quote state
-                if char == '"' and not in_single_quote:
-                    in_double_quote = not in_double_quote
-                elif char == "'" and not in_double_quote:
-                    in_single_quote = not in_single_quote
-                # Only count braces outside quotes
-                elif not in_double_quote and not in_single_quote:
-                    if char == '{':
-                        brace_depth += 1
-                    elif char == '}':
-                        brace_depth -= 1
-                    # Check for nested 'define' keyword (malformed config)
-                    elif char == 'd' and content[j:j+6] == 'define' and brace_depth == 1:
-                        # Check if this looks like a new define block
-                        define_check = re.match(r'define\s+\w+\s*\{', content[j:])
-                        if define_check and nested_define_pos is None:
-                            nested_define_pos = j
-
-                j += 1
-
-            # If we found a nested define before the closing brace, treat the block as empty/malformed
             if nested_define_pos is not None and (brace_depth > 0 or nested_define_pos < j - 1):
-                # Extract only the content before the nested define
                 block_content = content[brace_start + 1:nested_define_pos]
-                # Only add the block if it has meaningful content
                 if block_content.strip():
                     blocks.append((object_type, block_content, line_number))
-                # Continue parsing from the nested define
                 i = nested_define_pos
             elif brace_depth == 0:
-                # Extract block content (between braces)
                 block_content = content[brace_start + 1:j - 1]
                 blocks.append((object_type, block_content, line_number))
                 i = j
             else:
-                # Unmatched brace, skip this define and continue
                 logger.warning(f"Unmatched brace in define block at line {line_number}")
                 i = brace_start + 1
 
@@ -443,49 +448,23 @@ class NagiosConfigParser:
         pos = 0
         for i, line in enumerate(lines):
             if i + 1 == line_number:
-                # Found the starting line, now find the define block
                 remaining = content[pos:]
                 match = re.match(r'\s*define\s+\w+\s*\{', remaining)
                 if not match:
                     return None
 
-                # Find the closing brace
                 start_pos = pos
                 brace_start = pos + remaining.index('{')
-                j = brace_start + 1
-                brace_depth = 1
-                in_double_quote = False
-                in_single_quote = False
-
-                while j < len(content) and brace_depth > 0:
-                    char = content[j]
-                    prev_char = content[j-1] if j > 0 else ''
-
-                    if prev_char == '\\':
-                        j += 1
-                        continue
-
-                    if char == '"' and not in_single_quote:
-                        in_double_quote = not in_double_quote
-                    elif char == "'" and not in_double_quote:
-                        in_single_quote = not in_single_quote
-                    elif not in_double_quote and not in_single_quote:
-                        if char == '{':
-                            brace_depth += 1
-                        elif char == '}':
-                            brace_depth -= 1
-
-                    j += 1
+                j, brace_depth, _ = self._scan_block_body(content, brace_start, len(content))
 
                 if brace_depth == 0:
-                    # Include trailing newline if present
                     end_pos = j
                     if end_pos < len(content) and content[end_pos] == '\n':
                         end_pos += 1
                     return (start_pos, end_pos)
                 return None
 
-            pos += len(line) + 1  # +1 for newline
+            pos += len(line) + 1
 
         return None
 

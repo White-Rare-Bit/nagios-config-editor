@@ -98,27 +98,85 @@ def _normalize_block_spacing(before: str, middle: str, after: str) -> str:
     """
     before = before.rstrip('\n')
     after = after.lstrip('\n')
+    parts = [s for s in (before, middle, after) if s]
+    if not parts:
+        return ''
+    result = '\n\n'.join(parts)
+    # Add trailing newline when content ends with our sections (not raw after content)
+    if before or middle:
+        if not after:
+            result += '\n'
+    return result
 
-    if middle:
-        # Insertion or replacement
-        if before and after:
-            return f"{before}\n\n{middle}\n\n{after}"
-        elif before:
-            return f"{before}\n\n{middle}\n"
-        elif after:
-            return f"{middle}\n\n{after}"
-        else:
-            return f"{middle}\n"
+
+def _find_matching_brace(content: str, brace_open: int) -> Optional[int]:
+    """Find the position after the matching closing brace, respecting quotes.
+
+    Args:
+        content: Full file content
+        brace_open: Position of the opening brace
+
+    Returns:
+        Position after closing brace, or None if unmatched
+    """
+    brace_count = 1
+    pos = brace_open + 1
+    in_double_quote = False
+    in_single_quote = False
+    while pos < len(content) and brace_count > 0:
+        char = content[pos]
+        prev_char = content[pos - 1] if pos > 0 else ''
+
+        if prev_char == '\\':
+            pos += 1
+            continue
+
+        if char == '"' and not in_single_quote:
+            in_double_quote = not in_double_quote
+        elif char == "'" and not in_double_quote:
+            in_single_quote = not in_single_quote
+        elif not in_double_quote and not in_single_quote:
+            if char == '{':
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+        pos += 1
+
+    return pos if brace_count == 0 else None
+
+
+def _locate_define_pos(content: str, char_pos: int, target_line: int, lines: list) -> int:
+    """Locate the character position of the 'define' keyword for a block.
+
+    Tries: exact line match, backward search, then forward search.
+
+    Args:
+        content: Full file content
+        char_pos: Character position of target_line start
+        target_line: 1-based target line number
+        lines: Pre-split lines of content
+
+    Returns:
+        Character position of 'define', or -1 if not found
+    """
+    line_content = lines[target_line - 1] if target_line <= len(lines) else ''
+    define_on_line = line_content.strip().startswith('define')
+
+    if define_on_line:
+        define_pos = content.find('define', char_pos)
+        if define_pos >= 0:
+            define_line = content[:define_pos].count('\n') + 1
+            if define_line != target_line:
+                define_pos = -1
+        if define_pos >= 0:
+            return define_pos
     else:
-        # Deletion
-        if before and after:
-            return f"{before}\n\n{after}"
-        elif before:
-            return f"{before}\n"
-        elif after:
-            return after
-        else:
-            return ''
+        define_pos = content.rfind('define', 0, char_pos)
+        if define_pos >= 0:
+            return define_pos
+
+    # Last resort: search forward
+    return content.find('define', char_pos)
 
 
 def find_block_range(content: str, target_line: int) -> Optional[Tuple[int, int]]:
@@ -135,70 +193,22 @@ def find_block_range(content: str, target_line: int) -> Optional[Tuple[int, int]
     if target_line < 1 or target_line > len(lines):
         return None
 
-    # Find character position of target line
     char_pos = sum(len(lines[i]) + 1 for i in range(target_line - 1))
-
-    # Check if 'define' is at the start of this line
-    line_content = lines[target_line - 1] if target_line <= len(lines) else ''
-    define_on_line = line_content.strip().startswith('define')
-
-    if define_on_line:
-        # Find 'define' on this line
-        define_pos = content.find('define', char_pos)
-        if define_pos >= 0:
-            define_line = content[:define_pos].count('\n') + 1
-            if define_line != target_line:
-                define_pos = -1
-    else:
-        # Search backward for the containing block
-        define_pos = content.rfind('define', 0, char_pos)
-
+    define_pos = _locate_define_pos(content, char_pos, target_line, lines)
     if define_pos < 0:
-        # Last resort: search forward
-        define_pos = content.find('define', char_pos)
-        if define_pos < 0:
-            return None
+        return None
 
-    # Verify this looks like a define block
     remaining = content[define_pos:]
     match = re.match(r'define\s+\w+\s*\{', remaining)
     if not match:
         return None
 
-    # Find opening brace
     brace_open = define_pos + remaining.index('{')
-
-    # Find matching closing brace, respecting quotes
-    brace_count = 1
-    pos = brace_open + 1
-    in_double_quote = False
-    in_single_quote = False
-    while pos < len(content) and brace_count > 0:
-        char = content[pos]
-        prev_char = content[pos - 1] if pos > 0 else ''
-
-        # Handle escape sequences
-        if prev_char == '\\':
-            pos += 1
-            continue
-
-        # Track quote state
-        if char == '"' and not in_single_quote:
-            in_double_quote = not in_double_quote
-        elif char == "'" and not in_double_quote:
-            in_single_quote = not in_single_quote
-        # Only count braces outside quotes
-        elif not in_double_quote and not in_single_quote:
-            if char == '{':
-                brace_count += 1
-            elif char == '}':
-                brace_count -= 1
-        pos += 1
-
-    if brace_count != 0:
+    end_pos = _find_matching_brace(content, brace_open)
+    if end_pos is None:
         return None
 
-    return (define_pos, pos)
+    return (define_pos, end_pos)
 
 
 def edit_object_in_file(file_path: str, line_number: int, new_attrs: Dict[str, str],
@@ -342,6 +352,80 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: Dict[str, str],
     return OperationResult(True)
 
 
+def _move_same_file(source_file: str, source_line: int, source_content: str,
+                    start_char: int, raw_block: str, obj_type: str,
+                    attrs: Dict[str, str], insert_line: Optional[int]) -> OperationResult:
+    """Handle same-file reorder: delete first, then re-add at new position.
+
+    Args:
+        source_file: Path to the file
+        source_line: Line number of object to move
+        source_content: Original file content (for line shift calculation)
+        start_char: Character position of block start
+        raw_block: Raw block text to preserve formatting
+        obj_type: Object type
+        attrs: Object attributes (fallback)
+        insert_line: Target insert position
+
+    Returns:
+        OperationResult
+    """
+    source_start = source_content[:start_char].count('\n') + 1
+
+    del_result = delete_object_from_file(source_file, source_line)
+    if not del_result.success:
+        return del_result
+
+    # Recalculate insert position after deletion
+    adjusted_insert_line = insert_line
+    if insert_line is not None and insert_line > source_start:
+        try:
+            new_content = Path(source_file).read_text()
+        except (IOError, OSError) as e:
+            return OperationResult(False, f"Read error after delete: {e}")
+        actual_shift = len(source_content.split('\n')) - len(new_content.split('\n'))
+        adjusted_insert_line = insert_line - actual_shift
+        if adjusted_insert_line < 1:
+            adjusted_insert_line = None
+
+    add_result = add_object_to_file(source_file, obj_type, attrs, adjusted_insert_line, raw_block=raw_block)
+    if not add_result.success:
+        add_object_to_file(source_file, obj_type, attrs, source_line, raw_block=raw_block)
+        return OperationResult(False, f"Failed to re-add after delete: {add_result.error}")
+
+    return OperationResult(True)
+
+
+def _rollback_target_add(target_file: str, raw_block: str, del_error: str) -> OperationResult:
+    """Roll back a failed move by removing the block added to target.
+
+    Args:
+        target_file: File where block was added
+        raw_block: Block text to remove
+        del_error: Original deletion error message
+
+    Returns:
+        OperationResult with appropriate error message
+    """
+    try:
+        target_content = Path(target_file).read_text()
+        if raw_block in target_content:
+            rollback_content = target_content.replace(raw_block, '', 1)
+            rollback_content = re.sub(r'\n{3,}', '\n\n', rollback_content)
+            _atomic_write(target_file, rollback_content)
+        if _op_logger:
+            _op_logger.info('file_op', 'move_rollback',
+                           params={'target': target_file}, result='success')
+        return OperationResult(False, f"Failed to delete from source after add: {del_error}")
+    except (IOError, OSError) as e:
+        if _op_logger:
+            _op_logger.error('file_op', 'move_rollback',
+                            params={'target': target_file}, error=str(e))
+        return OperationResult(False,
+            f"Failed to delete from source: {del_error}. "
+            f"CRITICAL: Rollback failed, object may be duplicated in both files: {e}")
+
+
 def move_object_between_files(source_file: str, source_line: int,
                               target_file: str, obj_type: str, attrs: Dict[str, str],
                               insert_line: Optional[int] = None) -> OperationResult:
@@ -365,7 +449,6 @@ def move_object_between_files(source_file: str, source_line: int,
         _op_logger.debug('file_op', 'move_object_between_files',
                         params={'source_file': source_file, 'target_file': target_file, 'obj_type': obj_type})
 
-    # Read source file and extract raw block (preserves original formatting)
     try:
         source_content = Path(source_file).read_text()
     except (IOError, OSError) as e:
@@ -378,71 +461,18 @@ def move_object_between_files(source_file: str, source_line: int,
     start_char, end_char = block_range
     raw_block = source_content[start_char:end_char].strip()
 
-    source_real = os.path.realpath(source_file)
-    target_real = os.path.realpath(target_file)
+    if os.path.realpath(source_file) == os.path.realpath(target_file):
+        return _move_same_file(source_file, source_line, source_content,
+                               start_char, raw_block, obj_type, attrs, insert_line)
 
-    if source_real == target_real:
-        # Same file reorder - delete first, then add
-        # Compute start line directly from char position (already have start_char from block_range)
-        source_start = source_content[:start_char].count('\n') + 1
+    # Different files - add first to prevent data loss
+    add_result = add_object_to_file(target_file, obj_type, attrs, insert_line, raw_block=raw_block)
+    if not add_result.success:
+        return add_result
 
-        del_result = delete_object_from_file(source_file, source_line)
-        if not del_result.success:
-            return del_result
-
-        # Recalculate insert position after deletion
-        adjusted_insert_line = insert_line
-        if insert_line is not None and insert_line > source_start:
-            try:
-                new_content = Path(source_file).read_text()
-            except (IOError, OSError) as e:
-                return OperationResult(False, f"Read error after delete: {e}")
-            new_total_lines = len(new_content.split('\n'))
-            old_total_lines = len(source_content.split('\n'))
-            actual_shift = old_total_lines - new_total_lines
-            adjusted_insert_line = insert_line - actual_shift
-            if adjusted_insert_line < 1:
-                adjusted_insert_line = None
-
-        add_result = add_object_to_file(target_file, obj_type, attrs, adjusted_insert_line, raw_block=raw_block)
-        if not add_result.success:
-            # Try to re-add at original position (best effort recovery)
-            add_object_to_file(source_file, obj_type, attrs, source_line, raw_block=raw_block)
-            return OperationResult(False, f"Failed to re-add after delete: {add_result.error}")
-    else:
-        # Different files - add first to prevent data loss
-        add_result = add_object_to_file(target_file, obj_type, attrs, insert_line, raw_block=raw_block)
-        if not add_result.success:
-            return add_result
-
-        # Delete from source
-        del_result = delete_object_from_file(source_file, source_line)
-        if not del_result.success:
-            # Rollback: remove the object we just added to target
-            rollback_failed = False
-            rollback_error = None
-            try:
-                target_content = Path(target_file).read_text()
-                # Use the raw_block for rollback matching
-                if raw_block in target_content:
-                    rollback_content = target_content.replace(raw_block, '', 1)
-                    rollback_content = re.sub(r'\n{3,}', '\n\n', rollback_content)
-                    _atomic_write(target_file, rollback_content)
-                if _op_logger:
-                    _op_logger.info('file_op', 'move_rollback',
-                                   params={'target': target_file}, result='success')
-            except (IOError, OSError) as e:
-                rollback_failed = True
-                rollback_error = str(e)
-                if _op_logger:
-                    _op_logger.error('file_op', 'move_rollback',
-                                    params={'target': target_file}, error=rollback_error)
-
-            if rollback_failed:
-                return OperationResult(False,
-                    f"Failed to delete from source: {del_result.error}. "
-                    f"CRITICAL: Rollback failed, object may be duplicated in both files: {rollback_error}")
-            return OperationResult(False, f"Failed to delete from source after add: {del_result.error}")
+    del_result = delete_object_from_file(source_file, source_line)
+    if not del_result.success:
+        return _rollback_target_add(target_file, raw_block, del_result.error)
 
     return OperationResult(True)
 

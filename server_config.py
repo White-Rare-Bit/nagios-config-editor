@@ -192,6 +192,35 @@ def save_config(config: ServerConfig) -> None:
     )
 
 
+def _apply_paths_updates(config: ServerConfig, paths_dict: dict) -> None:
+    """Apply path updates from a dictionary to config.paths.
+
+    nagios_config_path is normalized to absolute path; others are set directly.
+
+    Args:
+        config: ServerConfig to update
+        paths_dict: Dictionary of path field updates
+    """
+    if 'nagios_config_path' in paths_dict:
+        config.paths.nagios_config_path = os.path.abspath(paths_dict['nagios_config_path'])
+    for key in ('backup_path', 'nagios_bin', 'nagios_cfg'):
+        if key in paths_dict:
+            setattr(config.paths, key, paths_dict[key])
+
+
+def _apply_logging_updates(config: ServerConfig, logging_dict: dict) -> None:
+    """Apply logging updates from a dictionary to config.logging.
+
+    Args:
+        config: ServerConfig to update
+        logging_dict: Dictionary of logging field updates
+    """
+    for key in ('enabled', 'log_level', 'log_dir', 'log_filename',
+                'max_file_size_mb', 'max_backup_files'):
+        if key in logging_dict:
+            setattr(config.logging, key, logging_dict[key])
+
+
 def update_config(updates: dict) -> ServerConfig:
     """Load config, apply updates, save, and return updated config.
 
@@ -207,42 +236,15 @@ def update_config(updates: dict) -> ServerConfig:
     config = load_config()
 
     # Handle flat key updates (backward compatibility)
-    if 'nagios_config_path' in updates:
-        config.paths.nagios_config_path = os.path.abspath(updates['nagios_config_path'])
-    if 'backup_path' in updates:
-        config.paths.backup_path = updates['backup_path']
-    if 'nagios_bin' in updates:
-        config.paths.nagios_bin = updates['nagios_bin']
-    if 'nagios_cfg' in updates:
-        config.paths.nagios_cfg = updates['nagios_cfg']
+    _apply_paths_updates(config, updates)
 
     # Handle nested paths updates
     if 'paths' in updates and isinstance(updates['paths'], dict):
-        paths_updates = updates['paths']
-        if 'nagios_config_path' in paths_updates:
-            config.paths.nagios_config_path = os.path.abspath(paths_updates['nagios_config_path'])
-        if 'backup_path' in paths_updates:
-            config.paths.backup_path = paths_updates['backup_path']
-        if 'nagios_bin' in paths_updates:
-            config.paths.nagios_bin = paths_updates['nagios_bin']
-        if 'nagios_cfg' in paths_updates:
-            config.paths.nagios_cfg = paths_updates['nagios_cfg']
+        _apply_paths_updates(config, updates['paths'])
 
     # Handle logging updates
     if 'logging' in updates and isinstance(updates['logging'], dict):
-        logging_updates = updates['logging']
-        if 'enabled' in logging_updates:
-            config.logging.enabled = logging_updates['enabled']
-        if 'log_level' in logging_updates:
-            config.logging.log_level = logging_updates['log_level']
-        if 'log_dir' in logging_updates:
-            config.logging.log_dir = logging_updates['log_dir']
-        if 'log_filename' in logging_updates:
-            config.logging.log_filename = logging_updates['log_filename']
-        if 'max_file_size_mb' in logging_updates:
-            config.logging.max_file_size_mb = logging_updates['max_file_size_mb']
-        if 'max_backup_files' in logging_updates:
-            config.logging.max_backup_files = logging_updates['max_backup_files']
+        _apply_logging_updates(config, updates['logging'])
 
     save_config(config)
     return config
