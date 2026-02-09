@@ -292,6 +292,235 @@ def _create_undo_entries_for_new_files(
     return entries
 
 
+def _preserve_existing_session_data(existing, data, session_id):
+    """Preserve user identity and file/folder ops from existing staging if same session.
+
+    When a session saves new staging data, we preserve fields that weren't
+    explicitly provided in the new request (user identity, file/folder operations,
+    undo stack, base checksums).
+
+    Args:
+        existing: Existing staging data (may be None)
+        data: New staging data dict from POST request (modified in place)
+        session_id: Current session ID
+    """
+    if not existing or existing.get('sessionId') != session_id:
+        return
+
+    # Preserve existing identity if not provided
+    if 'userName' not in data and existing.get('userName'):
+        data['userName'] = existing.get('userName')
+    if 'userEmail' not in data and existing.get('userEmail'):
+        data['userEmail'] = existing.get('userEmail')
+
+    # Preserve existing file/folder staging operations
+    for field in ['stagedFileCreations', 'stagedFileDeletions', 'stagedFileMoves',
+                  'stagedFolderCreations', 'stagedFolderDeletions', 'stagedFolderMoves',
+                  'undoStack', 'baseFileChecksums']:
+        if field not in data and existing.get(field):
+            data[field] = existing.get(field)
+
+
+def _collect_affected_files(data, config_path):
+    """Collect set of files affected by all staging operations.
+
+    Scans pending edits, moves, creations, and deletions to find all files
+    that will be affected when staging is applied.
+
+    Args:
+        data: Staging data dict
+        config_path: Base configuration path for resolving relative paths
+
+    Returns:
+        Set of absolute file paths that will be affected
+    """
+    files = set()
+    _collect_files_from_edits(files, data.get('pendingEdits', {}))
+    _collect_files_from_moves(files, data.get('stagedMoves', {}))
+    _collect_files_from_creations(files, data.get('stagedCreations', []), config_path)
+    _collect_files_from_deletions(files, data.get('stagedObjectDeletions', []))
+    return files
+
+
+def _collect_files_from_edits(files, pending_edits):
+    """Add source files from pending edits to the tracking set."""
+    for entry in pending_edits.values():
+        if isinstance(entry, dict):
+            source = entry.get('object', {}).get('source_file')
+            if source:
+                files.add(source)
+
+
+def _collect_files_from_moves(files, staged_moves):
+    """Add source and target files from staged moves to the tracking set."""
+    for move_data in staged_moves.values():
+        if not isinstance(move_data, dict):
+            continue
+        source = move_data.get('object', {}).get('source_file')
+        if source:
+            files.add(source)
+        target = move_data.get('targetFile')
+        if target:
+            files.add(target)
+
+
+def _collect_files_from_creations(files, staged_creations, config_path):
+    """Add target files from staged creations to the tracking set (if they exist)."""
+    for creation in staged_creations:
+        target_file = creation.get('targetFile')
+        if not target_file:
+            continue
+        if not os.path.isabs(target_file):
+            target_file = os.path.join(config_path, target_file)
+        if os.path.exists(target_file):
+            files.add(target_file)
+
+
+def _collect_files_from_deletions(files, staged_deletions):
+    """Add source files from staged object deletions to the tracking set."""
+    service = get_service()
+    for deletion_entry in staged_deletions:
+        if isinstance(deletion_entry, (int, float)):
+            obj = service.find_object_by_index(int(deletion_entry))
+            if obj:
+                files.add(obj.source_file)
+
+
+def _get_existing_operation_keys(existing):
+    """Extract sets of keys for operations already in existing staging data.
+
+    Used to determine which operations are new (and need undo entries) vs
+    already present from a previous save.
+
+    Args:
+        existing: Existing staging data (may be None)
+
+    Returns:
+        Tuple of (edit_keys, move_keys, creation_ids, deletion_keys) as sets of strings
+    """
+    if not existing:
+        return set(), set(), set(), set()
+
+    edit_keys = set(str(k) for k in existing.get('pendingEdits', {}).keys())
+    move_keys = set(str(k) for k in existing.get('stagedMoves', {}).keys())
+
+    creation_ids = set()
+    for creation in existing.get('stagedCreations', []):
+        if isinstance(creation, dict) and creation.get('id'):
+            creation_ids.add(str(creation['id']))
+
+    deletion_keys = set(
+        str(int(d)) for d in existing.get('stagedObjectDeletions', [])
+        if isinstance(d, (int, float))
+    )
+
+    return edit_keys, move_keys, creation_ids, deletion_keys
+
+
+def _build_undo_entries(data, existing, log):
+    """Build the complete undo stack including new entries for new operations.
+
+    Creates undo entries for new edits, moves, creations, deletions, and new files.
+    Groups multiple operations of the same type into bulk undo entries.
+
+    Args:
+        data: New staging data dict
+        existing: Existing staging data (may be None)
+        log: Logger instance
+
+    Returns:
+        List of undo entries (the complete undo stack)
+    """
+    existing_edit_keys, existing_move_keys, existing_creation_ids, existing_deletion_keys = (
+        _get_existing_operation_keys(existing)
+    )
+
+    # Initialize undo stack from existing data
+    undo_stack = list(existing.get('undoStack', [])) if existing else []
+
+    # Create undo entries for new operations
+    new_edits = _create_undo_entries_for_edits(
+        data.get('pendingEdits', {}), existing_edit_keys, log
+    )
+    new_moves = _create_undo_entries_for_moves(
+        data.get('stagedMoves', {}), existing_move_keys, log
+    )
+    new_creations = _create_undo_entries_for_creations(
+        data.get('stagedCreations', []), existing_creation_ids, log
+    )
+    new_deletions = _create_undo_entries_for_deletions(
+        data.get('stagedObjectDeletions', []), existing_deletion_keys, log
+    )
+
+    # Group multiple operations into single bulk undo entries
+    # D-05: Threshold is >1 (not >5 or >10) because:
+    # - User expectation: Multiple objects selected and edited together should undo together
+    # - UI simplicity: Bulk operations appear as single "Bulk edit N objects" in undo stack
+    # - Single operation stays atomic to allow granular undo when user edits one object at a time
+    _append_undo_group(undo_stack, new_edits, 'bulk_edit', 'edit')
+    _append_undo_group(undo_stack, new_moves, 'bulk_move', 'move')
+    _append_undo_group(undo_stack, new_creations, 'bulk_creation', 'create')
+    _append_undo_group(undo_stack, new_deletions, 'bulk_deletion', 'delete')
+
+    # Create undo entries for NEW files (newFiles set) - these remain individual
+    existing_new_files = set(existing.get('newFiles', [])) if existing else set()
+    undo_stack.extend(_create_undo_entries_for_new_files(
+        data.get('newFiles', []), existing_new_files, log
+    ))
+
+    return undo_stack
+
+
+def _append_undo_group(undo_stack, new_entries, bulk_type, verb):
+    """Append undo entries to stack, grouping multiple entries into a bulk entry.
+
+    If there are more than 1 entries, creates a single bulk undo entry.
+    Otherwise, appends individual entries directly.
+
+    Args:
+        undo_stack: The undo stack list to append to (modified in place)
+        new_entries: List of individual undo entries
+        bulk_type: Bulk operation type string (e.g. 'bulk_edit')
+        verb: Verb for description (e.g. 'edit')
+    """
+    if len(new_entries) > 1:
+        undo_stack.append(_create_bulk_undo_entry(
+            bulk_type, new_entries, f"Bulk {verb} {len(new_entries)} object(s)"
+        ))
+    else:
+        undo_stack.extend(new_entries)
+
+
+def _build_staging_data(sm, data):
+    """Build the final staging data structure with schema version.
+
+    Args:
+        sm: StagingManager instance
+        data: Staging data dict with all fields populated
+
+    Returns:
+        Staging data dict with schema version applied
+    """
+    return sm.migrate_staging_schema({
+        'sessionId': data['sessionId'],
+        'userName': data.get('userName', ''),
+        'userEmail': data.get('userEmail', ''),
+        'pendingEdits': data.get('pendingEdits', {}),
+        'stagedMoves': data.get('stagedMoves', {}),
+        'stagedCreations': data.get('stagedCreations', []),
+        'stagedObjectDeletions': data.get('stagedObjectDeletions', []),
+        'newFiles': data.get('newFiles', []),
+        'stagedFileCreations': data.get('stagedFileCreations', []),
+        'stagedFileDeletions': data.get('stagedFileDeletions', []),
+        'stagedFileMoves': data.get('stagedFileMoves', []),
+        'stagedFolderCreations': data.get('stagedFolderCreations', []),
+        'stagedFolderDeletions': data.get('stagedFolderDeletions', []),
+        'stagedFolderMoves': data.get('stagedFolderMoves', []),
+        'undoStack': data.get('undoStack', []),
+        'baseFileChecksums': data.get('baseFileChecksums', {}),
+    })
+
+
 def is_safe_path(path, base_dir=None):
     """Wrapper that provides get_config_path() as default for base_dir.
 
@@ -450,7 +679,7 @@ def api_save_staging():
     Accepts userName and userEmail in request body for user identification.
     """
     import logging
-    logger = logging.getLogger('nagios_bulk_editor.staging')
+    log = logging.getLogger('nagios_bulk_editor.staging')
 
     sm = get_staging_manager()
     data = request.get_json() or {}
@@ -459,11 +688,9 @@ def api_save_staging():
     format_error = _validate_staging_format(data)
     if format_error:
         return jsonify({'error': f'Invalid staging format: {format_error}'}), 400
-    session_id = request.headers.get('X-Session-Id')
 
-    # Log staging request
-    staged_moves = data.get('stagedMoves', {})
-    logger.debug(f"POST /api/staging: {len(staged_moves)} moves, session={session_id}")
+    session_id = request.headers.get('X-Session-Id')
+    log.debug(f"POST /api/staging: {len(data.get('stagedMoves', {}))} moves, session={session_id}")
 
     # Require session ID for modifications
     if not session_id:
@@ -471,173 +698,26 @@ def api_save_staging():
 
     # Check if locked by another session
     if not sm.validate_or_acquire_lock(session_id):
-        return jsonify({
-            'error': 'Staging is locked by another user',
-            'locked': True
-        }), 423  # 423 Locked
+        return jsonify({'error': 'Staging is locked by another user', 'locked': True}), 423
 
-    # Ensure session ID is stored with the staging data
     data['sessionId'] = session_id
 
-    # User identity comes from the request (stored in browser localStorage)
-    # Keep existing identity if not provided in this request
+    # Preserve user identity and file/folder ops from existing staging
     existing = sm.get_staging()
-    if existing and existing.get('sessionId') == session_id:
-        # Preserve existing identity if not provided
-        if 'userName' not in data and existing.get('userName'):
-            data['userName'] = existing.get('userName')
-        if 'userEmail' not in data and existing.get('userEmail'):
-            data['userEmail'] = existing.get('userEmail')
-        # Preserve existing file/folder staging operations
-        for field in ['stagedFileCreations', 'stagedFileDeletions', 'stagedFileMoves',
-                      'stagedFolderCreations', 'stagedFolderDeletions', 'stagedFolderMoves',
-                      'undoStack', 'baseFileChecksums']:
-            if field not in data and existing.get(field):
-                data[field] = existing.get(field)
+    _preserve_existing_session_data(existing, data, session_id)
 
-    # TRUE STAGING: Collect files that will be affected to track base checksums
-    # NO changes are written to disk here - only staging data is saved
-    files_to_track = set()
-
-    # Track files affected by object edits
-    pending_edits = data.get('pendingEdits', {})
-    for entry in pending_edits.values():
-        if isinstance(entry, dict):
-            obj_info = entry.get('object', {})
-            if obj_info.get('source_file'):
-                files_to_track.add(obj_info['source_file'])
-
-    # Track files affected by object moves
-    for move_data in data.get('stagedMoves', {}).values():
-        if isinstance(move_data, dict):
-            obj_info = move_data.get('object', {})
-            if obj_info.get('source_file'):
-                files_to_track.add(obj_info['source_file'])
-            if move_data.get('targetFile'):
-                files_to_track.add(move_data['targetFile'])
-
-    # Track files affected by object creations
-    for creation in data.get('stagedCreations', []):
-        if creation.get('targetFile'):
-            target_file = creation['targetFile']
-            config_path = get_config_path()
-            if not os.path.isabs(target_file):
-                target_file = os.path.join(config_path, target_file)
-            if os.path.exists(target_file):
-                files_to_track.add(target_file)
-
-    # Track files affected by object deletions (array of ints)
-    service = get_service()
-    for deletion_entry in data.get('stagedObjectDeletions', []):
-        if isinstance(deletion_entry, (int, float)):
-            obj = service.find_object_by_index(int(deletion_entry))
-            if obj:
-                files_to_track.add(obj.source_file)
-
-    # Update base checksums for files we're about to modify
+    # Collect and track files affected by all staging operations
+    files_to_track = _collect_affected_files(data, get_config_path())
     if files_to_track:
         sm.update_base_checksums(list(files_to_track))
 
-    # Create undo entries for new object operations
-    # Get existing operations to compare
-    existing_pending_edit_keys = set()
-    existing_staged_move_keys = set()
-    existing_staged_creation_ids = set()
-    existing_staged_deletion_keys = set()
+    # Build undo stack with entries for new operations
+    data['undoStack'] = _build_undo_entries(data, existing, log)
 
-    if existing:
-        # Dict keys are the globalIndex/stableKey directly
-        existing_pending_edit_keys = set(str(k) for k in existing.get('pendingEdits', {}).keys())
-        existing_staged_move_keys = set(str(k) for k in existing.get('stagedMoves', {}).keys())
-
-        # Extract IDs from existing staged creations
-        for creation in existing.get('stagedCreations', []):
-            if isinstance(creation, dict) and creation.get('id'):
-                existing_staged_creation_ids.add(str(creation['id']))
-
-        # Extract keys from existing staged deletions (array of ints)
-        existing_staged_deletion_keys = set(str(int(d)) for d in existing.get('stagedObjectDeletions', [])
-                                            if isinstance(d, (int, float)))
-
-    # Initialize undo stack from existing data
-    undo_stack = list(existing.get('undoStack', [])) if existing else []
-
-    # Create undo entries for new operations
-    # If multiple items of the same type are new, create a single bulk undo entry
-    new_edits = _create_undo_entries_for_edits(
-        pending_edits, existing_pending_edit_keys, logger
-    )
-    new_moves = _create_undo_entries_for_moves(
-        data.get('stagedMoves', {}), existing_staged_move_keys, logger
-    )
-    new_creations = _create_undo_entries_for_creations(
-        data.get('stagedCreations', []), existing_staged_creation_ids, logger
-    )
-    new_deletions = _create_undo_entries_for_deletions(
-        data.get('stagedObjectDeletions', []), existing_staged_deletion_keys, logger
-    )
-
-    # Group multiple operations into single bulk undo entries
-    # D-05: Threshold is >1 (not >5 or >10) because:
-    # - User expectation: Multiple objects selected and edited together should undo together
-    # - UI simplicity: Bulk operations appear as single "Bulk edit N objects" in undo stack
-    # - Single operation stays atomic to allow granular undo when user edits one object at a time
-    if len(new_edits) > 1:
-        # Create single bulk edit undo entry
-        undo_stack.append(_create_bulk_undo_entry('bulk_edit', new_edits, f"Bulk edit {len(new_edits)} object(s)"))
-    else:
-        undo_stack.extend(new_edits)
-
-    if len(new_moves) > 1:
-        # Create single bulk move undo entry
-        target_file = new_moves[0]['data'].get('object', {}).get('targetFile', 'target')
-        undo_stack.append(_create_bulk_undo_entry('bulk_move', new_moves, f"Bulk move {len(new_moves)} object(s)"))
-    else:
-        undo_stack.extend(new_moves)
-
-    if len(new_creations) > 1:
-        # Create single bulk creation undo entry
-        undo_stack.append(_create_bulk_undo_entry('bulk_creation', new_creations, f"Bulk create {len(new_creations)} object(s)"))
-    else:
-        undo_stack.extend(new_creations)
-
-    if len(new_deletions) > 1:
-        # Create single bulk deletion undo entry
-        undo_stack.append(_create_bulk_undo_entry('bulk_deletion', new_deletions, f"Bulk delete {len(new_deletions)} object(s)"))
-    else:
-        undo_stack.extend(new_deletions)
-
-    # Create undo entries for NEW files (newFiles set) - these remain individual
-    existing_new_files = set(existing.get('newFiles', [])) if existing else set()
-    undo_stack.extend(_create_undo_entries_for_new_files(
-        data.get('newFiles', []), existing_new_files, logger
-    ))
-
-    # Update the data with the new undo stack
-    data['undoStack'] = undo_stack
-
-    # Build staging data structure (with schema version)
-    staging_data = sm.migrate_staging_schema({
-        'sessionId': data['sessionId'],
-        'userName': data.get('userName', ''),
-        'userEmail': data.get('userEmail', ''),
-        'pendingEdits': data.get('pendingEdits', {}),
-        'stagedMoves': data.get('stagedMoves', {}),
-        'stagedCreations': data.get('stagedCreations', []),
-        'stagedObjectDeletions': data.get('stagedObjectDeletions', []),
-        'newFiles': data.get('newFiles', []),
-        'stagedFileCreations': data.get('stagedFileCreations', []),
-        'stagedFileDeletions': data.get('stagedFileDeletions', []),
-        'stagedFileMoves': data.get('stagedFileMoves', []),
-        'stagedFolderCreations': data.get('stagedFolderCreations', []),
-        'stagedFolderDeletions': data.get('stagedFolderDeletions', []),
-        'stagedFolderMoves': data.get('stagedFolderMoves', []),
-        'undoStack': data.get('undoStack', []),
-        'baseFileChecksums': data.get('baseFileChecksums', {}),
-    })
-
-    # Use atomic save to prevent race condition with lock validation
+    # Build final staging data structure and save atomically
+    staging_data = _build_staging_data(sm, data)
     save_result = sm.save_staging_atomic(staging_data, session_id, staging_operation_lock)
+
     if save_result.success:
         return jsonify({
             'success': True,
