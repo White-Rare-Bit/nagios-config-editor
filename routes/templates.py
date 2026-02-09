@@ -66,12 +66,18 @@ def get_inheritance(stable_key):
         if obj.object_type == obj_type and obj.attributes.get('name'):
             template_lookup[obj.attributes['name']] = obj
 
+    def get_obj_display_name(obj):
+        """Get display name for source attribution."""
+        return obj.get_name() or obj.attributes.get('name', '(unknown)')
+
     def resolve_chain(obj, visited=None):
         """Recursively resolve template inheritance chain.
 
         Uses shared visited set to detect circular dependencies.
         Nagios inheritance: comma-separated templates apply left-to-right,
         with later templates overriding earlier ones.
+
+        Returns inherited as {attr: {value, source}} for source tracking.
         """
         if visited is None:
             visited = set()
@@ -79,6 +85,7 @@ def get_inheritance(stable_key):
         chain = []
         inherited = {}
         errors = []
+        obj_name = get_obj_display_name(obj)
 
         use_value = obj.attributes.get('use', '')
         if use_value:
@@ -103,9 +110,9 @@ def get_inheritance(stable_key):
                 tmpl_chain, tmpl_inherited, tmpl_errors = resolve_chain(tmpl_obj, visited)
 
                 # Merge inherited attributes (later templates override earlier)
-                for key, value in tmpl_inherited.items():
+                for key, entry in tmpl_inherited.items():
                     if key not in ['use', 'name', 'register']:
-                        inherited[key] = value
+                        inherited[key] = entry
 
                 # Add template to chain
                 chain.append({
@@ -125,7 +132,7 @@ def get_inheritance(stable_key):
         # Object's own attributes override inherited
         for key, value in obj.attributes.items():
             if key not in ['use', 'name', 'register']:
-                inherited[key] = value
+                inherited[key] = {'value': value, 'source': obj_name}
 
         return chain, inherited, errors
 
