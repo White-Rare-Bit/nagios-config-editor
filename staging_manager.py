@@ -1375,6 +1375,9 @@ def parse_stable_key(key: str) -> dict[str, str] | None:
 def generate_stable_key_for_object(obj: Any) -> str:
     """Generate a stable key for a NagiosObject.
 
+    Uses get_display_name() to ensure uniqueness — services with the same
+    service_description on different hosts get different keys.
+
     Args:
         obj: NagiosObject instance
 
@@ -1382,8 +1385,7 @@ def generate_stable_key_for_object(obj: Any) -> str:
         Stable key string
 
     """
-    from nagios_model import get_object_name
-    name = get_object_name(obj.object_type, obj.attributes)
+    name = obj.get_display_name()
     return generate_stable_key(obj.source_file, obj.object_type, name)
 
 
