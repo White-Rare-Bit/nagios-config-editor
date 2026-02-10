@@ -30,6 +30,12 @@ class NagiosConfigParser:
     # Regex matching a Nagios time range value (e.g. 00:00-24:00, 08:00-17:00)
     _TIMERANGE_RE = re.compile(r"\d{1,2}:\d{2}-\d{1,2}:\d{2}")
 
+    # Months recognized in Nagios timeperiod date directives
+    _MONTH_NAMES = frozenset({
+        "january", "february", "march", "april", "may", "june",
+        "july", "august", "september", "october", "november", "december",
+    })
+
     # Standard timeperiod attributes that use normal key/value splitting
     _TIMEPERIOD_STANDARD_ATTRS = frozenset({
         "timeperiod_name", "alias", "use", "name", "register", "exclude",
@@ -276,6 +282,11 @@ class NagiosConfigParser:
             value = line[match.start():]
             if key:
                 return key, value
+
+        # Detect bare date directives (no time range): month names, "day N",
+        # or YYYY-MM-DD patterns. Treat entire line as key with empty value.
+        if first_word.lower() in self._MONTH_NAMES or first_word == "day":
+            return line, ""
 
         # Fallback: standard first-whitespace split
         key = parts[0]

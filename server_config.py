@@ -4,8 +4,10 @@ Consolidates all server-wide settings into config/settings.json with
 automatic persistence and environment variable overrides.
 """
 
+import contextlib
 import json
 import os
+import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -187,10 +189,18 @@ def save_config(config: ServerConfig) -> None:
     # Update version to current
     config.version = CONFIG_VERSION
 
-    CONFIG_FILE.write_text(
-        json.dumps(config.to_dict(), indent=2) + "\n",
-        encoding="utf-8",
-    )
+    content = json.dumps(config.to_dict(), indent=2) + "\n"
+    fd, tmp_path = tempfile.mkstemp(dir=str(CONFIG_DIR), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, str(CONFIG_FILE))
+    except:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_path)
+        raise
 
 
 def _apply_paths_updates(config: ServerConfig, paths_dict: dict) -> None:

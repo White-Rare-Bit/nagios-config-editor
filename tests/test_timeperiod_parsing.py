@@ -148,6 +148,47 @@ class TestTimeperiodParsing:
         assert "april 10 - may 15" in tp.attributes
         assert tp.attributes["april 10 - may 15"] == "00:00-24:00"
 
+    def test_bare_month_day_without_time_range(self):
+        """Bare date directive without time range: 'february -1' should be a single key."""
+        test_dir = tempfile.mkdtemp()
+        try:
+            test_config_path = Path(test_dir) / "nagios"
+            test_config_path.mkdir()
+
+            (test_config_path / "bare_date.cfg").write_text("""
+define timeperiod {
+    timeperiod_name     bare-date-test
+    alias               Bare Date Test
+    february -1         00:00-24:00
+    march 1
+    day 15
+}
+""")
+
+            parser = NagiosConfigParser(str(test_config_path))
+            parser.parse_all()
+
+            tp = None
+            for obj in parser.objects:
+                if obj.attributes.get("timeperiod_name") == "bare-date-test":
+                    tp = obj
+                    break
+            assert tp is not None
+
+            # february -1 WITH time range should parse normally
+            assert "february -1" in tp.attributes
+            assert tp.attributes["february -1"] == "00:00-24:00"
+
+            # march 1 WITHOUT time range: entire line should be the key, value empty
+            assert "march 1" in tp.attributes
+            assert tp.attributes["march 1"] == ""
+
+            # day 15 WITHOUT time range: entire line should be the key
+            assert "day 15" in tp.attributes
+            assert tp.attributes["day 15"] == ""
+        finally:
+            shutil.rmtree(test_dir, ignore_errors=True)
+
     def test_round_trip_preserves_timeperiods(self, parser_with_timeperiods):
         """Writing and re-reading a timeperiod preserves date-range keys."""
         import os

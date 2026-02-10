@@ -3,9 +3,11 @@
 Manages audit log persistence, rotation, and retrieval.
 """
 
+import contextlib
 import json
 import multiprocessing
 import os
+import tempfile
 from datetime import datetime
 
 # C-09: Module-level lock for process-safe audit log writes
@@ -72,9 +74,18 @@ def rotate_audit_log(entries: list) -> list:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     archive_path = os.path.join(log_dir, f"audit_log_{timestamp}.json")
 
-    # Write all current entries to archive
-    with open(archive_path, "w", encoding="utf-8") as f:
-        json.dump({"entries": entries, "archived_at": datetime.now().isoformat()}, f, indent=2)
+    # Atomic write: temp file → flush → fsync → rename
+    fd, tmp_path = tempfile.mkstemp(dir=log_dir, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump({"entries": entries, "archived_at": datetime.now().isoformat()}, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, archive_path)
+    except:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_path)
+        raise
 
     # Return empty list to start fresh
     return []
@@ -111,6 +122,16 @@ def write_audit_log(audit_entry: dict, config_dir: str = None):
         # Rotate if needed
         entries = rotate_audit_log(entries)
 
-        # Save
-        with open(audit_path, "w", encoding="utf-8") as f:
-            json.dump({"entries": entries}, f, indent=2)
+        # Atomic save: temp file → flush → fsync → rename
+        audit_dir = os.path.dirname(audit_path)
+        fd, tmp_path = tempfile.mkstemp(dir=audit_dir, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump({"entries": entries}, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, audit_path)
+        except:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp_path)
+            raise
