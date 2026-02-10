@@ -1812,3 +1812,194 @@ class TestObjectReferences:
         """Out-of-range global_index should return 404."""
         resp = ref_client.get("/api/object-references/99999")
         assert resp.status_code == 404  # noqa: PLR2004
+
+
+# ============================================================
+# Issue #5: Duplicate dependency semantic comparison
+# ============================================================
+
+class TestDuplicateDependencySemantics:
+    """Test that reordered CSV values in dependencies are detected as duplicates."""
+
+    @pytest.fixture
+    def app_with_deps(self):
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / "nagios"
+        test_config_path.mkdir()
+
+        (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name   hostA
+    alias       Host A
+    address     10.0.0.1
+}
+
+define host {
+    host_name   hostB
+    alias       Host B
+    address     10.0.0.2
+}
+
+define host {
+    host_name   hostC
+    alias       Host C
+    address     10.0.0.3
+}
+""")
+
+        (test_config_path / "deps.cfg").write_text("""
+define hostdependency {
+    dependent_host_name   hostA
+    host_name             hostB,hostC
+}
+
+define hostdependency {
+    dependent_host_name   hostA
+    host_name             hostC,hostB
+}
+""")
+
+        (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check-host-alive
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+""")
+
+        (test_config_path / "timeperiods.cfg").write_text("""
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+}
+""")
+
+        app = create_app(config_path=str(test_config_path))
+        app.config["TESTING"] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_reordered_csv_detected_as_duplicate(self, app_with_deps):
+        """Dependencies with host_name=A,B and host_name=B,A should be detected as duplicates."""
+        client = app_with_deps.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        dup_dep_issues = [i for i in data["issues"] if i["type"] == "duplicate_dependency"]
+        assert len(dup_dep_issues) >= 1, \
+            f"Expected at least 1 duplicate_dependency, got: {dup_dep_issues}"
+
+    def test_different_hosts_not_flagged(self, app_with_deps):
+        """Dependencies with different actual host sets should NOT be flagged."""
+        client = app_with_deps.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        # Only the reordered pair should be flagged, not false positives
+        dup_dep_issues = [i for i in data["issues"] if i["type"] == "duplicate_dependency"]
+        assert len(dup_dep_issues) <= 1, \
+            f"Too many duplicate_dependency issues, possible false positive: {dup_dep_issues}"
+
+
+# ============================================================
+# Issue #9: Wildcard handling in health checks
+# ============================================================
+
+class TestWildcardHandling:
+    """Test that * wildcards in CSV lists are not flagged as missing references."""
+
+    @pytest.fixture
+    def app_with_wildcards(self):
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / "nagios"
+        test_config_path.mkdir()
+
+        (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name   real-host
+    alias       Real Host
+    address     10.0.0.1
+}
+""")
+
+        (test_config_path / "contacts.cfg").write_text("""
+define contact {
+    contact_name                    admin
+    host_notification_commands      notify-host-by-email
+    service_notification_commands   notify-service-by-email
+    host_notification_period        24x7
+    service_notification_period     24x7
+    host_notification_options       d,u,r
+    service_notification_options    w,u,c,r
+}
+""")
+
+        (test_config_path / "services.cfg").write_text("""
+define service {
+    host_name             *,!real-host
+    service_description   Wildcard Service
+    check_command         check-host-alive
+    contacts              *
+}
+
+define service {
+    host_name             real-host
+    service_description   Normal Service
+    check_command         check-host-alive
+    contacts              admin
+}
+""")
+
+        (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check-host-alive
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+define command {
+    command_name    notify-host-by-email
+    command_line    /usr/bin/printf "%b" "Host alert"
+}
+define command {
+    command_name    notify-service-by-email
+    command_line    /usr/bin/printf "%b" "Service alert"
+}
+""")
+
+        (test_config_path / "timeperiods.cfg").write_text("""
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+}
+""")
+
+        app = create_app(config_path=str(test_config_path))
+        app.config["TESTING"] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_wildcard_in_csv_not_flagged_as_orphan(self, app_with_wildcards):
+        """Service with host_name '*,!host2' should NOT flag * as orphan."""
+        client = app_with_wildcards.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        orphan_issues = [i for i in data["issues"] if i["type"] == "orphan_service"]
+        orphan_messages = [i["message"] for i in orphan_issues]
+        assert not any("*" in msg for msg in orphan_messages), \
+            f"Wildcard * should not be flagged as orphan service: {orphan_messages}"
+
+    def test_wildcard_contacts_not_flagged_as_missing(self, app_with_wildcards):
+        """Object with contacts '*' should NOT flag * as a missing contact."""
+        client = app_with_wildcards.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        missing_contact_issues = [i for i in data["issues"] if i["type"] == "missing_contact"]
+        missing_messages = [i["message"] for i in missing_contact_issues]
+        assert not any("*" in msg for msg in missing_messages), \
+            f"Wildcard * should not be flagged as missing contact: {missing_messages}"
