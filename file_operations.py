@@ -4,13 +4,13 @@ Provides atomic file operations for editing, creating, deleting, and moving
 Nagios configuration objects directly in files (no shadow copies).
 """
 
+import contextlib
 import difflib
 import os
 import re
 from pathlib import Path
 
 from nagios_model import OperationResult, format_object_block
-import contextlib
 
 # Module-level operation logger (set via set_logger)
 _op_logger = None
@@ -230,7 +230,7 @@ def edit_object_in_file(file_path: str, line_number: int, new_attrs: dict[str, s
 
     """
     if _op_logger:
-        _op_logger.debug("file_op", "edit_object_in_file", params={"file_path": file_path, "line_number": line_number, "obj_type": obj_type})
+        _op_logger.debug("file_op", "edit_object_in_file", params={"file_path": file_path, "line_number": line_number, "obj_type": obj_type})  # noqa: PLE1205
 
     read_result = _read_file_content(file_path, expected_checksum)
     if not read_result.success:
@@ -268,7 +268,7 @@ def delete_object_from_file(file_path: str, line_number: int,
 
     """
     if _op_logger:
-        _op_logger.debug("file_op", "delete_object_from_file", params={"file_path": file_path, "line_number": line_number})
+        _op_logger.debug("file_op", "delete_object_from_file", params={"file_path": file_path, "line_number": line_number})  # noqa: PLE1205
 
     read_result = _read_file_content(file_path, expected_checksum)
     if not read_result.success:
@@ -312,7 +312,7 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: dict[str, str],
 
     """
     if _op_logger:
-        _op_logger.debug("file_op", "add_object_to_file", params={"file_path": file_path, "obj_type": obj_type})
+        _op_logger.debug("file_op", "add_object_to_file", params={"file_path": file_path, "obj_type": obj_type})  # noqa: PLE1205
     path = Path(file_path)
     new_block = raw_block or format_object_block(obj_type, attrs)
 
@@ -421,12 +421,12 @@ def _rollback_target_add(target_file: str, raw_block: str, del_error: str) -> Op
             rollback_content = re.sub(r"\n{3,}", "\n\n", rollback_content)
             _atomic_write(target_file, rollback_content)
         if _op_logger:
-            _op_logger.info("file_op", "move_rollback",
+            _op_logger.info("file_op", "move_rollback",  # noqa: PLE1205
                            params={"target": target_file}, result="success")
         return OperationResult(False, f"Failed to delete from source after add: {del_error}")
     except OSError as e:
         if _op_logger:
-            _op_logger.error("file_op", "move_rollback",
+            _op_logger.exception("file_op", "move_rollback",  # noqa: PLE1205
                             params={"target": target_file}, error=str(e))
         return OperationResult(False,
             f"Failed to delete from source: {del_error}. "
@@ -454,7 +454,7 @@ def move_object_between_files(source_file: str, source_line: int,
 
     """
     if _op_logger:
-        _op_logger.debug("file_op", "move_object_between_files",
+        _op_logger.debug("file_op", "move_object_between_files",  # noqa: PLE1205
                         params={"source_file": source_file, "target_file": target_file, "obj_type": obj_type})
 
     try:

@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
 from app import create_app
 
 
@@ -146,7 +147,7 @@ class TestNotificationChainValidation:
     def test_detects_contact_missing_notification_commands(self, client):
         """Contact without notification commands through chain is flagged."""
         resp = client.get("/api/health-check")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
 
         chain_issues = [i for i in data["issues"]

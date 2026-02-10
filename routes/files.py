@@ -1,5 +1,6 @@
 """File and folder management routes."""
 
+import logging
 import os
 import shutil
 
@@ -18,6 +19,7 @@ from .helpers import (
 )
 
 bp = Blueprint("files", __name__)
+logger = logging.getLogger("nagios_bulk_editor.files")
 
 
 def is_safe_path(path: str, base_dir: str = None):
@@ -173,7 +175,7 @@ def api_list_folders():
     folders = []
 
     if os.path.exists(config_dir):
-        for root, dirs, files in os.walk(config_dir):
+        for root, dirs, _files in os.walk(config_dir):
             # Skip backup directories
             dirs[:] = [d for d in dirs if d not in ["backups", "backup"] and not d.startswith(".")]
 
@@ -440,13 +442,13 @@ def api_relocate_folder():
         if err:
             return err
 
-        print(f"[folder-relocate] source_path: {source_path}, target_folder: {target_folder}")
+        logger.debug("Folder relocate: source_path=%s, target_folder=%s", source_path, target_folder)
 
         # Calculate new path
         folder_name = os.path.basename(source_path)
         new_path = os.path.join(target_folder, folder_name)
 
-        print(f"[folder-relocate] new_path: {new_path}")
+        logger.debug("Folder relocate: new_path=%s", new_path)
 
         err = _validate_relocate_folder_exists(source_path, target_folder, new_path)
         if err:

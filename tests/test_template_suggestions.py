@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
 from app import create_app
 
 
@@ -186,7 +187,7 @@ class TestTemplateSuggestions:
     def test_endpoint_returns_200(self, client):
         """Endpoint exists and returns 200."""
         response = client.get("/api/analysis/template-suggestions")
-        assert response.status_code == 200
+        assert response.status_code == 200  # noqa: PLR2004
         data = response.get_json()
         assert "suggestions" in data
         assert isinstance(data["suggestions"], list)
@@ -210,8 +211,7 @@ class TestTemplateSuggestions:
         data = response.get_json()
 
         for s in data["suggestions"]:
-            assert s["count"] >= 3, \
-                f"Suggestion has only {s['count']} objects, need at least 3"
+            assert s["count"] >= 3, f"Suggestion has only {s['count']} objects, need at least 3"  # noqa: PLR2004
 
     def test_excludes_templated_objects(self, client, service):
         """Objects already using a template should not appear in suggestions."""
@@ -255,7 +255,7 @@ class TestTemplateSuggestions:
         response = client.get("/api/analysis/template-suggestions")
         data = response.get_json()
 
-        if len(data["suggestions"]) < 2:
+        if len(data["suggestions"]) < 2:  # noqa: PLR2004
             pytest.skip("Need at least 2 suggestions to test sorting")
 
         for i in range(len(data["suggestions"]) - 1):
@@ -294,7 +294,7 @@ class TestTemplateSuggestions:
         # Should have found the group of 4 services with matching attributes
         found = False
         for s in service_suggestions:
-            if s["count"] >= 4:
+            if s["count"] >= 4:  # noqa: PLR2004
                 found = True
                 assert "check_command" in s["attributes"]
                 assert "max_check_attempts" in s["attributes"]

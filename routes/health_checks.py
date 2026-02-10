@@ -8,6 +8,13 @@ import re
 
 from nagios_model import NAME_FIELDS, REFERENCE_FIELDS
 
+# Minimum common prefix length for auto-generating template names
+_MIN_PREFIX_LENGTH = 3
+# Minimum hosts in a service host_name list to suggest using hostgroups
+_LONG_HOST_LIST_THRESHOLD = 10
+# Minimum objects sharing identical attrs to suggest template consolidation
+_MIN_TEMPLATE_CONSOLIDATION_GROUP = 3
+
 # ---------------------------------------------------------------------------
 # Shared utilities (used by both health checks and validation routes)
 # ---------------------------------------------------------------------------
@@ -29,10 +36,10 @@ def _generate_template_name(obj_type, objects, attrs):
         for name in names[1:]:
             while prefix and not name.startswith(prefix):
                 prefix = prefix[:-1]
-        if prefix and len(prefix) >= 3:
+        if prefix and len(prefix) >= _MIN_PREFIX_LENGTH:
             # Clean trailing dashes, underscores, digits
             prefix = re.sub(r"[-_\d]+$", "", prefix)
-            if len(prefix) >= 3:
+            if len(prefix) >= _MIN_PREFIX_LENGTH:
                 return f"{prefix}-{obj_type}-template"
 
     # Fallback: use check_command name
@@ -238,7 +245,7 @@ def check_missing_parents(ctx):
     for parent_name, host_refs in missing_parents.items():
         host_names = [h for h, _ in host_refs]
         first_file = host_refs[0][1]
-        if len(host_names) <= 3:
+        if len(host_names) <= 3:  # noqa: PLR2004
             host_list = ", ".join(host_names)
         else:
             host_list = f'{", ".join(host_names[:3])} and {len(host_names) - 3} more'
@@ -780,7 +787,7 @@ def check_template_conflicts(ctx):
         if not use_value:
             continue
         tmpl_names = [t.strip() for t in use_value.split(",") if t.strip()]
-        if len(tmpl_names) < 2:
+        if len(tmpl_names) < 2:  # noqa: PLR2004
             continue
         conflicts = _find_template_conflicts(obj, tmpl_names, template_lookup)
         if conflicts:
@@ -807,7 +814,7 @@ def _find_template_conflicts(obj, tmpl_names, template_lookup):
             cleaned = {k: v for k, v in resolved_tmpl.items()
                        if k not in ("use", "name", "register")}
             tmpl_attr_sets.append((tmpl_name, cleaned))
-    if len(tmpl_attr_sets) < 2:
+    if len(tmpl_attr_sets) < 2:  # noqa: PLR2004
         return []
 
     conflicts = []
@@ -1116,7 +1123,7 @@ def check_duplicate_objects(ctx):
         ]
         files = [o.source_file.rsplit("/", 1)[-1] for o in objs]
         for obj in objs:
-            other_files = [f for f, o in zip(files, objs) if o is not obj]
+            other_files = [f for f, o in zip(files, objs, strict=True) if o is not obj]
             issues.append({
                 "type": "duplicate",
                 "severity": "error",
@@ -1312,7 +1319,7 @@ def check_long_host_lists(ctx):
             continue
         host_list = [h.strip() for h in host_ref.split(",") if h.strip()]
         host_count = len(host_list)
-        if host_count >= 10:
+        if host_count >= _LONG_HOST_LIST_THRESHOLD:
             obj_name = obj.get_name() or obj.get_display_name()
             issues.append({
                 "type": "long_host_list",
@@ -1345,7 +1352,7 @@ def check_template_opportunities(ctx):
         objects_by_type.setdefault(obj.object_type, []).append((idx, obj))
 
     for obj_type, type_entries in objects_by_type.items():
-        if len(type_entries) < 3:
+        if len(type_entries) < _MIN_TEMPLATE_CONSOLIDATION_GROUP:
             continue
         if obj_type in ("timeperiod", "command"):
             continue
@@ -1371,7 +1378,7 @@ def _check_type_for_consolidation(obj_type, type_entries, identity_fields_set, i
         signatures.setdefault(signature, []).append((idx, obj))
 
     for signature, matching_entries in signatures.items():
-        if len(matching_entries) < 3:
+        if len(matching_entries) < _MIN_TEMPLATE_CONSOLIDATION_GROUP:
             continue
         attrs = {}
         for pair in signature.split("|"):

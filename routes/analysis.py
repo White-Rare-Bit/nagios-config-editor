@@ -1,5 +1,6 @@
 """Analysis and dependency routes."""
 
+import logging
 import os
 from collections import defaultdict
 
@@ -16,6 +17,7 @@ from .helpers import (
 )
 
 bp = Blueprint("analysis", __name__)
+logger = logging.getLogger("nagios_bulk_editor.analysis")
 
 # --- Shared constants ---
 
@@ -93,6 +95,11 @@ _GROUPING_TYPE_WEIGHTS = {
     "common-services": 0.9,
     "ungrouped": 0.5,
 }
+
+# Minimum members required for a hostgroup suggestion
+_MIN_GROUP_SUGGESTION_SIZE = 3
+# Minimum members for parent-based or ungrouped suggestions
+_MIN_PARENT_GROUP_SIZE = 2
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -262,12 +269,12 @@ def _collect_subnet_suggestions(hosts, existing_groups):
         addr = host.attributes.get("address", "")
         if addr and "." in addr:
             parts = addr.rsplit(".", 1)
-            if len(parts) == 2:
+            if len(parts) == 2:  # noqa: PLR2004
                 subnet_groups[parts[0]].append(host.get_name())
 
     suggestions = []
     for subnet, members in subnet_groups.items():
-        if len(members) >= 3:
+        if len(members) >= _MIN_GROUP_SUGGESTION_SIZE:
             suggested_name = f"subnet-{subnet.replace('.', '-')}"
             if suggested_name.lower() not in existing_groups:
                 suggestions.append({
@@ -291,7 +298,7 @@ def _collect_prefix_suggestions(hosts, existing_groups):
 
     suggestions = []
     for prefix, members in prefix_groups.items():
-        if len(members) >= 3:
+        if len(members) >= _MIN_GROUP_SUGGESTION_SIZE:
             suggested_name = f"{prefix}-servers"
             if suggested_name.lower() not in existing_groups:
                 suggestions.append({
@@ -315,7 +322,7 @@ def _collect_suffix_suggestions(hosts, existing_groups):
 
     suggestions = []
     for suffix, members in suffix_groups.items():
-        if len(members) >= 3:
+        if len(members) >= _MIN_GROUP_SUGGESTION_SIZE:
             suggested_name = f"{suffix}-systems"
             if suggested_name.lower() not in existing_groups:
                 suggestions.append({
@@ -340,7 +347,7 @@ def _collect_command_suggestions(hosts, existing_groups):
 
     suggestions = []
     for cmd, members in command_groups.items():
-        if len(members) >= 3:
+        if len(members) >= _MIN_GROUP_SUGGESTION_SIZE:
             suggested_name = f"{cmd.replace('check_', '').replace('check-', '')}-checked"
             if suggested_name.lower() not in existing_groups:
                 suggestions.append({
@@ -368,7 +375,7 @@ def _collect_parent_suggestions(hosts, existing_groups):
 
     suggestions = []
     for parent, members in parent_groups.items():
-        if len(members) >= 2:
+        if len(members) >= _MIN_PARENT_GROUP_SIZE:
             suggested_name = f"behind-{parent}"
             if suggested_name.lower() not in existing_groups:
                 suggestions.append({
@@ -401,7 +408,7 @@ def _find_ungrouped_hosts(hosts, service_objects):
             hosts_in_groups.add(host.get_name())
 
     ungrouped = [h.get_name() for h in hosts if h.get_name() and h.get_name() not in hosts_in_groups]
-    if len(ungrouped) >= 2:
+    if len(ungrouped) >= _MIN_PARENT_GROUP_SIZE:
         return [{
             "type": "ungrouped",
             "name": "ungrouped-hosts",
@@ -431,7 +438,7 @@ def _score_and_rank_suggestions(suggestions):
         for other in suggestions:
             if other is not suggestion:
                 shared = set(suggestion["members"]) & set(other["members"])
-                if len(shared) >= 2:
+                if len(shared) >= _MIN_PARENT_GROUP_SIZE:
                     overlap_types.add(other["type"])
         suggestion["overlaps_with"] = list(overlap_types)
 
@@ -480,7 +487,7 @@ def _update_host_hostgroups_attr(hosts_to_add, group_name, objects):
                 if group_name not in hostgroups_normalized:
                     hostgroups_list.append(group_name)
                     obj.attributes["hostgroups"] = ",".join(hostgroups_list)
-                    print(f"[add-to-group] Updated host {host_name} hostgroups: {obj.attributes['hostgroups']}")
+                    logger.debug("Updated host %s hostgroups: %s", host_name, obj.attributes["hostgroups"])
                 break
 
 
@@ -1364,26 +1371,26 @@ def api_add_to_group():
 
         current_members = hostgroup.attributes.get("members", "")
         current_list = [m.strip() for m in current_members.split(",") if m.strip()]
-        print(f"[add-to-group] Current members of {group_name}: {current_list}")
+        logger.debug("Current members of %s: %s", group_name, current_list)
 
         current_list, added_count = _merge_hosts_into_member_list(hosts_to_add, current_list)
 
         new_members = ",".join(current_list)
         hostgroup.attributes["members"] = new_members
-        print(f"[add-to-group] New members: {new_members}")
+        logger.debug("New members: %s", new_members)
 
         _update_host_hostgroups_attr(hosts_to_add, group_name, p.objects)
 
         writer = NagiosConfigWriter()
         files_written = writer.write_objects_to_original_files(p.objects)
-        print(f"[add-to-group] Files written: {files_written}")
+        logger.debug("Files written: %s", files_written)
 
     get_service().reload()
 
     service = get_service()
     for obj in service.get_objects():
         if obj.object_type == "hostgroup" and obj.get_name() == group_name:
-            print(f"[add-to-group] Verified members after reload: {obj.attributes.get('members', '')}")
+            logger.debug("Verified members after reload: %s", obj.attributes.get("members", ""))
             break
 
     final_members = ""

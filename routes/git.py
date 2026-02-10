@@ -87,7 +87,7 @@ def _create_pre_commit_backup(git_svc, user_name, user_email, op_log):
         if status_result.success and status_result.data.has_changes:
             bm = get_backup_manager()
             bm.create_backup("pre-commit", user_name, user_email)
-    except Exception as backup_err:
+    except Exception as backup_err:  # noqa: BLE001
         if op_log:
             op_log.warning("git", "commit", error=f"backup failed: {backup_err}")
 
@@ -155,7 +155,7 @@ def api_git_identity_get():
             "has_lock": True,
         })
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return jsonify({"error": str(e)}), 500
 
 
@@ -194,7 +194,7 @@ def api_git_identity_set():
             return jsonify({"success": True, "user_name": user_name, "user_email": user_email})
         return jsonify({"error": "Failed to save identity"}), 500
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return jsonify({"error": str(e)}), 500
 
 
@@ -234,7 +234,7 @@ def api_git_status():
             "has_changes": status.has_changes,
             **({"error": status.error} if status.error else {}),
         })
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return jsonify({"error": f"Failed to get git status: {e!s}"}), 500
 
 
@@ -266,7 +266,7 @@ def api_git_diff():
             "diff": result.data,
             "file": filepath,
         })
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return jsonify({"error": f"Failed to get diff: {e!s}"}), 500
 
 
@@ -293,7 +293,7 @@ def api_git_commit():
 
     try:
         return _execute_commit(data, message, session_id, op_log)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         if op_log:
             op_log.error("git", "commit", error=str(e))
         return jsonify({"error": f"Failed to commit: {e!s}"}), 500
@@ -406,7 +406,7 @@ def api_git_discard():
 
         return jsonify({"success": True, "action": result.data["action"]})
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         if op_log:
             op_log.error("git", "discard_file", params={"file": filepath}, error=str(e))
         return jsonify({"error": f"Failed to discard changes: {e!s}"}), 500
@@ -450,7 +450,7 @@ def api_git_discard_all():
             "commands": result.data["commands"],
         })
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         if op_log:
             op_log.error("git", "discard_all", error=str(e))
         return jsonify({"error": f"Failed to discard changes: {e!s}"}), 500
@@ -497,7 +497,7 @@ def api_git_clear_history():
 
         return jsonify({"success": True, "message": result.data["message"]})
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         if op_log:
             op_log.error("git", "clear_history", error=str(e))
         return jsonify({"error": f"Failed to clear history: {e!s}"}), 500
@@ -534,7 +534,7 @@ def api_git_log():
             response["message"] = data["message"]
         return jsonify(response)
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return jsonify({"error": f"Failed to get log: {e!s}"}), 500
 
 
@@ -613,5 +613,5 @@ def api_git_restore():
             "deleted_files": result.data["deleted_files"],
         })
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return jsonify({"error": f"Failed to restore: {e!s}"}), 500

@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
 from nagios_parser import NagiosConfigParser
 
 

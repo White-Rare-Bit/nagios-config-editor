@@ -124,7 +124,7 @@ def _create_undo_entries_for_edits(
             }
             entry = _create_undo_entry("edit", key, op_data, f"Edit {obj_type} '{obj_name}'")
             entries.append(entry)
-            log.debug(f"Created undo entry for edit: {obj_name}")
+            log.debug("Created undo entry for edit: %s", obj_name)
 
     return entries
 
@@ -171,7 +171,7 @@ def _create_undo_entries_for_moves(
                 f"Move {obj_type} '{obj_name}' to {os.path.basename(target_file)}",
             )
             entries.append(entry)
-            log.debug(f"Created undo entry for move: {obj_name}")
+            log.debug("Created undo entry for move: %s", obj_name)
 
     return entries
 
@@ -214,7 +214,7 @@ def _create_undo_entries_for_creations(
                 f"Create {obj_type} '{obj_name}'",
             )
             entries.append(entry)
-            log.debug(f"Created undo entry for creation: {obj_name}")
+            log.debug("Created undo entry for creation: %s", obj_name)
 
     return entries
 
@@ -262,7 +262,7 @@ def _create_undo_entries_for_deletions(
             f"Delete {obj_type} '{obj_name}'",
         )
         entries.append(entry)
-        log.debug(f"Created undo entry for deletion: {obj_name}")
+        log.debug("Created undo entry for deletion: %s", obj_name)
 
     return entries
 
@@ -293,7 +293,7 @@ def _create_undo_entries_for_new_files(
                 f"Create file '{file_name}'",
             )
             entries.append(entry)
-            log.debug(f"Created undo entry for new file: {file_name}")
+            log.debug("Created undo entry for new file: %s", file_name)
 
     return entries
 
@@ -698,7 +698,7 @@ def api_save_staging():
         return jsonify({"error": f"Invalid staging format: {format_error}"}), 400
 
     session_id = request.headers.get("X-Session-Id")
-    log.debug(f"POST /api/staging: {len(data.get('stagedMoves', {}))} moves, session={session_id}")
+    log.debug("POST /api/staging: %s moves, session=%s", len(data.get("stagedMoves", {})), session_id)
 
     # Require session ID for modifications
     if not session_id:
@@ -884,9 +884,9 @@ def _write_apply_audit_log(staging_data, session_id, all_details, errors, log):
         audit_entry = _build_audit_entry(staging_data, session_id, all_details, errors)
         write_audit_log(audit_entry)
         return True, None
-    except Exception as e:
+    except (OSError, ValueError) as e:
         error_msg = f"Failed to write audit log: {e}"
-        log.error(error_msg)  # C-10: Elevated from warning to error
+        log.exception(error_msg)  # C-10: Elevated from warning to error
         return False, error_msg
 
 
@@ -962,7 +962,7 @@ def _apply_reference_updates(service, name_changes, log):
         refs_updated = service.update_references(objects, old_name, new_name)
         total_refs_updated += refs_updated
         if refs_updated > 0:
-            log.info(f"Updated {refs_updated} references: {old_name} -> {new_name}")
+            log.info("Updated %s references: %s -> %s", refs_updated, old_name, new_name)
 
     if total_refs_updated > 0:
         # Write modified objects back to their files
@@ -992,8 +992,8 @@ def _create_pre_apply_backup(staging_data, log):
                 user_name=staging_data.get("userName", ""),
                 user_email=staging_data.get("userEmail", ""),
             )
-        except Exception as e:
-            log.warning(f"Failed to create pre-apply backup: {e}")
+        except Exception as e:  # noqa: BLE001
+            log.warning("Failed to create pre-apply backup: %s", e)
 
 
 def _handle_apply_failure(service, failed_phase, apply_ctx):
@@ -1013,7 +1013,7 @@ def _handle_apply_failure(service, failed_phase, apply_ctx):
     op_log = apply_ctx["op_log"]
     log = apply_ctx["log"]
 
-    log.error(f"Staging apply failed at phase '{failed_phase}': {errors}")
+    log.error("Staging apply failed at phase '%s': %s", failed_phase, errors)
     if op_log:
         op_log.error("app", "staging_apply", session_id=session_id,
                      error=f"Failed at phase {failed_phase}: {errors}")
@@ -1058,9 +1058,9 @@ def _apply_post_phase_reference_updates(service, name_changes, all_details, erro
                 "renames": name_changes,
             }
         return refs_updated
-    except Exception as ref_err:
+    except Exception as ref_err:  # noqa: BLE001
         # Reference update failure is non-fatal - objects were already renamed
-        log.warning(f"Reference update failed (non-fatal): {ref_err}")
+        log.warning("Reference update failed (non-fatal): %s", ref_err)
         errors.append(f"Reference update warning: {ref_err}")
         return 0
 
@@ -1086,7 +1086,7 @@ def _run_post_apply_validation():
             "skipped": True,
             "message": "Nagios binary or config path not configured",
         }
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return {
             "success": None,
             "skipped": True,
@@ -1233,9 +1233,9 @@ def api_apply_staging():
         audit_ctx = {"staging_data": staging_data, "session_id": session_id, "log": log}
         return _build_apply_success_response(result_ctx, audit_ctx)
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         # Unexpected exception - do NOT clear staging
-        log.error(f"Error applying staging: {e}")
+        log.exception("Error applying staging: %s", e)
         if op_log:
             op_log.error("app", "staging_apply", session_id=session_id, error=str(e))
         return jsonify({
@@ -1466,7 +1466,7 @@ def api_staging_undo():
     try:
         reversed_action = _execute_undo_action(staging, action_type, action_data)
     except UndoKeyError as e:
-        logger.error(f"Undo failed due to invalid key: {e}")
+        logger.exception("Undo failed due to invalid key: %s", e)
         return jsonify({"error": f"Undo failed: {e}"}), 400
 
     # C-04 FIX: Now remove from stack (in memory) after successful reversal
@@ -1523,14 +1523,14 @@ def _execute_undo_action(staging, action_type, action_data):
     try:
         op_type = OperationType(action_type)
     except ValueError:
-        logger.warning(f"Invalid undo action_type: {action_type}, skipping")
+        logger.warning("Invalid undo action_type: %s, skipping", action_type)
         return f"Skipped invalid action: {action_type}"
 
     handler = UNDO_HANDLERS.get(op_type)
     if handler:
         return handler(staging, action_data)
 
-    logger.warning(f"Unknown undo action_type: {action_type}, skipping")
+    logger.warning("Unknown undo action_type: %s, skipping", action_type)
     return f"Skipped unknown action: {action_type}"
 
 
@@ -1613,7 +1613,7 @@ def _get_existing_folders(config_path):
             rel_path = os.path.relpath(root, config_path)
             if rel_path != ".":
                 existing_folders.append(os.path.join(config_path, rel_path))
-    except Exception:
+    except OSError:
         pass
     return existing_folders
 
@@ -1682,7 +1682,7 @@ def api_staging_diff():
             "objects": all_objects,
         })
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return jsonify({"error": f"Failed to get diff: {e!s}"}), 500
 
 
@@ -1784,8 +1784,7 @@ def api_staging_commit():
         }), 423  # 423 Locked
 
     staging = sm.get_staging()
-    config = current_app.extensions.get("app_config", {})
-    config_path = config.get("nagios_config_path", "")
+    current_app.extensions.get("app_config", {})
 
     # Apply staged changes to disk before committing
     if staging:
@@ -1796,7 +1795,7 @@ def api_staging_commit():
                                      json=request_data,
                                      headers={"X-Session-Id": session_id,
                                               "Content-Type": "application/json"})
-            if apply_resp.status_code >= 400:
+            if apply_resp.status_code >= 400:  # noqa: PLR2004
                 apply_data = apply_resp.get_json()
                 error_msg = apply_data.get("error", "Failed to apply staged changes") if apply_data else "Failed to apply staged changes"
                 return jsonify({
@@ -1809,7 +1808,7 @@ def api_staging_commit():
         git_svc = get_git_service()
         changes_result = git_svc.has_uncommitted_changes()
         has_changes = changes_result.success and changes_result.data
-    except Exception:
+    except Exception:  # noqa: BLE001
         has_changes = False
 
     if not has_changes:
@@ -1832,22 +1831,21 @@ def api_staging_commit():
         sm.clear_staging()
 
         # Reload configuration
-        parser = None
         get_service().reload()
 
         # Log to audit file
         try:
             write_audit_log(audit_log)
-        except Exception as e:
-            print(f"Warning: Failed to write audit log: {e}")
+        except (OSError, ValueError) as e:
+            logger.warning("Failed to write audit log: %s", e)
 
         return jsonify({
             "success": True,
             "auditLog": audit_log,
         })
 
-    except Exception as e:
-        print(f"Error: Commit failed: {e}")
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Commit failed: %s", e)
         return jsonify({
             "success": False,
             "error": str(e),

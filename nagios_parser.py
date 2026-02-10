@@ -16,7 +16,12 @@ from nagios_model import format_object_block as _model_format_object_block
 logger = logging.getLogger("nagios_bulk_editor.parser")
 
 
+# Minimum digit count to identify timestamp patterns in filenames (e.g. 20240115)
+_MIN_TIMESTAMP_DIGITS = 8
+
+
 class NagiosConfigParser:
+
     """Parser for Nagios configuration files."""
 
     # Reference fields imported from nagios_model for backward compatibility
@@ -56,7 +61,7 @@ class NagiosConfigParser:
                 continue
             # Skip files with timestamp patterns like _20240115_ or .20240115.
             parts = cfg_file.name
-            if any(part.isdigit() and len(part) >= 8 for part in parts.replace("_", ".").split(".")):
+            if any(part.isdigit() and len(part) >= _MIN_TIMESTAMP_DIGITS for part in parts.replace("_", ".").split(".")):
                 continue
             self.parse_file(file_path)
 
@@ -73,17 +78,18 @@ class NagiosConfigParser:
                 content = f.read()
         except UnicodeDecodeError as e:
             logger.warning(
-                f"Unicode error in {filepath}: {e}. Retrying with latin-1 encoding. "
+                "Unicode error in %s: %s. Retrying with latin-1 encoding. "
                 "File may contain non-UTF-8 characters.",
+                filepath, e,
             )
             try:
                 with open(filepath, encoding="latin-1") as f:
                     content = f.read()
             except OSError as e2:
-                logger.error(f"Error reading {filepath} with latin-1 fallback: {e2}")
+                logger.exception("Error reading %s with latin-1 fallback: %s", filepath, e2)
                 return objects
         except OSError as e:
-            logger.error(f"Error reading {filepath}: {e}")
+            logger.exception("Error reading %s: %s", filepath, e)
             return objects
 
         self.files_parsed.append(filepath)
@@ -186,7 +192,7 @@ class NagiosConfigParser:
                 blocks.append((object_type, block_content, line_number))
                 i = j
             else:
-                logger.warning(f"Unmatched brace in define block at line {line_number}")
+                logger.warning("Unmatched brace in define block at line %s", line_number)
                 i = brace_start + 1
 
         return blocks

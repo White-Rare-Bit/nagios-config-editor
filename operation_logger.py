@@ -148,6 +148,10 @@ class OperationLogger:
         """Log an ERROR level operation."""
         self._log(logging.ERROR, category, operation, **kwargs)
 
+    def exception(self, category: str, operation: str, **kwargs) -> None:
+        """Log an ERROR level operation with traceback from current exception."""
+        self._log(logging.ERROR, category, operation, **kwargs)
+
     @contextmanager
     def operation(self, category: str, operation: str, **kwargs):
         """Context manager that logs start, duration, and result/error of an operation."""
@@ -162,7 +166,7 @@ class OperationLogger:
             result = ctx._result or "success"
             self._log(logging.INFO, category, operation,
                       result=result, duration_ms=duration_ms, **kwargs)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             duration_ms = round((time.perf_counter() - start) * 1000, 2)
             error_msg = ctx._error or str(e)
             self._log(logging.ERROR, category, operation,

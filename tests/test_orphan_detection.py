@@ -8,7 +8,7 @@ class TestOrphanDetection:
     def test_orphan_endpoint_returns_200(self, client):
         """Endpoint exists and returns 200."""
         response = client.get("/api/analysis/orphans")
-        assert response.status_code == 200
+        assert response.status_code == 200  # noqa: PLR2004
         data = response.get_json()
         assert "orphan_indices" in data
         assert isinstance(data["orphan_indices"], list)

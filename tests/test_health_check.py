@@ -7,9 +7,11 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
 from app import create_app
 from file_operations import edit_object_in_file
 from git_service import GitService
+from nagios_model import REQUIRED_FIELDS
 
 
 @pytest.fixture
@@ -84,7 +86,7 @@ def health_client(health_check_app):
 def test_health_check_detects_missing_notification_commands(health_client):
     """Health check should detect non-existent host/service notification commands on contacts."""
     resp = health_client.get("/api/health-check")
-    assert resp.status_code == 200
+    assert resp.status_code == 200  # noqa: PLR2004
     data = resp.json
 
     # Find issues about the non-existent service_notification_commands
@@ -112,7 +114,7 @@ def test_health_check_valid_notification_commands_no_false_positive(health_clien
 def test_health_check_detects_missing_cmd_in_comma_separated_list(health_client):
     """Health check should detect a missing command even when it appears in a comma-separated list."""
     resp = health_client.get("/api/health-check")
-    assert resp.status_code == 200
+    assert resp.status_code == 200  # noqa: PLR2004
     data = resp.json
 
     cmd_issues = [i for i in data["issues"] if i["type"] == "missing_command"]
@@ -188,7 +190,7 @@ define command {
         client = app.test_client()
 
         resp = client.get("/api/health-check")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json
 
         no_service_issues = [i for i in data["issues"]
@@ -253,9 +255,6 @@ define command {
             "False positive: 'grouped-host' has services via hostgroup but was flagged"
     finally:
         shutil.rmtree(test_dir, ignore_errors=True)
-
-
-from nagios_model import REQUIRED_FIELDS
 
 
 def test_required_fields_host_includes_address():
@@ -415,7 +414,7 @@ define service {
         """Service inheriting from template without check_command is flagged."""
         client = app_with_missing_check_cmd.test_client()
         resp = client.get("/api/health-check")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
 
         missing_cmd_issues = [i for i in data["issues"]
@@ -527,7 +526,7 @@ define service {
         """Services with wrong argument count are flagged."""
         client = app_with_arg_mismatch.test_client()
         resp = client.get("/api/health-check")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
 
         arg_issues = [i for i in data["issues"]
@@ -622,7 +621,7 @@ define timeperiod {
         """Objects inheriting conflicting attributes from multiple templates get a warning."""
         client = app_with_template_conflicts.test_client()
         resp = client.get("/api/health-check")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
 
         conflict_issues = [i for i in data["issues"]
@@ -661,7 +660,7 @@ define host {
 
         # Get objects to find stable key
         resp = client.get("/api/objects")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         objects = resp.json
         assert len(objects) > 0
         obj = objects[0]
@@ -684,13 +683,13 @@ define host {
                            data=json.dumps(staging_data),
                            content_type="application/json",
                            headers=headers)
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
 
         # Apply with validate flag
         resp = client.post("/api/staging/apply", headers=headers, json={
             "validate": True,
         })
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json
 
         # Response should include a validation field
@@ -767,7 +766,7 @@ define timeperiod {
         """Unused commands should be detected; used ones should not."""
         client = app_with_unused_commands.test_client()
         resp = client.get("/api/health-check")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
 
         unused_cmd_issues = [i for i in data["issues"]
@@ -790,7 +789,7 @@ define timeperiod {
         """Unused command issues should have 'warning' severity."""
         client = app_with_unused_commands.test_client()
         resp = client.get("/api/health-check")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
 
         unused_cmd_issues = [i for i in data["issues"]
@@ -902,7 +901,7 @@ define service {
         """unused-contact should be flagged; used-contact should not."""
         client = app_with_unused_objects.test_client()
         resp = client.get("/api/health-check")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
 
         unused_contact_issues = [i for i in data["issues"]
@@ -918,7 +917,7 @@ define service {
         """unused-cg should be flagged; used-cg should not."""
         client = app_with_unused_objects.test_client()
         resp = client.get("/api/health-check")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
 
         unused_cg_issues = [i for i in data["issues"]
@@ -934,7 +933,7 @@ define service {
         """unused-period should be flagged; 24x7 should not."""
         client = app_with_unused_objects.test_client()
         resp = client.get("/api/health-check")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
 
         unused_tp_issues = [i for i in data["issues"]
@@ -1003,7 +1002,7 @@ define timeperiod {
         """duplicate-host should be flagged; unique-host should not."""
         client = app_with_duplicates.test_client()
         resp = client.get("/api/health-check")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
 
         dup_issues = [i for i in data["issues"]
@@ -1019,7 +1018,7 @@ define timeperiod {
         """All duplicate issues should have 'error' severity."""
         client = app_with_duplicates.test_client()
         resp = client.get("/api/health-check")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
 
         dup_issues = [i for i in data["issues"]
@@ -1034,14 +1033,13 @@ define timeperiod {
         """Duplicate issue message should mention the other file(s)."""
         client = app_with_duplicates.test_client()
         resp = client.get("/api/health-check")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
 
         dup_issues = [i for i in data["issues"]
                       if i["type"] == "duplicate"]
 
-        assert len(dup_issues) >= 2, \
-            f"Expected at least 2 duplicate issues (one per copy), got {len(dup_issues)}"
+        assert len(dup_issues) >= 2, f"Expected at least 2 duplicate issues (one per copy), got {len(dup_issues)}"  # noqa: PLR2004
 
         # Each duplicate issue should mention the other file
         for issue in dup_issues:
@@ -1295,7 +1293,7 @@ def comp_client(comprehensive_health_app):
 def _get_health_issues(client):
     """Helper to get health check issues from the API."""
     resp = client.get("/api/health-check")
-    assert resp.status_code == 200
+    assert resp.status_code == 200  # noqa: PLR2004
     return resp.json
 
 
@@ -1339,8 +1337,7 @@ class TestDuplicateDetectionEnhanced:
                 f"Duplicate issue missing related_objects: {issue}"
             assert isinstance(issue["related_objects"], list), \
                 "related_objects should be a list"
-            assert len(issue["related_objects"]) >= 2, \
-                "related_objects should have >=2 entries for a duplicate"
+            assert len(issue["related_objects"]) >= 2, "related_objects should have >=2 entries for a duplicate"  # noqa: PLR2004
 
     def test_related_objects_have_required_fields(self, comp_client):
         """Each related_object should have global_index, file, line."""
@@ -1468,8 +1465,7 @@ class TestLongHostList:
         for issue in long_issues:
             assert "host_count" in issue, \
                 f"long_host_list issue missing host_count: {issue}"
-            assert issue["host_count"] >= 10, \
-                f"host_count should be >= 10, got {issue['host_count']}"
+            assert issue["host_count"] >= 10, f"host_count should be >= 10, got {issue['host_count']}"  # noqa: PLR2004
 
     def test_long_host_list_is_info(self, comp_client):
         """Long host list issues should be info severity."""
@@ -1516,8 +1512,7 @@ class TestTemplateConsolidation:
         data = _get_health_issues(comp_client)
         tmpl_issues = [i for i in data["issues"] if i["type"] == "template_opportunity"]
         for issue in tmpl_issues:
-            assert issue["suggestion"]["count"] >= 3, \
-                f"Expected count >= 3, got {issue['suggestion']['count']}"
+            assert issue["suggestion"]["count"] >= 3, f"Expected count >= 3, got {issue['suggestion']['count']}"  # noqa: PLR2004
 
     def test_template_opportunity_is_info(self, comp_client):
         """Template opportunity issues should be info severity."""
@@ -1533,7 +1528,7 @@ class TestConstantsEndpoint:
     def test_constants_returns_name_fields(self, health_client):
         """Endpoint should return name_fields with correct mappings."""
         resp = health_client.get("/api/constants")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json
 
         assert "name_fields" in data
@@ -1545,7 +1540,7 @@ class TestConstantsEndpoint:
     def test_constants_returns_required_fields(self, health_client):
         """Endpoint should return required_fields with OR conditions as lists."""
         resp = health_client.get("/api/constants")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json
 
         assert "required_fields" in data
@@ -1563,7 +1558,7 @@ class TestConstantsEndpoint:
     def test_constants_returns_reference_fields(self, health_client):
         """Endpoint should return reference_fields with correct target types."""
         resp = health_client.get("/api/constants")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json
 
         assert "reference_fields" in data
@@ -1699,7 +1694,7 @@ class TestObjectReferences:
         assert idx is not None, "Could not find host web-01"
 
         resp = ref_client.get(f"/api/object-references/{idx}")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json
 
         outgoing = data["outgoing"]
@@ -1716,7 +1711,7 @@ class TestObjectReferences:
         assert idx is not None, "Could not find host web-01"
 
         resp = ref_client.get(f"/api/object-references/{idx}")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json
 
         incoming = data["incoming"]
@@ -1731,7 +1726,7 @@ class TestObjectReferences:
         assert idx is not None, "Could not find host web-01"
 
         resp = ref_client.get(f"/api/object-references/{idx}")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json
 
         member_of = data["member_of"]
@@ -1747,7 +1742,7 @@ class TestObjectReferences:
         assert idx is not None, "Could not find hostgroup web-servers"
 
         resp = ref_client.get(f"/api/object-references/{idx}")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json
 
         members = data["members"]
@@ -1763,7 +1758,7 @@ class TestObjectReferences:
         assert idx is not None, "Could not find command check-host-alive"
 
         resp = ref_client.get(f"/api/object-references/{idx}")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json
 
         incoming = data["incoming"]
@@ -1778,7 +1773,7 @@ class TestObjectReferences:
         assert idx is not None, "Could not find command check-host-alive"
 
         resp = ref_client.get(f"/api/object-references/{idx}")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json
 
         assert data["parent_hosts"] is None, \
@@ -1787,4 +1782,4 @@ class TestObjectReferences:
     def test_invalid_index_returns_404(self, ref_client):
         """Out-of-range global_index should return 404."""
         resp = ref_client.get("/api/object-references/99999")
-        assert resp.status_code == 404
+        assert resp.status_code == 404  # noqa: PLR2004

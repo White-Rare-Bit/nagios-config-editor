@@ -74,7 +74,7 @@ class NagiosService:
             self._parser.parse_all()
             self._parser_corrupted = False  # Clear corrupted flag on successful reload
             if self._op_logger:
-                self._op_logger.debug("parser", "reload", params={"config_path": self._config_path})
+                self._op_logger.debug("parser", "reload", params={"config_path": self._config_path})  # noqa: PLE1205
             return self._parser
 
     def _validate_path_safety(self, path: str, path_type: str) -> tuple[bool, str | None]:
@@ -141,7 +141,7 @@ class NagiosService:
                 return p.objects[global_index]
 
         if self._op_logger:
-            self._op_logger.warning("service", f"find_object_for_{lookup_type}",
+            self._op_logger.warning("service", f"find_object_for_{lookup_type}",  # noqa: PLE1205
                                     params={"entry": str(entry)}, result="not_found")
         return None
 
@@ -338,7 +338,7 @@ class NagiosService:
             self._parser = new_parser
             self._parser_corrupted = False
             return OperationResult(True)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             # Set corrupted flag to block subsequent operations
             self._parser_corrupted = True
             # Restore old parser for read operations (queries still work)
@@ -351,7 +351,7 @@ class NagiosService:
                 f"Original error: {e}"
             )
             if self._op_logger:
-                self._op_logger.error("service", "parser_reload",
+                self._op_logger.exception("service", "parser_reload",  # noqa: PLE1205
                                      params={"file_path": file_path, "corrupted": True},
                                      error=str(e))
             return OperationResult(False, error_msg)
@@ -370,6 +370,7 @@ class NagiosService:
                 "All operations are blocked until explicit reload succeeds. "
                 "Run POST /api/reload to resync parser.",
             )
+        return None
 
     def create_object(self, target_file: str, obj_type: str, attrs: dict[str, str],
                       after_block_line: int | None = None) -> OperationResult:
@@ -395,7 +396,7 @@ class NagiosService:
                 result = add_object_to_file(target_file, obj_type, attrs, after_block_line)
                 if not result.success:
                     if self._op_logger:
-                        self._op_logger.error("service", "create_object", params={"target_file": target_file, "obj_type": obj_type}, error=result.error)
+                        self._op_logger.error("service", "create_object", params={"target_file": target_file, "obj_type": obj_type}, error=result.error)  # noqa: PLE1205
                     return result
                 # Save old parser for rollback on reload failure
                 old_parser = self._parser
@@ -403,11 +404,11 @@ class NagiosService:
                 if not reload_result.success:
                     return reload_result
                 if self._op_logger:
-                    self._op_logger.info("service", "create_object", params={"target_file": target_file, "obj_type": obj_type}, result="success")
+                    self._op_logger.info("service", "create_object", params={"target_file": target_file, "obj_type": obj_type}, result="success")  # noqa: PLE1205
                 return OperationResult(True)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 if self._op_logger:
-                    self._op_logger.error("service", "create_object", params={"target_file": target_file, "obj_type": obj_type}, error=str(e))
+                    self._op_logger.exception("service", "create_object", params={"target_file": target_file, "obj_type": obj_type}, error=str(e))  # noqa: PLE1205
                 return OperationResult(False, f"Create failed: {e}")
 
     def update_object(self, source_file: str, line_number: int,
@@ -434,7 +435,7 @@ class NagiosService:
                 result = edit_object_in_file(source_file, line_number, new_attrs, obj_type)
                 if not result.success:
                     if self._op_logger:
-                        self._op_logger.error("service", "update_object", params={"source_file": source_file, "line_number": line_number, "obj_type": obj_type}, error=result.error)
+                        self._op_logger.error("service", "update_object", params={"source_file": source_file, "line_number": line_number, "obj_type": obj_type}, error=result.error)  # noqa: PLE1205
                     return result
                 # Save old parser for rollback on reload failure
                 old_parser = self._parser
@@ -442,11 +443,11 @@ class NagiosService:
                 if not reload_result.success:
                     return reload_result
                 if self._op_logger:
-                    self._op_logger.info("service", "update_object", params={"source_file": source_file, "line_number": line_number, "obj_type": obj_type}, result="success")
+                    self._op_logger.info("service", "update_object", params={"source_file": source_file, "line_number": line_number, "obj_type": obj_type}, result="success")  # noqa: PLE1205
                 return OperationResult(True)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 if self._op_logger:
-                    self._op_logger.error("service", "update_object", params={"source_file": source_file, "line_number": line_number, "obj_type": obj_type}, error=str(e))
+                    self._op_logger.exception("service", "update_object", params={"source_file": source_file, "line_number": line_number, "obj_type": obj_type}, error=str(e))  # noqa: PLE1205
                 return OperationResult(False, f"Update failed: {e}")
 
     def delete_object(self, source_file: str, line_number: int) -> OperationResult:
@@ -470,7 +471,7 @@ class NagiosService:
                 result = delete_object_from_file(source_file, line_number)
                 if not result.success:
                     if self._op_logger:
-                        self._op_logger.error("service", "delete_object", params={"source_file": source_file, "line_number": line_number}, error=result.error)
+                        self._op_logger.error("service", "delete_object", params={"source_file": source_file, "line_number": line_number}, error=result.error)  # noqa: PLE1205
                     return result
                 # Save old parser for rollback on reload failure
                 old_parser = self._parser
@@ -478,11 +479,11 @@ class NagiosService:
                 if not reload_result.success:
                     return reload_result
                 if self._op_logger:
-                    self._op_logger.info("service", "delete_object", params={"source_file": source_file, "line_number": line_number}, result="success")
+                    self._op_logger.info("service", "delete_object", params={"source_file": source_file, "line_number": line_number}, result="success")  # noqa: PLE1205
                 return OperationResult(True)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 if self._op_logger:
-                    self._op_logger.error("service", "delete_object", params={"source_file": source_file, "line_number": line_number}, error=str(e))
+                    self._op_logger.exception("service", "delete_object", params={"source_file": source_file, "line_number": line_number}, error=str(e))  # noqa: PLE1205
                 return OperationResult(False, f"Delete failed: {e}")
 
     def move_object(self, source_file: str, source_line: int,
@@ -513,7 +514,7 @@ class NagiosService:
                                                    target_file, obj_type, attrs, insert_line)
                 if not result.success:
                     if self._op_logger:
-                        self._op_logger.error("service", "move_object", params={"source_file": source_file, "target_file": target_file, "obj_type": obj_type}, error=result.error)
+                        self._op_logger.error("service", "move_object", params={"source_file": source_file, "target_file": target_file, "obj_type": obj_type}, error=result.error)  # noqa: PLE1205
                     return result
                 # Save old parser for rollback on reload failure
                 old_parser = self._parser
@@ -521,11 +522,11 @@ class NagiosService:
                 if not reload_result.success:
                     return reload_result
                 if self._op_logger:
-                    self._op_logger.info("service", "move_object", params={"source_file": source_file, "target_file": target_file, "obj_type": obj_type}, result="success")
+                    self._op_logger.info("service", "move_object", params={"source_file": source_file, "target_file": target_file, "obj_type": obj_type}, result="success")  # noqa: PLE1205
                 return OperationResult(True)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 if self._op_logger:
-                    self._op_logger.error("service", "move_object", params={"source_file": source_file, "target_file": target_file, "obj_type": obj_type}, error=str(e))
+                    self._op_logger.exception("service", "move_object", params={"source_file": source_file, "target_file": target_file, "obj_type": obj_type}, error=str(e))  # noqa: PLE1205
                 return OperationResult(False, f"Move failed: {e}")
 
     # =========================================================================
@@ -537,19 +538,19 @@ class NagiosService:
         if not self._op_logger:
             return
         if errors:
-            self._op_logger.warning("service", phase,
+            self._op_logger.warning("service", phase,  # noqa: PLE1205
                                     params={"count": count, "error_count": len(errors)},
                                     result="partial" if count > 0 else "failed")
         elif count > 0:
-            self._op_logger.info("service", phase,
+            self._op_logger.info("service", phase,  # noqa: PLE1205
                                  params={"count": count}, result="success")
         else:
-            self._op_logger.debug("service", phase, params={"count": 0}, result="noop")
+            self._op_logger.debug("service", phase, params={"count": 0}, result="noop")  # noqa: PLE1205
 
     def apply_folder_creations(self, staging_data: dict) -> OperationResult:
         """Create staged folders."""
         if self._op_logger:
-            self._op_logger.debug("service", "apply_folder_creations", result="started")
+            self._op_logger.debug("service", "apply_folder_creations", result="started")  # noqa: PLE1205
         folder_creations = staging_data.get("stagedFolderCreations", [])
         folder_creations.sort(key=lambda x: x.get("path", "").count("/"))
         count = 0
@@ -567,7 +568,7 @@ class NagiosService:
                     os.makedirs(folder_path, exist_ok=True)
                     count += 1
                     details.append({"path": folder_path})
-                except Exception as e:
+                except OSError as e:
                     errors.append(f"Failed to create folder {folder_path}: {e}")
 
         result = self._build_apply_result("folder_creations", count, errors, details)
@@ -590,7 +591,7 @@ class NagiosService:
                     f.write(f"# Nagios configuration file: {os.path.basename(file_path)}\n\n")
                 return (True, "")
             return (False, "")  # Already exists, not an error but no count
-        except Exception as e:
+        except OSError as e:
             return (False, f"Failed to create file {file_path}: {e}")
 
     def _create_new_file(self, file_path: str) -> tuple[bool, str]:
@@ -608,7 +609,7 @@ class NagiosService:
                 Path(file_path).touch()
                 return (True, "")
             return (False, "")  # Already exists
-        except Exception as e:
+        except OSError as e:
             return (False, f"Failed to create file {file_path}: {e}")
 
     def _apply_staged_file_creations(self, file_creations: list, errors: list) -> int:
@@ -649,7 +650,7 @@ class NagiosService:
     def apply_file_creations(self, staging_data: dict) -> OperationResult:
         """Create staged files."""
         if self._op_logger:
-            self._op_logger.debug("service", "apply_file_creations", result="started")
+            self._op_logger.debug("service", "apply_file_creations", result="started")  # noqa: PLE1205
         errors = []
         count = self._apply_staged_file_creations(
             staging_data.get("stagedFileCreations", []), errors,
@@ -664,7 +665,7 @@ class NagiosService:
     def apply_object_deletions(self, staging_data: dict) -> OperationResult:
         """Delete staged objects."""
         if self._op_logger:
-            self._op_logger.debug("service", "apply_object_deletions", result="started")
+            self._op_logger.debug("service", "apply_object_deletions", result="started")  # noqa: PLE1205
         staged_deletions = staging_data.get("stagedObjectDeletions", [])
         count = 0
         errors = []
@@ -853,7 +854,7 @@ class NagiosService:
         comments and formatting in both source and target files.
         """
         if self._op_logger:
-            self._op_logger.debug("service", "apply_object_moves", result="started")
+            self._op_logger.debug("service", "apply_object_moves", result="started")  # noqa: PLE1205
         count = 0
         errors = []
         details = []
@@ -946,7 +947,7 @@ class NagiosService:
     def apply_object_edits(self, staging_data: dict) -> OperationResult:
         """Edit staged objects."""
         if self._op_logger:
-            self._op_logger.debug("service", "apply_object_edits", result="started")
+            self._op_logger.debug("service", "apply_object_edits", result="started")  # noqa: PLE1205
         pending_edits = staging_data.get("pendingEdits", {})
         count = 0
         errors = []
@@ -990,7 +991,7 @@ class NagiosService:
     def apply_object_creations(self, staging_data: dict) -> OperationResult:
         """Create staged objects."""
         if self._op_logger:
-            self._op_logger.debug("service", "apply_object_creations", result="started")
+            self._op_logger.debug("service", "apply_object_creations", result="started")  # noqa: PLE1205
         staged_creations = staging_data.get("stagedCreations", [])
         count = 0
         errors = []
@@ -1030,7 +1031,7 @@ class NagiosService:
     def apply_file_moves(self, staging_data: dict) -> OperationResult:
         """Move staged files."""
         if self._op_logger:
-            self._op_logger.debug("service", "apply_file_moves", result="started")
+            self._op_logger.debug("service", "apply_file_moves", result="started")  # noqa: PLE1205
         file_moves = staging_data.get("stagedFileMoves", [])
         count = 0
         errors = []
@@ -1056,7 +1057,7 @@ class NagiosService:
                         shutil.move(source_path, target_path)
                         count += 1
                         details.append({"from": source_path, "to": target_path})
-                except Exception as e:
+                except OSError as e:
                     errors.append(f"Failed to move file {source_path}: {e}")
 
         result = self._build_apply_result("file_moves", count, errors, details)
@@ -1066,7 +1067,7 @@ class NagiosService:
     def apply_folder_moves(self, staging_data: dict) -> OperationResult:
         """Move staged folders."""
         if self._op_logger:
-            self._op_logger.debug("service", "apply_folder_moves", result="started")
+            self._op_logger.debug("service", "apply_folder_moves", result="started")  # noqa: PLE1205
         folder_moves = staging_data.get("stagedFolderMoves", [])
         count = 0
         errors = []
@@ -1092,7 +1093,7 @@ class NagiosService:
                         shutil.move(source_path, target_path)
                         count += 1
                         details.append({"from": source_path, "to": target_path})
-                except Exception as e:
+                except OSError as e:
                     errors.append(f"Failed to move folder {source_path}: {e}")
 
         result = self._build_apply_result("folder_moves", count, errors, details)
@@ -1102,7 +1103,7 @@ class NagiosService:
     def apply_file_deletions(self, staging_data: dict) -> OperationResult:
         """Delete staged files."""
         if self._op_logger:
-            self._op_logger.debug("service", "apply_file_deletions", result="started")
+            self._op_logger.debug("service", "apply_file_deletions", result="started")  # noqa: PLE1205
         file_deletions = staging_data.get("stagedFileDeletions", [])
         count = 0
         errors = []
@@ -1119,7 +1120,7 @@ class NagiosService:
                     os.remove(file_path)
                     count += 1
                     details.append({"path": file_path, "type": "file"})
-                except Exception as e:
+                except OSError as e:
                     errors.append(f"Failed to delete file {file_path}: {e}")
 
         result = self._build_apply_result("file_deletions", count, errors, details)
@@ -1129,7 +1130,7 @@ class NagiosService:
     def apply_folder_deletions(self, staging_data: dict) -> OperationResult:
         """Delete staged folders."""
         if self._op_logger:
-            self._op_logger.debug("service", "apply_folder_deletions", result="started")
+            self._op_logger.debug("service", "apply_folder_deletions", result="started")  # noqa: PLE1205
         folder_deletions = staging_data.get("stagedFolderDeletions", [])
         folder_deletions.sort(key=lambda x: -x.get("path", "").count("/"))
         count = 0
@@ -1147,7 +1148,7 @@ class NagiosService:
                     shutil.rmtree(folder_path)
                     count += 1
                     details.append({"path": folder_path, "type": "folder"})
-                except Exception as e:
+                except OSError as e:
                     errors.append(f"Failed to delete folder {folder_path}: {e}")
 
         result = self._build_apply_result("folder_deletions", count, errors, details)

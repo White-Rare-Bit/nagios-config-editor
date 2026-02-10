@@ -11,6 +11,7 @@ TRUE STAGING ARCHITECTURE:
 - Detects conflicts via file checksums
 """
 
+import contextlib
 import hashlib
 import json
 import logging
@@ -25,7 +26,6 @@ from pathlib import Path
 from typing import Any
 
 from nagios_model import OperationResult
-import contextlib
 
 # Schema version
 STAGING_SCHEMA_VERSION = 3
@@ -258,7 +258,7 @@ class ChecksumManager:
                 return None
             return hashlib.sha256(path.read_bytes()).hexdigest()
         except OSError as e:
-            logger.warning(f"Failed to compute checksum for {file_path}: {e}")
+            logger.warning("Failed to compute checksum for %s: %s", file_path, e)
             return None
 
     def compute_base_checksums(self, file_paths: list[str] | None = None) -> dict[str, str]:
@@ -412,10 +412,10 @@ class UndoStackManager:
 
         if save_after:
             if self._sm.save_staging(staging).success:
-                logger.debug(f"Added undo entry: {action_type} - {description}")
+                logger.debug("Added undo entry: %s - %s", action_type, description)
                 return undo_id
             return None
-        logger.debug(f"Queued undo entry: {action_type} - {description}")
+        logger.debug("Queued undo entry: %s - %s", action_type, description)
         return undo_id
 
     def peek_undo_stack(self) -> dict | None:
@@ -464,7 +464,7 @@ class UndoStackManager:
         staging["undoStack"] = undo_stack
 
         if self._sm.save_staging(staging).success:
-            logger.debug(f"Popped undo entry: {undo_entry.get('type')} - {undo_entry.get('description')}")
+            logger.debug("Popped undo entry: %s - %s", undo_entry.get("type"), undo_entry.get("description"))
             return undo_entry
         return None
 
@@ -550,7 +550,7 @@ class FileOperationsStager:
 
         """
         if self._sm._op_logger:
-            self._sm._op_logger.info("staging", op_type, params=entry_data)
+            self._sm._op_logger.info("staging", op_type, params=entry_data)  # noqa: PLE1205
 
         staging = self._sm.get_staging()
         if not staging:
@@ -710,7 +710,7 @@ class FileOperationsStager:
         if len(staging[field]) < original_len:
             result = self._sm.save_staging(staging)
             if result.success:
-                logger.info(f"Unstaged {op_type} operation: {op_id}")
+                logger.info("Unstaged %s operation: %s", op_type, op_id)
             return result
 
         return OperationResult(False, f"Operation {op_id} not found")
@@ -758,7 +758,7 @@ class StagingManager:
         self.undo = UndoStackManager(self)
         self.file_ops = FileOperationsStager(self)
 
-        logger.debug(f"StagingManager initialized for {config_path}")
+        logger.debug("StagingManager initialized for %s", config_path)
 
     def _ensure_staging_dir(self) -> None:
         """Ensure the staging directory exists with a .gitignore."""
@@ -808,13 +808,13 @@ class StagingManager:
                 return None
             return json.loads(content)
         except (OSError, json.JSONDecodeError) as e:
-            logger.warning(f"Failed to read staging file: {e}")
+            logger.warning("Failed to read staging file: %s", e)
             return None
 
     def save_staging(self, data: dict) -> OperationResult:
         """Save staging data with metadata."""
         if self._op_logger:
-            self._op_logger.debug("staging", "save_staging", session_id=data.get("sessionId"))
+            self._op_logger.debug("staging", "save_staging", session_id=data.get("sessionId"))  # noqa: PLE1205
         self._ensure_staging_dir()
 
         # Add metadata
@@ -835,7 +835,7 @@ class StagingManager:
 
                 # Atomic rename
                 Path(temp_path).replace(self.staging_file)
-                logger.debug(f"Staging saved for session {data.get('sessionId')}")
+                logger.debug("Staging saved for session %s", data.get("sessionId"))
                 return OperationResult(True)
             except Exception as write_err:
                 # Clean up temp file on failure
@@ -845,8 +845,9 @@ class StagingManager:
                 except OSError as cleanup_err:
                     # Log at CRITICAL level with temp file path for manual recovery
                     logger.critical(
-                        f"DISK_LEAK: Failed to cleanup staging temp file. Manual intervention required. "
-                        f"temp_file={temp_path}, original_error={write_err}, cleanup_error={cleanup_err}",
+                        "DISK_LEAK: Failed to cleanup staging temp file. Manual intervention required. "
+                        "temp_file=%s, original_error=%s, cleanup_error=%s",
+                        temp_path, write_err, cleanup_err,
                     )
                     # Raise exception instead of continuing silently
                     raise OSError(
@@ -855,7 +856,7 @@ class StagingManager:
                     ) from cleanup_err
                 raise
         except OSError as e:
-            logger.error(f"Failed to save staging: {e}")
+            logger.exception("Failed to save staging: %s", e)
             return OperationResult(False, f"Failed to save staging: {e}")
 
     def save_staging_atomic(self, data: dict, session_id: str, lock: "multiprocessing.Lock") -> OperationResult:
@@ -887,7 +888,7 @@ class StagingManager:
     def clear_staging(self) -> OperationResult:
         """Clear all staging data."""
         if self._op_logger:
-            self._op_logger.info("staging", "clear_staging")
+            self._op_logger.info("staging", "clear_staging")  # noqa: PLE1205
         if not self.staging_file.exists():
             return OperationResult(True)
 
@@ -896,7 +897,7 @@ class StagingManager:
             logger.info("Staging cleared")
             return OperationResult(True)
         except OSError as e:
-            logger.error(f"Failed to clear staging: {e}")
+            logger.exception("Failed to clear staging: %s", e)
             return OperationResult(False, f"Failed to clear staging: {e}")
 
     def has_staging(self) -> bool:
@@ -1234,7 +1235,7 @@ def parse_stable_key(key: str) -> dict[str, str] | None:
 
     """
     parts = key.split("|")
-    if len(parts) != 3:
+    if len(parts) != 3:  # noqa: PLR2004
         return None
 
     return {

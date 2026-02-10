@@ -3,6 +3,7 @@
 Creates timestamped zip backups before any changes and provides restore functionality.
 """
 
+import contextlib
 import os
 import shutil
 import tempfile
@@ -10,7 +11,6 @@ import uuid
 import zipfile
 from datetime import datetime
 from pathlib import Path
-import contextlib
 
 
 class BackupManager:
@@ -63,7 +63,7 @@ class BackupManager:
     def create_backup(self, description: str = "", user_name: str = "", user_email: str = "") -> str:
         """Create a timestamped zip backup of all configuration files."""
         if self._op_logger:
-            self._op_logger.info("backup", "create_backup", params={"description": description}, user_name=user_name, user_email=user_email)
+            self._op_logger.info("backup", "create_backup", params={"description": description}, user_name=user_name, user_email=user_email)  # noqa: PLE1205
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         # C-02: Add UUID suffix to prevent filename collision on concurrent creates
         unique_id = uuid.uuid4().hex[:8]
@@ -87,7 +87,7 @@ class BackupManager:
                 if is_symlink:
                     skipped_symlinks += 1
                     if self._op_logger:
-                        self._op_logger.warning("backup", "create_backup",
+                        self._op_logger.warning("backup", "create_backup",  # noqa: PLE1205
                             params={"skipped_symlink": str(cfg_file)},
                             error="Symlink skipped for security")
                     continue
@@ -204,7 +204,7 @@ class BackupManager:
         try:
             backup_path.resolve().relative_to(self.backup_path.resolve())
         except ValueError:
-            raise ValueError(f"Backup outside backup path: {backup_name}")
+            raise ValueError(f"Backup outside backup path: {backup_name}") from None
 
         return backup_path
 
@@ -275,7 +275,7 @@ class BackupManager:
         Or manually extract the safety backup zip to config directory.
         """
         if self._op_logger:
-            self._op_logger.info("backup", "restore_backup", params={"backup_name": backup_name}, user_name=user_name, user_email=user_email)
+            self._op_logger.info("backup", "restore_backup", params={"backup_name": backup_name}, user_name=user_name, user_email=user_email)  # noqa: PLE1205
 
         backup_path = self._validate_backup_request(backup_name)
 
@@ -304,7 +304,7 @@ class BackupManager:
                 "files_skipped": skipped_count,
                 "safety_backup": safety_backup,
             }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             raise ValueError(
                 f"Restore failed: {e}. "
                 f"Safety backup available at: {safety_backup}. "
@@ -319,7 +319,7 @@ class BackupManager:
     def delete_backup(self, backup_name: str) -> bool:
         """Delete a specific zip backup."""
         if self._op_logger:
-            self._op_logger.info("backup", "delete_backup", params={"backup_name": backup_name})
+            self._op_logger.info("backup", "delete_backup", params={"backup_name": backup_name})  # noqa: PLE1205
         # Validate backup_name to prevent path traversal
         if ".." in backup_name or backup_name.startswith("/"):
             raise ValueError(f"Invalid backup name: {backup_name}")
@@ -330,7 +330,7 @@ class BackupManager:
         try:
             backup_path.resolve().relative_to(self.backup_path.resolve())
         except ValueError:
-            raise ValueError(f"Backup outside backup path: {backup_name}")
+            raise ValueError(f"Backup outside backup path: {backup_name}") from None
 
         if backup_path.is_file() and backup_name.endswith(".zip"):
             backup_path.unlink()
@@ -340,7 +340,7 @@ class BackupManager:
     def cleanup_old_backups(self, keep_count: int = 10) -> int:
         """Remove old backups, keeping only the most recent ones."""
         if self._op_logger:
-            self._op_logger.info("backup", "cleanup_old_backups", params={"keep_count": keep_count})
+            self._op_logger.info("backup", "cleanup_old_backups", params={"keep_count": keep_count})  # noqa: PLE1205
         backups = self.list_backups()
         deleted = 0
 

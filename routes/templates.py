@@ -57,7 +57,7 @@ def _decode_and_find_object(service, stable_key):
 
     try:
         decoded_key = base64.b64decode(stable_key).decode("utf-8")
-    except Exception:
+    except (ValueError, UnicodeDecodeError):
         return None, None, (jsonify({"error": "Invalid stable key encoding"}), 400)
 
     try:

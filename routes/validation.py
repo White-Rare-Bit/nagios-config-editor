@@ -177,7 +177,7 @@ def api_analysis_template_suggestions():
 
     suggestions = []
     for obj_type, type_entries in objects_by_type.items():
-        if len(type_entries) < 3 or obj_type in ("timeperiod", "command"):
+        if len(type_entries) < 3 or obj_type in ("timeperiod", "command"):  # noqa: PLR2004
             continue
         signatures = _build_type_signatures(type_entries, identity_fields)
         _collect_suggestions(obj_type, signatures, suggestions)
@@ -206,7 +206,7 @@ def _build_type_signatures(type_entries, identity_fields):
 def _collect_suggestions(obj_type, signatures, suggestions):
     """Convert matching signature groups into template suggestions."""
     for signature, matching_entries in signatures.items():
-        if len(matching_entries) < 3:
+        if len(matching_entries) < 3:  # noqa: PLR2004
             continue
         attrs = _parse_signature(signature)
         matching_objects = [obj for _, obj in matching_entries]

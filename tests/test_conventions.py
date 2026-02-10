@@ -441,7 +441,7 @@ class TestReferenceFieldSync:
             if field in main_fields:
                 locations.append("main.js")
 
-            if len(locations) < 3:
+            if len(locations) < 3:  # noqa: PLR2004
                 missing = []
                 if field not in python_fields:
                     missing.append("nagios_model.py")
@@ -467,7 +467,7 @@ class TestOperationResultPattern:
         result_returns = len(re.findall(r"return OperationResult", content))
 
         # Should have many OperationResult returns
-        assert result_returns > 10, f"Expected many OperationResult returns, found {result_returns}"
+        assert result_returns > 10, f"Expected many OperationResult returns, found {result_returns}"  # noqa: PLR2004
 
     def test_no_dict_returns_in_service(self):
         """Service should not return raw dicts (should use OperationResult)."""

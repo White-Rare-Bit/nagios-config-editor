@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
 from app import create_app
 
 
@@ -122,7 +123,7 @@ class TestEscalationPath:
     def test_service_escalation_path(self, client):
         """Service escalation path includes base contacts and escalation levels."""
         resp = client.get("/api/escalation-path/service/web-01/HTTP")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
 
         assert "base_contacts" in data
@@ -133,22 +134,22 @@ class TestEscalationPath:
         assert "admin" in base_names
 
         # Should have 2 escalation levels
-        assert len(data["escalations"]) == 2
+        assert len(data["escalations"]) == 2  # noqa: PLR2004
         # First escalation starts at notification 3
         esc1 = data["escalations"][0]
-        assert esc1["first_notification"] == 3
+        assert esc1["first_notification"] == 3  # noqa: PLR2004
         # Second at notification 6
         esc2 = data["escalations"][1]
-        assert esc2["first_notification"] == 6
+        assert esc2["first_notification"] == 6  # noqa: PLR2004
 
     def test_host_escalation_path(self, client):
         """Host escalation path works correctly."""
         resp = client.get("/api/escalation-path/host/web-01")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
 
         assert len(data["escalations"]) == 1
-        assert data["escalations"][0]["first_notification"] == 2
+        assert data["escalations"][0]["first_notification"] == 2  # noqa: PLR2004
 
         esc_contacts = [c["name"] for c in data["escalations"][0]["contacts"]]
         assert "manager" in esc_contacts
@@ -156,4 +157,4 @@ class TestEscalationPath:
     def test_nonexistent_object(self, client):
         """Nonexistent object returns 404."""
         resp = client.get("/api/escalation-path/host/nonexistent")
-        assert resp.status_code == 404
+        assert resp.status_code == 404  # noqa: PLR2004

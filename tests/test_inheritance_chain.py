@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
 from app import create_app
 
 
@@ -73,9 +74,9 @@ class TestInheritanceChainMultiTemplate:
     def test_single_template_chain(self, client):
         """Single template use works correctly."""
         resp = client.get("/api/inheritance/host/single-template-host")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
-        assert data["depth"] == 2  # object + 1 template
+        assert data["depth"] == 2  # object + 1 template  # noqa: PLR2004
         names = [item.get("attributes", {}).get("host_name") or item.get("attributes", {}).get("name")
                  for item in data["chain"]]
         assert "single-template-host" in names[0]
@@ -84,10 +85,10 @@ class TestInheritanceChainMultiTemplate:
     def test_multi_template_chain(self, client):
         """Comma-separated use resolves both templates."""
         resp = client.get("/api/inheritance/host/web-01")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
         # Should have: web-01 + base-host + linux-host = depth 3
-        assert data["depth"] >= 3
+        assert data["depth"] >= 3  # noqa: PLR2004
         template_names = []
         for item in data["chain"]:
             attrs = item.get("attributes", {})
@@ -98,7 +99,7 @@ class TestInheritanceChainMultiTemplate:
     def test_multi_template_chain_via_template(self, client):
         """Template with multi-template use is also resolved."""
         resp = client.get("/api/inheritance/host/multi-parent-host")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
         template_names = []
         for item in data["chain"]:

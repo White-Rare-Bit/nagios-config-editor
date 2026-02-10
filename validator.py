@@ -118,7 +118,7 @@ class NagiosValidator:
                 "Validation timed out after 60 seconds",
                 "Timeout: Nagios validation took too long",
             )
-        except Exception as e:
+        except (subprocess.SubprocessError, OSError) as e:
             return self._create_error_result(
                 f"Failed to run validation: {e!s}",
                 str(e),
@@ -151,14 +151,14 @@ class NagiosValidator:
         ]
 
         lines = output.split("\n")
-        for i, line in enumerate(lines):
+        for _i, line in enumerate(lines):
             line = line.strip()
 
             # Check for errors
             for pattern in error_patterns:
                 match = re.search(pattern, line, re.IGNORECASE)
                 if match:
-                    if len(match.groups()) == 3:
+                    if len(match.groups()) == 3:  # noqa: PLR2004
                         errors.append({
                             "file": match.group(1),
                             "line": int(match.group(2)),
@@ -258,7 +258,7 @@ class NagiosValidator:
             return OperationResult(success=False, error="Binary timed out when checking version")
         except PermissionError:
             return OperationResult(success=False, error=f"Permission denied executing: {self.nagios_bin}")
-        except Exception as e:
+        except (subprocess.SubprocessError, OSError) as e:
             return OperationResult(success=False, error=f"Error verifying binary: {e!s}")
 
 

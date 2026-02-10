@@ -86,7 +86,7 @@ def _parse_log_entries(raw_output: str) -> list[GitCommit]:
         if not line:
             continue
         parts = line.split("\x00", 3)
-        if len(parts) >= 4:
+        if len(parts) >= 4:  # noqa: PLR2004
             commits.append(GitCommit(
                 hash=parts[0],
                 hash_short=parts[0][:7],
@@ -188,8 +188,9 @@ class GitService:
 
                 return self._build_run_result(result, run_result, args)
 
-            except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
+            except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:  # noqa: BLE001
                 return self._handle_git_exception(e, args, timeout)
+        return None  # Unreachable: loop always returns
 
     def _should_retry_transient(self, result, retry: bool, attempt: int,
                                 max_attempts: int, args: list[str]) -> bool:
@@ -203,7 +204,7 @@ class GitService:
         if any(pat in combined for pat in _TRANSIENT_PATTERNS):
             delay = (0.1 * (2 ** attempt)) + random.uniform(0, 0.05)
             if self._op_logger:
-                self._op_logger.warning("git", "retry",
+                self._op_logger.warning("git", "retry",  # noqa: PLE1205
                                         params={"cmd": " ".join(args), "attempt": attempt + 1})
             time.sleep(delay)
             return True
@@ -213,7 +214,7 @@ class GitService:
                           args: list[str]) -> OperationResult:
         """Build OperationResult from a completed subprocess result."""
         if self._op_logger and result.returncode != 0:
-            self._op_logger.warning("git", "run",
+            self._op_logger.warning("git", "run",  # noqa: PLE1205
                                     params={"cmd": " ".join(args)},
                                     error=result.stderr.strip()[:200])
 
@@ -229,15 +230,15 @@ class GitService:
         if isinstance(exc, subprocess.TimeoutExpired):
             error_msg = f'Git command timed out after {timeout}s: git {" ".join(args)}'
             if self._op_logger:
-                self._op_logger.error("git", "timeout", params={"cmd": " ".join(args)})
+                self._op_logger.error("git", "timeout", params={"cmd": " ".join(args)})  # noqa: PLE1205
         elif isinstance(exc, FileNotFoundError):
             error_msg = "Git is not installed or not in PATH"
             if self._op_logger:
-                self._op_logger.error("git", "not_found")
+                self._op_logger.error("git", "not_found")  # noqa: PLE1205
         else:
             error_msg = f"Git command failed: {exc!s}"
             if self._op_logger:
-                self._op_logger.error("git", "exception",
+                self._op_logger.error("git", "exception",  # noqa: PLE1205
                                       params={"cmd": " ".join(args)}, error=str(exc))
         return OperationResult(success=False, error=error_msg)
 
@@ -335,7 +336,7 @@ class GitService:
         files = []
         for line in raw_output.split("\n"):
             line = line.rstrip("\r\n")
-            if not line or len(line) < 4:
+            if not line or len(line) < 4:  # noqa: PLR2004
                 continue
 
             entry = self._parse_single_status_line(line, excluded_paths)
@@ -443,7 +444,7 @@ class GitService:
             diff_output += f"@@ -0,0 +1,{len(lines)} @@\n"
             diff_output += "\n".join("+" + line for line in lines)
             return diff_output
-        except Exception:
+        except OSError:
             return None
 
     def get_workspace_diff(self, excluded_paths: list[str] | None = None) -> OperationResult:
@@ -597,7 +598,7 @@ class GitService:
                 f"+++ b/{file_path}",
                 f"@@ -0,0 +1,{len(content_lines)} @@",
             ]
-            diff_lines.extend(["+" + l for l in content_lines])
+            diff_lines.extend(["+" + line for line in content_lines])
             diffs.append({
                 "file_path": file_path,
                 "diff": "\n".join(diff_lines),
@@ -606,8 +607,8 @@ class GitService:
                 "change_count": len(content_lines),
             })
             git_changes.append({"path": file_path, "status": "added"})
-        except Exception:
-            pass
+        except OSError:
+            pass  # Unreadable untracked file - skip silently
 
     @staticmethod
     def _add_deleted_file_diff(file_path: str, diffs: list[dict],
@@ -638,13 +639,13 @@ class GitService:
             lines: Diff lines for this file
 
         """
-        additions = sum(1 for l in lines if l.startswith("+") and not l.startswith("+++"))
-        deletions = sum(1 for l in lines if l.startswith("-") and not l.startswith("---"))
+        additions = sum(1 for line in lines if line.startswith("+") and not line.startswith("+++"))
+        deletions = sum(1 for line in lines if line.startswith("-") and not line.startswith("---"))
 
         status = "modified"
-        if any("new file mode" in l for l in lines):
+        if any("new file mode" in line for line in lines):
             status = "added"
-        elif any("deleted file mode" in l for l in lines):
+        elif any("deleted file mode" in line for line in lines):
             status = "deleted"
 
         diffs.append({
@@ -1081,7 +1082,7 @@ class GitService:
         if not pop_result.success or pop_result.data.returncode != 0:
             stash_pop_error = (pop_result.error if not pop_result.success
                                else pop_result.data.stderr)
-            logger.warning(f"Failed to restore stash: {stash_pop_error}")
+            logger.warning("Failed to restore stash: %s", stash_pop_error)
             error_msg = (
                 f"{base_error} Your uncommitted changes were stashed but could not be "
                 f"automatically restored (error: {stash_pop_error}). "

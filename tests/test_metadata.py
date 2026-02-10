@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
 from app import create_app
 from nagios_model import (
     DEFAULT_ATTRIBUTES,
@@ -85,7 +86,7 @@ class TestMetadataEndpoint:
 
     def test_returns_all_metadata(self, client):
         resp = client.get("/api/metadata")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json
         assert data["success"] is True
         meta = data["data"]

@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
 from app import create_app, get_config_path
 
 
@@ -71,7 +72,7 @@ def test_staging_round_trip_dict_format(client, app):
     """Test full staging round-trip with dict format."""
     # Get initial objects
     resp = client.get("/api/objects")
-    assert resp.status_code == 200
+    assert resp.status_code == 200  # noqa: PLR2004
     objects = resp.json
     assert len(objects) > 0
 
@@ -94,12 +95,12 @@ def test_staging_round_trip_dict_format(client, app):
                        data=json.dumps(edit_data),
                        content_type="application/json",
                        headers={"X-Session-Id": "test-session"})
-    assert resp.status_code == 200
+    assert resp.status_code == 200  # noqa: PLR2004
 
     # Verify staging was saved
     resp = client.get("/api/staging",
                       headers={"X-Session-Id": "test-session"})
-    assert resp.status_code == 200
+    assert resp.status_code == 200  # noqa: PLR2004
     data = resp.json
     staging = data.get("staging", data)  # Handle both response formats
     assert "pendingEdits" in staging
@@ -110,7 +111,7 @@ def test_staging_round_trip_dict_format(client, app):
                        data=json.dumps({}),
                        content_type="application/json",
                        headers={"X-Session-Id": "test-session"})
-    assert resp.status_code == 200
+    assert resp.status_code == 200  # noqa: PLR2004
 
     # Verify the edit was written to disk
     config_path = Path(get_config_path())
@@ -120,7 +121,7 @@ def test_staging_round_trip_dict_format(client, app):
 
     # Verify re-parsed objects reflect the edit
     resp = client.get("/api/objects")
-    assert resp.status_code == 200
+    assert resp.status_code == 200  # noqa: PLR2004
     updated_objects = resp.json
     edited_obj = next(o for o in updated_objects
                       if o["attributes"].get("host_name") == "test-host-1")
@@ -141,7 +142,7 @@ def test_reject_old_list_format(client):
                        data=json.dumps(old_format_data),
                        content_type="application/json",
                        headers={"X-Session-Id": "test-session"})
-    assert resp.status_code == 400
+    assert resp.status_code == 400  # noqa: PLR2004
     assert "Invalid staging format" in resp.json["error"]
     assert "dict" in resp.json["error"]
 
@@ -183,7 +184,7 @@ def test_undo_operations_dict_format(client):
                        data=json.dumps({}),
                        content_type="application/json",
                        headers={"X-Session-Id": "test-session"})
-    assert resp.status_code == 200
+    assert resp.status_code == 200  # noqa: PLR2004
 
     # Verify undo worked
     resp = client.get("/api/staging/info",
@@ -230,7 +231,7 @@ def test_multi_operation_workflow(client, app):
                        data=json.dumps(staging_data),
                        content_type="application/json",
                        headers=headers)
-    assert resp.status_code == 200
+    assert resp.status_code == 200  # noqa: PLR2004
 
     # Verify counts
     resp = client.get("/api/staging/info", headers=headers)
@@ -244,7 +245,7 @@ def test_multi_operation_workflow(client, app):
                        data=json.dumps({}),
                        content_type="application/json",
                        headers=headers)
-    assert resp.status_code == 200
+    assert resp.status_code == 200  # noqa: PLR2004
 
     # Verify changes were written to disk
     config_path = Path(get_config_path())
@@ -255,7 +256,7 @@ def test_multi_operation_workflow(client, app):
 
     # Verify re-parsed objects reflect both changes
     resp = client.get("/api/objects")
-    assert resp.status_code == 200
+    assert resp.status_code == 200  # noqa: PLR2004
     updated_objects = resp.json
 
     edited_obj = next(o for o in updated_objects
@@ -295,7 +296,7 @@ def test_conflict_detection(client):
 
     # Check for conflicts (should be none initially)
     resp = client.get("/api/staging/conflicts", headers=headers)
-    assert resp.status_code == 200
+    assert resp.status_code == 200  # noqa: PLR2004
     assert len(resp.json.get("conflicts", [])) == 0
 
 
@@ -330,7 +331,7 @@ class TestBulkOpsUseStagingSystem:
                 },
             },
         }, headers={"X-Session-Id": "test-session"})
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
 
         # Verify disk file is UNCHANGED
         with app.app_context():

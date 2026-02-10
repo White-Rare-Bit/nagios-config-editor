@@ -1,6 +1,7 @@
 """Bulk operations routes for Nagios configuration editing."""
 
 import copy
+import logging
 import os
 
 from flask import Blueprint, jsonify, request
@@ -18,6 +19,7 @@ from .helpers import (
 )
 
 bp = Blueprint("bulk_ops", __name__)
+logger = logging.getLogger("nagios_bulk_editor.bulk_ops")
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -86,10 +88,10 @@ def _move_objects_in_parser(object_data, p_objects, target_file):
             if position is not None:
                 p_objects[idx].line_number = position
             moved_count += 1
-            print(f"Moved object {idx} from {old_file} to {target_file} at position {position}")
+            logger.debug("Moved object %s from %s to %s at position %s", idx, old_file, target_file, position)
         else:
             skipped.append(idx)
-            print(f"Invalid index {idx}, max is {len(p_objects)-1}")
+            logger.warning("Invalid index %s, max is %s", idx, len(p_objects)-1)
     return moved_count, skipped
 
 

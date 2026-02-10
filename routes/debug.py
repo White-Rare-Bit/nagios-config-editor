@@ -13,6 +13,9 @@ from flask import Blueprint, current_app, jsonify, request
 debug_bp = Blueprint("debug", __name__)
 logger = logging.getLogger("nagios_bulk_editor.debug")
 
+# Maximum character length for JSON values in console log output
+_MAX_JSON_LENGTH = 500
+
 # Configure dedicated file handler for frontend logs
 _handler_configured = False
 
@@ -69,10 +72,10 @@ def _format_json_value(value):
     """Format a dict or list as truncated JSON string."""
     try:
         s = json.dumps(value, default=str)
-        if len(s) > 500:
-            s = s[:500] + "..."
+        if len(s) > _MAX_JSON_LENGTH:
+            s = s[:_MAX_JSON_LENGTH] + "..."
         return s
-    except Exception:
+    except (ValueError, TypeError):
         return "[Object]" if isinstance(value, dict) else "[Array]"
 
 
@@ -101,6 +104,7 @@ def check_debug_mode():
         return jsonify({"error": "Debug endpoints disabled in production"}), 403
     # Initialize log handler on first request
     _ensure_log_handler()
+    return None
 
 
 @debug_bp.route("/api/debug/console", methods=["POST"])
@@ -130,7 +134,7 @@ def receive_console_log():
         log_prefix = f"[FRONTEND:{level.upper()}] ({page})"
         log_level = _LOG_LEVEL_MAP.get(level.lower(), logging.INFO)
 
-        logger.log(log_level, f"{log_prefix} {message_str}")
+        logger.log(log_level, "%s %s", log_prefix, message_str)
 
         return jsonify({"ok": True})
 

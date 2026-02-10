@@ -62,7 +62,7 @@ def api_update_settings():
     if updated and not errors:
         try:
             save_server_config(server_config)
-        except Exception as e:
+        except (OSError, ValueError) as e:
             errors.append(f"Failed to save config: {e}")
 
     return jsonify({
@@ -111,7 +111,7 @@ def _update_config_path(server_config, path, updated, errors):
         current_app.extensions["backup"] = new_backup
         current_app.extensions["git"] = new_git
         updated.append("nagios_config_path")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         errors.append(f"Failed to initialize services for path: {e}")
 
 

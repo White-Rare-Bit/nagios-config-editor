@@ -113,8 +113,8 @@ def get_audit_user_identity():
             if staging:
                 user_name = user_name or staging.get("userName")
                 user_email = user_email or staging.get("userEmail")
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001, S110
+            pass  # Best-effort fallback to staging data for user identity
 
     return {
         "userName": user_name,

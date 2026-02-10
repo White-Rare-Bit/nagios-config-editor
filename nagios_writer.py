@@ -69,7 +69,7 @@ class NagiosConfigWriter:
     def write_file(self, filepath: str, objects: list[NagiosObject]) -> None:
         """Write objects to a configuration file atomically."""
         if self._op_logger:
-            self._op_logger.info("writer", "write_file", params={"filepath": filepath, "object_count": len(objects)})
+            self._op_logger.info("writer", "write_file", params={"filepath": filepath, "object_count": len(objects)})  # noqa: PLE1205
         content = self.objects_to_string(objects)
         path = Path(filepath)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -91,17 +91,17 @@ class NagiosConfigWriter:
             except OSError as cleanup_err:
                 # Log temp file cleanup failure for manual intervention
                 if self._op_logger:
-                    self._op_logger.error("writer", "write_file",
+                    self._op_logger.exception("writer", "write_file",  # noqa: PLE1205
                         params={"filepath": filepath, "temp_file": temp_path},
                         error=f"DISK_LEAK: Temp file cleanup failed: {cleanup_err}")
             if self._op_logger:
-                self._op_logger.error("writer", "write_file", params={"filepath": filepath}, error=str(e))
+                self._op_logger.exception("writer", "write_file", params={"filepath": filepath}, error=str(e))  # noqa: PLE1205
             raise
 
     def write_objects_to_original_files(self, objects: list[NagiosObject]) -> dict[str, int]:
         """Write objects back to their original source files."""
         if self._op_logger:
-            self._op_logger.info("writer", "write_objects_to_original_files", params={"total_objects": len(objects)})
+            self._op_logger.info("writer", "write_objects_to_original_files", params={"total_objects": len(objects)})  # noqa: PLE1205
         # Group objects by source file
         by_file: dict[str, list[NagiosObject]] = {}
         for obj in objects:
