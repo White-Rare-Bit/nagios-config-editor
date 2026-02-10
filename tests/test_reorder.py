@@ -111,8 +111,8 @@ def build_staged_moves(service: NagiosService, config_file: str, new_order: list
             print(f"WARNING: Object {name} not found")
             continue
 
-        # Build stable key like frontend does: source_file|object_type|name
-        stable_key = f"{obj.source_file}|{obj.object_type}|{name}"
+        # Build stable key like frontend does: source_file|object_type|display_name
+        stable_key = f"{obj.source_file}|{obj.object_type}|{obj.get_display_name()}"
 
         # insertPosition is the desired order (lower = earlier in file)
         # Frontend uses fractional values, we'll use simple integers
