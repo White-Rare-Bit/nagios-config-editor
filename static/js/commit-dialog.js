@@ -597,7 +597,7 @@ function findObjectByKey(key, allObjects) {
         return allObjects.find(o =>
             o.source_file === source_file &&
             o.object_type === object_type &&
-            o.name === name
+            (o.display_name ?? o.name) === name
         );
     }
 
