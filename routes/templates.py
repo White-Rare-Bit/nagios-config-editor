@@ -70,7 +70,7 @@ def _decode_and_find_object(service, stable_key):
     for obj in service.get_objects():
         if (obj.source_file == source_file and
             obj.object_type == obj_type and
-            obj.get_name() == obj_name):
+            obj.get_display_name() == obj_name):
             return obj, obj_type, None
 
     return None, None, (jsonify({"error": "Object not found"}), 404)
