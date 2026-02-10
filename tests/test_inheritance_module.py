@@ -269,6 +269,63 @@ class TestResolveInheritedAttrs:
         assert "admins" in resolved["contact_groups"]
         assert "devs" in resolved["contact_groups"]
 
+    def test_important_prefix_overrides_child(self):
+        """! prefix in template forces value, child cannot override."""
+        tmpl = _tmpl("service", "base", check_command="!check_ping!100!500")
+        obj = _Obj(object_type="service", attributes={
+            "service_description": "PING", "use": "base",
+            "check_command": "check_local_ping!200!600",
+        })
+        lookup = build_template_lookup([tmpl, obj])
+        resolved = resolve_inherited_attrs(obj, lookup)
+        assert resolved["check_command"] == "check_ping!100!500"
+
+    def test_important_prefix_stripped_from_value(self):
+        """! prefix is stripped from the resolved value."""
+        tmpl = _tmpl("service", "base", check_command="!check_ping!100!500")
+        obj = _Obj(object_type="service", attributes={
+            "service_description": "PING", "use": "base",
+        })
+        lookup = build_template_lookup([tmpl, obj])
+        resolved = resolve_inherited_attrs(obj, lookup)
+        assert resolved["check_command"] == "check_ping!100!500"
+
+    def test_important_not_applied_to_custom_vars(self):
+        """! prefix on custom variables is treated as literal."""
+        tmpl = _tmpl("host", "base", _SNMP="!public")
+        obj = _host(host_name="web-01", use="base", _SNMP="private")
+        lookup = build_template_lookup([tmpl, obj])
+        resolved = resolve_inherited_attrs(obj, lookup)
+        assert resolved["_SNMP"] == "private"
+
+    def test_important_propagates_through_chain(self):
+        """! prefix in grandparent template propagates through parent."""
+        grandparent = _tmpl("host", "gp", check_command="!check_ping")
+        parent = _tmpl("host", "parent", use="gp", max_check_attempts="5")
+        obj = _host(host_name="web-01", use="parent", check_command="check_local")
+        lookup = build_template_lookup([grandparent, parent, obj])
+        resolved = resolve_inherited_attrs(obj, lookup)
+        assert resolved["check_command"] == "check_ping"
+
+    def test_important_in_middle_template_locks_child(self):
+        """! prefix in parent template locks value, child cannot override."""
+        grandparent = _tmpl("host", "gp", check_command="check_gp")
+        parent = _tmpl("host", "parent", use="gp", check_command="!check_parent")
+        obj = _host(host_name="web-01", use="parent", check_command="check_local")
+        lookup = build_template_lookup([grandparent, parent, obj])
+        resolved = resolve_inherited_attrs(obj, lookup)
+        assert resolved["check_command"] == "check_parent"
+
+    def test_important_does_not_affect_other_keys(self):
+        """! prefix on one key does not lock other keys."""
+        tmpl = _tmpl("host", "base", check_command="!check_ping",
+                      max_check_attempts="5")
+        obj = _host(host_name="web-01", use="base", max_check_attempts="3")
+        lookup = build_template_lookup([tmpl, obj])
+        resolved = resolve_inherited_attrs(obj, lookup)
+        assert resolved["check_command"] == "check_ping"
+        assert resolved["max_check_attempts"] == "3"
+
 
 class TestHasAttrInChain:
     def test_direct_attr(self):
@@ -412,6 +469,27 @@ class TestResolveChain:
         chain, inherited, errors = resolve_chain(obj, "host", type_lookup)
         assert "admins" in inherited["contact_groups"]["value"]
         assert "devs" in inherited["contact_groups"]["value"]
+
+    def test_important_in_chain(self):
+        """! prefix in template forces value in chain, child's value is ignored."""
+        tmpl = _tmpl("service", "base", check_command="!check_ping!100!500")
+        obj = _Obj(object_type="service", attributes={
+            "service_description": "PING", "use": "base",
+            "check_command": "check_local",
+        })
+        type_lookup = {"base": tmpl}
+        chain, inherited, errors = resolve_chain(obj, "service", type_lookup)
+        assert inherited["check_command"]["value"] == "check_ping!100!500"
+        assert inherited["check_command"]["source"] == "base"
+
+    def test_important_in_chain_custom_var_not_locked(self):
+        """! prefix on custom var in chain does not lock it."""
+        tmpl = _tmpl("host", "base", _SNMP="!public")
+        obj = _host(host_name="web-01", use="base", _SNMP="private")
+        type_lookup = {"base": tmpl}
+        chain, inherited, errors = resolve_chain(obj, "host", type_lookup)
+        assert inherited["_SNMP"]["value"] == "private"
+        assert inherited["_SNMP"]["source"] == "web-01"
 
 
 # ─────────────────────────────────────────────────────────────────────

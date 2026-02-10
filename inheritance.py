@@ -86,11 +86,69 @@ def build_template_index(objects):
 # Attribute resolution (correct Nagios precedence + cycle detection)
 # ─────────────────────────────────────────────────────────────────────
 
+def _resolve_with_important(obj, template_lookup, visited):
+    """Resolve attrs and return (resolved_dict, important_keys_set).
+
+    Important keys are keys whose values started with ! in this template
+    or any ancestor template. These keys cannot be overridden by children.
+    The ! prefix only applies to non-custom (_) variables.
+    """
+    resolved = {}
+    important_keys = set()
+    use_templates = obj.attributes.get("use", "")
+    if use_templates:
+        for tmpl_name in (t.strip() for t in use_templates.split(",") if t.strip()):
+            if tmpl_name not in visited:
+                visited.add(tmpl_name)
+                tmpl = template_lookup.get((obj.object_type, tmpl_name))
+                if tmpl:
+                    tmpl_attrs, tmpl_important = _resolve_with_important(
+                        tmpl, template_lookup, visited,
+                    )
+                    for key, value in tmpl_attrs.items():
+                        if key not in INHERITANCE_META and key not in resolved:
+                            resolved[key] = value
+                    important_keys |= tmpl_important
+                visited.discard(tmpl_name)
+    # This object's own attributes
+    for key, value in obj.attributes.items():
+        if key in important_keys and not key.startswith("_"):
+            continue  # Locked by ancestor's ! — skip
+        if value == "null":
+            resolved[key] = _NULL_SENTINEL
+        elif (
+            isinstance(value, str) and value.startswith("!")
+            and not key.startswith("_") and key not in INHERITANCE_META
+        ):
+            resolved[key] = value[1:]  # Strip ! prefix
+            important_keys.add(key)
+        elif (
+            isinstance(value, str) and value.startswith("+")
+            and not key.startswith("_")
+            and key not in INHERITANCE_META
+        ):
+            stripped = value[1:]
+            existing = resolved.get(key)
+            if existing is not None and existing is not _NULL_SENTINEL:
+                resolved[key] = f"{existing},{stripped}"
+            else:
+                resolved[key] = stripped
+        else:
+            resolved[key] = value
+    result = {k: v for k, v in resolved.items() if v is not _NULL_SENTINEL}
+    return result, important_keys
+
+
 def resolve_inherited_attrs(obj, template_lookup, visited=None):
     """Resolve attributes including inherited ones from templates.
 
     Nagios precedence: object's own attrs > first template > second > ... > last.
     Uses visited set for cycle detection and discard for sibling-branch reuse.
+
+    Supports three special prefixes (non-custom vars only):
+    - "null": cancels inheritance of that key
+    - "+": appends to inherited value
+    - "!": in templates, forces the value — children cannot override it
 
     Args:
         obj: NagiosObject to resolve
@@ -103,6 +161,7 @@ def resolve_inherited_attrs(obj, template_lookup, visited=None):
     if visited is None:
         visited = set()
     resolved = {}
+    important_keys = set()
     use_templates = obj.attributes.get("use", "")
     if use_templates:
         for tmpl_name in (t.strip() for t in use_templates.split(",") if t.strip()):
@@ -110,15 +169,21 @@ def resolve_inherited_attrs(obj, template_lookup, visited=None):
                 visited.add(tmpl_name)
                 tmpl = template_lookup.get((obj.object_type, tmpl_name))
                 if tmpl:
-                    tmpl_attrs = resolve_inherited_attrs(tmpl, template_lookup, visited)
+                    tmpl_attrs, tmpl_important = _resolve_with_important(
+                        tmpl, template_lookup, visited,
+                    )
                     for key, value in tmpl_attrs.items():
                         if key not in INHERITANCE_META and key not in resolved:
                             resolved[key] = value
+                    important_keys |= tmpl_important
                 visited.discard(tmpl_name)
-    # Object's own attributes always override;
+    # Object's own attributes — respect important locks from templates
     # "null" values become sentinels to block inheritance;
-    # "+" prefix on non-custom vars appends to inherited value
+    # "+" prefix on non-custom vars appends to inherited value;
+    # keys locked by template ! prefix cannot be overridden
     for key, value in obj.attributes.items():
+        if key in important_keys and not key.startswith("_"):
+            continue  # Locked by template's ! — child can't override
         if value == "null":
             resolved[key] = _NULL_SENTINEL
         elif (
@@ -189,11 +254,95 @@ def walk_inheritance_chain(obj, templates, visited=None):
     return chain
 
 
+def _resolve_chain_with_important(obj, obj_type, template_lookup, visited):
+    """Internal: resolve chain returning (chain, inherited, errors, important_keys).
+
+    Like resolve_chain but also tracks which keys are locked by ! prefix
+    in templates, so children cannot override them.
+    """
+    chain = []
+    inherited = {}
+    errors = []
+    important_keys = set()
+
+    use_value = obj.attributes.get("use", "")
+    if use_value:
+        template_names = [t.strip() for t in use_value.split(",") if t.strip()]
+        for tmpl_name in template_names:
+            if tmpl_name not in template_lookup:
+                errors.append(f"Template '{tmpl_name}' not found for type '{obj_type}'")
+                continue
+            if tmpl_name in visited:
+                errors.append(f"Circular dependency: {' -> '.join(visited)} -> {tmpl_name}")
+                continue
+
+            visited.add(tmpl_name)
+            tmpl_obj = template_lookup[tmpl_name]
+            tmpl_chain, tmpl_inherited, tmpl_errors, tmpl_important = (
+                _resolve_chain_with_important(
+                    tmpl_obj, obj_type, template_lookup, visited,
+                )
+            )
+
+            # First template to set a key wins (correct Nagios precedence)
+            for key, entry in tmpl_inherited.items():
+                if key not in INHERITANCE_META and key not in inherited:
+                    inherited[key] = entry
+            important_keys |= tmpl_important
+
+            chain.append({"name": tmpl_name, "type": obj_type, "attributes": tmpl_obj.attributes})
+            chain.extend(tmpl_chain)
+            errors.extend(tmpl_errors)
+
+            # Allow reuse in sibling branches (A uses B,C where both use D)
+            visited.discard(tmpl_name)
+
+    # Object's own attributes — respect important locks from templates;
+    # "null" values cancel the attribute entirely;
+    # "!" prefix on non-custom vars locks the value;
+    # "+" prefix on non-custom vars appends to inherited value
+    obj_name = obj.get_name() or obj.attributes.get("name", "(unknown)")
+    for key, value in obj.attributes.items():
+        if key not in INHERITANCE_META:
+            if key in important_keys and not key.startswith("_"):
+                continue  # Locked by ancestor's ! — skip
+            if value == "null":
+                inherited.pop(key, None)
+            elif (
+                isinstance(value, str) and value.startswith("!")
+                and not key.startswith("_")
+            ):
+                inherited[key] = {"value": value[1:], "source": obj_name}
+                important_keys.add(key)
+            elif (
+                value.startswith("+")
+                and not key.startswith("_")
+            ):
+                stripped = value[1:]
+                existing = inherited.get(key)
+                if existing is not None:
+                    inherited[key] = {
+                        "value": f"{existing['value']},{stripped}",
+                        "source": f"{existing['source']},{obj_name}",
+                    }
+                else:
+                    inherited[key] = {"value": stripped, "source": obj_name}
+            else:
+                inherited[key] = {"value": value, "source": obj_name}
+
+    return chain, inherited, errors, important_keys
+
+
 def resolve_chain(obj, obj_type, template_lookup, visited=None):
     """Resolve template inheritance chain with source tracking.
 
     Correct Nagios precedence: first template's values win over later templates.
-    Object's own attributes always override inherited ones.
+    Object's own attributes always override inherited ones (unless locked by !).
+
+    Supports three special prefixes (non-custom vars only):
+    - "null": cancels inheritance of that key
+    - "+": appends to inherited value
+    - "!": in templates, forces the value — children cannot override it
 
     Args:
         obj: NagiosObject to resolve
@@ -213,6 +362,7 @@ def resolve_chain(obj, obj_type, template_lookup, visited=None):
     chain = []
     inherited = {}
     errors = []
+    important_keys = set()
 
     use_value = obj.attributes.get("use", "")
     if use_value:
@@ -227,14 +377,17 @@ def resolve_chain(obj, obj_type, template_lookup, visited=None):
 
             visited.add(tmpl_name)
             tmpl_obj = template_lookup[tmpl_name]
-            tmpl_chain, tmpl_inherited, tmpl_errors = resolve_chain(
-                tmpl_obj, obj_type, template_lookup, visited,
+            tmpl_chain, tmpl_inherited, tmpl_errors, tmpl_important = (
+                _resolve_chain_with_important(
+                    tmpl_obj, obj_type, template_lookup, visited,
+                )
             )
 
             # First template to set a key wins (correct Nagios precedence)
             for key, entry in tmpl_inherited.items():
                 if key not in INHERITANCE_META and key not in inherited:
                     inherited[key] = entry
+            important_keys |= tmpl_important
 
             chain.append({"name": tmpl_name, "type": obj_type, "attributes": tmpl_obj.attributes})
             chain.extend(tmpl_chain)
@@ -243,12 +396,14 @@ def resolve_chain(obj, obj_type, template_lookup, visited=None):
             # Allow reuse in sibling branches (A uses B,C where both use D)
             visited.discard(tmpl_name)
 
-    # Object's own attributes override inherited;
+    # Object's own attributes — respect important locks from templates;
     # "null" values cancel the attribute entirely;
     # "+" prefix on non-custom vars appends to inherited value
     obj_name = obj.get_name() or obj.attributes.get("name", "(unknown)")
     for key, value in obj.attributes.items():
         if key not in INHERITANCE_META:
+            if key in important_keys and not key.startswith("_"):
+                continue  # Locked by template's ! — child can't override
             if value == "null":
                 inherited.pop(key, None)
             elif (
