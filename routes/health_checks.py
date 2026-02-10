@@ -6,6 +6,7 @@ The run_all_checks() orchestrator calls them all.
 
 import re
 
+from inheritance import has_attr_in_chain, resolve_inherited_attrs
 from nagios_model import NAME_FIELDS, REFERENCE_FIELDS
 
 # Minimum common prefix length for auto-generating template names
@@ -57,55 +58,6 @@ def _generate_template_name(obj_type, objects, attrs):
 def strip_prefix(s):
     """Strip +/! prefixes used in Nagios additive/exclusion syntax."""
     return s.strip().lstrip("+!").strip()
-
-
-def build_template_lookup(objects):
-    """Build (object_type, template_name) -> obj lookup."""
-    lookup = {}
-    for obj in objects:
-        tmpl_name = obj.attributes.get("name")
-        if tmpl_name:
-            lookup[(obj.object_type, tmpl_name)] = obj
-    return lookup
-
-
-def resolve_inherited_attrs(obj, template_lookup, visited=None):
-    """Resolve attributes including inherited ones from templates."""
-    if visited is None:
-        visited = set()
-    resolved = {}
-    use_templates = obj.attributes.get("use", "")
-    if use_templates:
-        for tmpl_name in (t.strip() for t in use_templates.split(",") if t.strip()):
-            if tmpl_name not in visited:
-                visited.add(tmpl_name)
-                tmpl = template_lookup.get((obj.object_type, tmpl_name))
-                if tmpl:
-                    tmpl_attrs = resolve_inherited_attrs(tmpl, template_lookup, visited)
-                    for key, value in tmpl_attrs.items():
-                        if key not in ("use", "name", "register"):
-                            resolved[key] = value
-    for key, value in obj.attributes.items():
-        resolved[key] = value
-    return resolved
-
-
-def has_attr_in_chain(obj, attr_name, template_lookup, visited=None):
-    """Check if attribute exists in object or its template chain."""
-    if visited is None:
-        visited = set()
-    if attr_name in obj.attributes:
-        return True
-    use_val = obj.attributes.get("use", "")
-    if not use_val:
-        return False
-    for t_name in (t.strip() for t in use_val.split(",") if t.strip()):
-        if t_name not in visited:
-            visited.add(t_name)
-            tmpl = template_lookup.get((obj.object_type, t_name))
-            if tmpl and has_attr_in_chain(tmpl, attr_name, template_lookup, visited):
-                return True
-    return False
 
 
 # ---------------------------------------------------------------------------

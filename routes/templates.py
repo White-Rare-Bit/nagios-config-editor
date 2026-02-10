@@ -4,6 +4,8 @@ import base64
 
 from flask import Blueprint, jsonify, request
 
+from inheritance import build_type_template_lookup, resolve_chain
+
 from .helpers import get_service
 
 bp = Blueprint("templates", __name__)
@@ -38,8 +40,8 @@ def get_inheritance(stable_key):
     if error:
         return error
 
-    template_lookup = _build_template_lookup(service, obj_type)
-    chain, inherited, errors = _resolve_chain(target_obj, obj_type, template_lookup)
+    template_lookup = build_type_template_lookup(service.get_objects(), obj_type)
+    chain, inherited, errors = resolve_chain(target_obj, obj_type, template_lookup)
 
     return jsonify({"chain": chain, "inherited": inherited, "errors": errors})
 
@@ -72,86 +74,6 @@ def _decode_and_find_object(service, stable_key):
             return obj, obj_type, None
 
     return None, None, (jsonify({"error": "Object not found"}), 404)
-
-
-def _build_template_lookup(service, obj_type):
-    """Build a name-to-object lookup for templates of a given type."""
-    lookup = {}
-    for obj in service.get_objects():
-        if obj.object_type == obj_type and obj.attributes.get("name"):
-            lookup[obj.attributes["name"]] = obj
-    return lookup
-
-
-def _resolve_chain(obj, obj_type, template_lookup, visited=None):
-    """Recursively resolve template inheritance chain.
-
-    Nagios inheritance: comma-separated templates apply left-to-right,
-    with later templates overriding earlier ones.
-
-    Returns:
-        Tuple of (chain, inherited, errors).
-
-    """
-    if visited is None:
-        visited = set()
-
-    chain = []
-    inherited = {}
-    errors = []
-
-    use_value = obj.attributes.get("use", "")
-    if use_value:
-        ctx = {"obj_type": obj_type, "lookup": template_lookup, "visited": visited}
-        _resolve_use_templates(use_value, ctx, chain, inherited, errors)
-
-    # Object's own attributes override inherited
-    obj_name = obj.get_name() or obj.attributes.get("name", "(unknown)")
-    for key, value in obj.attributes.items():
-        if key not in ["use", "name", "register"]:
-            inherited[key] = {"value": value, "source": obj_name}
-
-    return chain, inherited, errors
-
-
-def _resolve_use_templates(use_value, ctx, chain, inherited, errors):
-    """Process 'use' directive templates and merge into chain/inherited/errors.
-
-    Args:
-        use_value: Comma-separated template names string
-        ctx: Dict with 'obj_type', 'lookup' (template_lookup), 'visited' set
-        chain, inherited, errors: Accumulator lists/dicts (modified in place)
-
-    """
-    obj_type = ctx["obj_type"]
-    template_lookup = ctx["lookup"]
-    visited = ctx["visited"]
-    template_names = [t.strip() for t in use_value.split(",") if t.strip()]
-
-    for tmpl_name in template_names:
-        if tmpl_name not in template_lookup:
-            errors.append(f"Template '{tmpl_name}' not found for type '{obj_type}'")
-            continue
-        if tmpl_name in visited:
-            errors.append(f"Circular dependency: {' -> '.join(visited)} -> {tmpl_name}")
-            continue
-
-        visited.add(tmpl_name)
-        tmpl_obj = template_lookup[tmpl_name]
-        tmpl_chain, tmpl_inherited, tmpl_errors = _resolve_chain(
-            tmpl_obj, obj_type, template_lookup, visited,
-        )
-
-        for key, entry in tmpl_inherited.items():
-            if key not in ["use", "name", "register"]:
-                inherited[key] = entry
-
-        chain.append({"name": tmpl_name, "type": obj_type, "attributes": tmpl_obj.attributes})
-        chain.extend(tmpl_chain)
-        errors.extend(tmpl_errors)
-
-        # Allow reuse in sibling branches (A uses B,C where both use D)
-        visited.discard(tmpl_name)
 
 
 @bp.route("/api/templates/validate-use")

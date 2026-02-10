@@ -103,7 +103,8 @@ def api_constants():
 @bp.route("/api/health-check")
 def api_health_check():
     """Analyze configuration for potential issues."""
-    from .health_checks import build_template_lookup, run_all_checks
+    from inheritance import build_template_lookup
+    from .health_checks import run_all_checks
 
     service = get_service()
     p = service.parser
@@ -138,7 +139,8 @@ def api_analysis_orphans():
     - Services with 'servicegroups' attr (direct or inherited) are in-use
     - Templates (register=0) are excluded from analysis entirely
     """
-    from .health_checks import build_template_lookup, detect_orphans
+    from inheritance import build_template_lookup
+    from .health_checks import detect_orphans
 
     service = get_service()
     objects = service.get_objects()

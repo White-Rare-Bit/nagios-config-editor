@@ -6,6 +6,17 @@ from collections import defaultdict
 
 from flask import Blueprint, jsonify, request
 
+from inheritance import (
+    build_template_index,
+    build_template_lookup,
+    build_template_names_set,
+    detect_template_cycles,
+    find_invalid_use_refs,
+    find_unused_templates,
+    format_cycle_issues,
+    resolve_inherited_attrs,
+    walk_inheritance_chain,
+)
 from nagios_model import NagiosObject
 from nagios_writer import NagiosConfigWriter
 
@@ -105,44 +116,6 @@ _MIN_PARENT_GROUP_SIZE = 2
 # ─────────────────────────────────────────────────────────────────────
 # api_dependencies helpers
 # ─────────────────────────────────────────────────────────────────────
-
-def _build_template_lookup(objects):
-    """Build a lookup of (object_type, template_name) -> obj."""
-    lookup = {}
-    for obj in objects:
-        template_name = obj.attributes.get("name")
-        if template_name:
-            lookup[(obj.object_type, template_name)] = obj
-    return lookup
-
-
-def _resolve_inherited_attributes(obj, template_lookup):
-    """Resolve attributes including inherited ones from templates."""
-    resolved = {}
-    use_templates = obj.attributes.get("use", "")
-    if use_templates:
-        for tmpl_name in [t.strip() for t in use_templates.split(",") if t.strip()]:
-            tmpl = template_lookup.get((obj.object_type, tmpl_name))
-            if tmpl:
-                tmpl_attrs = _resolve_inherited_attributes(tmpl, template_lookup)
-                for key, value in tmpl_attrs.items():
-                    if key not in ["use", "name", "register"]:
-                        resolved[key] = value
-    for key, value in obj.attributes.items():
-        resolved[key] = value
-    return resolved
-
-
-def _build_template_names_set(objects):
-    """Build set of (object_type, name) for template objects."""
-    template_names = set()
-    for obj in objects:
-        if obj.attributes.get("register", "1") == "0":
-            obj_name = obj.attributes.get("name")
-            if obj_name:
-                template_names.add((obj.object_type, obj_name))
-    return template_names
-
 
 def _make_service_node_id(obj):
     """Compute the node ID for a service object."""
@@ -495,134 +468,6 @@ def _update_host_hostgroups_attr(hosts_to_add, group_name, objects):
 # get_template_issues helpers
 # ─────────────────────────────────────────────────────────────────────
 
-def _build_template_index(objects):
-    """Build templates_by_type dict and all_templates set."""
-    templates_by_type = {}
-    all_templates = set()
-    for obj in objects:
-        if obj.attributes.get("register", "1") == "0":
-            obj_type = obj.object_type
-            if obj_type not in templates_by_type:
-                templates_by_type[obj_type] = {}
-            name = obj.attributes.get("name")
-            if name:
-                templates_by_type[obj_type][name] = obj
-                all_templates.add((obj_type, name))
-    return templates_by_type, all_templates
-
-
-def _find_invalid_use_refs(objects, templates_by_type):
-    """Find objects referencing non-existent templates. Returns (issues, referenced_templates)."""
-    issues = []
-    referenced_templates = set()
-    for obj in objects:
-        use_value = obj.attributes.get("use", "")
-        if not use_value:
-            continue
-        obj_type = obj.object_type
-        for tmpl_name in [t.strip() for t in use_value.split(",") if t.strip()]:
-            referenced_templates.add((obj_type, tmpl_name))
-            if obj_type not in templates_by_type or tmpl_name not in templates_by_type[obj_type]:
-                issues.append({
-                    "object_name": obj.get_name(),
-                    "object_type": obj_type,
-                    "source_file": obj.source_file,
-                    "template_name": tmpl_name,
-                    "message": f"{obj_type.capitalize()} '{obj.get_name()}' references unknown template '{tmpl_name}'",
-                })
-    return issues, referenced_templates
-
-
-def _get_template_chain(templates_by_type, obj_type, tmpl_name, visited=None):
-    """Iteratively get all templates in chain to avoid recursion limits."""
-    if visited is None:
-        visited = set()
-    chain = []
-    stack = [(obj_type, tmpl_name)]
-    while stack:
-        curr_type, curr_name = stack.pop()
-        if (curr_type, curr_name) in visited:
-            continue
-        visited.add((curr_type, curr_name))
-        chain.append((curr_type, curr_name))
-        if curr_type in templates_by_type and curr_name in templates_by_type[curr_type]:
-            tmpl_obj = templates_by_type[curr_type][curr_name]
-            use_value = tmpl_obj.attributes.get("use", "")
-            if use_value:
-                for parent_name in [t.strip() for t in use_value.split(",") if t.strip()]:
-                    stack.append((curr_type, parent_name))
-    return chain
-
-
-def _detect_template_cycles(templates_by_type, all_templates):
-    """Detect circular template dependencies using DFS with path tracking."""
-    WHITE, GRAY, BLACK = 0, 1, 2
-    color = {}
-    cycles = []
-
-    def dfs(node, path):
-        if color.get(node) == BLACK:
-            return
-        if color.get(node) == GRAY:
-            cycle_start = path.index(node)
-            cycles.append(path[cycle_start:] + [node])
-            return
-        color[node] = GRAY
-        path.append(node)
-        obj_type, tmpl_name = node
-        if obj_type in templates_by_type and tmpl_name in templates_by_type[obj_type]:
-            tmpl_obj = templates_by_type[obj_type][tmpl_name]
-            use_value = tmpl_obj.attributes.get("use", "")
-            if use_value:
-                for parent_name in [t.strip() for t in use_value.split(",") if t.strip()]:
-                    parent_node = (obj_type, parent_name)
-                    if obj_type in templates_by_type and parent_name in templates_by_type[obj_type]:
-                        dfs(parent_node, path)
-        path.pop()
-        color[node] = BLACK
-
-    for node in all_templates:
-        if color.get(node) == WHITE or node not in color:
-            dfs(node, [])
-    return cycles
-
-
-def _format_cycle_issues(detected_cycles):
-    """Convert raw cycle data into issue dicts, deduplicating."""
-    issues = []
-    seen_cycles = set()
-    for cycle in detected_cycles:
-        cycle_key = tuple(sorted(cycle[:-1]))
-        if cycle_key not in seen_cycles:
-            seen_cycles.add(cycle_key)
-            cycle_names = [name for _, name in cycle]
-            issues.append({
-                "cycle": cycle_names,
-                "object_type": cycle[0][0],
-                "message": f"Circular template inheritance: {' -> '.join(cycle_names)}",
-            })
-    return issues
-
-
-def _find_unused_templates(all_templates, referenced_templates, templates_by_type):
-    """Find templates not referenced by any object (directly or transitively)."""
-    indirect_refs = set()
-    for obj_type, tmpl_name in referenced_templates:
-        chain = _get_template_chain(templates_by_type, obj_type, tmpl_name)
-        indirect_refs.update(chain)
-    all_refs = referenced_templates | indirect_refs
-
-    issues = []
-    for obj_type, tmpl_name in all_templates:
-        if (obj_type, tmpl_name) not in all_refs:
-            issues.append({
-                "template_name": tmpl_name,
-                "object_type": obj_type,
-                "message": f"Template '{tmpl_name}' is not used by any {obj_type}",
-            })
-    return issues
-
-
 # ─────────────────────────────────────────────────────────────────────
 # api_escalation_path helpers
 # ─────────────────────────────────────────────────────────────────────
@@ -643,38 +488,15 @@ def _find_escalation_target(objects, object_type, name, service_desc):
 
 def _build_escalation_lookups(objects):
     """Build template, contact, and contactgroup lookups."""
-    template_lookup = {}
+    template_lookup = build_template_lookup(objects)
     contact_objects = {}
     cg_objects = {}
     for obj in objects:
-        tmpl_name = obj.attributes.get("name")
-        if tmpl_name:
-            template_lookup[(obj.object_type, tmpl_name)] = obj
         if obj.object_type == "contact" and obj.attributes.get("register", "1") != "0":
             contact_objects[obj.attributes.get("contact_name", "")] = obj
         elif obj.object_type == "contactgroup":
             cg_objects[obj.attributes.get("contactgroup_name", "")] = obj
     return template_lookup, contact_objects, cg_objects
-
-
-def _resolve_attrs_with_templates(obj, template_lookup, visited=None):
-    """Resolve an object's attributes including inherited ones from templates."""
-    if visited is None:
-        visited = set()
-    resolved = {}
-    use_templates = obj.attributes.get("use", "")
-    if use_templates:
-        for t in [t.strip() for t in use_templates.split(",") if t.strip()]:
-            if t not in visited:
-                visited.add(t)
-                tmpl = template_lookup.get((obj.object_type, t))
-                if tmpl:
-                    for k, v in _resolve_attrs_with_templates(tmpl, template_lookup, visited).items():
-                        if k not in ("use", "name", "register"):
-                            resolved[k] = v
-    for k, v in obj.attributes.items():
-        resolved[k] = v
-    return resolved
 
 
 def _resolve_cg_members(cg_name, cg_objects):
@@ -693,7 +515,7 @@ def _get_contact_info(cname, contact_objects, template_lookup):
     cobj = contact_objects.get(cname)
     if not cobj:
         return {"name": cname, "exists": False}
-    resolved = _resolve_attrs_with_templates(cobj, template_lookup)
+    resolved = resolve_inherited_attrs(cobj, template_lookup)
     return {
         "name": cname,
         "exists": True,
@@ -1293,24 +1115,6 @@ def _find_host_by_name(name, objects):
     return None
 
 
-# ─────────────────────────────────────────────────────────────────────
-# api_inheritance_chain helpers
-# ─────────────────────────────────────────────────────────────────────
-
-def _walk_inheritance_chain(obj, templates, visited=None):
-    """Walk the template inheritance chain recursively."""
-    if visited is None:
-        visited = set()
-    chain = [obj.to_dict()]
-    uses = obj.attributes.get("use", "")
-    if uses:
-        for tmpl_name in [t.strip() for t in uses.split(",") if t.strip()]:
-            if tmpl_name in templates and tmpl_name not in visited:
-                visited.add(tmpl_name)
-                chain.extend(_walk_inheritance_chain(templates[tmpl_name], templates, visited))
-    return chain
-
-
 # ═══════════════════════════════════════════════════════════════════════
 # Route handlers
 # ═══════════════════════════════════════════════════════════════════════
@@ -1324,8 +1128,8 @@ def api_dependencies():
 
     graph = {"nodes": [], "edges": [], "node_ids": set(), "defined_node_ids": set()}
 
-    template_lookup = _build_template_lookup(service.get_objects())
-    template_names = _build_template_names_set(service.get_objects())
+    template_lookup = build_template_lookup(service.get_objects())
+    template_names = build_template_names_set(service.get_objects())
 
     for obj in p.objects:
         if object_type and obj.object_type != object_type:
@@ -1341,7 +1145,7 @@ def api_dependencies():
 
         _add_or_update_node(obj, node_id, template_names, graph)
 
-        resolved_attrs = _resolve_inherited_attributes(obj, template_lookup)
+        resolved_attrs = resolve_inherited_attrs(obj, template_lookup)
         _process_obj_relationships(obj, node_id, resolved_attrs, graph)
 
     return jsonify({"nodes": graph["nodes"], "edges": graph["edges"]})
@@ -1377,7 +1181,7 @@ def api_inheritance_chain(object_type, name):
         if obj.object_type == object_type and "name" in obj.attributes:
             templates[obj.attributes["name"]] = obj
 
-    chain = _walk_inheritance_chain(target, templates)
+    chain = walk_inheritance_chain(target, templates)
     return jsonify({"chain": chain, "depth": len(chain)})
 
 
@@ -1547,11 +1351,11 @@ def get_template_issues():
     service = get_service()
     objects = service.get_objects()
 
-    templates_by_type, all_templates = _build_template_index(objects)
-    invalid_use, referenced_templates = _find_invalid_use_refs(objects, templates_by_type)
-    detected_cycles = _detect_template_cycles(templates_by_type, all_templates)
-    circular_deps = _format_cycle_issues(detected_cycles)
-    unused = _find_unused_templates(all_templates, referenced_templates, templates_by_type)
+    templates_by_type, all_templates = build_template_index(objects)
+    invalid_use, referenced_templates = find_invalid_use_refs(objects, templates_by_type)
+    detected_cycles = detect_template_cycles(templates_by_type, all_templates)
+    circular_deps = format_cycle_issues(detected_cycles)
+    unused = find_unused_templates(all_templates, referenced_templates, templates_by_type)
 
     return jsonify({
         "invalid_use": invalid_use,
@@ -1575,7 +1379,7 @@ def api_escalation_path(object_type, name, service_desc=None):
         return jsonify({"error": "Object not found"}), 404
 
     template_lookup, contact_objects, cg_objects = _build_escalation_lookups(objects)
-    resolved_target = _resolve_attrs_with_templates(target, template_lookup)
+    resolved_target = resolve_inherited_attrs(target, template_lookup)
     base_contacts = _resolve_base_contacts(resolved_target, cg_objects, contact_objects, template_lookup)
     lookups = {
         "cg_objects": cg_objects,

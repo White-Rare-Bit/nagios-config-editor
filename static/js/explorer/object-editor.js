@@ -1192,7 +1192,7 @@
      * @returns {string} - Base64-encoded "file|type|name" key
      */
     function buildStableKey(obj) {
-        const objName = obj.get_name ? obj.get_name() : (obj.attributes.name || obj.attributes.host_name || obj.attributes.service_description || '');
+        const objName = Explorer.getEffectiveName(obj);
         return btoa(`${obj.source_file}|${obj.object_type}|${objName}`);
     }
 
