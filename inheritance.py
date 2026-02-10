@@ -116,10 +116,22 @@ def resolve_inherited_attrs(obj, template_lookup, visited=None):
                             resolved[key] = value
                 visited.discard(tmpl_name)
     # Object's own attributes always override;
-    # "null" values become sentinels to block inheritance
+    # "null" values become sentinels to block inheritance;
+    # "+" prefix on non-custom vars appends to inherited value
     for key, value in obj.attributes.items():
         if value == "null":
             resolved[key] = _NULL_SENTINEL
+        elif (
+            value.startswith("+")
+            and not key.startswith("_")
+            and key not in INHERITANCE_META
+        ):
+            stripped = value[1:]
+            existing = resolved.get(key)
+            if existing is not None and existing is not _NULL_SENTINEL:
+                resolved[key] = f"{existing},{stripped}"
+            else:
+                resolved[key] = stripped
         else:
             resolved[key] = value
     # Strip null-cancelled keys from the result
@@ -232,12 +244,26 @@ def resolve_chain(obj, obj_type, template_lookup, visited=None):
             visited.discard(tmpl_name)
 
     # Object's own attributes override inherited;
-    # "null" values cancel the attribute entirely
+    # "null" values cancel the attribute entirely;
+    # "+" prefix on non-custom vars appends to inherited value
     obj_name = obj.get_name() or obj.attributes.get("name", "(unknown)")
     for key, value in obj.attributes.items():
         if key not in INHERITANCE_META:
             if value == "null":
                 inherited.pop(key, None)
+            elif (
+                value.startswith("+")
+                and not key.startswith("_")
+            ):
+                stripped = value[1:]
+                existing = inherited.get(key)
+                if existing is not None:
+                    inherited[key] = {
+                        "value": f"{existing['value']},{stripped}",
+                        "source": f"{existing['source']},{obj_name}",
+                    }
+                else:
+                    inherited[key] = {"value": stripped, "source": obj_name}
             else:
                 inherited[key] = {"value": value, "source": obj_name}
 

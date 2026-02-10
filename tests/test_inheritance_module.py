@@ -234,6 +234,41 @@ class TestResolveInheritedAttrs:
         resolved = resolve_inherited_attrs(obj, lookup)
         assert "notification_period" not in resolved
 
+    def test_additive_prefix_appends(self):
+        """+ prefix appends to inherited value instead of replacing."""
+        tmpl = _tmpl("host", "base", hostgroups="base-group")
+        obj = _host(host_name="web-01", use="base", hostgroups="+linux-servers")
+        lookup = build_template_lookup([tmpl, obj])
+        resolved = resolve_inherited_attrs(obj, lookup)
+        assert "base-group" in resolved["hostgroups"]
+        assert "linux-servers" in resolved["hostgroups"]
+
+    def test_additive_prefix_no_inherited_value(self):
+        """+ prefix with no inherited value just uses the local value (stripped)."""
+        obj = _host(host_name="web-01", hostgroups="+linux-servers")
+        lookup = build_template_lookup([obj])
+        resolved = resolve_inherited_attrs(obj, lookup)
+        assert resolved["hostgroups"] == "linux-servers"
+
+    def test_additive_not_applied_to_custom_vars(self):
+        """+ prefix on custom variables (_underscore) is NOT additive — treated as literal."""
+        tmpl = _tmpl("host", "base", _NOTES="base-note")
+        obj = _host(host_name="web-01", use="base", _NOTES="+extra-note")
+        lookup = build_template_lookup([tmpl, obj])
+        resolved = resolve_inherited_attrs(obj, lookup)
+        assert resolved["_NOTES"] == "+extra-note"
+
+    def test_additive_with_multiple_templates(self):
+        """+ prefix works correctly with multi-template inheritance."""
+        t1 = _tmpl("host", "first", contact_groups="admins")
+        t2 = _tmpl("host", "second", contact_groups="ops")
+        obj = _host(host_name="web-01", use="first,second", contact_groups="+devs")
+        lookup = build_template_lookup([t1, t2, obj])
+        resolved = resolve_inherited_attrs(obj, lookup)
+        # First template wins for base, then +devs appended
+        assert "admins" in resolved["contact_groups"]
+        assert "devs" in resolved["contact_groups"]
+
 
 class TestHasAttrInChain:
     def test_direct_attr(self):
@@ -368,6 +403,15 @@ class TestResolveChain:
         chain, inherited, errors = resolve_chain(obj, "host", type_lookup)
         assert "notification_period" not in inherited
         assert inherited["max_check_attempts"]["value"] == "5"
+
+    def test_additive_in_chain(self):
+        """+ prefix resolves additively in chain with source tracking."""
+        tmpl = _tmpl("host", "base", contact_groups="admins")
+        obj = _host(host_name="web-01", use="base", contact_groups="+devs")
+        type_lookup = {"base": tmpl}
+        chain, inherited, errors = resolve_chain(obj, "host", type_lookup)
+        assert "admins" in inherited["contact_groups"]["value"]
+        assert "devs" in inherited["contact_groups"]["value"]
 
 
 # ─────────────────────────────────────────────────────────────────────
