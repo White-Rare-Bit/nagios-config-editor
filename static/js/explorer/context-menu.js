@@ -196,7 +196,7 @@
         document.getElementById('dialogBody').innerHTML = bodyHtml;
 
         const confirmBtn = document.getElementById('dialogConfirm');
-        const cancelBtn = document.querySelector('#dialog .btn-cancel');
+        const cancelBtn = document.querySelector('#dialog .dialog-footer button:first-child');
 
         if (onConfirm) {
             confirmBtn.onclick = onConfirm;
@@ -266,7 +266,7 @@
         // Reset button states
         const confirmBtn = document.getElementById('dialogConfirm');
         if (confirmBtn) confirmBtn.style.display = '';
-        const cancelBtn = dialog.querySelector('.btn-cancel');
+        const cancelBtn = dialog.querySelector('.dialog-footer button:first-child');
         if (cancelBtn) cancelBtn.textContent = 'Cancel';
     }
 

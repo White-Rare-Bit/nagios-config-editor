@@ -1196,15 +1196,15 @@ function fixDuplicate(idx) {
         }
 
         return {
-            html: `<div class="dialog-entry-item dialog-entry-item--vertical">
+            html: `<div class="u-mb-md">
                 <div class="dialog-entry-header">
                     <div class="ref-item-clickable" onclick="Explorer.navigateToObjectByIndex(${o.global_index}); Explorer.closeDialog();">
                         <span class="cleanup-detail-file">${Explorer.escapeHtml(file)}</span>
                         <span class="cleanup-detail-line">Line ${o.line_number || '?'}</span>
                     </div>
-                    <button class="nbe-btn nbe-btn--primary nbe-btn--sm" onclick="Explorer.keepDuplicateAndDeleteOthers(${idx}, ${i})">Keep This</button>
+                    <button class="nbe-btn nbe-btn--dark nbe-btn--secondary nbe-btn--sm" onclick="Explorer.keepDuplicateAndDeleteOthers(${idx}, ${i})">Keep This</button>
                 </div>
-                ${diffHtml}
+                ${diffHtml ? `<div class="code-preview">${diffHtml}</div>` : ''}
             </div>`
         };
     });
@@ -1216,10 +1216,11 @@ function fixDuplicate(idx) {
         : Explorer.dialogAlert('info',
              'These duplicates are identical. You can safely delete any of them.');
 
-    Explorer.showDialog('Resolve Duplicate', `
+    const objectType = s.duplicateGroup[0]?.object_type || 'object';
+    Explorer.showDialog(`Resolve Duplicate ${objectType}`, `
         ${diffMessage}
         ${Explorer.dialogInfoText('Choose which definition to keep. The others will be staged for deletion.')}
-        <div class="dialog-entry-list dialog-scrollable-list">${entries.map(e => e.html).join('')}</div>
+        <div class="dialog-duplicate-list">${entries.map(e => e.html).join('')}</div>
     `, null);
 }
 

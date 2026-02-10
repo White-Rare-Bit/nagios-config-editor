@@ -4031,45 +4031,6 @@
     justify-content: flex-end;
 }
 
-.btn-save {
-    padding: var(--nbe-space-sm) var(--nbe-space-lg);
-    background: var(--nbe-primary);
-    color: var(--nbe-text-inverse);
-    border: none;
-    border-radius: var(--nbe-radius-md);
-    font-size: var(--nbe-font-size-base);
-    font-weight: 500;
-    cursor: pointer;
-}
-
-.btn-save:hover {
-    background: var(--nbe-primary-hover);
-}
-
-.btn-save:focus-visible {
-    outline: none;
-    box-shadow: var(--nbe-focus-ring);
-}
-
-.btn-cancel {
-    padding: var(--nbe-space-sm) var(--nbe-space-lg);
-    background: var(--nbe-dark-bg-primary);
-    border: 1px solid var(--nbe-dark-input-border);
-    border-radius: var(--nbe-radius-md);
-    font-size: var(--nbe-font-size-base);
-    cursor: pointer;
-    color: var(--nbe-dark-text-primary);
-}
-
-.btn-cancel:hover {
-    background: var(--nbe-dark-bg-secondary);
-}
-
-.btn-cancel:focus-visible {
-    outline: none;
-    box-shadow: var(--nbe-focus-ring);
-}
-
 /* Multi Select - Enterprise Style */
 .multi-select {
     background: var(--nbe-dark-bg-primary);
@@ -4481,6 +4442,11 @@
 }
 
 /* Dialog entry list (clickable items) */
+.dialog-duplicate-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
 .dialog-entry-list {
     max-height: 200px;
     overflow-y: auto;
