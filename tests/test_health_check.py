@@ -3233,3 +3233,250 @@ define timeperiod {
         macro_issues = [i for i in data["issues"] if i["type"] == "undefined_macro"]
         flagged_macros = [i["message"] for i in macro_issues]
         assert any("$USER2$" in m for m in flagged_macros)
+
+
+class TestImpliedInheritanceHealthChecks:
+    """Test that health checks use implied inheritance for contact resolution."""
+
+    @pytest.fixture
+    def app_service_inherits_contacts_from_host(self):
+        """Config where a service has no contacts but its host does (implied inheritance)."""
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / "nagios"
+        test_config_path.mkdir()
+
+        (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check_ping
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+
+define command {
+    command_name    notify-by-email
+    command_line    /usr/bin/printf "%b" "Notification"
+}
+""")
+
+        (test_config_path / "timeperiods.cfg").write_text("""
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+    tuesday         00:00-24:00
+    wednesday       00:00-24:00
+    thursday        00:00-24:00
+    friday          00:00-24:00
+    saturday        00:00-24:00
+    sunday          00:00-24:00
+}
+""")
+
+        (test_config_path / "contacts.cfg").write_text("""
+define contact {
+    contact_name                    admin
+    host_notification_commands      notify-by-email
+    service_notification_commands   notify-by-email
+    host_notification_period        24x7
+    service_notification_period     24x7
+}
+
+define contactgroup {
+    contactgroup_name   admins
+    members             admin
+}
+""")
+
+        # Host has contacts; service does not (should inherit via implied inheritance)
+        (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name       web-server
+    alias           Web Server
+    address         10.0.0.1
+    contacts        admin
+    check_command   check_ping
+}
+""")
+
+        (test_config_path / "services.cfg").write_text("""
+define service {
+    host_name               web-server
+    service_description     HTTP
+    check_command           check_ping
+}
+""")
+
+        app = create_app(config_path=str(test_config_path))
+        app.config["TESTING"] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_service_inheriting_contacts_from_host_not_flagged(self, app_service_inherits_contacts_from_host):
+        """Service with no contacts that inherits from host should NOT be flagged."""
+        client = app_service_inherits_contacts_from_host.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        missing_contact_issues = [i for i in data["issues"]
+                                  if i["type"] == "missing_contacts"]
+        flagged_names = [i["object"] for i in missing_contact_issues]
+
+        # The HTTP service should NOT be flagged because it inherits contacts from web-server host
+        assert "HTTP" not in flagged_names, \
+            f"False positive: service 'HTTP' inherits contacts from host but was flagged. Issues: {missing_contact_issues}"
+
+    @pytest.fixture
+    def app_service_null_cancels_contacts(self):
+        """Config where a service explicitly cancels inherited contacts with null."""
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / "nagios"
+        test_config_path.mkdir()
+
+        (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check_ping
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+
+define command {
+    command_name    notify-by-email
+    command_line    /usr/bin/printf "%b" "Notification"
+}
+""")
+
+        (test_config_path / "timeperiods.cfg").write_text("""
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+    tuesday         00:00-24:00
+    wednesday       00:00-24:00
+    thursday        00:00-24:00
+    friday          00:00-24:00
+    saturday        00:00-24:00
+    sunday          00:00-24:00
+}
+""")
+
+        (test_config_path / "contacts.cfg").write_text("""
+define contact {
+    contact_name                    admin
+    host_notification_commands      notify-by-email
+    service_notification_commands   notify-by-email
+    host_notification_period        24x7
+    service_notification_period     24x7
+}
+""")
+
+        # Host has contacts, but service template cancels them with null
+        (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name       web-server
+    alias           Web Server
+    address         10.0.0.1
+    contacts        admin
+    check_command   check_ping
+}
+""")
+
+        (test_config_path / "templates.cfg").write_text("""
+define service {
+    name                    no-contacts-template
+    register                0
+    contacts                null
+    contact_groups          null
+}
+""")
+
+        (test_config_path / "services.cfg").write_text("""
+define service {
+    host_name               web-server
+    service_description     Nullified Contacts
+    check_command           check_ping
+    use                     no-contacts-template
+}
+""")
+
+        app = create_app(config_path=str(test_config_path))
+        app.config["TESTING"] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_service_with_null_contacts_still_inherits_from_host(self, app_service_null_cancels_contacts):
+        """Service with 'contacts null' template still gets implied inheritance from host."""
+        client = app_service_null_cancels_contacts.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        missing_contact_issues = [i for i in data["issues"]
+                                  if i["type"] == "missing_contacts"]
+        flagged_names = [i["object"] for i in missing_contact_issues]
+
+        # null cancels template inheritance but not implied inheritance from host.
+        # Since the host has contacts, the service should NOT be flagged.
+        assert "Nullified Contacts" not in flagged_names, \
+            f"False positive: 'Nullified Contacts' still inherits contacts from host via implied inheritance"
+
+    @pytest.fixture
+    def app_service_no_contacts_anywhere(self):
+        """Config where neither service nor host has contacts."""
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / "nagios"
+        test_config_path.mkdir()
+
+        (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check_ping
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+""")
+
+        (test_config_path / "timeperiods.cfg").write_text("""
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+}
+""")
+
+        # Host has NO contacts
+        (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name       bare-host
+    alias           No Contacts Host
+    address         10.0.0.1
+    check_command   check_ping
+}
+""")
+
+        # Service has NO contacts either
+        (test_config_path / "services.cfg").write_text("""
+define service {
+    host_name               bare-host
+    service_description     No Contacts Service
+    check_command           check_ping
+}
+""")
+
+        app = create_app(config_path=str(test_config_path))
+        app.config["TESTING"] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_service_and_host_both_without_contacts_flagged(self, app_service_no_contacts_anywhere):
+        """Service with no contacts whose host also has no contacts SHOULD be flagged."""
+        client = app_service_no_contacts_anywhere.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        missing_contact_issues = [i for i in data["issues"]
+                                  if i["type"] == "missing_contacts"]
+        flagged_names = [i["object"] for i in missing_contact_issues]
+
+        # Both host and service should be flagged since neither has contacts
+        assert "No Contacts Service" in flagged_names, \
+            f"Expected 'No Contacts Service' to be flagged, got: {flagged_names}"
+        assert "bare-host" in flagged_names, \
+            f"Expected 'bare-host' to be flagged, got: {flagged_names}"

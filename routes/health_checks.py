@@ -7,7 +7,7 @@ The run_all_checks() orchestrator calls them all.
 import os
 import re
 
-from inheritance import has_attr_in_chain, resolve_inherited_attrs
+from inheritance import has_attr_in_chain, resolve_all_attrs, resolve_inherited_attrs
 from nagios_cfg import parse_nagios_cfg, parse_resource_cfg
 from nagios_model import NAME_FIELDS, REFERENCE_FIELDS, REQUIRED_FIELDS
 
@@ -680,7 +680,7 @@ def check_missing_check_command(ctx):
             continue
         if obj.attributes.get("register", "1") == "0":
             continue
-        resolved = resolve_inherited_attrs(obj, template_lookup)
+        resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"])
         if "check_command" not in resolved:
             obj_name = obj.get_name() or "unnamed"
             host = resolved.get("host_name", resolved.get("hostgroup_name", ""))
@@ -712,7 +712,7 @@ def check_command_arg_mismatch(ctx):
             continue
         if obj.attributes.get("register", "1") == "0":
             continue
-        resolved = resolve_inherited_attrs(obj, template_lookup)
+        resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"])
         check_cmd = resolved.get("check_command", "")
         if not check_cmd:
             continue
@@ -883,7 +883,7 @@ def check_service_host_notification_reachability(ctx):
         if obj.attributes.get("register", "1") == "0":
             continue
 
-        resolved = resolve_inherited_attrs(obj, template_lookup)
+        resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"])
         contact_names = _expand_contacts(resolved, ctx)
 
         if not contact_names:
@@ -1323,19 +1323,21 @@ def _resolve_ref_type(ref_field, target_type, obj_type):
 # ---------------------------------------------------------------------------
 
 def check_missing_contacts_on_objects(ctx):
-    """Check 21: Hosts/services with no contacts, contact_groups, or template."""
+    """Check 21: Hosts/services with no contacts or contact_groups after full resolution."""
     issues = []
     obj_to_index = ctx["obj_to_index"]
+    template_lookup = ctx["template_lookup"]
+    objects = ctx["objects"]
 
-    for obj in ctx["objects"]:
+    for obj in objects:
         if obj.object_type not in ("host", "service"):
             continue
         if obj.attributes.get("register", "1") == "0":
             continue
-        has_contacts = "contacts" in obj.attributes
-        has_contact_groups = "contact_groups" in obj.attributes
-        has_use = "use" in obj.attributes
-        if not has_contacts and not has_contact_groups and not has_use:
+        resolved = resolve_all_attrs(obj, template_lookup, objects)
+        has_contacts = bool(resolved.get("contacts"))
+        has_contact_groups = bool(resolved.get("contact_groups"))
+        if not has_contacts and not has_contact_groups:
             obj_name = obj.get_name() or obj.get_display_name()
             issues.append({
                 "type": "missing_contacts",
@@ -1344,7 +1346,7 @@ def check_missing_contacts_on_objects(ctx):
                 "object_type": obj.object_type,
                 "file": obj.source_file,
                 "global_index": obj_to_index.get(id(obj)),
-                "message": f"{obj.object_type.title()} has no contacts, contact_groups, or template (use) defined",
+                "message": f"{obj.object_type.title()} has no contacts or contact_groups (after template and implied inheritance)",
             })
     return issues
 
@@ -1479,7 +1481,7 @@ def check_required_fields(ctx):
         if obj.attributes.get("register", "1") == "0":
             continue
 
-        resolved = resolve_inherited_attrs(obj, template_lookup)
+        resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"])
         obj_name = obj.get_name() or obj.get_display_name()
 
         for requirement in REQUIRED_FIELDS[obj.object_type]:
@@ -1588,7 +1590,7 @@ def check_redundant_escalation_contacts(ctx):
 
     # Build map of (host_name, service_description?) -> resolved contact set
     def get_contact_set(obj):
-        resolved = resolve_inherited_attrs(obj, template_lookup)
+        resolved = resolve_all_attrs(obj, template_lookup, objects)
         contacts = set()
         for c in resolved.get("contacts", "").split(","):
             c = c.strip()
@@ -1729,7 +1731,7 @@ def check_notification_period_criticality(ctx):
         if obj.attributes.get("register", "1") == "0":
             continue
 
-        resolved = resolve_inherited_attrs(obj, template_lookup)
+        resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"])
 
         # Determine if this is a "critical" service
         host = resolved.get("host_name", "")
@@ -1849,7 +1851,7 @@ def check_dependency_period_mismatch(ctx):
         if not target:
             continue
 
-        resolved = resolve_inherited_attrs(target, template_lookup)
+        resolved = resolve_all_attrs(target, template_lookup, ctx["objects"])
         check_period = resolved.get("check_period", "")
 
         if check_period and dep_period != check_period and dep_period != "24x7" and check_period != "24x7":
