@@ -22,20 +22,6 @@
     const state = Explorer.state;
 
     // ==========================================================================
-    // Shared Utilities (duplicated from analysis.js for module independence)
-    // ==========================================================================
-
-    // Build file dropdown options HTML
-    function buildFileOptionsHtml(defaultFile = '') {
-        const configFiles = [...new Set(state.allObjects.map(o => o.source_file))].sort();
-        return configFiles.map(f => {
-            const fileName = f.split('/').pop();
-            const selected = f === defaultFile ? 'selected' : '';
-            return `<option value="${Explorer.escapeHtml(f)}" ${selected}>${Explorer.escapeHtml(fileName)}</option>`;
-        }).join('');
-    }
-
-    // ==========================================================================
     // Issue Loading and Display
     // ==========================================================================
 
@@ -253,7 +239,7 @@
         }).join('');
 
         Explorer.showDialog(`Missing ${group.objectType}: ${group.missingName}`, `
-            <p class="u-mb-md dialog-info-text">This ${group.objectType} is referenced by ${group.issues.length} object(s) but doesn't exist.</p>
+            ${Explorer.dialogInfoText(`This ${group.objectType} is referenced by ${group.issues.length} object(s) but doesn't exist.`)}
             <p class="u-mb-sm"><strong>Affected objects:</strong></p>
             <div class="dialog-scrollable-list">${objectList}</div>
         `, null);
@@ -321,9 +307,6 @@
             return;
         }
 
-        // Get list of existing files for the target file dropdown
-        const existingFiles = [...new Set(state.allObjects.map(o => o.source_file))].sort();
-
         // Try to find the most common target file from source objects
         const fileCounts = {};
         matchingGroups.forEach(g => {
@@ -338,13 +321,8 @@
         });
 
         // Default to most common file, or first file if no matches
+        const existingFiles = [...new Set(state.allObjects.map(o => o.source_file))].sort();
         const defaultFile = Object.entries(fileCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || existingFiles[0];
-
-        const fileOptions = existingFiles.map(f => {
-            const selected = f === defaultFile ? 'selected' : '';
-            const fileName = f.split('/').pop();
-            return `<option value="${Explorer.escapeHtml(f)}" ${selected}>${Explorer.escapeHtml(fileName)}</option>`;
-        }).join('');
 
         // Build list of items to create
         const itemsList = matchingGroups.map(g => {
@@ -358,13 +336,8 @@
         const typeLabel = groupType === 'template' ? 'templates' : `${groupType}s`;
 
         Explorer.showDialog(`Create All Missing ${typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)}`, `
-            <p class="u-mb-md dialog-info-text">Create ${matchingGroups.length} missing ${typeLabel} at once.</p>
-            <div class="u-mb-md">
-                <label class="form-label">Target File</label>
-                <select class="form-select" id="batchCreateTargetFile">
-                    ${fileOptions}
-                </select>
-            </div>
+            ${Explorer.dialogInfoText(`Create ${matchingGroups.length} missing ${typeLabel} at once.`)}
+            ${Explorer.dialogFileSelect('batchCreateTargetFile', 'Target File', defaultFile)}
             <div class="u-mb-md">
                 <label class="form-label">Objects to Create (${matchingGroups.length})</label>
                 <div class="dialog-scrollable-list batch-create-list">
@@ -523,31 +496,18 @@
     }
 
     function showCreateObjectForIssueDialog(objectType, attributes, suggestedFile, isTemplate) {
-        const fileOptions = buildFileOptionsHtml(suggestedFile);
-
         const typeLabel = isTemplate ? `${objectType} template` : objectType;
-        const nameField = Object.keys(attributes)[0];
-        const displayName = attributes[nameField];
 
         // Build attributes preview
-        const attrsHtml = Object.entries(attributes).map(([key, val]) => {
-            return `<div class="attr-display-row">
-                <span class="attr-display-key">${Explorer.escapeHtml(key)}:</span> ${Explorer.escapeHtml(val)}
-            </div>`;
-        }).join('');
+        const kvPairs = Object.entries(attributes).map(([key, val]) => ({ key, value: val }));
 
         Explorer.showDialog(`Create Missing ${typeLabel}`, `
-            <p class="u-mb-md dialog-info-text">Create a new ${typeLabel} to resolve this issue.</p>
-            <div class="u-mb-md">
-                <label class="form-label">Target File</label>
-                <select class="form-select" id="resolveTargetFile">
-                    ${fileOptions}
-                </select>
-            </div>
+            ${Explorer.dialogInfoText(`Create a new ${typeLabel} to resolve this issue.`)}
+            ${Explorer.dialogFileSelect('resolveTargetFile', 'Target File', suggestedFile)}
             <div class="u-mb-md">
                 <label class="form-label">Attributes</label>
                 <div class="code-preview">
-                    ${attrsHtml}
+                    ${Explorer.dialogKvList(kvPairs)}
                 </div>
                 <small class="text-muted">You can edit these after creation.</small>
             </div>

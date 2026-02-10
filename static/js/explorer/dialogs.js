@@ -11,20 +11,71 @@
     // ============================================================================
 
     /**
-     * Build HTML for a warning box with icon
-     * @param {string} message - Warning message (can include HTML)
-     * @param {string} [type='warning'] - Box type: 'warning', 'danger', or 'info'
+     * Build HTML for an alert box with severity styling
+     * @param {string} severity - 'info', 'warning', or 'danger'
+     * @param {string} html - Alert content (can include HTML)
      * @returns {string} HTML string
      */
-    function buildWarningBox(message, type = 'warning') {
-        const icons = {
-            warning: 'fa-triangle-exclamation',
-            danger: 'fa-exclamation-circle',
-            info: 'fa-info-circle'
-        };
-        const icon = icons[type] || icons.warning;
-        const cssClass = type === 'danger' ? 'dialog-danger-box' : `dialog-${type}-box`;
-        return `<div class="${cssClass}"><strong><i class="fa-solid ${icon}"></i> ${message}</strong></div>`;
+    function dialogAlert(severity, html) {
+        return `<div class="dialog-alert dialog-alert--${severity}">${html}</div>`;
+    }
+
+    /**
+     * Build HTML for a key-value list (attribute display, diff rows)
+     * @param {Array<{key: string, value: string}>} pairs - Key-value pairs
+     * @returns {string} HTML string
+     */
+    function dialogKvList(pairs) {
+        const rows = pairs.map(({key, value}) =>
+            `<div class="dialog-kv-row">
+                <span class="dialog-kv-key">${Explorer.escapeHtml(key)}</span>
+                <span class="dialog-kv-val">${value !== undefined ? Explorer.escapeHtml(String(value)) : '<em>not set</em>'}</span>
+            </div>`
+        ).join('');
+        return `<div class="dialog-kv-list">${rows}</div>`;
+    }
+
+    /**
+     * Build HTML for a file select dropdown
+     * @param {string} id - Element id for the select
+     * @param {string} label - Label text
+     * @param {string} [defaultFile=''] - File path to pre-select
+     * @returns {string} HTML string
+     */
+    function dialogFileSelect(id, label, defaultFile = '') {
+        const configFiles = [...new Set(state.allObjects.map(o => o.source_file))].sort();
+        const options = configFiles.map(f => {
+            const fileName = f.split('/').pop();
+            const selected = f === defaultFile ? 'selected' : '';
+            return `<option value="${Explorer.escapeHtml(f)}" ${selected}>${Explorer.escapeHtml(fileName)}</option>`;
+        }).join('');
+        return `<div class="u-mb-md">
+            <label class="form-label">${Explorer.escapeHtml(label)}</label>
+            <select class="form-select" id="${id}">
+                ${options}
+            </select>
+        </div>`;
+    }
+
+    /**
+     * Build HTML for a muted info paragraph
+     * @param {string} text - Info text (plain text, will be escaped)
+     * @returns {string} HTML string
+     */
+    function dialogInfoText(text) {
+        return `<p class="dialog-info-text">${Explorer.escapeHtml(text)}</p>`;
+    }
+
+    /**
+     * Build HTML for a list of clickable entry items
+     * @param {Array<{html: string, onclick: string}>} entries - Entry items
+     * @returns {string} HTML string
+     */
+    function dialogEntryList(entries) {
+        const items = entries.map(e =>
+            `<div class="dialog-entry-item"${e.onclick ? ` onclick="${e.onclick}"` : ''}>${e.html}</div>`
+        ).join('');
+        return `<div class="dialog-entry-list">${items}</div>`;
     }
 
     /**
@@ -500,23 +551,22 @@
             }
         }
 
-        let warningHtml = buildWarningBox('Warning: This deletion will affect other objects', 'warning');
+        let warningHtml = dialogAlert('warning',
+            '<strong><i class="fa-solid fa-triangle-exclamation"></i> Warning: This deletion will affect other objects</strong>');
 
         // Show orphaned services warning prominently
         if (orphanedServices.length > 0) {
-            warningHtml += `
-                <div class="dialog-danger-box">
-                    <strong><i class="fa-solid fa-exclamation-circle"></i> ${orphanedServices.length} service(s) will become orphaned</strong>
-                    <p>These services will have no host/hostgroup and may fail to load:</p>
-                    <ul>
-            `;
+            let orphanList = '';
             for (const dep of orphanedServices.slice(0, 5)) {
-                warningHtml += `<li>${Explorer.escapeHtml(dep.object.display_name)}</li>`;
+                orphanList += `<li>${Explorer.escapeHtml(dep.object.display_name)}</li>`;
             }
             if (orphanedServices.length > 5) {
-                warningHtml += `<li class="dialog-detail-more">... and ${orphanedServices.length - 5} more</li>`;
+                orphanList += `<li class="dialog-detail-more">... and ${orphanedServices.length - 5} more</li>`;
             }
-            warningHtml += '</ul></div>';
+            warningHtml += dialogAlert('danger',
+                `<strong><i class="fa-solid fa-exclamation-circle"></i> ${orphanedServices.length} service(s) will become orphaned</strong>
+                <p>These services will have no host/hostgroup and may fail to load:</p>
+                <ul>${orphanList}</ul>`);
         }
 
         // Show other broken references (non-orphan dependencies)
@@ -1149,6 +1199,12 @@
     // ============================================================================
     // Export Functions to Explorer Namespace
     // ============================================================================
+
+    Explorer.dialogAlert = dialogAlert;
+    Explorer.dialogKvList = dialogKvList;
+    Explorer.dialogFileSelect = dialogFileSelect;
+    Explorer.dialogInfoText = dialogInfoText;
+    Explorer.dialogEntryList = dialogEntryList;
 
     Explorer.createNewObject = createNewObject;
     Explorer.showCenterPaneNewObject = showCenterPaneNewObject;

@@ -13,7 +13,7 @@ All modules attach to `window.Explorer` namespace. State in `Explorer.state`.
 | `object-editor.js` | Center pane: attribute editor, validation, create/delete workflows |
 | `file-operations.js` | Right pane: file tree, navigation, folder ops. Helper: `afterStagingChange()` |
 | `context-menu.js` | Right-click menus, bulk actions. Helper: `getOrCreatePendingEdit(obj)` |
-| `dialogs.js` | Create/delete/rename dialogs, `buildWarningBox()`, `buildTypeDropdown()` |
+| `dialogs.js` | Create/delete/rename dialogs, dialog content helpers (`dialogAlert`, `dialogKvList`, etc.), `buildTypeDropdown()` |
 | `data-loading.js` | API calls, staging sync/polling, initial load |
 | `drag-drop.js` | Drag-drop cleanup utilities (handlers in context-menu.js and file-operations.js) |
 | `analysis.js` | Suggestions tab: template detection, validation errors |

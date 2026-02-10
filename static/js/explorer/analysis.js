@@ -15,16 +15,6 @@
         return suggestions.filter(s => s.object && !Explorer.isObjectMarkedForDeletion(s.object.global_index));
     }
 
-    // A-03: Build file dropdown options HTML (used 3+ times in dialogs)
-    function buildFileOptionsHtml(defaultFile = '') {
-        const configFiles = [...new Set(state.allObjects.map(o => o.source_file))].sort();
-        return configFiles.map(f => {
-            const fileName = f.split('/').pop();
-            const selected = f === defaultFile ? 'selected' : '';
-            return `<option value="${Explorer.escapeHtml(f)}" ${selected}>${Explorer.escapeHtml(fileName)}</option>`;
-        }).join('');
-    }
-
 async function analyzeAll() {
     try {
         await loadAllSuggestions(true);
@@ -1075,9 +1065,7 @@ function bulkDeleteCleanupGroup(groupType) {
             ${itemsList}
             ${moreCount}
         </ul>
-        <p class="u-mt-md dialog-info-text">
-            Changes will be staged and can be reviewed before committing.
-        </p>
+        ${Explorer.dialogInfoText('Changes will be staged and can be reviewed before committing.')}
     `, () => {
         // Stage deletions
         let deletedCount = 0;
@@ -1113,18 +1101,19 @@ function showCleanupDetail(idx) {
 
     if (s.type === 'duplicate') {
         // Show all duplicate objects
-        const objectList = s.objects.map(o => {
+        const entries = s.objects.map(o => {
             const file = o.source_file.split('/').pop();
-            return `<div class="cleanup-detail-item" onclick="Explorer.navigateToObjectByIndex(${o.global_index}); Explorer.closeDialog();">
-                <span class="cleanup-detail-file">${Explorer.escapeHtml(file)}</span>
-                <span class="cleanup-detail-line">Line ${o.line_number || '?'}</span>
-            </div>`;
-        }).join('');
+            return {
+                html: `<span class="cleanup-detail-file">${Explorer.escapeHtml(file)}</span>
+                       <span class="cleanup-detail-line">Line ${o.line_number || '?'}</span>`,
+                onclick: `Explorer.navigateToObjectByIndex(${o.global_index}); Explorer.closeDialog();`
+            };
+        });
 
         Explorer.showDialog('Duplicate Objects', `
-            <p class="u-mb-md dialog-info-text">${Explorer.escapeHtml(s.description)}</p>
+            ${Explorer.dialogInfoText(s.description)}
             <p class="u-mb-sm"><strong>Click to navigate to each definition:</strong></p>
-            <div class="cleanup-detail-list">${objectList}</div>
+            ${Explorer.dialogEntryList(entries)}
         `, null);
     } else if (s.object) {
         // Single object - navigate to it
@@ -1133,7 +1122,7 @@ function showCleanupDetail(idx) {
         // Warning without a direct object - show info dialog
         Explorer.showDialog('Issue Details', `
             <p class="u-mb-md"><strong>${Explorer.escapeHtml(s.title)}</strong></p>
-            <p class="dialog-info-text">${Explorer.escapeHtml(s.description)}</p>
+            ${Explorer.dialogInfoText(s.description)}
         `, null);
     }
 }
@@ -1194,25 +1183,21 @@ function fixDuplicate(idx) {
     const hasDifferences = differences.length > 0;
 
     // Build list of duplicates with "Keep" buttons
-    const objectList = s.duplicateGroup.map((o, i) => {
+    const entries = s.duplicateGroup.map((o, i) => {
         const file = o.source_file.split('/').pop();
 
         // Show differing attributes for this object
         let diffHtml = '';
         if (hasDifferences) {
-            const diffAttrs = differences.map(attr => {
-                const val = o.attributes[attr];
-                return `<div class="diff-row">
-                    <span class="diff-key">${Explorer.escapeHtml(attr)}:</span>
-                    <span class="diff-val">${val !== undefined ? Explorer.escapeHtml(String(val)) : '<em>not set</em>'}</span>
-                </div>`;
-            }).join('');
-            diffHtml = `<div class="diff-values">${diffAttrs}</div>`;
+            diffHtml = Explorer.dialogKvList(differences.map(attr => ({
+                key: attr,
+                value: o.attributes[attr]
+            })));
         }
 
-        return `
-            <div class="cleanup-detail-item cleanup-detail-item--vertical">
-                <div class="cleanup-detail-header">
+        return {
+            html: `<div class="dialog-entry-item dialog-entry-item--vertical">
+                <div class="dialog-entry-header">
                     <div class="ref-item-clickable" onclick="Explorer.navigateToObjectByIndex(${o.global_index}); Explorer.closeDialog();">
                         <span class="cleanup-detail-file">${Explorer.escapeHtml(file)}</span>
                         <span class="cleanup-detail-line">Line ${o.line_number || '?'}</span>
@@ -1220,22 +1205,21 @@ function fixDuplicate(idx) {
                     <button class="nbe-btn nbe-btn--primary nbe-btn--sm" onclick="Explorer.keepDuplicateAndDeleteOthers(${idx}, ${i})">Keep This</button>
                 </div>
                 ${diffHtml}
-            </div>`;
-    }).join('');
+            </div>`
+        };
+    });
 
     const diffMessage = hasDifferences
-        ? `<div class="dialog-alert dialog-alert--warning">
-             <strong>Differences found!</strong> These duplicates have different values for:
-             <code>${differences.join('</code>, <code>')}</code>
-           </div>`
-        : `<div class="dialog-alert dialog-alert--info">
-             These duplicates are identical. You can safely delete any of them.
-           </div>`;
+        ? Explorer.dialogAlert('warning',
+             `<strong>Differences found!</strong> These duplicates have different values for:
+             <code>${differences.join('</code>, <code>')}</code>`)
+        : Explorer.dialogAlert('info',
+             'These duplicates are identical. You can safely delete any of them.');
 
     Explorer.showDialog('Resolve Duplicate', `
         ${diffMessage}
-        <p class="u-mb-sm dialog-info-text">Choose which definition to keep. The others will be staged for deletion.</p>
-        <div class="cleanup-detail-list dialog-scrollable-list">${objectList}</div>
+        ${Explorer.dialogInfoText('Choose which definition to keep. The others will be staged for deletion.')}
+        <div class="dialog-entry-list dialog-scrollable-list">${entries.map(e => e.html).join('')}</div>
     `, null);
 }
 
@@ -1302,20 +1286,19 @@ function fixLongHostList(idx) {
     const serviceDesc = obj.attributes.service_description || 'service';
 
     Explorer.showDialog('Create Hostgroup', `
-        <div class="dialog-alert dialog-alert--info">
-            <strong>This will:</strong>
+        ${Explorer.dialogAlert('info',
+            `<strong>This will:</strong>
             <ol class="u-mt-sm u-pl-lg">
                 <li>Create a new hostgroup definition with ${hosts.length} hosts</li>
                 <li>Update the service "${Explorer.escapeHtml(serviceDesc)}" to use the new hostgroup</li>
-            </ol>
-        </div>
+            </ol>`)}
         <div class="u-mb-md">
             <label class="form-label">Hosts to be grouped:</label>
             <div class="dialog-scrollable-list dialog-scrollable-list--short">
                 ${hosts.map(h => Explorer.escapeHtml(h)).join('<br>')}
             </div>
         </div>
-        <p class="dialog-info-text">Click Continue to open the hostgroup editor where you can set the name and other attributes.</p>
+        ${Explorer.dialogInfoText('Click Continue to open the hostgroup editor where you can set the name and other attributes.')}
     `, () => {
         Explorer.closeDialog();
         openHostgroupEditorForService(idx, hosts);

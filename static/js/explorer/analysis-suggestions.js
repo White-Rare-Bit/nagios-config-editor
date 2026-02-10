@@ -26,16 +26,6 @@
     // Shared Utilities
     // ==========================================================================
 
-    // Build file dropdown options HTML (duplicated from analysis.js for module independence)
-    function buildFileOptionsHtml(defaultFile = '') {
-        const configFiles = [...new Set(state.allObjects.map(o => o.source_file))].sort();
-        return configFiles.map(f => {
-            const fileName = f.split('/').pop();
-            const selected = f === defaultFile ? 'selected' : '';
-            return `<option value="${Explorer.escapeHtml(f)}" ${selected}>${Explorer.escapeHtml(fileName)}</option>`;
-        }).join('');
-    }
-
     function getObjectDisplayName(obj) {
         return obj.attributes.host_name || obj.attributes.service_description || obj.attributes.name || obj.attributes.contact_name || `${obj.object_type}@${obj.line_number}`;
     }
@@ -321,23 +311,17 @@
         const objectFiles = [...new Set(suggestion.objects.map(o => o.source_file))];
         const defaultFile = configFiles.find(f => f.toLowerCase().includes('template')) ||
                             objectFiles[0] || configFiles[0] || '';
-        const fileOptions = buildFileOptionsHtml(defaultFile);
 
         // Format attributes for display
-        const attrsHtml = Object.entries(suggestion.attributes)
-            .map(([k, v]) => `<div class="attr-display-row"><span class="attr-display-key">${Explorer.escapeHtml(k)}</span><span class="attr-display-value">${Explorer.escapeHtml(v)}</span></div>`)
-            .join('');
+        const kvPairs = Object.entries(suggestion.attributes).map(([k, v]) => ({ key: k, value: v }));
 
         Explorer.showDialog('Create Template', `
             <label>Template Name</label>
             <input type="text" id="newTemplateName" value="${Explorer.escapeHtml(suggestion.suggestedName)}">
-            <label>Target File</label>
-            <select id="newTemplateFile" class="dialog-select">
-                ${fileOptions}
-            </select>
+            ${Explorer.dialogFileSelect('newTemplateFile', 'Target File', defaultFile)}
             <label>Shared Attributes (${Object.keys(suggestion.attributes).length})</label>
             <div class="dialog-scrollable-list dialog-scrollable-list--short">
-                ${attrsHtml}
+                ${Explorer.dialogKvList(kvPairs)}
             </div>
             <div class="dialog-checkbox-group">
                 <label>
@@ -448,15 +432,11 @@
         const defaultFile = configFiles.find(f => f.toLowerCase().includes('hostgroup')) ||
                             configFiles.find(f => state.allObjects.some(o => o.source_file === f && o.object_type === 'host')) ||
                             configFiles[0] || '';
-        const fileOptions = buildFileOptionsHtml(defaultFile);
 
         Explorer.showDialog('Create Hostgroup', `
             <label>Group Name</label>
             <input type="text" id="newGroupName" value="${Explorer.escapeHtml(suggestion.name)}">
-            <label>Target File</label>
-            <select id="newGroupFile" class="dialog-select">
-                ${fileOptions}
-            </select>
+            ${Explorer.dialogFileSelect('newGroupFile', 'Target File', defaultFile)}
             <label>Members (${suggestion.members.length} hosts)</label>
             <div class="dialog-scrollable-list">
                 ${suggestion.members.map(m => `<span class="suggestion-member">${Explorer.escapeHtml(m)}</span>`).join(' ')}
