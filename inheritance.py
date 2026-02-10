@@ -15,6 +15,10 @@ Key design choices:
 # Attributes excluded from inheritance resolution
 INHERITANCE_META = frozenset({"use", "name", "register"})
 
+# Sentinel for null cancellation: when an attribute is set to the literal
+# string "null", it blocks inheriting that field from templates.
+_NULL_SENTINEL = object()
+
 
 # ─────────────────────────────────────────────────────────────────────
 # Template lookup builders
@@ -111,10 +115,15 @@ def resolve_inherited_attrs(obj, template_lookup, visited=None):
                         if key not in INHERITANCE_META and key not in resolved:
                             resolved[key] = value
                 visited.discard(tmpl_name)
-    # Object's own attributes always override
+    # Object's own attributes always override;
+    # "null" values become sentinels to block inheritance
     for key, value in obj.attributes.items():
-        resolved[key] = value
-    return resolved
+        if value == "null":
+            resolved[key] = _NULL_SENTINEL
+        else:
+            resolved[key] = value
+    # Strip null-cancelled keys from the result
+    return {k: v for k, v in resolved.items() if v is not _NULL_SENTINEL}
 
 
 def has_attr_in_chain(obj, attr_name, template_lookup, visited=None):
@@ -126,7 +135,8 @@ def has_attr_in_chain(obj, attr_name, template_lookup, visited=None):
     if visited is None:
         visited = set()
     if attr_name in obj.attributes:
-        return True
+        # "null" cancels the attribute — treat as not present
+        return obj.attributes[attr_name] != "null"
     use_val = obj.attributes.get("use", "")
     if not use_val:
         return False
@@ -221,11 +231,15 @@ def resolve_chain(obj, obj_type, template_lookup, visited=None):
             # Allow reuse in sibling branches (A uses B,C where both use D)
             visited.discard(tmpl_name)
 
-    # Object's own attributes override inherited
+    # Object's own attributes override inherited;
+    # "null" values cancel the attribute entirely
     obj_name = obj.get_name() or obj.attributes.get("name", "(unknown)")
     for key, value in obj.attributes.items():
         if key not in INHERITANCE_META:
-            inherited[key] = {"value": value, "source": obj_name}
+            if value == "null":
+                inherited.pop(key, None)
+            else:
+                inherited[key] = {"value": value, "source": obj_name}
 
     return chain, inherited, errors
 

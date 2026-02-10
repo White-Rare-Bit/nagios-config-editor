@@ -216,6 +216,24 @@ class TestResolveInheritedAttrs:
         resolved = resolve_inherited_attrs(obj, lookup)
         assert resolved["check_command"] == "check-gp"
 
+    def test_null_cancels_inheritance(self):
+        """Setting a value to 'null' prevents inheriting from template."""
+        tmpl = _tmpl("host", "base", notification_period="24x7", max_check_attempts="5")
+        obj = _host(host_name="web-01", use="base", notification_period="null")
+        lookup = build_template_lookup([tmpl, obj])
+        resolved = resolve_inherited_attrs(obj, lookup)
+        assert "notification_period" not in resolved
+        assert resolved["max_check_attempts"] == "5"
+
+    def test_null_in_template_cancels_grandparent(self):
+        """null in a template blocks inheritance from further up the chain."""
+        grandparent = _tmpl("host", "gp", notification_period="24x7")
+        parent = _tmpl("host", "parent", use="gp", notification_period="null")
+        obj = _host(host_name="web-01", use="parent")
+        lookup = build_template_lookup([grandparent, parent, obj])
+        resolved = resolve_inherited_attrs(obj, lookup)
+        assert "notification_period" not in resolved
+
 
 class TestHasAttrInChain:
     def test_direct_attr(self):
@@ -248,6 +266,13 @@ class TestHasAttrInChain:
         a = _host(host_name="web-01", use="B,C")
         lookup = build_template_lookup([d, b, c, a])
         assert has_attr_in_chain(a, "check_command", lookup) is True
+
+    def test_null_value_returns_false(self):
+        """Attribute set to 'null' should be treated as not present."""
+        tmpl = _tmpl("host", "base", notification_period="24x7")
+        obj = _host(host_name="web-01", use="base", notification_period="null")
+        lookup = build_template_lookup([tmpl, obj])
+        assert has_attr_in_chain(obj, "notification_period", lookup) is False
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -334,6 +359,15 @@ class TestResolveChain:
         assert "use" not in inherited
         assert "name" not in inherited
         assert "register" not in inherited
+
+    def test_null_cancels_in_chain(self):
+        """null value cancels inheritance and is not in resolved chain."""
+        tmpl = _tmpl("host", "base", notification_period="24x7", max_check_attempts="5")
+        obj = _host(host_name="web-01", use="base", notification_period="null")
+        type_lookup = {"base": tmpl}
+        chain, inherited, errors = resolve_chain(obj, "host", type_lookup)
+        assert "notification_period" not in inherited
+        assert inherited["max_check_attempts"]["value"] == "5"
 
 
 # ─────────────────────────────────────────────────────────────────────
