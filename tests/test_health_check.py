@@ -2003,3 +2003,189 @@ define timeperiod {
         missing_messages = [i["message"] for i in missing_contact_issues]
         assert not any("*" in msg for msg in missing_messages), \
             f"Wildcard * should not be flagged as missing contact: {missing_messages}"
+
+
+# ============================================================
+# Issue #3: Required field validation through inheritance
+# ============================================================
+
+class TestRequiredFieldInheritance:
+    """Test that required fields are validated through inheritance chains."""
+
+    @pytest.fixture
+    def app_with_templates(self):
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / "nagios"
+        test_config_path.mkdir()
+
+        (test_config_path / "templates.cfg").write_text("""
+define host {
+    name                    good-template
+    register                0
+    address                 10.0.0.1
+    contact_groups          admins
+    max_check_attempts      5
+}
+
+define host {
+    name                    empty-template
+    register                0
+}
+""")
+
+        (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name       good-host
+    use             good-template
+    alias           Good Host
+}
+
+define host {
+    host_name       bad-host
+    use             empty-template
+    alias           Bad Host
+}
+""")
+
+        (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check-host-alive
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+""")
+
+        (test_config_path / "contacts.cfg").write_text("""
+define contact {
+    contact_name                    admin
+    host_notification_commands      check-host-alive
+    service_notification_commands   check-host-alive
+    host_notification_period        24x7
+    service_notification_period     24x7
+    host_notification_options       d,u,r
+    service_notification_options    w,u,c,r
+}
+""")
+
+        (test_config_path / "contactgroups.cfg").write_text("""
+define contactgroup {
+    contactgroup_name   admins
+    alias               Admins
+    members             admin
+}
+""")
+
+        (test_config_path / "timeperiods.cfg").write_text("""
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+}
+""")
+
+        app = create_app(config_path=str(test_config_path))
+        app.config["TESTING"] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_required_field_resolved_through_inheritance(self, app_with_templates):
+        """Host inheriting address + contact_groups from template should NOT be flagged."""
+        client = app_with_templates.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        missing_req = [
+            i for i in data["issues"]
+            if i["type"] == "missing_required_field" and i["object"] == "good-host"
+        ]
+        assert len(missing_req) == 0, \
+            f"good-host should have no missing required fields (inherited from template): {missing_req}"
+
+    def test_required_field_missing_despite_template(self, app_with_templates):
+        """Host inheriting from empty template should be flagged for missing address, contacts."""
+        client = app_with_templates.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        missing_req = [
+            i for i in data["issues"]
+            if i["type"] == "missing_required_field" and i["object"] == "bad-host"
+        ]
+        missing_fields = [i["message"] for i in missing_req]
+        assert any("address" in m for m in missing_fields), \
+            f"Expected missing 'address' for bad-host, got: {missing_fields}"
+        assert any("contacts" in m or "contact_groups" in m for m in missing_fields), \
+            f"Expected missing contacts/contact_groups for bad-host, got: {missing_fields}"
+
+    def test_or_group_satisfied_by_one(self, app_with_templates):
+        """Host with contact_groups but no contacts should NOT be flagged for contacts OR-group."""
+        client = app_with_templates.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        # good-host has contact_groups via template, no contacts directly
+        missing_req = [
+            i for i in data["issues"]
+            if i["type"] == "missing_required_field"
+            and i["object"] == "good-host"
+            and ("contacts" in i["message"] or "contact_groups" in i["message"])
+        ]
+        assert len(missing_req) == 0, \
+            f"good-host should satisfy contacts OR-group via contact_groups: {missing_req}"
+
+
+# ============================================================
+# Issue #18: Old inheritance API error reporting
+# ============================================================
+
+class TestInheritanceApiErrors:
+    """Test that the inheritance chain API reports template errors."""
+
+    @pytest.fixture
+    def app_with_missing_template(self):
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / "nagios"
+        test_config_path.mkdir()
+
+        (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name   broken-host
+    use         nonexistent-template
+    alias       Broken Host
+    address     10.0.0.1
+}
+""")
+
+        (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check-host-alive
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+""")
+
+        (test_config_path / "timeperiods.cfg").write_text("""
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+}
+""")
+
+        app = create_app(config_path=str(test_config_path))
+        app.config["TESTING"] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_old_inheritance_api_reports_errors(self, app_with_missing_template):
+        """Chain with missing template should include errors in response."""
+        client = app_with_missing_template.test_client()
+        resp = client.get("/api/inheritance/host/broken-host")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        assert "errors" in data, f"Expected 'errors' in response, got keys: {list(data.keys())}"
+        assert len(data["errors"]) > 0, "Expected at least one error for missing template"
+        assert any("nonexistent-template" in e for e in data["errors"]), \
+            f"Expected error mentioning 'nonexistent-template', got: {data['errors']}"

@@ -14,6 +14,7 @@ from inheritance import (
     find_invalid_use_refs,
     find_unused_templates,
     format_cycle_issues,
+    resolve_chain,
     resolve_inherited_attrs,
     walk_inheritance_chain,
 )
@@ -1181,8 +1182,13 @@ def api_inheritance_chain(object_type, name):
         if obj.object_type == object_type and "name" in obj.attributes:
             templates[obj.attributes["name"]] = obj
 
-    chain = walk_inheritance_chain(target, templates)
-    return jsonify({"chain": chain, "depth": len(chain)})
+    chain_list, inherited, errors = resolve_chain(target, object_type, templates)
+    # Include the target object itself at the start for backward compatibility
+    full_chain = [target.to_dict()] + chain_list
+    result = {"chain": full_chain, "depth": len(full_chain)}
+    if errors:
+        result["errors"] = errors
+    return jsonify(result)
 
 
 @bp.route("/api/smart-grouping/suggest")

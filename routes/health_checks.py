@@ -7,7 +7,7 @@ The run_all_checks() orchestrator calls them all.
 import re
 
 from inheritance import has_attr_in_chain, resolve_inherited_attrs
-from nagios_model import NAME_FIELDS, REFERENCE_FIELDS
+from nagios_model import NAME_FIELDS, REFERENCE_FIELDS, REQUIRED_FIELDS
 
 # Minimum common prefix length for auto-generating template names
 _MIN_PREFIX_LENGTH = 3
@@ -1457,6 +1457,61 @@ def _check_type_for_consolidation(obj_type, type_entries, identity_fields_set, i
 
 
 # ---------------------------------------------------------------------------
+# Check 24: Required fields through inheritance
+# ---------------------------------------------------------------------------
+
+def check_required_fields(ctx):
+    """Check 24: Required fields missing even after inheritance resolution.
+
+    Uses REQUIRED_FIELDS from nagios_model to validate each non-template object.
+    Handles OR-tuples: e.g. ("contacts", "contact_groups") means at least one
+    must be present. Skips check_command for services (covered by check 11).
+    """
+    issues = []
+    obj_to_index = ctx["obj_to_index"]
+    template_lookup = ctx["template_lookup"]
+
+    for obj in ctx["objects"]:
+        if obj.object_type not in REQUIRED_FIELDS:
+            continue
+        if obj.attributes.get("register", "1") == "0":
+            continue
+
+        resolved = resolve_inherited_attrs(obj, template_lookup)
+        obj_name = obj.get_name() or obj.get_display_name()
+
+        for requirement in REQUIRED_FIELDS[obj.object_type]:
+            if isinstance(requirement, tuple):
+                # OR-group: at least one must be present
+                if not any(resolved.get(f) for f in requirement):
+                    fields_str = " or ".join(requirement)
+                    issues.append({
+                        "type": "missing_required_field",
+                        "severity": "warning",
+                        "object": obj_name,
+                        "object_type": obj.object_type,
+                        "file": obj.source_file,
+                        "global_index": obj_to_index.get(id(obj)),
+                        "message": f"Missing required field: {fields_str} (not found directly or through inheritance)",
+                    })
+            else:
+                # Skip check_command for services — covered by dedicated check 11
+                if obj.object_type == "service" and requirement == "check_command":
+                    continue
+                if not resolved.get(requirement):
+                    issues.append({
+                        "type": "missing_required_field",
+                        "severity": "warning",
+                        "object": obj_name,
+                        "object_type": obj.object_type,
+                        "file": obj.source_file,
+                        "global_index": obj_to_index.get(id(obj)),
+                        "message": f"Missing required field: {requirement} (not found directly or through inheritance)",
+                    })
+    return issues
+
+
+# ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
 
@@ -1487,6 +1542,7 @@ ALL_CHECKS = [
     check_missing_contacts_on_objects,  # 21
     check_long_host_lists,          # 22
     check_template_opportunities,   # 23
+    check_required_fields,          # 24
 ]
 
 
