@@ -88,6 +88,29 @@ SPECIAL_DIRECTIVES: dict[str, str] = {
     "action_url": "URL for actions related to the object.",
 }
 
+# Implied inheritance: fields auto-inherited from associated objects.
+# Key: (child_type, parent_type, parent_key_field)
+# Value: list of (child_field, parent_field) tuples
+# parent_key_field is the attribute on the child that references the parent
+IMPLIED_INHERITANCE = {
+    ("service", "host", "host_name"): [
+        ("contacts", "contacts"),
+        ("contact_groups", "contact_groups"),
+        ("notification_interval", "notification_interval"),
+        ("notification_period", "notification_period"),
+    ],
+    ("hostescalation", "host", "host_name"): [
+        ("contact_groups", "contact_groups"),
+        ("notification_interval", "notification_interval"),
+        ("escalation_period", "notification_period"),  # Field rename
+    ],
+    ("serviceescalation", "service", "host_name"): [
+        ("contact_groups", "contact_groups"),
+        ("notification_interval", "notification_interval"),
+        ("escalation_period", "notification_period"),  # Field rename
+    ],
+}
+
 VALID_ATTRIBUTES: dict[str, list[str]] = {
     "host": [
         "host_name", "alias", "display_name", "address", "parents", "hostgroups",

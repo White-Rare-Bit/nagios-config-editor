@@ -14,7 +14,9 @@ from inheritance import (
     format_cycle_issues,
     get_template_chain,
     has_attr_in_chain,
+    resolve_all_attrs,
     resolve_chain,
+    resolve_implied_attrs,
     resolve_inherited_attrs,
     walk_inheritance_chain,
 )
@@ -592,3 +594,107 @@ class TestFindUnusedTemplates:
         by_type = {"host": {"gp": gp, "parent": parent}}
         issues = find_unused_templates(all_tmpls, referenced, by_type)
         assert len(issues) == 0  # gp is transitively used via parent
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Implied inheritance (cross-object-type)
+# ─────────────────────────────────────────────────────────────────────
+
+class TestResolveImpliedAttrs:
+    def test_service_inherits_contacts_from_host(self):
+        """Service with no contacts inherits from its host."""
+        host = _host(host_name="web-01", contacts="admin", notification_period="24x7")
+        svc = _Obj(object_type="service", attributes={
+            "host_name": "web-01", "service_description": "PING",
+            "check_command": "check_ping",
+        })
+        objects = [host, svc]
+        template_lookup = build_template_lookup(objects)
+        resolved = resolve_inherited_attrs(svc, template_lookup)
+        result = resolve_implied_attrs(resolved, svc.object_type, svc, objects, template_lookup)
+        assert result["contacts"] == "admin"
+        assert result["notification_period"] == "24x7"
+
+    def test_service_own_contacts_not_overridden(self):
+        """Service with its own contacts does NOT inherit from host."""
+        host = _host(host_name="web-01", contacts="admin")
+        svc = _Obj(object_type="service", attributes={
+            "host_name": "web-01", "service_description": "PING",
+            "contacts": "svc-contact",
+        })
+        objects = [host, svc]
+        template_lookup = build_template_lookup(objects)
+        resolved = resolve_inherited_attrs(svc, template_lookup)
+        result = resolve_implied_attrs(resolved, svc.object_type, svc, objects, template_lookup)
+        assert result["contacts"] == "svc-contact"
+
+    def test_host_escalation_inherits_from_host(self):
+        """Host escalation inherits contact_groups and escalation_period from host."""
+        host = _host(
+            host_name="web-01", contact_groups="admins",
+            notification_interval="30", notification_period="24x7",
+        )
+        esc = _Obj(object_type="hostescalation", attributes={
+            "host_name": "web-01", "first_notification": "3", "last_notification": "5",
+        })
+        objects = [host, esc]
+        template_lookup = build_template_lookup(objects)
+        resolved = resolve_inherited_attrs(esc, template_lookup)
+        result = resolve_implied_attrs(resolved, esc.object_type, esc, objects, template_lookup)
+        assert result["contact_groups"] == "admins"
+        assert result["escalation_period"] == "24x7"
+
+    def test_service_escalation_inherits_from_service(self):
+        """Service escalation inherits from its service."""
+        host = _host(host_name="web-01")
+        svc = _Obj(object_type="service", attributes={
+            "host_name": "web-01", "service_description": "PING",
+            "contact_groups": "svc-admins", "notification_period": "workhours",
+        })
+        esc = _Obj(object_type="serviceescalation", attributes={
+            "host_name": "web-01", "service_description": "PING",
+            "first_notification": "3", "last_notification": "5",
+        })
+        objects = [host, svc, esc]
+        template_lookup = build_template_lookup(objects)
+        resolved = resolve_inherited_attrs(esc, template_lookup)
+        result = resolve_implied_attrs(resolved, esc.object_type, esc, objects, template_lookup)
+        assert result["contact_groups"] == "svc-admins"
+        assert result["escalation_period"] == "workhours"
+
+    def test_implied_does_not_apply_to_unrelated_types(self):
+        """Implied inheritance only applies to specific type combinations."""
+        host = _host(host_name="web-01", contacts="admin")
+        objects = [host]
+        template_lookup = build_template_lookup(objects)
+        resolved = resolve_inherited_attrs(host, template_lookup)
+        result = resolve_implied_attrs(resolved, host.object_type, host, objects, template_lookup)
+        assert result == resolved
+
+
+class TestResolveAllAttrs:
+    def test_combines_template_and_implied(self):
+        """resolve_all_attrs does template + implied resolution."""
+        tmpl = _tmpl("service", "base-svc", check_command="check_ping", max_check_attempts="3")
+        host = _host(host_name="web-01", contacts="admin", notification_period="24x7")
+        svc = _Obj(object_type="service", attributes={
+            "host_name": "web-01", "service_description": "PING", "use": "base-svc",
+        })
+        objects = [tmpl, host, svc]
+        template_lookup = build_template_lookup(objects)
+        resolved = resolve_all_attrs(svc, template_lookup, objects)
+        assert resolved["check_command"] == "check_ping"  # From template
+        assert resolved["contacts"] == "admin"  # Implied from host
+        assert resolved["notification_period"] == "24x7"  # Implied from host
+
+    def test_template_attrs_beat_implied(self):
+        """Template-inherited values take priority over implied."""
+        tmpl = _tmpl("service", "base-svc", contacts="tmpl-contact")
+        host = _host(host_name="web-01", contacts="host-contact")
+        svc = _Obj(object_type="service", attributes={
+            "host_name": "web-01", "service_description": "PING", "use": "base-svc",
+        })
+        objects = [tmpl, host, svc]
+        template_lookup = build_template_lookup(objects)
+        resolved = resolve_all_attrs(svc, template_lookup, objects)
+        assert resolved["contacts"] == "tmpl-contact"  # Template wins over implied

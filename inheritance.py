@@ -10,7 +10,10 @@ Key design choices:
 - Sibling-branch reuse via visited.discard (A uses B,C both using D works)
 - Error reporting for missing templates and cycles
 - Source tracking in resolve_chain for UI display
+- Implied inheritance: cross-object-type field inheritance (lowest priority)
 """
+
+from nagios_model import IMPLIED_INHERITANCE, NAME_FIELDS
 
 # Attributes excluded from inheritance resolution
 INHERITANCE_META = frozenset({"use", "name", "register"})
@@ -225,6 +228,98 @@ def has_attr_in_chain(obj, attr_name, template_lookup, visited=None):
                 return True
             visited.discard(t_name)
     return False
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Implied inheritance (cross-object-type)
+# ─────────────────────────────────────────────────────────────────────
+
+def resolve_implied_attrs(resolved_attrs, obj_type, obj, objects, template_lookup):
+    """Fill in missing fields from implied inheritance (cross-object-type).
+
+    Implied inheritance is lowest priority -- only fills in fields not already
+    set by the object's own attributes or template inheritance.
+
+    Args:
+        resolved_attrs: dict of already-resolved attributes (from resolve_inherited_attrs)
+        obj_type: the object's type string
+        obj: the original NagiosObject (needed for additive+implied interaction)
+        objects: full list of NagiosObject instances
+        template_lookup: dict of (obj_type, tmpl_name) -> obj
+
+    Returns:
+        dict with implied fields filled in (new dict, doesn't mutate input)
+    """
+    result = dict(resolved_attrs)
+
+    for (child_type, parent_type, parent_key_field), field_mappings in IMPLIED_INHERITANCE.items():
+        if obj_type != child_type:
+            continue
+
+        parent_obj = _find_implied_parent(
+            result, obj_type, parent_type, parent_key_field, objects,
+        )
+        if not parent_obj:
+            continue
+
+        parent_resolved = resolve_inherited_attrs(parent_obj, template_lookup)
+
+        for child_field, parent_field in field_mappings:
+            if child_field not in result and parent_field in parent_resolved:
+                result[child_field] = parent_resolved[parent_field]
+
+    return result
+
+
+def _find_implied_parent(resolved_attrs, obj_type, parent_type, parent_key_field, objects):
+    """Find the parent object for implied inheritance."""
+    parent_key = resolved_attrs.get(parent_key_field, "")
+    if not parent_key:
+        return None
+
+    # For service escalations, match service by host_name + service_description
+    if obj_type == "serviceescalation" and parent_type == "service":
+        svc_desc = resolved_attrs.get("service_description", "")
+        for o in objects:
+            if o.object_type != "service":
+                continue
+            if o.attributes.get("register", "1") == "0":
+                continue
+            obj_host = o.attributes.get("host_name", "")
+            obj_svc = o.attributes.get("service_description", "")
+            if parent_key in (h.strip() for h in obj_host.split(",")) and obj_svc == svc_desc:
+                return o
+        return None
+
+    # For hosts, host escalations, services: match by name field
+    name_field = NAME_FIELDS.get(parent_type, "")
+    first_parent = parent_key.split(",")[0].strip()
+    for o in objects:
+        if o.object_type != parent_type:
+            continue
+        if o.attributes.get("register", "1") == "0":
+            continue
+        if o.attributes.get(name_field, "") == first_parent:
+            return o
+    return None
+
+
+def resolve_all_attrs(obj, template_lookup, objects):
+    """Resolve all attributes: template inheritance + implied inheritance.
+
+    This is the recommended entry point for callers needing fully-resolved
+    attributes matching Nagios behavior.
+
+    Args:
+        obj: NagiosObject to resolve
+        template_lookup: dict of (obj_type, tmpl_name) -> obj
+        objects: full list of NagiosObject instances
+
+    Returns:
+        dict[attr_name, value] -- fully resolved attributes
+    """
+    resolved = resolve_inherited_attrs(obj, template_lookup)
+    return resolve_implied_attrs(resolved, obj.object_type, obj, objects, template_lookup)
 
 
 # ─────────────────────────────────────────────────────────────────────
