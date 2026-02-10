@@ -267,6 +267,12 @@ def resolve_implied_attrs(resolved_attrs, obj_type, obj, objects, template_looku
         for child_field, parent_field in field_mappings:
             if child_field not in result and parent_field in parent_resolved:
                 result[child_field] = parent_resolved[parent_field]
+            elif child_field in result and parent_field in parent_resolved:
+                # Check if original object had + prefix (additive with implied base)
+                original_val = obj.attributes.get(child_field, "") if obj else ""
+                if original_val.startswith("+") and not child_field.startswith("_"):
+                    stripped = original_val[1:]
+                    result[child_field] = f"{parent_resolved[parent_field]},{stripped}"
 
     return result
 

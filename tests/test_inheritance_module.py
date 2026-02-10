@@ -698,3 +698,29 @@ class TestResolveAllAttrs:
         template_lookup = build_template_lookup(objects)
         resolved = resolve_all_attrs(svc, template_lookup, objects)
         assert resolved["contacts"] == "tmpl-contact"  # Template wins over implied
+
+    def test_escalation_additive_with_implied_base(self):
+        """Escalation + prefix uses host's contacts as base when no template provides them."""
+        host = _host(host_name="web-01", contact_groups="admins")
+        esc = _Obj(object_type="hostescalation", attributes={
+            "host_name": "web-01", "first_notification": "3",
+            "last_notification": "5", "contact_groups": "+managers",
+        })
+        objects = [host, esc]
+        template_lookup = build_template_lookup(objects)
+        resolved = resolve_all_attrs(esc, template_lookup, objects)
+        assert "admins" in resolved["contact_groups"]
+        assert "managers" in resolved["contact_groups"]
+
+    def test_service_additive_with_implied_base(self):
+        """Service + prefix uses host's contacts as base when no template provides them."""
+        host = _host(host_name="web-01", contacts="admin")
+        svc = _Obj(object_type="service", attributes={
+            "host_name": "web-01", "service_description": "PING",
+            "contacts": "+svc-contact",
+        })
+        objects = [host, svc]
+        template_lookup = build_template_lookup(objects)
+        resolved = resolve_all_attrs(svc, template_lookup, objects)
+        assert "admin" in resolved["contacts"]
+        assert "svc-contact" in resolved["contacts"]
