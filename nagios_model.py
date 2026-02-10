@@ -21,6 +21,9 @@ NAME_FIELDS: dict[str, str] = {
     "hostdependency": "host_name",
     "serviceescalation": "service_description",
     "hostescalation": "host_name",
+    "hostextinfo": "host_name",
+    "serviceextinfo": "service_description",
+    "module": "module_name",
 }
 
 # C-05: Required fields per object type for validation
@@ -164,6 +167,18 @@ VALID_ATTRIBUTES: dict[str, list[str]] = {
         "first_notification", "last_notification", "notification_interval",
         "escalation_period", "escalation_options", "use", "name", "register",
     ],
+    "hostextinfo": [
+        "host_name", "notes", "notes_url", "action_url", "icon_image",
+        "icon_image_alt", "vrml_image", "statusmap_image", "2d_coords", "3d_coords",
+        "use", "name", "register",
+    ],
+    "serviceextinfo": [
+        "host_name", "service_description", "notes", "notes_url", "action_url",
+        "icon_image", "icon_image_alt", "use", "name", "register",
+    ],
+    "module": [
+        "module_name", "module_type", "path", "args", "use", "name", "register",
+    ],
 }
 
 OBJECT_TYPE_LABELS: dict[str, str] = {
@@ -179,6 +194,9 @@ OBJECT_TYPE_LABELS: dict[str, str] = {
     "hostdependency": "Host Dependencies",
     "serviceescalation": "Service Escalations",
     "hostescalation": "Host Escalations",
+    "hostextinfo": "Host Extended Info",
+    "serviceextinfo": "Service Extended Info",
+    "module": "Modules",
 }
 
 DEFAULT_ATTRIBUTES: dict[str, dict[str, str]] = {
@@ -214,6 +232,9 @@ DEFAULT_ATTRIBUTES: dict[str, dict[str, str]] = {
         "host_name": "", "contact_groups": "",
         "first_notification": "", "last_notification": "",
     },
+    "hostextinfo": {"host_name": ""},
+    "serviceextinfo": {"host_name": "", "service_description": ""},
+    "module": {"module_name": "", "module_type": "", "path": ""},
 }
 
 NOTIFICATION_OPTIONS: dict[str, list] = {
