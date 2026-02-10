@@ -327,8 +327,15 @@ function collectAllSuggestions() {
     }
 
     // 1b. Health check warnings (e.g. hosts without services)
+    // Skip types already handled by cleanup (section 3) or notification suggestions
+    const cleanupTypes = new Set([
+        'duplicate', 'empty_group', 'orphan', 'long_host_list',
+        'unused_template', 'unused_command', 'unused_contact',
+        'unused_contactgroup', 'unused_timeperiod',
+        'missing_contacts', 'template_opportunity',
+    ]);
     if (state.allIssues) {
-        const warnings = state.allIssues.filter(i => i.severity === 'warning');
+        const warnings = state.allIssues.filter(i => i.severity === 'warning' && !cleanupTypes.has(i.type));
         for (const issue of warnings) {
             // Skip warnings for objects staged for deletion
             if (issue.global_index != null && state.stagedObjectDeletions.has(issue.global_index)) continue;
@@ -336,7 +343,7 @@ function collectAllSuggestions() {
                 id: `health-warning-${issue.type}-${issue.object}`,
                 severity: 'warning',
                 type: 'health_check_warning',
-                label: issue.type === 'host_without_services' ? 'No services' : 'Health warning',
+                label: getHealthWarningLabel(issue.type),
                 name: issue.object || 'unknown',
                 detail: issue.message || '',
                 actionLabel: 'View',
@@ -472,12 +479,30 @@ function collectAllSuggestions() {
         const aSev = SEVERITY_ORDER[a.severity] ?? 3;
         const bSev = SEVERITY_ORDER[b.severity] ?? 3;
         if (aSev !== bSev) return aSev - bSev;
-        // Within same severity, sort by type then name
-        if (a.type !== b.type) return a.type.localeCompare(b.type);
+        // Within same severity, sort by label then name
+        if (a.label !== b.label) return a.label.localeCompare(b.label);
         return (a.name || '').localeCompare(b.name || '');
     });
 
     return suggestions;
+}
+
+function getHealthWarningLabel(issueType) {
+    const labels = {
+        'host_without_services': 'No services',
+        'notification_gap': 'Notification gap',
+        'duplicate_dependency': 'Duplicate dependency',
+        'command_arg_mismatch': 'Argument mismatch',
+        'template_conflict': 'Template conflict',
+        'missing_contacts': 'Missing contacts',
+        'missing_parent': 'Missing parent',
+        'missing_timeperiod': 'Missing timeperiod',
+        'missing_contact': 'Missing contact',
+        'missing_contactgroup': 'Missing contactgroup',
+        'missing_hostgroup': 'Missing hostgroup',
+        'missing_servicegroup': 'Missing servicegroup',
+    };
+    return labels[issueType] || issueType.replace(/_/g, ' ');
 }
 
 function getCleanupTypeLabel(type) {
@@ -1177,7 +1202,10 @@ function fixDuplicate(idx) {
         if (hasDifferences) {
             const diffAttrs = differences.map(attr => {
                 const val = o.attributes[attr];
-                return `<span class="diff-attr"><code>${Explorer.escapeHtml(attr)}</code>: ${val !== undefined ? Explorer.escapeHtml(String(val)) : '<em>not set</em>'}</span>`;
+                return `<div class="diff-row">
+                    <span class="diff-key">${Explorer.escapeHtml(attr)}:</span>
+                    <span class="diff-val">${val !== undefined ? Explorer.escapeHtml(String(val)) : '<em>not set</em>'}</span>
+                </div>`;
             }).join('');
             diffHtml = `<div class="diff-values">${diffAttrs}</div>`;
         }
