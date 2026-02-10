@@ -828,6 +828,45 @@ def _collect_outgoing_refs(obj, global_index, objects, reference_fields):
     return outgoing
 
 
+def _classify_ref_severity(ref_obj, field, _target_obj_type):
+    """Classify the severity if the target object were deleted.
+
+    Returns "error", "warning", or "info":
+    - error: would break the referring object (orphan service, broken inheritance)
+    - warning: escalations, dependencies, contact_groups membership
+    - info: minor reference updates
+    """
+    ref_type = ref_obj.object_type
+
+    # Template inheritance — deleting breaks the inheriting object
+    if field == "use":
+        return "error"
+
+    # Service bound to host/hostgroup — deleting orphans the service
+    if ref_type == "service" and field in ("host_name", "hostgroup_name"):
+        return "error"
+
+    # Host parent — deleting breaks parent chain
+    if ref_type == "host" and field == "parents":
+        return "error"
+
+    # Group members, escalations, dependencies, contact refs
+    warning_types = (
+        "hostescalation", "serviceescalation",
+        "hostdependency", "servicedependency",
+    )
+    warning_member_types = ("hostgroup", "contactgroup", "servicegroup")
+
+    if field == "members" and ref_type in warning_member_types:
+        return "warning"
+    if ref_type in warning_types:
+        return "warning"
+    if field in ("contact_groups", "contacts"):
+        return "warning"
+
+    return "info"
+
+
 def _collect_incoming_refs(obj, obj_identity, global_index, objects, reference_fields):
     """Collect incoming references from other objects to obj.
 
@@ -856,7 +895,14 @@ def _collect_incoming_refs(obj, obj_identity, global_index, objects, reference_f
             if field in _COMMAND_FIELDS:
                 values = [v.split("!")[0] if "!" in v else v for v in values]
             if obj_name in values or (obj_template_name and obj_template_name in values):
-                incoming.append({**_obj_summary(o, idx), "field": field})
+                severity = _classify_ref_severity(
+                    o, field, obj.object_type,
+                )
+                incoming.append({
+                    **_obj_summary(o, idx),
+                    "field": field,
+                    "severity": severity,
+                })
     return incoming
 
 
@@ -1017,16 +1063,20 @@ def _collect_host_service_bindings_via_hostgroup(obj_name, objects):
 
 
 def _collect_group_members(obj, obj_name, global_index, objects):
-    """Collect members for a group or template object."""
+    """Collect members for a group or template object.
+
+    Returns:
+        Tuple of (members_list, transitive_summary_or_none).
+    """
     if obj.object_type == "hostgroup":
-        return _collect_hostgroup_members(obj, obj_name, objects)
+        return _collect_hostgroup_members(obj, obj_name, objects), None
     if obj.object_type == "contactgroup":
-        return _collect_contactgroup_members(obj, obj_name, objects)
+        return _collect_contactgroup_members(obj, obj_name, objects), None
     if obj.object_type == "servicegroup":
-        return _collect_servicegroup_members(obj, obj_name, objects)
+        return _collect_servicegroup_members(obj, obj_name, objects), None
     if obj.attributes.get("register", "1") == "0":
         return _collect_template_inheritors(obj, global_index, objects)
-    return []
+    return [], None
 
 
 def _collect_hostgroup_members(obj, obj_name, objects):
@@ -1081,10 +1131,10 @@ def _collect_servicegroup_members(obj, obj_name, objects):
 
 
 def _collect_template_inheritors(obj, global_index, objects):
-    """Collect objects that inherit from this template."""
+    """Collect objects that inherit from this template, with transitive counts."""
     template_name = obj.attributes.get("name", "")
     if not template_name:
-        return []
+        return [], None
     members = []
     for idx, o in enumerate(objects):
         if idx == global_index:
@@ -1092,7 +1142,83 @@ def _collect_template_inheritors(obj, global_index, objects):
         uses = [u.strip() for u in o.attributes.get("use", "").split(",") if u.strip()]
         if template_name in uses:
             members.append({**_obj_summary(o, idx), "via": "inherits"})
-    return members
+
+    # Compute transitive impact
+    transitive_summary = _count_transitive_inheritors(
+        template_name, obj.object_type, global_index, objects,
+    )
+
+    return members, transitive_summary
+
+
+def _count_transitive_inheritors(template_name, _obj_type, exclude_idx, objects):
+    """Count all objects that transitively inherit from this template.
+
+    Uses BFS to walk through intermediate templates.
+
+    Returns:
+        Dict with direct_count, transitive_count, intermediate_templates.
+        None if no transitive impact beyond direct inheritors.
+    """
+    # BFS: find all direct inheritors of the template
+    def find_inheritors(name):
+        """Find objects that directly use the given template name."""
+        result = []
+        for idx, o in enumerate(objects):
+            if idx == exclude_idx:
+                continue
+            use_val = o.attributes.get("use", "")
+            uses = [u.strip() for u in use_val.split(",") if u.strip()]
+            if name in uses:
+                result.append((idx, o))
+        return result
+
+    def is_template(o):
+        """Check if an object is itself a template."""
+        return "name" in o.attributes or o.attributes.get("register", "1") == "0"
+
+    direct = find_inheritors(template_name)
+    direct_count = len(direct)
+
+    if direct_count == 0:
+        return None
+
+    # BFS through intermediate templates
+    visited_names = {template_name}
+    queue = []
+    intermediate_templates = []
+    transitive_total = 0
+
+    for _idx, o in direct:
+        transitive_total += 1
+        if is_template(o):
+            tmpl_name = o.attributes.get("name", "")
+            if tmpl_name and tmpl_name not in visited_names:
+                queue.append(tmpl_name)
+                visited_names.add(tmpl_name)
+                intermediate_templates.append(tmpl_name)
+
+    while queue:
+        current_name = queue.pop(0)
+        children = find_inheritors(current_name)
+        for _idx, o in children:
+            transitive_total += 1
+            if is_template(o):
+                tmpl_name = o.attributes.get("name", "")
+                if tmpl_name and tmpl_name not in visited_names:
+                    queue.append(tmpl_name)
+                    visited_names.add(tmpl_name)
+                    intermediate_templates.append(tmpl_name)
+
+    # Only return summary if there's transitive impact beyond direct
+    if transitive_total <= direct_count:
+        return None
+
+    return {
+        "direct_count": direct_count,
+        "transitive_count": transitive_total,
+        "intermediate_templates": intermediate_templates,
+    }
 
 
 def _collect_host_member_of(obj, obj_name, objects):
@@ -1505,7 +1631,9 @@ def api_object_references(global_index):
     incoming.extend(_collect_service_bindings(obj, obj_name, objects))
 
     # --- Members ---
-    members = _collect_group_members(obj, obj_name, global_index, objects)
+    members, transitive_summary = _collect_group_members(
+        obj, obj_name, global_index, objects,
+    )
 
     # --- Member-of ---
     member_of = _collect_member_of(obj, obj_name, objects)
@@ -1515,13 +1643,17 @@ def api_object_references(global_index):
     if obj.object_type == "host" and obj.attributes.get("parents", "").strip():
         parent_hosts = _build_parent_tree(obj, objects, obj_to_index)
 
-    return jsonify({
+    result = {
         "outgoing": outgoing,
         "incoming": incoming,
         "members": members,
         "member_of": member_of,
         "parent_hosts": parent_hosts,
-    })
+    }
+    if transitive_summary:
+        result["transitive_summary"] = transitive_summary
+
+    return jsonify(result)
 
 
 def _collect_dependency_rules(obj, obj_name, global_index, objects):

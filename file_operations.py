@@ -214,7 +214,8 @@ def find_block_range(content: str, target_line: int) -> tuple[int, int] | None:
 
 
 def edit_object_in_file(file_path: str, line_number: int, new_attrs: dict[str, str],
-                        obj_type: str, expected_checksum: str | None = None) -> OperationResult:
+                        obj_type: str, expected_checksum: str | None = None,
+                        inline_comments: dict | None = None) -> OperationResult:
     """Edit an object in place in its file.
 
     Args:
@@ -224,6 +225,7 @@ def edit_object_in_file(file_path: str, line_number: int, new_attrs: dict[str, s
         obj_type: Type of the object (e.g., 'host', 'service')
         expected_checksum: If provided, validates file hasn't changed since staging began.
                           Returns conflict error if checksum doesn't match.
+        inline_comments: If provided, preserves inline comments on attributes.
 
     Returns:
         OperationResult with success=True on success, or error details on failure
@@ -242,7 +244,9 @@ def edit_object_in_file(file_path: str, line_number: int, new_attrs: dict[str, s
         return OperationResult(False, f"Could not find define block at line {line_number} in {file_path}")
 
     start_char, end_char = block_range
-    new_block = format_object_block(obj_type, new_attrs)
+    new_block = format_object_block(
+        obj_type, new_attrs, inline_comments=inline_comments,
+    )
     new_content = content[:start_char] + new_block + content[end_char:]
 
     try:

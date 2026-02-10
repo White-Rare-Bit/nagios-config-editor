@@ -154,7 +154,12 @@ async function applyRename() {
         return;
     }
 
-    showToast(`Renamed ${result.data.renamed} objects, updated ${result.data.references_updated} references`, 'success');
+    const staged = result.data.staged || 0;
+    const refStaged = result.data.references_staged || 0;
+    const msg = refStaged > 0
+        ? `Staged ${staged} rename(s) and ${refStaged} reference update(s). Apply changes to write to disk.`
+        : `Staged ${staged} rename(s). Apply changes to write to disk.`;
+    showToast(msg, 'success');
     location.reload();
 }
 

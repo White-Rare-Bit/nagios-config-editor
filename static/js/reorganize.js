@@ -135,10 +135,10 @@ async function moveSelected() {
         operationName: 'move',
         endpoint: '/api/move-objects',
         getPayload: (indices) => ({ objects: indices, target_file: targetFile }),
-        getSuccessMessage: (data) => `Moved ${data.moved} objects. Backup: ${data.backup}`,
+        getSuccessMessage: (data) => `Staged ${data.staged} move(s). Apply changes to write to disk.`,
         confirm: {
             title: 'Move Objects',
-            message: `Move {count} objects to ${targetFile}? A backup will be created first.`,
+            message: `Stage move of {count} objects to ${targetFile}?`,
             confirmText: 'Move',
             type: 'warning'
         }

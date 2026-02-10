@@ -5,6 +5,7 @@ def register_blueprints(app):
     """Register all route blueprints with the Flask app."""
     from .analysis import bp as analysis_bp
     from .backups import bp as backups_bp
+    from .bulk_ops import bp as bulk_ops_bp
     from .debug import debug_bp
     from .files import bp as files_bp
     from .git import bp as git_bp
@@ -26,5 +27,6 @@ def register_blueprints(app):
     app.register_blueprint(analysis_bp)
     app.register_blueprint(staging_bp)
     app.register_blueprint(templates_bp)
+    app.register_blueprint(bulk_ops_bp)
     app.register_blueprint(debug_bp)
     app.register_blueprint(metadata_bp)

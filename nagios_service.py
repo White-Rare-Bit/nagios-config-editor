@@ -412,7 +412,8 @@ class NagiosService:
                 return OperationResult(False, f"Create failed: {e}")
 
     def update_object(self, source_file: str, line_number: int,
-                      new_attrs: dict[str, str], obj_type: str) -> OperationResult:
+                      new_attrs: dict[str, str], obj_type: str,
+                      inline_comments: dict | None = None) -> OperationResult:
         """Update an object's attributes in place.
 
         Args:
@@ -420,6 +421,7 @@ class NagiosService:
             line_number: Line number where object starts
             new_attrs: New attributes dictionary
             obj_type: Object type (for formatting)
+            inline_comments: If provided, preserves inline comments on attributes.
 
         Returns:
             OperationResult with success status
@@ -432,7 +434,10 @@ class NagiosService:
                 return corrupted_error
 
             try:
-                result = edit_object_in_file(source_file, line_number, new_attrs, obj_type)
+                result = edit_object_in_file(
+                    source_file, line_number, new_attrs, obj_type,
+                    inline_comments=inline_comments,
+                )
                 if not result.success:
                     if self._op_logger:
                         self._op_logger.error("service", "update_object", params={"source_file": source_file, "line_number": line_number, "obj_type": obj_type}, error=result.error)  # noqa: PLE1205
@@ -977,7 +982,8 @@ class NagiosService:
             merged_attrs = dict(target_obj.attributes)
             merged_attrs.update(edited_attrs)
             result = self.update_object(target_obj.source_file, target_obj.line_number,
-                                        merged_attrs, target_obj.object_type)
+                                        merged_attrs, target_obj.object_type,
+                                        inline_comments=target_obj.inline_comments)
             if result.success:
                 count += 1
                 details.append(self._build_edit_detail(target_obj, old_attrs, edited_attrs))

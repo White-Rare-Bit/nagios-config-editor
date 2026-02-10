@@ -5019,6 +5019,11 @@ body.dragging-objects .right-pane::after {
     font-weight: 600;
 }
 
+.impact-subsection-count.danger {
+    background: var(--nbe-dark-validation-error-badge);
+    color: var(--nbe-dark-accent-danger);
+}
+
 .impact-subsection-count.warning {
     background: var(--nbe-dark-validation-warning-badge);
     color: var(--nbe-dark-accent-warning);
@@ -5057,6 +5062,12 @@ body.dragging-objects .right-pane::after {
     color: var(--nbe-dark-text-secondary);
 }
 
+.impact-summary.danger {
+    background: var(--nbe-dark-validation-error-bg);
+    border-left: 3px solid var(--nbe-dark-accent-danger);
+    color: var(--nbe-dark-text-primary);
+}
+
 .impact-summary.warning {
     background: var(--nbe-dark-validation-warning-bg);
     border-left: 3px solid var(--nbe-dark-accent-warning);
@@ -5070,6 +5081,10 @@ body.dragging-objects .right-pane::after {
 
 .impact-summary-icon {
     font-size: var(--nbe-typography-h3-size);
+}
+
+.impact-summary.danger .impact-summary-icon {
+    color: var(--nbe-dark-accent-danger);
 }
 
 .impact-summary.warning .impact-summary-icon {

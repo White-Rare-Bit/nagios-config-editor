@@ -1190,6 +1190,131 @@ class StagingManager:
         """Remove a staged operation by its ID. Delegates to self.file_ops."""
         return self.file_ops.unstage_operation(op_id, op_type)
 
+    def stage_bulk_rename(
+        self, session_id: str, renames: list[dict],
+    ) -> OperationResult:
+        """Stage a bulk rename as individual pendingEdits with a grouped undo entry.
+
+        Args:
+            session_id: Session ID for lock validation
+            renames: List of dicts with keys:
+                - stableKey: stable key for the object
+                - globalIndex: global index of the object
+                - object: object summary dict (name, object_type, source_file, etc.)
+                - originalAttrs: original attributes dict
+                - editedAttrs: dict of changed attributes (name field + any ref updates)
+
+        Returns:
+            OperationResult with data=count of staged edits on success
+
+        """
+        if self._op_logger:
+            self._op_logger.info(  # noqa: PLE1205
+                "staging", "stage_bulk_rename",
+                params={"count": len(renames)},
+            )
+
+        staging = self.get_staging()
+        if not staging:
+            # Initialize fresh staging
+            staging = self.get_empty_staging_structure()
+            staging["sessionId"] = session_id
+            staging["status"] = StagingStatus.ACTIVE.value
+
+        staging = self.migrate_staging_schema(staging)
+
+        pending_edits = staging.get("pendingEdits", {})
+        undo_items = []
+
+        for entry in renames:
+            key = str(entry["globalIndex"])
+            pending_edits[key] = {
+                "globalIndex": key,
+                "object": entry["object"],
+                "original": entry["originalAttrs"],
+                "edited": entry["editedAttrs"],
+            }
+            undo_items.append({"key": key, "object": entry["object"]})
+
+        staging["pendingEdits"] = pending_edits
+
+        # Add a single grouped undo entry
+        self.undo.add_to_undo_stack(
+            OperationType.BULK_EDIT.value,
+            {"items": undo_items},
+            f"Bulk rename: {len(renames)} object(s)",
+            staging,
+        )
+
+        result = self.save_staging(staging)
+        if result.success:
+            logger.info("Staged bulk rename: %d object(s)", len(renames))
+            return OperationResult(True, data=len(renames))
+        return result
+
+    def stage_bulk_move(
+        self, session_id: str, moves: list[dict],
+    ) -> OperationResult:
+        """Stage a bulk move as individual stagedMoves with a grouped undo entry.
+
+        Args:
+            session_id: Session ID for lock validation
+            moves: List of dicts with keys:
+                - stableKey: stable key for the object
+                - object: object summary dict
+                - sourceFile: original source file
+                - targetFile: destination file
+
+        Returns:
+            OperationResult with data=count of staged moves on success
+
+        """
+        if self._op_logger:
+            self._op_logger.info(  # noqa: PLE1205
+                "staging", "stage_bulk_move",
+                params={"count": len(moves)},
+            )
+
+        staging = self.get_staging()
+        if not staging:
+            staging = self.get_empty_staging_structure()
+            staging["sessionId"] = session_id
+            staging["status"] = StagingStatus.ACTIVE.value
+
+        staging = self.migrate_staging_schema(staging)
+
+        staged_moves = staging.get("stagedMoves", {})
+        undo_items = []
+
+        # Capture checksums for source files
+        source_files = list({entry["sourceFile"] for entry in moves})
+        self.checksums.update_base_checksums(source_files)
+
+        for entry in moves:
+            key = entry["stableKey"]
+            staged_moves[key] = {
+                "stableKey": key,
+                "object": entry["object"],
+                "sourceFile": entry["sourceFile"],
+                "targetFile": entry["targetFile"],
+            }
+            undo_items.append({"key": key, "object": entry["object"]})
+
+        staging["stagedMoves"] = staged_moves
+
+        self.undo.add_to_undo_stack(
+            OperationType.BULK_MOVE.value,
+            {"items": undo_items},
+            f"Bulk move: {len(moves)} object(s)",
+            staging,
+        )
+
+        result = self.save_staging(staging)
+        if result.success:
+            logger.info("Staged bulk move: %d object(s)", len(moves))
+            return OperationResult(True, data=len(moves))
+        return result
+
     def get_total_staged_count(self) -> int:
         """Get total count of all staged operations.
 

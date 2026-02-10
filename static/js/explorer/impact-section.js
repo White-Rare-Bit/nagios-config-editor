@@ -68,7 +68,7 @@
 
         // Fetch references from backend
         let referencesData = { outgoing: [], incoming: [] };
-        let membersData = { members: [], memberOf: [] };
+        let membersData = { members: [], memberOf: [], transitiveSummary: null };
 
         if (!state.isNewObject && obj.global_index != null) {
             try {
@@ -105,6 +105,10 @@
                         object: objectsByIndex.get(r.global_index),
                         via: r.via,
                     })).filter(r => r.object);
+
+                    if (data.transitive_summary) {
+                        membersData.transitiveSummary = data.transitive_summary;
+                    }
 
                     // Parent hosts tree from API
                     if (data.parent_hosts) {
@@ -167,7 +171,7 @@
 
         const { templateChain, parentHosts, resolvedAttrs } = inheritanceData;
         const { outgoing, incoming } = referencesData;
-        const { members, memberOf } = membersData;
+        const { members, memberOf, transitiveSummary } = membersData;
 
         // Check if there's any data to show
         const hasTemplateChain = templateChain && templateChain.parents && templateChain.parents.length > 0;
@@ -203,7 +207,7 @@
 
         // 4. Group Membership
         if (hasMembers || hasMemberOf) {
-            html += renderMembershipSubsection(obj, members, memberOf);
+            html += renderMembershipSubsection(obj, members, memberOf, transitiveSummary);
         }
 
         container.innerHTML = html;
@@ -349,21 +353,63 @@
     function renderIncomingSubsection(incoming) {
         const count = incoming.length;
 
-        const grouped = {};
-        incoming.forEach(ref => {
-            const type = ref.object.object_type;
-            if (!grouped[type]) grouped[type] = [];
-            grouped[type].push(ref);
-        });
+        // Partition by severity
+        const errors = incoming.filter(r => r.severity === 'error');
+        const warnings = incoming.filter(r => r.severity === 'warning');
+        const infos = incoming.filter(r => r.severity === 'info' || !r.severity);
 
-        let content = `
-            <div class="impact-summary warning">
-                <span class="impact-summary-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
-                <span>${count} object${count !== 1 ? 's' : ''} reference${count === 1 ? 's' : ''} this and would need updates</span>
-            </div>
-        `;
+        // Determine header badge class based on worst severity
+        const badgeClass = errors.length > 0 ? 'danger' : 'warning';
 
-        content += renderGroupedReferences(grouped);
+        let content = '';
+
+        if (errors.length > 0) {
+            const errorGrouped = {};
+            errors.forEach(ref => {
+                const type = ref.object.object_type;
+                if (!errorGrouped[type]) errorGrouped[type] = [];
+                errorGrouped[type].push(ref);
+            });
+            content += `
+                <div class="impact-summary danger">
+                    <span class="impact-summary-icon"><i class="fa-solid fa-circle-xmark"></i></span>
+                    <span>${errors.length} object${errors.length !== 1 ? 's' : ''} would <strong>BREAK</strong> (orphaned or missing dependency)</span>
+                </div>
+            `;
+            content += renderGroupedReferences(errorGrouped);
+        }
+
+        if (warnings.length > 0) {
+            const warnGrouped = {};
+            warnings.forEach(ref => {
+                const type = ref.object.object_type;
+                if (!warnGrouped[type]) warnGrouped[type] = [];
+                warnGrouped[type].push(ref);
+            });
+            content += `
+                <div class="impact-summary warning">
+                    <span class="impact-summary-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                    <span>${warnings.length} object${warnings.length !== 1 ? 's' : ''} would need updates</span>
+                </div>
+            `;
+            content += renderGroupedReferences(warnGrouped);
+        }
+
+        if (infos.length > 0) {
+            const infoGrouped = {};
+            infos.forEach(ref => {
+                const type = ref.object.object_type;
+                if (!infoGrouped[type]) infoGrouped[type] = [];
+                infoGrouped[type].push(ref);
+            });
+            content += `
+                <div class="impact-summary info">
+                    <span class="impact-summary-icon"><i class="fa-solid fa-circle-info"></i></span>
+                    <span>${infos.length} minor reference${infos.length !== 1 ? 's' : ''}</span>
+                </div>
+            `;
+            content += renderGroupedReferences(infoGrouped);
+        }
 
         return `
             <div class="impact-subsection">
@@ -371,7 +417,7 @@
                     <div class="impact-subsection-title">
                         <i class="fa-solid fa-link-slash"></i>
                         <span>If Deleted/Renamed</span>
-                        <span class="impact-subsection-count warning">${count}</span>
+                        <span class="impact-subsection-count ${badgeClass}">${count}</span>
                     </div>
                     <span class="impact-subsection-toggle"><i class="fa-solid fa-chevron-right"></i></span>
                 </div>
@@ -618,7 +664,7 @@
     /**
      * Render the Group Membership subsection
      */
-    function renderMembershipSubsection(obj, members, memberOf) {
+    function renderMembershipSubsection(obj, members, memberOf, transitiveSummary) {
         const totalCount = members.length + memberOf.length;
 
         let content = '';
@@ -643,6 +689,20 @@
         if (members.length > 0) {
             const label = isObjectTemplate(obj) ? 'Used by (inherits from this template)' : 'Direct Members';
             content += `<div class="ancestry-label">${label}</div>`;
+
+            // Show transitive impact summary for templates
+            if (transitiveSummary && transitiveSummary.transitive_count > 0) {
+                const intermediateList = transitiveSummary.intermediate_templates.join(', ');
+                content += `
+                    <div class="impact-summary info">
+                        <span class="impact-summary-icon"><i class="fa-solid fa-diagram-project"></i></span>
+                        <span>Affects ${transitiveSummary.transitive_count} total objects through ${transitiveSummary.intermediate_templates.length} intermediate template${transitiveSummary.intermediate_templates.length !== 1 ? 's' : ''}</span>
+                    </div>
+                `;
+                if (intermediateList) {
+                    content += `<div class="dep-rule-details"><div class="dep-rule-detail"><i class="fa-solid fa-layer-group"></i> Via: ${Explorer.escapeHtml(intermediateList)}</div></div>`;
+                }
+            }
 
             // Group by type
             const grouped = {};

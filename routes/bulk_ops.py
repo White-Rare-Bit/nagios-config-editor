@@ -7,15 +7,15 @@ import os
 from flask import Blueprint, jsonify, request
 
 import file_operations
-from nagios_model import NAME_FIELDS
+from nagios_model import NAME_FIELDS, REFERENCE_FIELDS
 from nagios_writer import NagiosConfigWriter
+from staging_manager import generate_stable_key_for_object
 
 from .helpers import (
-    get_backup_manager,
     get_config_path,
     get_op_logger,
-    get_parser_for_modification,
     get_service,
+    get_staging_manager,
 )
 
 bp = Blueprint("bulk_ops", __name__)
@@ -224,9 +224,9 @@ def api_preview_rename():
 
 @bp.route("/api/apply-rename", methods=["POST"])
 def api_apply_rename():
-    """Apply bulk rename operation."""
+    """Stage bulk rename operation (changes applied via staging Apply)."""
     op_log = get_op_logger()
-    bm = get_backup_manager()
+    sm = get_staging_manager()
     data = request.get_json() or {}
 
     object_type = data.get("type")
@@ -237,55 +237,99 @@ def api_apply_rename():
     use_regex = data.get("regex", False)
     add_prefix = data.get("prefix", "")
     add_suffix = data.get("suffix", "")
-    # Accept both camelCase and snake_case for compatibility
     should_update_refs = data.get("updateReferences", data.get("update_references", False))
 
     if not object_type:
         return jsonify({"error": "Object type required"}), 400
 
-    with get_parser_for_modification() as p:
-        # Create backup before changes
-        backup_path = bm.create_backup(f"rename_{object_type}")
+    session_id = request.headers.get("X-Session-Id")
+    if not session_id:
+        return jsonify({"error": "X-Session-Id header required"}), 400
+    if not sm.can_modify(session_id):
+        return jsonify({"error": "Locked by another user", "locked": True}), 423
 
-        name_field = NAME_FIELDS.get(object_type, "name")
-        renamed_count = 0
-        references_updated = 0
+    service = get_service()
+    p = service.parser
+    name_field = NAME_FIELDS.get(object_type, "name")
+    renames = []
 
-        for obj in p.objects:
-            if obj.object_type == object_type and name_field in obj.attributes:
-                old_name = obj.attributes[name_field]
-                new_name = get_service().transform_name(old_name, find_pattern, replace_with,
+    # Compute renames and reference updates
+    # Work on copies to avoid mutating live parser state
+    all_objects = list(p.objects)
+    ref_updates = {}  # {old_name: new_name} for reference tracking
+
+    for idx, obj in enumerate(all_objects):
+        if obj.object_type != object_type or name_field not in obj.attributes:
+            continue
+        old_name = obj.attributes[name_field]
+        new_name = service.transform_name(old_name, find_pattern, replace_with,
                                           add_prefix, add_suffix, use_regex)
-                if new_name is None:
-                    continue  # Skip invalid regex
+        if new_name is None or new_name == old_name:
+            continue
+        ref_updates[old_name] = new_name
+        renames.append({
+            "globalIndex": idx,
+            "object": obj.to_dict(),
+            "originalAttrs": {name_field: old_name},
+            "editedAttrs": {name_field: new_name},
+        })
 
-                if new_name != old_name:
-                    obj.attributes[name_field] = new_name
-                    renamed_count += 1
-                    # Only update references if user opted in
-                    if should_update_refs:
-                        references_updated += get_service().update_references(p.objects, old_name, new_name)
+    if not renames:
+        return jsonify({"success": True, "staged": 0, "references_staged": 0})
 
-        # Write changes to files
-        writer = NagiosConfigWriter()
-        writer.write_objects_to_original_files(p.objects)
+    # Stage reference updates if requested
+    references_staged = 0
+    if should_update_refs and ref_updates:
+        for idx, obj in enumerate(all_objects):
+            ref_edits = {}
+            for field in REFERENCE_FIELDS:
+                val = obj.attributes.get(field)
+                if not val:
+                    continue
+                parts = [v.strip() for v in val.split(",")]
+                changed = False
+                new_parts = []
+                for part in parts:
+                    if part in ref_updates:
+                        new_parts.append(ref_updates[part])
+                        changed = True
+                    else:
+                        new_parts.append(part)
+                if changed:
+                    ref_edits[field] = ",".join(new_parts)
+            if ref_edits:
+                # Check if this object already has a rename entry
+                existing = next((r for r in renames if r["globalIndex"] == idx), None)
+                if existing:
+                    existing["editedAttrs"].update(ref_edits)
+                    existing["originalAttrs"].update(
+                        {f: obj.attributes[f] for f in ref_edits},
+                    )
+                else:
+                    renames.append({
+                        "globalIndex": idx,
+                        "object": obj.to_dict(),
+                        "originalAttrs": {f: obj.attributes[f] for f in ref_edits},
+                        "editedAttrs": ref_edits,
+                    })
+                    references_staged += 1
 
-    # Reload config
-    get_service().reload()
+    result = sm.stage_bulk_rename(session_id, renames)
+    if not result.success:
+        return jsonify({"error": result.error}), 500
 
     return jsonify({
         "success": True,
-        "renamed": renamed_count,
-        "references_updated": references_updated,
-        "backup": backup_path,
+        "staged": result.data,
+        "references_staged": references_staged,
     })
 
 
 @bp.route("/api/move-objects", methods=["POST"])
 def api_move_objects():
-    """Move objects to a different file."""
+    """Stage bulk move operation (changes applied via staging Apply)."""
     op_log = get_op_logger()
-    bm = get_backup_manager()
+    sm = get_staging_manager()
     data = request.get_json() or {}
 
     if op_log:
@@ -293,6 +337,12 @@ def api_move_objects():
             "object_count": len(data.get("objects", [])),
             "target_file": data.get("target_file", ""),
         })
+
+    session_id = request.headers.get("X-Session-Id")
+    if not session_id:
+        return jsonify({"error": "X-Session-Id header required"}), 400
+    if not sm.can_modify(session_id):
+        return jsonify({"error": "Locked by another user", "locked": True}), 423
 
     object_data, target_file, create_new, err = _validate_move_objects_input(data)
     if err:
@@ -303,33 +353,51 @@ def api_move_objects():
     if err:
         return err
 
-    with get_parser_for_modification() as p:
-        backup_path = bm.create_backup("move_objects")
+    # If creating a new file, stage the file creation
+    if create_new and not os.path.exists(target_file):
+        sm.file_ops.stage_file_creation(target_file)
 
-        file_created, err = _create_target_file_if_needed(target_file, create_new)
-        if err:
-            return err
+    service = get_service()
+    p = service.parser
+    all_objects = list(p.objects)
+    moves = []
+    skipped = []
 
-        moved_count, skipped = _move_objects_in_parser(object_data, p.objects, target_file)
+    for item in object_data:
+        idx, _position = _parse_move_item(item)
+        if idx is None:
+            skipped.append(str(item))
+            continue
+        if 0 <= idx < len(all_objects):
+            obj = all_objects[idx]
+            if obj.source_file == target_file:
+                continue  # Already in target file
+            moves.append({
+                "stableKey": generate_stable_key_for_object(obj),
+                "object": obj.to_dict(),
+                "sourceFile": obj.source_file,
+                "targetFile": target_file,
+            })
+        else:
+            skipped.append(str(idx))
 
-        try:
-            writer = NagiosConfigWriter()
-            writer.write_objects_to_original_files(p.objects)
-        except (OSError, PermissionError) as e:
-            return jsonify({"error": f"Failed to write changes: {e!s}"}), 500
+    if not moves:
+        return jsonify({
+            "success": True,
+            "staged": 0,
+            "skipped": skipped,
+            "requested": len(object_data),
+        })
 
-    try:
-        get_service().reload()
-    except OSError as e:
-        return jsonify({"error": f"Failed to reload config: {e!s}"}), 500
+    result = sm.stage_bulk_move(session_id, moves)
+    if not result.success:
+        return jsonify({"error": result.error}), 500
 
     return jsonify({
         "success": True,
-        "moved": moved_count,
+        "staged": result.data,
         "skipped": skipped,
         "requested": len(object_data),
-        "backup": backup_path,
-        "file_created": file_created,
         "target_file": target_file,
     })
 
