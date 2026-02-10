@@ -122,3 +122,101 @@ class TestMetadataEndpoint:
         meta = resp.json["data"]
         service_reqs = meta["required_fields"]["service"]
         assert ["host_name", "hostgroup_name"] in service_reqs
+
+
+class TestNewObjectTypeParsing:
+    """Test that new object types (hostextinfo, serviceextinfo, module) are recognized."""
+
+    def test_hostextinfo_parsed(self):
+        test_dir = tempfile.mkdtemp()
+        try:
+            from nagios_parser import NagiosConfigParser
+
+            cfg_path = Path(test_dir) / "nagios"
+            cfg_path.mkdir()
+            (cfg_path / "extinfo.cfg").write_text("""
+define hostextinfo {
+    host_name       test-host
+    notes           Extended info for test host
+    icon_image      server.png
+}
+""")
+            parser = NagiosConfigParser(str(cfg_path))
+            parser.parse_all()
+            ext_objs = [o for o in parser.objects if o.object_type == "hostextinfo"]
+            assert len(ext_objs) == 1, f"Expected 1 hostextinfo, got {len(ext_objs)}"
+            assert ext_objs[0].attributes.get("host_name") == "test-host"
+        finally:
+            shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_module_parsed(self):
+        test_dir = tempfile.mkdtemp()
+        try:
+            from nagios_parser import NagiosConfigParser
+
+            cfg_path = Path(test_dir) / "nagios"
+            cfg_path.mkdir()
+            (cfg_path / "modules.cfg").write_text("""
+define module {
+    module_name     nrpe
+    module_type     neb
+    path            /usr/lib/nagios/nrpe.so
+}
+""")
+            parser = NagiosConfigParser(str(cfg_path))
+            parser.parse_all()
+            mod_objs = [o for o in parser.objects if o.object_type == "module"]
+            assert len(mod_objs) == 1, f"Expected 1 module, got {len(mod_objs)}"
+            assert mod_objs[0].attributes.get("module_name") == "nrpe"
+        finally:
+            shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_contact_name_not_self_referenced(self):
+        """A contact's own contact_name should not be flagged as a missing reference."""
+        test_dir = tempfile.mkdtemp()
+        try:
+            cfg_path = Path(test_dir) / "nagios"
+            cfg_path.mkdir()
+            (cfg_path / "contacts.cfg").write_text("""
+define contact {
+    contact_name                    sole-admin
+    host_notification_commands      notify-host
+    service_notification_commands   notify-service
+    host_notification_period        24x7
+    service_notification_period     24x7
+    host_notification_options       d,u,r
+    service_notification_options    w,u,c,r
+}
+""")
+            (cfg_path / "commands.cfg").write_text("""
+define command {
+    command_name    notify-host
+    command_line    /usr/bin/true
+}
+define command {
+    command_name    notify-service
+    command_line    /usr/bin/true
+}
+""")
+            (cfg_path / "timeperiods.cfg").write_text("""
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+}
+""")
+            application = create_app(config_path=str(cfg_path))
+            application.config["TESTING"] = True
+            client = application.test_client()
+            resp = client.get("/api/health-check")
+            assert resp.status_code == 200  # noqa: PLR2004
+            data = resp.get_json()
+            missing_contact_issues = [
+                i for i in data["issues"]
+                if i["type"] == "missing_contact"
+                and "sole-admin" in i.get("message", "")
+            ]
+            assert len(missing_contact_issues) == 0, \
+                f"contact_name should not be flagged as missing reference: {missing_contact_issues}"
+        finally:
+            shutil.rmtree(test_dir, ignore_errors=True)
