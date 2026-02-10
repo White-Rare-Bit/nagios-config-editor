@@ -1452,6 +1452,156 @@ def _check_type_for_consolidation(obj_type, type_entries, identity_fields_set, i
 
 
 # ---------------------------------------------------------------------------
+# Check 24: Host reachability — single-point-of-failure parents
+# ---------------------------------------------------------------------------
+
+def check_host_reachability(ctx):
+    """Check 24: Hosts that are sole parent for 3+ other hosts (SPOF)."""
+    issues = []
+    obj_to_index = ctx["obj_to_index"]
+    objects = ctx["objects"]
+
+    # Count how many hosts have each parent as their SOLE parent
+    sole_parent_count = {}
+    for obj in objects:
+        if obj.object_type != "host":
+            continue
+        if obj.attributes.get("register", "1") == "0":
+            continue
+        parents = obj.attributes.get("parents", "").strip()
+        if not parents:
+            continue
+        parent_list = [p.strip() for p in parents.split(",") if p.strip()]
+        if len(parent_list) == 1:
+            sole_parent_count[parent_list[0]] = sole_parent_count.get(parent_list[0], 0) + 1
+
+    for parent_name, count in sole_parent_count.items():
+        if count >= 3:  # noqa: PLR2004
+            # Find the parent object for file info
+            parent_obj = None
+            for obj in objects:
+                if obj.object_type == "host" and obj.attributes.get("host_name") == parent_name:
+                    parent_obj = obj
+                    break
+            issues.append({
+                "type": "reachability_spof",
+                "severity": "info",
+                "object": parent_name,
+                "object_type": "host",
+                "file": parent_obj.source_file if parent_obj else "",
+                "global_index": obj_to_index.get(id(parent_obj)) if parent_obj else None,
+                "message": f"Host is sole parent for {count} hosts — single point of failure for reachability",
+            })
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Check 25: Dependency period vs check period mismatch
+# ---------------------------------------------------------------------------
+
+def check_dependency_period_mismatch(ctx):
+    """Check 25: Dependencies where dependency_period differs from check_period."""
+    issues = []
+    obj_to_index = ctx["obj_to_index"]
+    template_lookup = ctx["template_lookup"]
+    objects = ctx["objects"]
+
+    for obj in objects:
+        if obj.object_type not in ("hostdependency", "servicedependency"):
+            continue
+
+        dep_period = obj.attributes.get("dependency_period", "")
+        if not dep_period:
+            continue
+
+        # Find the dependent service/host and resolve its check_period
+        dep_host = obj.attributes.get("dependent_host_name", "")
+        dep_svc = obj.attributes.get("dependent_service_description", "")
+
+        target = None
+        if obj.object_type == "servicedependency" and dep_host and dep_svc:
+            for o in objects:
+                if (o.object_type == "service"
+                        and o.attributes.get("host_name") == dep_host
+                        and o.attributes.get("service_description") == dep_svc):
+                    target = o
+                    break
+        elif obj.object_type == "hostdependency" and dep_host:
+            for o in objects:
+                if o.object_type == "host" and o.attributes.get("host_name") == dep_host:
+                    target = o
+                    break
+
+        if not target:
+            continue
+
+        resolved = resolve_inherited_attrs(target, template_lookup)
+        check_period = resolved.get("check_period", "")
+
+        if check_period and dep_period != check_period and dep_period != "24x7" and check_period != "24x7":
+            obj_name = obj.get_name() or obj.get_display_name()
+            issues.append({
+                "type": "dependency_period_mismatch",
+                "severity": "info",
+                "object": obj_name,
+                "object_type": obj.object_type,
+                "file": obj.source_file,
+                "global_index": obj_to_index.get(id(obj)),
+                "message": f"dependency_period '{dep_period}' differs from dependent's check_period '{check_period}'",
+            })
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Check 26: Inheritance depth warnings
+# ---------------------------------------------------------------------------
+
+def check_inheritance_depth(ctx):
+    """Check 26: Objects with inheritance chain deeper than 5 levels."""
+    issues = []
+    obj_to_index = ctx["obj_to_index"]
+    template_lookup = ctx["template_lookup"]
+    objects = ctx["objects"]
+    max_depth = 5
+
+    for obj in objects:
+        use_val = obj.attributes.get("use", "")
+        if not use_val:
+            continue
+
+        # Walk chain counting depth
+        depth = 0
+        visited = set()
+        queue = [obj]
+        while queue:
+            current = queue.pop(0)
+            uses = current.attributes.get("use", "")
+            if not uses:
+                continue
+            for tmpl_name in (t.strip() for t in uses.split(",") if t.strip()):
+                if tmpl_name in visited:
+                    continue
+                visited.add(tmpl_name)
+                depth += 1
+                tmpl = template_lookup.get((current.object_type, tmpl_name))
+                if tmpl:
+                    queue.append(tmpl)
+
+        if depth > max_depth:
+            obj_name = obj.get_name() or obj.get_display_name()
+            issues.append({
+                "type": "deep_inheritance",
+                "severity": "info",
+                "object": obj_name,
+                "object_type": obj.object_type,
+                "file": obj.source_file,
+                "global_index": obj_to_index.get(id(obj)),
+                "message": f"Inheritance chain depth is {depth} (exceeds threshold of {max_depth})",
+            })
+    return issues
+
+
+# ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
 
@@ -1482,6 +1632,9 @@ ALL_CHECKS = [
     check_missing_contacts_on_objects,  # 21
     check_long_host_lists,          # 22
     check_template_opportunities,   # 23
+    check_host_reachability,        # 24
+    check_dependency_period_mismatch,  # 25
+    check_inheritance_depth,        # 26
 ]
 
 

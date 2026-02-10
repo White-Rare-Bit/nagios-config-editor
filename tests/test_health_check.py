@@ -1812,3 +1812,364 @@ class TestObjectReferences:
         """Out-of-range global_index should return 404."""
         resp = ref_client.get("/api/object-references/99999")
         assert resp.status_code == 404  # noqa: PLR2004
+
+
+# ============================================================
+# Issue #10: Host reachability SPOF
+# ============================================================
+
+class TestHostReachability:
+    """Test detection of single-point-of-failure parent hosts."""
+
+    @pytest.fixture
+    def app_with_spof(self):
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / "nagios"
+        test_config_path.mkdir()
+
+        (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name   router1
+    alias       Router 1
+    address     10.0.0.1
+}
+
+define host {
+    host_name   child1
+    alias       Child 1
+    address     10.0.0.2
+    parents     router1
+}
+
+define host {
+    host_name   child2
+    alias       Child 2
+    address     10.0.0.3
+    parents     router1
+}
+
+define host {
+    host_name   child3
+    alias       Child 3
+    address     10.0.0.4
+    parents     router1
+}
+
+define host {
+    host_name   dual-parent-child
+    alias       Dual Parent Child
+    address     10.0.0.5
+    parents     router1,child1
+}
+""")
+
+        (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check-host-alive
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+""")
+
+        (test_config_path / "timeperiods.cfg").write_text("""
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+}
+""")
+
+        app = create_app(config_path=str(test_config_path))
+        app.config["TESTING"] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_spof_detected(self, app_with_spof):
+        """router1 is sole parent for 3+ hosts — should be flagged as SPOF."""
+        client = app_with_spof.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        spof_issues = [i for i in data["issues"] if i["type"] == "reachability_spof"]
+        assert len(spof_issues) >= 1, \
+            f"Expected at least 1 reachability_spof, got {len(spof_issues)}"
+        assert any("router1" in i["object"] for i in spof_issues)
+
+    def test_non_sole_parent_not_flagged(self, app_with_spof):
+        """child1 is a parent for dual-parent-child but not sole, and has <3 children — should NOT be SPOF."""
+        client = app_with_spof.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        spof_issues = [i for i in data["issues"] if i["type"] == "reachability_spof"]
+        assert not any("child1" == i["object"] for i in spof_issues), \
+            f"child1 should not be SPOF: {spof_issues}"
+
+
+# ============================================================
+# Issue #15: Dependency period mismatch
+# ============================================================
+
+class TestDependencyPeriodMismatch:
+    """Test detection of dependency_period vs check_period mismatches."""
+
+    @pytest.fixture
+    def app_with_dep_period(self):
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / "nagios"
+        test_config_path.mkdir()
+
+        (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name   dep-host
+    alias       Dep Host
+    address     10.0.0.1
+    check_period workhours
+}
+
+define host {
+    host_name   master-host
+    alias       Master Host
+    address     10.0.0.2
+}
+""")
+
+        (test_config_path / "deps.cfg").write_text("""
+define hostdependency {
+    dependent_host_name   dep-host
+    host_name             master-host
+    dependency_period     nighthours
+}
+""")
+
+        (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check-host-alive
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+""")
+
+        (test_config_path / "timeperiods.cfg").write_text("""
+define timeperiod {
+    timeperiod_name workhours
+    alias           Work Hours
+    monday          09:00-17:00
+}
+
+define timeperiod {
+    timeperiod_name nighthours
+    alias           Night Hours
+    monday          17:00-09:00
+}
+
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+}
+""")
+
+        app = create_app(config_path=str(test_config_path))
+        app.config["TESTING"] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_dependency_period_mismatch_flagged(self, app_with_dep_period):
+        """dependency_period=nighthours vs check_period=workhours should be flagged."""
+        client = app_with_dep_period.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        mismatch = [i for i in data["issues"] if i["type"] == "dependency_period_mismatch"]
+        assert len(mismatch) >= 1, \
+            f"Expected at least 1 dependency_period_mismatch, got {len(mismatch)}"
+
+    def test_matching_periods_not_flagged(self):
+        """dependency_period matching check_period should NOT be flagged."""
+        test_dir = tempfile.mkdtemp()
+        try:
+            test_config_path = Path(test_dir) / "nagios"
+            test_config_path.mkdir()
+
+            (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name   dep-host
+    alias       Dep Host
+    address     10.0.0.1
+    check_period workhours
+}
+
+define host {
+    host_name   master-host
+    alias       Master Host
+    address     10.0.0.2
+}
+""")
+
+            (test_config_path / "deps.cfg").write_text("""
+define hostdependency {
+    dependent_host_name   dep-host
+    host_name             master-host
+    dependency_period     workhours
+}
+""")
+
+            (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check-host-alive
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+""")
+
+            (test_config_path / "timeperiods.cfg").write_text("""
+define timeperiod {
+    timeperiod_name workhours
+    alias           Work Hours
+    monday          09:00-17:00
+}
+
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+}
+""")
+
+            app = create_app(config_path=str(test_config_path))
+            app.config["TESTING"] = True
+            client = app.test_client()
+            resp = client.get("/api/health-check")
+            assert resp.status_code == 200  # noqa: PLR2004
+            data = resp.get_json()
+
+            mismatch = [i for i in data["issues"] if i["type"] == "dependency_period_mismatch"]
+            assert len(mismatch) == 0, \
+                f"Matching periods should not be flagged: {mismatch}"
+        finally:
+            shutil.rmtree(test_dir, ignore_errors=True)
+
+
+# ============================================================
+# Issue #25: Inheritance depth warnings
+# ============================================================
+
+class TestInheritanceDepth:
+    """Test detection of deep inheritance chains."""
+
+    def test_deep_chain_flagged(self):
+        """Inheritance chain deeper than 5 should be flagged."""
+        test_dir = tempfile.mkdtemp()
+        try:
+            test_config_path = Path(test_dir) / "nagios"
+            test_config_path.mkdir()
+
+            # Create a chain 7 deep: t1 -> t2 -> ... -> t6 -> concrete
+            templates = []
+            for i in range(1, 7):
+                use_line = f"    use             tmpl-{i - 1}" if i > 1 else ""
+                templates.append(f"""
+define host {{
+    name            tmpl-{i}
+    register        0
+    check_command   check-host-alive
+{use_line}
+}}""")
+
+            (test_config_path / "templates.cfg").write_text("\n".join(templates))
+
+            (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name   deep-host
+    use         tmpl-6
+    alias       Deep Host
+    address     10.0.0.1
+}
+""")
+
+            (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check-host-alive
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+""")
+
+            (test_config_path / "timeperiods.cfg").write_text("""
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+}
+""")
+
+            app = create_app(config_path=str(test_config_path))
+            app.config["TESTING"] = True
+            client = app.test_client()
+            resp = client.get("/api/health-check")
+            assert resp.status_code == 200  # noqa: PLR2004
+            data = resp.get_json()
+
+            deep_issues = [i for i in data["issues"] if i["type"] == "deep_inheritance"]
+            assert len(deep_issues) >= 1, \
+                f"Expected at least 1 deep_inheritance issue, got {len(deep_issues)}"
+        finally:
+            shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_shallow_chain_not_flagged(self):
+        """Inheritance chain of 2-3 should NOT be flagged."""
+        test_dir = tempfile.mkdtemp()
+        try:
+            test_config_path = Path(test_dir) / "nagios"
+            test_config_path.mkdir()
+
+            (test_config_path / "templates.cfg").write_text("""
+define host {
+    name            base-tmpl
+    register        0
+    check_command   check-host-alive
+}
+
+define host {
+    name            child-tmpl
+    use             base-tmpl
+    register        0
+}
+""")
+
+            (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name   shallow-host
+    use         child-tmpl
+    alias       Shallow Host
+    address     10.0.0.1
+}
+""")
+
+            (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check-host-alive
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+""")
+
+            (test_config_path / "timeperiods.cfg").write_text("""
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+}
+""")
+
+            app = create_app(config_path=str(test_config_path))
+            app.config["TESTING"] = True
+            client = app.test_client()
+            resp = client.get("/api/health-check")
+            assert resp.status_code == 200  # noqa: PLR2004
+            data = resp.get_json()
+
+            deep_issues = [i for i in data["issues"] if i["type"] == "deep_inheritance"]
+            assert len(deep_issues) == 0, \
+                f"Shallow chain should not be flagged: {deep_issues}"
+        finally:
+            shutil.rmtree(test_dir, ignore_errors=True)
