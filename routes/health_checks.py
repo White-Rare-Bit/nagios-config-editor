@@ -4,9 +4,11 @@ Each check_* function takes a context dict and returns a list of issue dicts.
 The run_all_checks() orchestrator calls them all.
 """
 
+import os
 import re
 
 from inheritance import has_attr_in_chain, resolve_inherited_attrs
+from nagios_cfg import parse_nagios_cfg, parse_resource_cfg
 from nagios_model import NAME_FIELDS, REFERENCE_FIELDS
 
 # Minimum common prefix length for auto-generating template names
@@ -64,12 +66,13 @@ def strip_prefix(s):
 # Context builder
 # ---------------------------------------------------------------------------
 
-def build_context(objects, obj_to_index, template_lookup):
+def build_context(objects, obj_to_index, template_lookup, config_paths=None):
     """Build lookup sets and shared data used by multiple checks."""
     ctx = {
         "objects": objects,
         "obj_to_index": obj_to_index,
         "template_lookup": template_lookup,
+        "config_paths": config_paths or {},
         "hosts": set(),
         "hostgroups": set(),
         "services": set(),
@@ -1452,6 +1455,90 @@ def _check_type_for_consolidation(obj_type, type_entries, identity_fields_set, i
 
 
 # ---------------------------------------------------------------------------
+# Check 24: cfg_dir coverage
+# ---------------------------------------------------------------------------
+
+def check_cfg_dir_coverage(ctx):
+    """Check 24: Flag .cfg file directories not covered by cfg_dir/cfg_file."""
+    issues = []
+    config_paths = ctx.get("config_paths", {})
+    nagios_cfg_path = config_paths.get("nagios_cfg", "")
+    if not nagios_cfg_path:
+        return issues
+
+    cfg_data = parse_nagios_cfg(nagios_cfg_path)
+    # Use realpath to resolve symlinks (e.g. /var → /private/var on macOS)
+    cfg_dirs = {os.path.realpath(d) for d in cfg_data["cfg_dirs"]}
+    cfg_files = {os.path.realpath(f) for f in cfg_data["cfg_files"]}
+
+    # Collect directories that contain .cfg files used by objects
+    obj_dirs = set()
+    for obj in ctx["objects"]:
+        if obj.source_file:
+            obj_dirs.add(os.path.dirname(os.path.realpath(obj.source_file)))
+
+    for d in sorted(obj_dirs):
+        # Check if directory is covered by a cfg_dir entry (or a parent)
+        covered = any(d == cd or d.startswith(cd + os.sep) for cd in cfg_dirs)
+        if not covered:
+            # Check if all files in this dir are individually listed in cfg_file
+            dir_files = {
+                os.path.realpath(obj.source_file)
+                for obj in ctx["objects"]
+                if obj.source_file and os.path.dirname(os.path.realpath(obj.source_file)) == d
+            }
+            if not dir_files.issubset(cfg_files):
+                issues.append({
+                    "type": "cfg_dir_gap",
+                    "severity": "warning",
+                    "object": os.path.basename(d),
+                    "object_type": "directory",
+                    "file": d,
+                    "global_index": None,
+                    "message": f"Directory '{d}' contains .cfg files but is not covered by any cfg_dir directive",
+                })
+
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Check 25: Undefined $USERn$ macros
+# ---------------------------------------------------------------------------
+
+def check_undefined_macros(ctx):
+    """Check 25: Flag $USERn$ macros used in commands but not defined in resource.cfg."""
+    issues = []
+    config_paths = ctx.get("config_paths", {})
+    resource_cfg_path = config_paths.get("resource_cfg", "")
+
+    # Parse resource.cfg for defined macros (empty dict if no path)
+    defined_macros = parse_resource_cfg(resource_cfg_path) if resource_cfg_path else {}
+
+    macro_re = re.compile(r"\$USER\d+\$")
+    obj_to_index = ctx["obj_to_index"]
+
+    for obj in ctx["objects"]:
+        if obj.object_type != "command":
+            continue
+        cmd_line = obj.attributes.get("command_line", "")
+        for match in macro_re.finditer(cmd_line):
+            macro = match.group()
+            if macro not in defined_macros:
+                cmd_name = obj.attributes.get("command_name", obj.get_name() or "unknown")
+                issues.append({
+                    "type": "undefined_macro",
+                    "severity": "warning",
+                    "object": cmd_name,
+                    "object_type": "command",
+                    "file": obj.source_file,
+                    "global_index": obj_to_index.get(id(obj)),
+                    "message": f"Command '{cmd_name}' uses {macro} which is not defined in resource.cfg",
+                })
+
+    return issues
+
+
+# ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
 
@@ -1482,12 +1569,14 @@ ALL_CHECKS = [
     check_missing_contacts_on_objects,  # 21
     check_long_host_lists,          # 22
     check_template_opportunities,   # 23
+    check_cfg_dir_coverage,         # 24
+    check_undefined_macros,         # 25
 ]
 
 
-def run_all_checks(objects, obj_to_index, template_lookup):
+def run_all_checks(objects, obj_to_index, template_lookup, config_paths=None):
     """Run all health checks and return combined issues list."""
-    ctx = build_context(objects, obj_to_index, template_lookup)
+    ctx = build_context(objects, obj_to_index, template_lookup, config_paths=config_paths)
     issues = []
     for check_fn in ALL_CHECKS:
         issues.extend(check_fn(ctx))

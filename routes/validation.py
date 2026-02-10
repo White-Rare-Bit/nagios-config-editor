@@ -105,6 +105,7 @@ def api_health_check():
     """Analyze configuration for potential issues."""
     from inheritance import build_template_lookup
     from .health_checks import run_all_checks
+    from .helpers import get_server_config
 
     service = get_service()
     p = service.parser
@@ -113,7 +114,14 @@ def api_health_check():
     obj_to_index = {id(obj): idx for idx, obj in enumerate(objects)}
     template_lookup = build_template_lookup(objects)
 
-    issues = run_all_checks(objects, obj_to_index, template_lookup)
+    server_config = get_server_config()
+    config_paths = {}
+    if server_config:
+        config_paths["nagios_cfg"] = server_config.nagios_cfg
+        if hasattr(server_config.paths, "resource_cfg"):
+            config_paths["resource_cfg"] = server_config.paths.resource_cfg
+
+    issues = run_all_checks(objects, obj_to_index, template_lookup, config_paths=config_paths)
 
     summary = {
         "total_issues": len(issues),
