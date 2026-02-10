@@ -144,7 +144,7 @@ def check_orphan_services(ctx):
         if host_ref and host_ref != "*":
             for h in host_ref.split(","):
                 h = h.strip()
-                if h.startswith("!"):
+                if h.startswith("!") or h == "*":
                     continue
                 if h and h not in hosts:
                     issues.append({
@@ -340,6 +340,8 @@ def check_missing_contacts(ctx):
         if "contacts" in obj.attributes:
             for c in obj.attributes["contacts"].split(","):
                 c = strip_prefix(c)
+                if c == "*":
+                    continue
                 if c and c not in contacts:
                     issues.append({
                         "type": "missing_contact",
@@ -384,6 +386,8 @@ def check_missing_groups(ctx):
         if "hostgroups" in obj.attributes:
             for hg in obj.attributes["hostgroups"].split(","):
                 hg = strip_prefix(hg)
+                if hg == "*":
+                    continue
                 if hg and hg not in hostgroups:
                     issues.append({
                         "type": "missing_hostgroup",
@@ -542,6 +546,7 @@ def check_duplicate_dependencies(ctx):
         for field in dep_fields:
             val = obj.attributes.get(field, "")
             if val:
+                val = ",".join(sorted(v.strip() for v in val.split(",")))
                 sig_parts.append(f"{field}={val}")
         sig = "|".join(sorted(sig_parts))
 
