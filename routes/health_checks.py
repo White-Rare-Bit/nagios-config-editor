@@ -1512,6 +1512,258 @@ def check_required_fields(ctx):
 
 
 # ---------------------------------------------------------------------------
+# Check 25: Services bound to empty hostgroups
+# ---------------------------------------------------------------------------
+
+def check_services_on_empty_hostgroups(ctx):
+    """Check 25: Services referencing hostgroups with zero members."""
+    issues = []
+    obj_to_index = ctx["obj_to_index"]
+    objects = ctx["objects"]
+
+    # Build set of hostgroup names that have members
+    populated_hostgroups = set()
+    for obj in objects:
+        if obj.object_type == "hostgroup":
+            hg_name = obj.attributes.get("hostgroup_name", "")
+            members = obj.attributes.get("members", "").strip()
+            if members:
+                populated_hostgroups.add(hg_name)
+        # Also check hosts that point to hostgroups via hostgroups attr
+        if obj.object_type == "host" and obj.attributes.get("register", "1") != "0":
+            for hg in obj.attributes.get("hostgroups", "").split(","):
+                hg = hg.strip().lstrip("+!")
+                if hg:
+                    populated_hostgroups.add(hg)
+
+    # Find all defined hostgroups
+    all_hostgroups = set()
+    for obj in objects:
+        if obj.object_type == "hostgroup":
+            hg_name = obj.attributes.get("hostgroup_name", "")
+            if hg_name:
+                all_hostgroups.add(hg_name)
+
+    empty_hostgroups = all_hostgroups - populated_hostgroups
+
+    if not empty_hostgroups:
+        return issues
+
+    for obj in objects:
+        if obj.object_type != "service":
+            continue
+        if obj.attributes.get("register", "1") == "0":
+            continue
+        hg_ref = obj.attributes.get("hostgroup_name", "")
+        if not hg_ref:
+            continue
+        for hg in hg_ref.split(","):
+            hg = hg.strip().lstrip("+!")
+            if hg in empty_hostgroups:
+                obj_name = obj.get_name() or obj.get_display_name()
+                issues.append({
+                    "type": "service_on_empty_hostgroup",
+                    "severity": "warning",
+                    "object": obj_name,
+                    "object_type": "service",
+                    "file": obj.source_file,
+                    "global_index": obj_to_index.get(id(obj)),
+                    "message": f"Service bound to empty hostgroup '{hg}' (no hosts are members)",
+                })
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Check 26: Redundant escalation contacts
+# ---------------------------------------------------------------------------
+
+def check_redundant_escalation_contacts(ctx):
+    """Check 26: Escalation contacts identical to base object contacts."""
+    issues = []
+    obj_to_index = ctx["obj_to_index"]
+    template_lookup = ctx["template_lookup"]
+    objects = ctx["objects"]
+
+    # Build map of (host_name, service_description?) -> resolved contact set
+    def get_contact_set(obj):
+        resolved = resolve_inherited_attrs(obj, template_lookup)
+        contacts = set()
+        for c in resolved.get("contacts", "").split(","):
+            c = c.strip()
+            if c:
+                contacts.add(c)
+        for cg in resolved.get("contact_groups", "").split(","):
+            cg = cg.strip()
+            if cg:
+                contacts.add(f"cg:{cg}")
+        return contacts
+
+    # Index base objects by identity
+    base_contacts = {}
+    for obj in objects:
+        if obj.object_type == "host" and obj.attributes.get("register", "1") != "0":
+            host_name = obj.attributes.get("host_name", "")
+            if host_name:
+                base_contacts[("host", host_name, "")] = get_contact_set(obj)
+        elif obj.object_type == "service" and obj.attributes.get("register", "1") != "0":
+            host_name = obj.attributes.get("host_name", "")
+            svc_desc = obj.attributes.get("service_description", "")
+            if svc_desc:
+                base_contacts[("service", host_name, svc_desc)] = get_contact_set(obj)
+
+    for obj in objects:
+        if obj.object_type not in ("hostescalation", "serviceescalation"):
+            continue
+
+        esc_contacts = get_contact_set(obj)
+        if not esc_contacts:
+            continue
+
+        host_name = obj.attributes.get("host_name", "")
+        if obj.object_type == "hostescalation":
+            base_key = ("host", host_name, "")
+        else:
+            svc_desc = obj.attributes.get("service_description", "")
+            base_key = ("service", host_name, svc_desc)
+
+        base = base_contacts.get(base_key, set())
+        if base and esc_contacts.issubset(base):
+            obj_name = obj.get_name() or obj.get_display_name()
+            issues.append({
+                "type": "redundant_escalation_contacts",
+                "severity": "info",
+                "object": obj_name,
+                "object_type": obj.object_type,
+                "file": obj.source_file,
+                "global_index": obj_to_index.get(id(obj)),
+                "message": "Escalation contacts are a subset of base object contacts (escalation adds no new recipients)",
+            })
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Check 27: Escalation coverage gaps
+# ---------------------------------------------------------------------------
+
+def check_escalation_coverage_gaps(ctx):
+    """Check 27: Gaps in escalation notification ranges."""
+    issues = []
+    obj_to_index = ctx["obj_to_index"]
+    objects = ctx["objects"]
+
+    # Group escalations by target
+    escalation_groups = {}
+    for obj in objects:
+        if obj.object_type not in ("hostescalation", "serviceescalation"):
+            continue
+        host_name = obj.attributes.get("host_name", "")
+        svc_desc = obj.attributes.get("service_description", "") if obj.object_type == "serviceescalation" else ""
+        key = (obj.object_type, host_name, svc_desc)
+        escalation_groups.setdefault(key, []).append(obj)
+
+    for key, escs in escalation_groups.items():
+        if len(escs) < 2:  # noqa: PLR2004
+            continue
+
+        # Parse and sort by first_notification
+        ranges = []
+        for obj in escs:
+            try:
+                first = int(obj.attributes.get("first_notification", "0"))
+                last = int(obj.attributes.get("last_notification", "0"))
+            except (ValueError, TypeError):
+                continue
+            ranges.append((first, last, obj))
+
+        ranges.sort(key=lambda r: r[0])
+
+        for i in range(len(ranges) - 1):
+            _, last_n, _ = ranges[i]
+            first_next, _, next_obj = ranges[i + 1]
+
+            # last_notification=0 means unlimited — no gap possible
+            if last_n == 0:
+                continue
+
+            if first_next > last_n + 1:
+                obj_name = next_obj.get_name() or next_obj.get_display_name()
+                esc_type, host, svc = key
+                target = f"{host}/{svc}" if svc else host
+                issues.append({
+                    "type": "escalation_coverage_gap",
+                    "severity": "warning",
+                    "object": obj_name,
+                    "object_type": esc_type,
+                    "file": next_obj.source_file,
+                    "global_index": obj_to_index.get(id(next_obj)),
+                    "message": f"Escalation gap for {target}: notifications {last_n + 1}-{first_next - 1} have no escalation",
+                })
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Check 28: Notification period vs criticality mismatch
+# ---------------------------------------------------------------------------
+
+def check_notification_period_criticality(ctx):
+    """Check 28: Critical services with non-24x7 notification periods."""
+    issues = []
+    obj_to_index = ctx["obj_to_index"]
+    template_lookup = ctx["template_lookup"]
+    objects = ctx["objects"]
+
+    # Build set of services that have escalations
+    escalated_services = set()
+    for obj in objects:
+        if obj.object_type == "serviceescalation":
+            host = obj.attributes.get("host_name", "")
+            svc = obj.attributes.get("service_description", "")
+            if host and svc:
+                escalated_services.add((host, svc))
+
+    for obj in objects:
+        if obj.object_type != "service":
+            continue
+        if obj.attributes.get("register", "1") == "0":
+            continue
+
+        resolved = resolve_inherited_attrs(obj, template_lookup)
+
+        # Determine if this is a "critical" service
+        host = resolved.get("host_name", "")
+        svc_desc = resolved.get("service_description", "")
+        has_escalation = (host, svc_desc) in escalated_services
+
+        try:
+            check_interval = int(resolved.get("check_interval", "5"))
+        except (ValueError, TypeError):
+            check_interval = 5
+        try:
+            max_attempts = int(resolved.get("max_check_attempts", "3"))
+        except (ValueError, TypeError):
+            max_attempts = 3
+
+        is_critical = has_escalation or check_interval < 5 or max_attempts <= 2  # noqa: PLR2004
+
+        if not is_critical:
+            continue
+
+        notification_period = resolved.get("notification_period", "")
+        if notification_period and notification_period != "24x7":
+            obj_name = obj.get_name() or obj.get_display_name()
+            issues.append({
+                "type": "notification_period_mismatch",
+                "severity": "info",
+                "object": obj_name,
+                "object_type": "service",
+                "file": obj.source_file,
+                "global_index": obj_to_index.get(id(obj)),
+                "message": f"Critical service uses notification_period '{notification_period}' instead of 24x7",
+            })
+    return issues
+
+
+# ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
 
@@ -1543,6 +1795,10 @@ ALL_CHECKS = [
     check_long_host_lists,          # 22
     check_template_opportunities,   # 23
     check_required_fields,          # 24
+    check_services_on_empty_hostgroups,  # 25
+    check_redundant_escalation_contacts,  # 26
+    check_escalation_coverage_gaps,  # 27
+    check_notification_period_criticality,  # 28
 ]
 
 

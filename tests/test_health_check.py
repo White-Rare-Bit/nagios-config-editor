@@ -2189,3 +2189,473 @@ define timeperiod {
         assert len(data["errors"]) > 0, "Expected at least one error for missing template"
         assert any("nonexistent-template" in e for e in data["errors"]), \
             f"Expected error mentioning 'nonexistent-template', got: {data['errors']}"
+
+
+# ============================================================
+# Issue #6: Services bound to empty hostgroups
+# ============================================================
+
+class TestServiceOnEmptyHostgroup:
+    """Test detection of services bound to hostgroups with no members."""
+
+    @pytest.fixture
+    def app_with_empty_hg(self):
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / "nagios"
+        test_config_path.mkdir()
+
+        (test_config_path / "hostgroups.cfg").write_text("""
+define hostgroup {
+    hostgroup_name  empty-group
+    alias           Empty Group
+}
+
+define hostgroup {
+    hostgroup_name  populated-group
+    alias           Populated Group
+    members         real-host
+}
+""")
+
+        (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name   real-host
+    alias       Real Host
+    address     10.0.0.1
+}
+""")
+
+        (test_config_path / "services.cfg").write_text("""
+define service {
+    hostgroup_name        empty-group
+    service_description   Service on Empty
+    check_command         check-host-alive
+}
+
+define service {
+    hostgroup_name        populated-group
+    service_description   Service on Populated
+    check_command         check-host-alive
+}
+""")
+
+        (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check-host-alive
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+""")
+
+        (test_config_path / "timeperiods.cfg").write_text("""
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+}
+""")
+
+        app = create_app(config_path=str(test_config_path))
+        app.config["TESTING"] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_service_on_empty_hostgroup_flagged(self, app_with_empty_hg):
+        """Service bound to empty-group should be flagged."""
+        client = app_with_empty_hg.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        empty_hg_issues = [i for i in data["issues"] if i["type"] == "service_on_empty_hostgroup"]
+        assert len(empty_hg_issues) >= 1, \
+            f"Expected at least 1 service_on_empty_hostgroup issue, got {len(empty_hg_issues)}"
+        assert any("empty-group" in i["message"] for i in empty_hg_issues)
+
+    def test_service_on_populated_hostgroup_not_flagged(self, app_with_empty_hg):
+        """Service bound to populated-group should NOT be flagged."""
+        client = app_with_empty_hg.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        empty_hg_issues = [i for i in data["issues"] if i["type"] == "service_on_empty_hostgroup"]
+        assert not any("populated-group" in i["message"] for i in empty_hg_issues), \
+            f"populated-group should not be flagged: {empty_hg_issues}"
+
+
+# ============================================================
+# Issue #7: Redundant escalation contacts
+# ============================================================
+
+class TestRedundantEscalationContacts:
+    """Test detection of escalation contacts that match base contacts."""
+
+    @pytest.fixture
+    def app_with_escalations(self):
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / "nagios"
+        test_config_path.mkdir()
+
+        (test_config_path / "contacts.cfg").write_text("""
+define contact {
+    contact_name                    admin
+    host_notification_commands      notify-host
+    service_notification_commands   notify-svc
+    host_notification_period        24x7
+    service_notification_period     24x7
+    host_notification_options       d,u,r
+    service_notification_options    w,u,c,r
+}
+
+define contact {
+    contact_name                    oncall
+    host_notification_commands      notify-host
+    service_notification_commands   notify-svc
+    host_notification_period        24x7
+    service_notification_period     24x7
+    host_notification_options       d,u,r
+    service_notification_options    w,u,c,r
+}
+""")
+
+        (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name   esc-host
+    alias       Escalation Host
+    address     10.0.0.1
+    contacts    admin,oncall
+}
+""")
+
+        (test_config_path / "escalations.cfg").write_text("""
+define hostescalation {
+    host_name           esc-host
+    contacts            admin
+    first_notification  2
+    last_notification   5
+}
+""")
+
+        (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check-host-alive
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+define command {
+    command_name    notify-host
+    command_line    /usr/bin/true
+}
+define command {
+    command_name    notify-svc
+    command_line    /usr/bin/true
+}
+""")
+
+        (test_config_path / "timeperiods.cfg").write_text("""
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+}
+""")
+
+        app = create_app(config_path=str(test_config_path))
+        app.config["TESTING"] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_redundant_escalation_flagged(self, app_with_escalations):
+        """Escalation with contacts subset of base should be flagged."""
+        client = app_with_escalations.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        redundant = [i for i in data["issues"] if i["type"] == "redundant_escalation_contacts"]
+        assert len(redundant) >= 1, \
+            f"Expected at least 1 redundant_escalation_contacts issue, got {len(redundant)}"
+
+    def test_redundant_escalation_is_info(self, app_with_escalations):
+        """Redundant escalation contacts should be info severity."""
+        client = app_with_escalations.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        redundant = [i for i in data["issues"] if i["type"] == "redundant_escalation_contacts"]
+        for issue in redundant:
+            assert issue["severity"] == "info"
+
+
+# ============================================================
+# Issue #14: Escalation coverage gaps
+# ============================================================
+
+class TestEscalationCoverageGaps:
+    """Test detection of gaps in escalation notification ranges."""
+
+    @pytest.fixture
+    def app_with_gap(self):
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / "nagios"
+        test_config_path.mkdir()
+
+        (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name   gap-host
+    alias       Gap Host
+    address     10.0.0.1
+    contacts    admin
+}
+""")
+
+        (test_config_path / "contacts.cfg").write_text("""
+define contact {
+    contact_name                    admin
+    host_notification_commands      notify-host
+    service_notification_commands   notify-host
+    host_notification_period        24x7
+    service_notification_period     24x7
+    host_notification_options       d,u,r
+    service_notification_options    w,u,c,r
+}
+""")
+
+        (test_config_path / "escalations.cfg").write_text("""
+define hostescalation {
+    host_name           gap-host
+    contacts            admin
+    first_notification  1
+    last_notification   3
+}
+
+define hostescalation {
+    host_name           gap-host
+    contacts            admin
+    first_notification  8
+    last_notification   0
+}
+""")
+
+        (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check-host-alive
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+define command {
+    command_name    notify-host
+    command_line    /usr/bin/true
+}
+""")
+
+        (test_config_path / "timeperiods.cfg").write_text("""
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+}
+""")
+
+        app = create_app(config_path=str(test_config_path))
+        app.config["TESTING"] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_escalation_gap_detected(self, app_with_gap):
+        """Gap between notification 3 and 8 should be flagged."""
+        client = app_with_gap.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        gap_issues = [i for i in data["issues"] if i["type"] == "escalation_coverage_gap"]
+        assert len(gap_issues) >= 1, \
+            f"Expected at least 1 escalation_coverage_gap, got {len(gap_issues)}"
+
+    def test_contiguous_escalation_no_gap(self):
+        """Contiguous escalations should NOT be flagged."""
+        test_dir = tempfile.mkdtemp()
+        try:
+            test_config_path = Path(test_dir) / "nagios"
+            test_config_path.mkdir()
+
+            (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name   ok-host
+    alias       OK Host
+    address     10.0.0.1
+    contacts    admin
+}
+""")
+
+            (test_config_path / "contacts.cfg").write_text("""
+define contact {
+    contact_name                    admin
+    host_notification_commands      notify-host
+    service_notification_commands   notify-host
+    host_notification_period        24x7
+    service_notification_period     24x7
+    host_notification_options       d,u,r
+    service_notification_options    w,u,c,r
+}
+""")
+
+            (test_config_path / "escalations.cfg").write_text("""
+define hostescalation {
+    host_name           ok-host
+    contacts            admin
+    first_notification  1
+    last_notification   3
+}
+
+define hostescalation {
+    host_name           ok-host
+    contacts            admin
+    first_notification  4
+    last_notification   0
+}
+""")
+
+            (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check-host-alive
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+define command {
+    command_name    notify-host
+    command_line    /usr/bin/true
+}
+""")
+
+            (test_config_path / "timeperiods.cfg").write_text("""
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+}
+""")
+
+            app = create_app(config_path=str(test_config_path))
+            app.config["TESTING"] = True
+            client = app.test_client()
+            resp = client.get("/api/health-check")
+            assert resp.status_code == 200  # noqa: PLR2004
+            data = resp.get_json()
+
+            gap_issues = [i for i in data["issues"] if i["type"] == "escalation_coverage_gap"]
+            assert len(gap_issues) == 0, \
+                f"Contiguous escalations should have no gaps: {gap_issues}"
+        finally:
+            shutil.rmtree(test_dir, ignore_errors=True)
+
+
+# ============================================================
+# Issue #16: Notification period vs criticality mismatch
+# ============================================================
+
+class TestNotificationPeriodCriticality:
+    """Test detection of critical services with non-24x7 notification periods."""
+
+    @pytest.fixture
+    def app_with_critical_service(self):
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / "nagios"
+        test_config_path.mkdir()
+
+        (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name   crit-host
+    alias       Critical Host
+    address     10.0.0.1
+    contacts    admin
+}
+""")
+
+        (test_config_path / "contacts.cfg").write_text("""
+define contact {
+    contact_name                    admin
+    host_notification_commands      notify-host
+    service_notification_commands   notify-host
+    host_notification_period        24x7
+    service_notification_period     24x7
+    host_notification_options       d,u,r
+    service_notification_options    w,u,c,r
+}
+""")
+
+        (test_config_path / "services.cfg").write_text("""
+define service {
+    host_name               crit-host
+    service_description     Critical SVC
+    check_command           check-host-alive
+    check_interval          1
+    max_check_attempts      2
+    notification_period     workhours
+    contacts                admin
+}
+
+define service {
+    host_name               crit-host
+    service_description     Normal SVC
+    check_command           check-host-alive
+    check_interval          10
+    max_check_attempts      5
+    notification_period     workhours
+    contacts                admin
+}
+""")
+
+        (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check-host-alive
+    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+}
+define command {
+    command_name    notify-host
+    command_line    /usr/bin/true
+}
+""")
+
+        (test_config_path / "timeperiods.cfg").write_text("""
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+}
+
+define timeperiod {
+    timeperiod_name workhours
+    alias           Work Hours
+    monday          09:00-17:00
+}
+""")
+
+        app = create_app(config_path=str(test_config_path))
+        app.config["TESTING"] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_critical_service_non_24x7_flagged(self, app_with_critical_service):
+        """Critical service (low interval + low attempts) with workhours should be flagged."""
+        client = app_with_critical_service.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        mismatch = [i for i in data["issues"] if i["type"] == "notification_period_mismatch"]
+        flagged_names = [i["object"] for i in mismatch]
+        assert any("Critical SVC" in name for name in flagged_names), \
+            f"Expected Critical SVC flagged, got: {flagged_names}"
+
+    def test_normal_service_non_24x7_not_flagged(self, app_with_critical_service):
+        """Normal service (high interval + high attempts) with workhours should NOT be flagged."""
+        client = app_with_critical_service.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        mismatch = [i for i in data["issues"] if i["type"] == "notification_period_mismatch"]
+        flagged_names = [i["object"] for i in mismatch]
+        assert not any("Normal SVC" in name for name in flagged_names), \
+            f"Normal SVC should not be flagged: {flagged_names}"
+
