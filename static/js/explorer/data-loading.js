@@ -62,7 +62,7 @@
 
         // Populate constants from backend metadata (once)
         if (metadataResult && metadataResult.success) {
-            Explorer.applyMetadata(metadataResult.data);
+            Explorer.applyMetadata(metadataResult.data.data || metadataResult.data);
             Explorer.state.metadataLoaded = true;
         }
     };

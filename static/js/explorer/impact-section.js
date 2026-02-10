@@ -198,7 +198,7 @@
 
         // 2. "If Deleted/Renamed" (incoming references)
         if (hasIncoming) {
-            html += renderIncomingSubsection(incoming);
+            html += renderIncomingSubsection(obj, incoming);
         }
 
         // 3. "This Object Requires" (outgoing references)
@@ -349,10 +349,28 @@
     }
 
     /**
-     * Render the "If Deleted/Renamed" subsection (incoming references)
+     * Get a human-readable reason string for an incoming reference impact
      */
-    function renderIncomingSubsection(incoming) {
+    function getImpactReason(ref) {
+        if (ref.severity === 'error') {
+            if (ref.isServiceBinding) return 'Will be orphaned';
+            if (ref.isDependencyRule) return 'Dependency breaks';
+            return 'Broken reference';
+        }
+        if (ref.isDependencyRule) return 'Dependency rule';
+        if (ref.isEscalationRule) return 'Escalation rule';
+        if (ref.field) return 'via ' + ref.field;
+        return 'Needs update';
+    }
+
+    /**
+     * Render the "If Deleted/Renamed" subsection as a terraform-plan-style diff view.
+     * Incoming references sorted: destroy (errors) first, then modify (warnings/info).
+     */
+    function renderIncomingSubsection(obj, incoming) {
         const count = incoming.length;
+        const objName = Explorer.escapeHtml(getEffectiveName(obj));
+        const nameField = (Explorer.constants.nameFields || {})[obj.object_type] || obj.object_type;
 
         // Partition by severity
         const errors = incoming.filter(r => r.severity === 'error');
@@ -362,62 +380,45 @@
         // Determine header badge class based on worst severity
         const badgeClass = errors.length > 0 ? 'danger' : 'warning';
 
-        let content = '';
+        // Sort: destroy first, then modify
+        const sorted = [...errors, ...warnings, ...infos];
+        const modifyCount = warnings.length + infos.length;
 
+        // Summary banner
+        let content = '<div class="impact-diff-header"><span>Plan: ';
+        const parts = [];
         if (errors.length > 0) {
-            const errorGrouped = {};
-            errors.forEach(ref => {
-                const type = ref.object.object_type;
-                if (!errorGrouped[type]) errorGrouped[type] = [];
-                errorGrouped[type].push(ref);
-            });
-            content += `
-                <div class="impact-summary danger">
-                    <span class="impact-summary-icon"><i class="fa-solid fa-circle-xmark"></i></span>
-                    <span>${errors.length} object${errors.length !== 1 ? 's' : ''} would <strong>BREAK</strong> (orphaned or missing dependency)</span>
-                </div>
-            `;
-            content += renderGroupedReferences(errorGrouped);
+            parts.push(`<strong class="impact-diff-count-destroy">${errors.length}</strong> to break`);
         }
+        if (modifyCount > 0) {
+            parts.push(`<strong class="impact-diff-count-modify">${modifyCount}</strong> to update`);
+        }
+        content += parts.join(', ') + '.</span></div>';
 
-        if (warnings.length > 0) {
-            const warnGrouped = {};
-            warnings.forEach(ref => {
-                const type = ref.object.object_type;
-                if (!warnGrouped[type]) warnGrouped[type] = [];
-                warnGrouped[type].push(ref);
-            });
-            content += `
-                <div class="impact-summary warning">
-                    <span class="impact-summary-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
-                    <span>${warnings.length} object${warnings.length !== 1 ? 's' : ''} would need updates</span>
-                </div>
-            `;
-            content += renderGroupedReferences(warnGrouped);
-        }
+        // Diff list
+        content += '<div class="impact-diff-list">';
+        sorted.forEach(ref => {
+            const isDestroy = ref.severity === 'error';
+            const status = isDestroy ? 'destroy' : 'modify';
+            const symbol = isDestroy ? '[-]' : '[~]';
+            const type = ref.object.object_type.toUpperCase();
+            const displayName = getStagedDisplayName(ref.object);
+            const reason = getImpactReason(ref);
 
-        if (infos.length > 0) {
-            const infoGrouped = {};
-            infos.forEach(ref => {
-                const type = ref.object.object_type;
-                if (!infoGrouped[type]) infoGrouped[type] = [];
-                infoGrouped[type].push(ref);
-            });
-            content += `
-                <div class="impact-summary info">
-                    <span class="impact-summary-icon"><i class="fa-solid fa-circle-info"></i></span>
-                    <span>${infos.length} minor reference${infos.length !== 1 ? 's' : ''}</span>
-                </div>
-            `;
-            content += renderGroupedReferences(infoGrouped);
-        }
+            content += `<div class="impact-diff-row impact-diff-row--${status}" onclick="Explorer.navigateToObjectByIndex(${ref.object.global_index})">`;
+            content += `<span class="impact-diff-status">${symbol} <span class="impact-diff-type">${type}</span></span>`;
+            content += `<span class="impact-diff-name" title="${Explorer.escapeHtml(displayName)}">${Explorer.escapeHtml(displayName)}</span>`;
+            content += `<span class="impact-diff-reason">${Explorer.escapeHtml(reason)}</span>`;
+            content += '</div>';
+        });
+        content += '</div>';
 
         return `
             <div class="impact-subsection">
                 <div class="impact-subsection-header">
                     <div class="impact-subsection-title">
                         <i class="fa-solid fa-link-slash"></i>
-                        <span>If Deleted/Renamed</span>
+                        <span>If ${nameField} ${objName} is Deleted/Renamed</span>
                         <span class="impact-subsection-count ${badgeClass}">${count}</span>
                     </div>
                     <span class="impact-subsection-toggle"><i class="fa-solid fa-chevron-right"></i></span>

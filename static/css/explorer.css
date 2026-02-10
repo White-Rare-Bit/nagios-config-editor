@@ -5095,6 +5095,109 @@ body.dragging-objects .right-pane::after {
     color: var(--nbe-dark-accent-secondary);
 }
 
+/* Impact Diff View (terraform-plan style for "If Deleted/Renamed") */
+.impact-diff-header {
+    display: flex;
+    align-items: center;
+    padding: var(--nbe-space-sm) var(--nbe-space-md);
+    margin-bottom: var(--nbe-space-sm);
+    background: var(--nbe-dark-bg-secondary);
+    border-radius: var(--nbe-radius-sm);
+    border-bottom: 1px solid var(--nbe-dark-border-secondary);
+    font-family: var(--nbe-font-sans);
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-dark-text-secondary);
+}
+
+.impact-diff-count-destroy {
+    color: var(--nbe-dark-validation-error-text);
+}
+
+.impact-diff-count-modify {
+    color: var(--nbe-dark-validation-warning-text);
+}
+
+.impact-diff-list {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    column-gap: var(--nbe-space-xl);
+    border: 1px solid var(--nbe-dark-border-secondary);
+    border-radius: var(--nbe-radius-sm);
+}
+
+.impact-diff-row {
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    align-items: center;
+    padding: var(--nbe-space-xs) 0;
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+}
+
+.impact-diff-row:hover {
+    filter: brightness(1.15);
+}
+
+.impact-diff-row--destroy {
+    background: var(--nbe-dark-validation-error-bg);
+    border: 1px solid #000;
+    border-left: 3px solid var(--nbe-dark-validation-error-border);
+}
+
+.impact-diff-row--modify {
+    background: var(--nbe-dark-validation-warning-bg);
+    border: 1px solid #000;
+    border-left: 3px solid var(--nbe-dark-validation-warning-border);
+}
+
+.impact-diff-status {
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-font-size-sm);
+    font-weight: 600;
+    padding-left: var(--nbe-space-sm);
+    white-space: nowrap;
+}
+
+.impact-diff-row--destroy .impact-diff-status {
+    color: var(--nbe-dark-validation-error-text);
+}
+
+.impact-diff-row--modify .impact-diff-status {
+    color: var(--nbe-dark-validation-warning-text);
+}
+
+.impact-diff-type {
+    font-family: var(--nbe-font-sans);
+    font-size: var(--nbe-font-size-xs-plus);
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--nbe-dark-text-primary);
+    margin-left: var(--nbe-space-sm);
+}
+
+.impact-diff-name {
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-dark-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 var(--nbe-space-sm);
+}
+
+.impact-diff-reason {
+    font-family: var(--nbe-font-sans);
+    font-size: var(--nbe-font-size-xs-plus);
+    font-style: italic;
+    color: var(--nbe-dark-text-secondary);
+    white-space: nowrap;
+    padding-right: var(--nbe-space-md);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* Empty state for impact section */
 .impact-empty {
     padding: var(--nbe-space-lg);
