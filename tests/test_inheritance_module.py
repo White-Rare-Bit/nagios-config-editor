@@ -328,6 +328,15 @@ class TestResolveInheritedAttrs:
         assert resolved["check_command"] == "check_ping"
         assert resolved["max_check_attempts"] == "3"
 
+    def test_important_only_applies_to_check_command(self):
+        """! prefix on non-check_command fields is treated as literal value."""
+        tmpl = _tmpl("host", "base", notification_period="!24x7")
+        obj = _host(host_name="web-01", use="base", notification_period="workhours")
+        lookup = build_template_lookup([tmpl, obj])
+        resolved = resolve_inherited_attrs(obj, lookup)
+        # Child overrides because ! is not special on notification_period
+        assert resolved["notification_period"] == "workhours"
+
 
 class TestHasAttrInChain:
     def test_direct_attr(self):
@@ -627,6 +636,36 @@ class TestResolveImpliedAttrs:
         resolved = resolve_inherited_attrs(svc, template_lookup)
         result = resolve_implied_attrs(resolved, svc.object_type, svc, objects, template_lookup)
         assert result["contacts"] == "svc-contact"
+
+    def test_contact_fields_coupled_in_implied_inheritance(self):
+        """Defining contacts suppresses contact_groups inheritance from host too."""
+        host = _host(host_name="web-01", contacts="admin", contact_groups="admins")
+        svc = _Obj(object_type="service", attributes={
+            "host_name": "web-01", "service_description": "PING",
+            "contacts": "svc-contact",
+        })
+        objects = [host, svc]
+        template_lookup = build_template_lookup(objects)
+        resolved = resolve_inherited_attrs(svc, template_lookup)
+        result = resolve_implied_attrs(resolved, svc.object_type, svc, objects, template_lookup)
+        assert result["contacts"] == "svc-contact"
+        # Per Nagios spec: defining contacts suppresses contact_groups inheritance
+        assert "contact_groups" not in result
+
+    def test_contact_groups_suppresses_contacts_inheritance(self):
+        """Defining contact_groups suppresses contacts inheritance from host too."""
+        host = _host(host_name="web-01", contacts="admin", contact_groups="admins")
+        svc = _Obj(object_type="service", attributes={
+            "host_name": "web-01", "service_description": "PING",
+            "contact_groups": "svc-group",
+        })
+        objects = [host, svc]
+        template_lookup = build_template_lookup(objects)
+        resolved = resolve_inherited_attrs(svc, template_lookup)
+        result = resolve_implied_attrs(resolved, svc.object_type, svc, objects, template_lookup)
+        assert result["contact_groups"] == "svc-group"
+        # Per Nagios spec: defining contact_groups suppresses contacts inheritance
+        assert "contacts" not in result
 
     def test_host_escalation_inherits_from_host(self):
         """Host escalation inherits contact_groups and escalation_period from host."""

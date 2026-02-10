@@ -13,7 +13,7 @@ Key design choices:
 - Implied inheritance: cross-object-type field inheritance (lowest priority)
 """
 
-from nagios_model import IMPLIED_INHERITANCE, NAME_FIELDS
+from nagios_model import IMPLIED_CONTACT_FIELDS, IMPLIED_INHERITANCE, NAME_FIELDS
 
 # Attributes excluded from inheritance resolution
 INHERITANCE_META = frozenset({"use", "name", "register"})
@@ -94,7 +94,8 @@ def _resolve_with_important(obj, template_lookup, visited):
 
     Important keys are keys whose values started with ! in this template
     or any ancestor template. These keys cannot be overridden by children.
-    The ! prefix only applies to non-custom (_) variables.
+    Per the Nagios spec, the ! prefix only applies to check_command in
+    service templates (for distributed monitoring).
     """
     resolved = {}
     important_keys = set()
@@ -115,13 +116,13 @@ def _resolve_with_important(obj, template_lookup, visited):
                 visited.discard(tmpl_name)
     # This object's own attributes
     for key, value in obj.attributes.items():
-        if key in important_keys and not key.startswith("_"):
-            continue  # Locked by ancestor's ! — skip
+        if key in important_keys:
+            continue  # Locked by ancestor's ! — skip (check_command only per spec)
         if value == "null":
             resolved[key] = _NULL_SENTINEL
         elif (
-            isinstance(value, str) and value.startswith("!")
-            and not key.startswith("_") and key not in INHERITANCE_META
+            key == "check_command" and isinstance(value, str)
+            and value.startswith("!") and key not in INHERITANCE_META
         ):
             resolved[key] = value[1:]  # Strip ! prefix
             important_keys.add(key)
@@ -148,10 +149,10 @@ def resolve_inherited_attrs(obj, template_lookup, visited=None):
     Nagios precedence: object's own attrs > first template > second > ... > last.
     Uses visited set for cycle detection and discard for sibling-branch reuse.
 
-    Supports three special prefixes (non-custom vars only):
-    - "null": cancels inheritance of that key
-    - "+": appends to inherited value
-    - "!": in templates, forces the value — children cannot override it
+    Supports three special prefixes:
+    - "null": cancels inheritance of that key (all non-meta keys)
+    - "+": appends to inherited value (non-custom vars only)
+    - "!": on check_command in templates, forces value — children cannot override
 
     Args:
         obj: NagiosObject to resolve
@@ -185,8 +186,8 @@ def resolve_inherited_attrs(obj, template_lookup, visited=None):
     # "+" prefix on non-custom vars appends to inherited value;
     # keys locked by template ! prefix cannot be overridden
     for key, value in obj.attributes.items():
-        if key in important_keys and not key.startswith("_"):
-            continue  # Locked by template's ! — child can't override
+        if key in important_keys:
+            continue  # Locked by template's ! — child can't override (check_command only)
         if value == "null":
             resolved[key] = _NULL_SENTINEL
         elif (
@@ -264,7 +265,22 @@ def resolve_implied_attrs(resolved_attrs, obj_type, obj, objects, template_looku
 
         parent_resolved = resolve_inherited_attrs(parent_obj, template_lookup)
 
+        # Per Nagios spec, contact fields are coupled: if the child defines
+        # EITHER contacts or contact_groups (non-additively), NEITHER is
+        # inherited from parent. Additive (+) fields don't count as "defined"
+        # for this purpose — they explicitly request the implied base.
+        has_explicit_contact_field = False
+        for f in IMPLIED_CONTACT_FIELDS:
+            if f in result:
+                original = obj.attributes.get(f, "") if obj else ""
+                if not original.startswith("+"):
+                    has_explicit_contact_field = True
+                    break
+
         for child_field, parent_field in field_mappings:
+            # Skip contact field inheritance if child explicitly defines any
+            if child_field in IMPLIED_CONTACT_FIELDS and has_explicit_contact_field:
+                continue
             if child_field not in result and parent_field in parent_resolved:
                 result[child_field] = parent_resolved[parent_field]
             elif child_field in result and parent_field in parent_resolved:
@@ -400,18 +416,18 @@ def _resolve_chain_with_important(obj, obj_type, template_lookup, visited):
 
     # Object's own attributes — respect important locks from templates;
     # "null" values cancel the attribute entirely;
-    # "!" prefix on non-custom vars locks the value;
+    # "!" prefix on check_command locks the value (per Nagios spec);
     # "+" prefix on non-custom vars appends to inherited value
     obj_name = obj.get_name() or obj.attributes.get("name", "(unknown)")
     for key, value in obj.attributes.items():
         if key not in INHERITANCE_META:
-            if key in important_keys and not key.startswith("_"):
+            if key in important_keys:
                 continue  # Locked by ancestor's ! — skip
             if value == "null":
                 inherited.pop(key, None)
             elif (
-                isinstance(value, str) and value.startswith("!")
-                and not key.startswith("_")
+                key == "check_command" and isinstance(value, str)
+                and value.startswith("!")
             ):
                 inherited[key] = {"value": value[1:], "source": obj_name}
                 important_keys.add(key)

@@ -92,6 +92,10 @@ SPECIAL_DIRECTIVES: dict[str, str] = {
 # Key: (child_type, parent_type, parent_key_field)
 # Value: list of (child_field, parent_field) tuples
 # parent_key_field is the attribute on the child that references the parent
+#
+# Per the Nagios spec, contact fields are coupled: if a child defines
+# EITHER contacts or contact_groups (directly or via template), NEITHER
+# is inherited from the parent. This is enforced via IMPLIED_CONTACT_FIELDS.
 IMPLIED_INHERITANCE = {
     ("service", "host", "host_name"): [
         ("contacts", "contacts"),
@@ -100,16 +104,24 @@ IMPLIED_INHERITANCE = {
         ("notification_period", "notification_period"),
     ],
     ("hostescalation", "host", "host_name"): [
+        ("contacts", "contacts"),
         ("contact_groups", "contact_groups"),
         ("notification_interval", "notification_interval"),
         ("escalation_period", "notification_period"),  # Field rename
     ],
     ("serviceescalation", "service", "host_name"): [
+        ("contacts", "contacts"),
         ("contact_groups", "contact_groups"),
         ("notification_interval", "notification_interval"),
         ("escalation_period", "notification_period"),  # Field rename
     ],
 }
+
+# Coupled field groups for implied inheritance: if any field in the group
+# is present on the child (after template resolution), none of the group's
+# fields are inherited from the parent. Per Nagios spec, defining contacts
+# suppresses inheritance of contact_groups and vice versa.
+IMPLIED_CONTACT_FIELDS = frozenset({"contacts", "contact_groups"})
 
 VALID_ATTRIBUTES: dict[str, list[str]] = {
     "host": [
