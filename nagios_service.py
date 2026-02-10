@@ -18,7 +18,7 @@ from file_operations import (
     is_safe_path,
     move_object_between_files,
 )
-from nagios_model import NAME_FIELDS, NagiosObject, OperationResult, get_object_name
+from nagios_model import NAME_FIELDS, NagiosObject, OperationResult
 from nagios_parser import NagiosConfigParser
 from staging_manager import (
     StagingManager,
@@ -250,7 +250,7 @@ class NagiosService:
         """Find an object by its stable key.
 
         Args:
-            stable_key: Stable key in format "source_file|object_type|name"
+            stable_key: Stable key in format "source_file|object_type|display_name"
 
         Returns:
             Tuple of (global_index, NagiosObject) or None if not found
@@ -270,8 +270,7 @@ class NagiosService:
                 continue
             if obj.object_type != obj_type:
                 continue
-            obj_name = get_object_name(obj.object_type, obj.attributes)
-            if obj_name == target_name:
+            if obj.get_display_name() == target_name:
                 return (idx, obj)
 
         return None
