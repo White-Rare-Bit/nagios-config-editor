@@ -39,6 +39,7 @@ class PathsConfig:
     backup_path: str | None = None
     nagios_bin: str = "/usr/local/nagios/bin/nagios"
     nagios_cfg: str = "./sample-config/nagios.cfg"
+    resource_cfg: str = ""
 
 
 @dataclass
@@ -70,6 +71,7 @@ class ServerConfig:
                 backup_path=paths_data.get("backup_path"),
                 nagios_bin=paths_data.get("nagios_bin", "/usr/local/nagios/bin/nagios"),
                 nagios_cfg=paths_data.get("nagios_cfg", "./sample-config/nagios.cfg"),
+                resource_cfg=paths_data.get("resource_cfg", ""),
             ),
             logging=LoggingConfig(
                 enabled=logging_data.get("enabled", True),

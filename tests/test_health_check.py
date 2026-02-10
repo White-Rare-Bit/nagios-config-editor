@@ -3019,3 +3019,217 @@ define timeperiod {
                 f"Shallow chain should not be flagged: {deep_issues}"
         finally:
             shutil.rmtree(test_dir, ignore_errors=True)
+
+
+class TestCfgDirCoverage:
+    """Test check_cfg_dir_coverage flags directories not in nagios.cfg cfg_dir."""
+
+    @pytest.fixture
+    def cfg_dir_app(self):
+        """Config with two directories but nagios.cfg only listing one."""
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / "nagios"
+        test_config_path.mkdir()
+
+        # Create two subdirectories with .cfg files
+        covered = test_config_path / "covered"
+        covered.mkdir()
+        uncovered = test_config_path / "uncovered"
+        uncovered.mkdir()
+
+        (covered / "hosts.cfg").write_text("""
+define host {
+    host_name       test-host
+    address         10.0.0.1
+    max_check_attempts 5
+    contact_groups  admins
+}
+""")
+
+        (uncovered / "services.cfg").write_text("""
+define service {
+    host_name           test-host
+    service_description Uncovered Service
+    check_command       check_http
+    max_check_attempts  3
+    contact_groups      admins
+}
+""")
+
+        (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check_http
+    command_line    /usr/lib/nagios/plugins/check_http -H $HOSTADDRESS$
+}
+define command {
+    command_name    notify-host-by-email
+    command_line    /usr/bin/printf "%b" "Host alert"
+}
+define command {
+    command_name    notify-by-email
+    command_line    /usr/bin/printf "%b" "Service alert"
+}
+""")
+
+        (test_config_path / "contacts.cfg").write_text("""
+define contact {
+    contact_name                    admin
+    host_notification_commands      notify-host-by-email
+    service_notification_commands   notify-by-email
+    host_notification_period        24x7
+    service_notification_period     24x7
+}
+define contactgroup {
+    contactgroup_name   admins
+    members             admin
+}
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+    tuesday         00:00-24:00
+    wednesday       00:00-24:00
+    thursday        00:00-24:00
+    friday          00:00-24:00
+    saturday        00:00-24:00
+    sunday          00:00-24:00
+}
+""")
+
+        # nagios.cfg only lists the covered directory
+        (test_config_path / "nagios.cfg").write_text(
+            f"cfg_dir={covered}\n"
+            f"cfg_file={test_config_path / 'commands.cfg'}\n"
+            f"cfg_file={test_config_path / 'contacts.cfg'}\n"
+        )
+
+        app = create_app(config_path=str(test_config_path))
+        app.config["TESTING"] = True
+        # Point nagios_cfg at our test nagios.cfg
+        app.extensions["server_config"].paths.nagios_cfg = str(
+            test_config_path / "nagios.cfg"
+        )
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_cfg_dir_coverage_flags_uncovered_directory(self, cfg_dir_app):
+        """Directory not listed in cfg_dir should be flagged."""
+        client = cfg_dir_app.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        cfg_issues = [i for i in data["issues"] if i["type"] == "cfg_dir_gap"]
+        flagged_dirs = [i["file"] for i in cfg_issues]
+        # The "uncovered" directory should be flagged
+        assert any(d.endswith("/uncovered") for d in flagged_dirs), \
+            f"Expected 'uncovered' dir flagged, got: {flagged_dirs}"
+        # The "covered" directory should NOT be flagged
+        assert not any(d.endswith("/covered") for d in flagged_dirs), \
+            f"'covered' dir should not be flagged, got: {flagged_dirs}"
+
+
+class TestUndefinedMacros:
+    """Test check_undefined_macros flags $USERn$ not in resource.cfg."""
+
+    @pytest.fixture
+    def macro_app(self):
+        """Config with commands using $USER1$ and $USER2$, only $USER1$ defined."""
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / "nagios"
+        test_config_path.mkdir()
+
+        (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check_http
+    command_line    $USER1$/check_http -H $HOSTADDRESS$
+}
+define command {
+    command_name    check_custom
+    command_line    $USER2$/check_custom -H $HOSTADDRESS$
+}
+define command {
+    command_name    notify-host-by-email
+    command_line    /usr/bin/printf "%b" "Host alert"
+}
+define command {
+    command_name    notify-by-email
+    command_line    /usr/bin/printf "%b" "Service alert"
+}
+""")
+
+        (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name       test-host
+    address         10.0.0.1
+    max_check_attempts 5
+    contact_groups  admins
+}
+""")
+
+        (test_config_path / "services.cfg").write_text("""
+define service {
+    host_name           test-host
+    service_description HTTP
+    check_command       check_http
+    max_check_attempts  3
+    contact_groups      admins
+}
+""")
+
+        (test_config_path / "contacts.cfg").write_text("""
+define contact {
+    contact_name                    admin
+    host_notification_commands      notify-host-by-email
+    service_notification_commands   notify-by-email
+    host_notification_period        24x7
+    service_notification_period     24x7
+}
+define contactgroup {
+    contactgroup_name   admins
+    members             admin
+}
+define timeperiod {
+    timeperiod_name 24x7
+    alias           24x7
+    monday          00:00-24:00
+    tuesday         00:00-24:00
+    wednesday       00:00-24:00
+    thursday        00:00-24:00
+    friday          00:00-24:00
+    saturday        00:00-24:00
+    sunday          00:00-24:00
+}
+""")
+
+        # resource.cfg only defines $USER1$
+        resource_path = test_config_path / "resource.cfg"
+        resource_path.write_text("$USER1$=/usr/lib/nagios/plugins\n")
+
+        app = create_app(config_path=str(test_config_path))
+        app.config["TESTING"] = True
+        app.extensions["server_config"].paths.resource_cfg = str(resource_path)
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_defined_macro_not_flagged(self, macro_app):
+        """$USER1$ is defined in resource.cfg and should not be flagged."""
+        client = macro_app.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        macro_issues = [i for i in data["issues"] if i["type"] == "undefined_macro"]
+        flagged_macros = [i["message"] for i in macro_issues]
+        assert not any("$USER1$" in m for m in flagged_macros)
+
+    def test_undefined_macro_flagged(self, macro_app):
+        """$USER2$ is NOT defined in resource.cfg and should be flagged."""
+        client = macro_app.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        macro_issues = [i for i in data["issues"] if i["type"] == "undefined_macro"]
+        flagged_macros = [i["message"] for i in macro_issues]
+        assert any("$USER2$" in m for m in flagged_macros)
