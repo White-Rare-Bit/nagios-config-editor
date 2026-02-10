@@ -5198,6 +5198,89 @@ body.dragging-objects .right-pane::after {
     text-overflow: ellipsis;
 }
 
+/* Dependency Grid (4-column layout for "This Object Requires" and "Group Membership") */
+.dep-grid-list {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    column-gap: var(--nbe-space-xl);
+    border: 1px solid var(--nbe-dark-border-secondary);
+    border-radius: var(--nbe-radius-sm);
+}
+
+.dep-grid-row {
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    align-items: center;
+    padding: var(--nbe-space-xs) 0;
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+}
+
+.dep-grid-row:nth-child(even) {
+    background: var(--nbe-dark-bg-hover);
+}
+
+.dep-grid-row:hover {
+    filter: brightness(1.15);
+}
+
+.dep-grid-row--ok {
+    background: var(--nbe-dark-bg-tertiary);
+}
+
+.dep-grid-row--broken {
+    background: var(--nbe-dark-validation-error-bg);
+    border-left: 3px solid var(--nbe-dark-validation-error-border);
+}
+
+.dep-grid-status {
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-font-size-sm);
+    font-weight: 600;
+    padding-left: var(--nbe-space-sm);
+    white-space: nowrap;
+}
+
+.dep-grid-row--ok .dep-grid-status {
+    color: var(--nbe-success, #28a745);
+}
+
+.dep-grid-row--broken .dep-grid-status {
+    color: var(--nbe-dark-validation-error-text);
+}
+
+.dep-grid-type {
+    font-family: var(--nbe-font-sans);
+    font-size: var(--nbe-font-size-xs-plus);
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--nbe-dark-text-primary);
+    margin-left: var(--nbe-space-sm);
+}
+
+.dep-grid-name {
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-dark-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 var(--nbe-space-sm);
+}
+
+.dep-grid-attr {
+    font-family: var(--nbe-font-sans);
+    font-size: var(--nbe-font-size-xs-plus);
+    font-style: italic;
+    color: var(--nbe-dark-text-secondary);
+    white-space: nowrap;
+    padding-right: var(--nbe-space-md);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* Empty state for impact section */
 .impact-empty {
     padding: var(--nbe-space-lg);

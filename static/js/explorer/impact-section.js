@@ -429,26 +429,24 @@
     }
 
     /**
-     * Render the "This Object Requires" subsection (outgoing references)
+     * Render the "This Object Requires" subsection as a 4-column grid
      */
     function renderOutgoingSubsection(outgoing) {
         const count = outgoing.length;
 
-        const grouped = {};
+        let content = '<div class="dep-grid-list">';
         outgoing.forEach(ref => {
-            const type = ref.object.object_type;
-            if (!grouped[type]) grouped[type] = [];
-            grouped[type].push(ref);
+            const type = ref.object.object_type.toUpperCase();
+            const displayName = getStagedDisplayName(ref.object);
+            const attrKey = ref.field || '';
+
+            content += `<div class="dep-grid-row dep-grid-row--ok" onclick="Explorer.navigateToObjectByIndex(${ref.object.global_index})">`;
+            content += `<span class="dep-grid-status">[✓] <span class="dep-grid-type">${type}</span></span>`;
+            content += `<span class="dep-grid-name" title="${Explorer.escapeHtml(displayName)}">${Explorer.escapeHtml(displayName)}</span>`;
+            content += `<span class="dep-grid-attr">${Explorer.escapeHtml(attrKey)}</span>`;
+            content += '</div>';
         });
-
-        let content = `
-            <div class="impact-summary info">
-                <span class="impact-summary-icon"><i class="fa-solid fa-link"></i></span>
-                <span>${count} object${count !== 1 ? 's' : ''} must exist for this to work</span>
-            </div>
-        `;
-
-        content += renderGroupedReferences(grouped);
+        content += '</div>';
 
         return `
             <div class="impact-subsection">
@@ -465,206 +463,10 @@
         `;
     }
 
-    /**
-     * Render grouped references (used by both incoming and outgoing)
-     */
-    function renderGroupedReferences(grouped) {
-        let html = '';
-
-        for (const [type, refs] of Object.entries(grouped)) {
-            const typeLabel = typeLabels[type] || type;
-            html += `<div class="ref-type-group"><div class="ref-type-header">${typeLabel} (${refs.length})</div>`;
-            html += '<div class="ref-type-list">';
-
-            refs.forEach(ref => {
-                const displayName = getStagedDisplayName(ref.object);
-                const isDependencyRule = ref.isDependencyRule;
-                const isEscalationRule = ref.isEscalationRule;
-                const isRuleItem = isDependencyRule || isEscalationRule;
-
-                html += `<div class="ref-item ${isRuleItem ? 'dep-rule-item' : ''}" onclick="Explorer.navigateToObjectByIndex(${ref.object.global_index})">`;
-
-                if (isDependencyRule) {
-                    html += '<span class="dep-rule-badge">rule</span>';
-                } else if (isEscalationRule) {
-                    html += '<span class="dep-rule-badge esc-badge">esc</span>';
-                }
-
-                html += `<span class="ref-type-badge type-${ref.object.object_type}">${ref.object.object_type}</span>`;
-                html += `<span class="ref-name" title="${Explorer.escapeHtml(displayName)}">${Explorer.escapeHtml(displayName)}</span>`;
-
-                if (isDependencyRule) {
-                    const criteria = formatFailureCriteriaReadable(ref.object);
-                    if (criteria) {
-                        html += `<span class="ref-field">${criteria}</span>`;
-                    }
-                } else if (isEscalationRule) {
-                    const info = formatEscalationInfoReadable(ref.object);
-                    if (info) {
-                        html += `<span class="ref-field">${info}</span>`;
-                    }
-                } else if (ref.field && ref.field !== 'use' && ref.field !== 'members') {
-                    html += `<span class="ref-attr">${ref.field}</span>`;
-                }
-
-                html += '</div>';
-
-                // Add readable criteria details for dependency rules
-                if (isDependencyRule) {
-                    const details = formatFailureCriteriaDetails(ref.object);
-                    if (details) {
-                        html += `<div class="dep-rule-details">${details}</div>`;
-                    }
-                } else if (isEscalationRule) {
-                    const details = formatEscalationDetails(ref.object);
-                    if (details) {
-                        html += `<div class="dep-rule-details">${details}</div>`;
-                    }
-                }
-            });
-
-            html += '</div></div>';
-        }
-
-        return html;
-    }
-
-    // =============================================================================
-    // FORMAT HELPERS (Readable versions for Impact section)
-    // =============================================================================
+    // (renderGroupedReferences removed — outgoing and membership now use dep-grid layout)
 
     /**
-     * Format failure criteria as human-readable compact string
-     */
-    function formatFailureCriteriaReadable(depObj) {
-        const attrs = getEffectiveAttributes(depObj);
-        const parts = [];
-
-        const criteriaMap = {
-            'o': 'ok/up',
-            'w': 'warning',
-            'c': 'critical',
-            'u': 'unknown',
-            'd': 'down',
-            'p': 'pending',
-            'n': 'none'
-        };
-
-        function expandCriteria(criteria) {
-            return criteria.split(',').map(c => criteriaMap[c.trim()] || c.trim()).join(', ');
-        }
-
-        if (attrs.execution_failure_criteria && attrs.execution_failure_criteria !== 'n') {
-            parts.push(`skip: ${expandCriteria(attrs.execution_failure_criteria)}`);
-        }
-        if (attrs.notification_failure_criteria && attrs.notification_failure_criteria !== 'n') {
-            parts.push(`suppress: ${expandCriteria(attrs.notification_failure_criteria)}`);
-        }
-
-        return parts.length > 0 ? `(${parts.join(' | ')})` : '';
-    }
-
-    /**
-     * Format failure criteria as detailed explanation
-     */
-    function formatFailureCriteriaDetails(depObj) {
-        const attrs = getEffectiveAttributes(depObj);
-        let html = '';
-
-        const criteriaMap = {
-            'o': 'ok/up',
-            'w': 'warning',
-            'c': 'critical',
-            'u': 'unknown',
-            'd': 'down',
-            'p': 'pending',
-            'n': 'none'
-        };
-
-        function expandCriteria(criteria) {
-            return criteria.split(',').map(c => criteriaMap[c.trim()] || c.trim()).join(', ');
-        }
-
-        if (attrs.execution_failure_criteria && attrs.execution_failure_criteria !== 'n') {
-            html += `<div class="dep-rule-detail"><i class="fa-solid fa-ban"></i> Skip checks when master is: ${expandCriteria(attrs.execution_failure_criteria)}</div>`;
-        }
-        if (attrs.notification_failure_criteria && attrs.notification_failure_criteria !== 'n') {
-            html += `<div class="dep-rule-detail"><i class="fa-solid fa-bell-slash"></i> Suppress notifications when master is: ${expandCriteria(attrs.notification_failure_criteria)}</div>`;
-        }
-        if (attrs.dependency_period) {
-            html += `<div class="dep-rule-detail"><i class="fa-solid fa-clock"></i> Active during: ${Explorer.escapeHtml(attrs.dependency_period)}</div>`;
-        }
-
-        return html;
-    }
-
-    /**
-     * Format escalation info as readable summary
-     */
-    function formatEscalationInfoReadable(escObj) {
-        const attrs = getEffectiveAttributes(escObj);
-        const parts = [];
-
-        const first = attrs.first_notification;
-        const last = attrs.last_notification;
-        const interval = attrs.notification_interval;
-
-        if (first || last) {
-            if (first && last && last !== '0') {
-                parts.push(`levels ${first}-${last}`);
-            } else if (first) {
-                parts.push(`from level ${first}+`);
-            }
-        }
-
-        if (interval && interval !== '0') {
-            parts.push(`every ${interval}m`);
-        }
-
-        return parts.length > 0 ? `(${parts.join(', ')})` : '';
-    }
-
-    /**
-     * Format escalation as detailed explanation
-     */
-    function formatEscalationDetails(escObj) {
-        const attrs = getEffectiveAttributes(escObj);
-        let html = '';
-
-        const first = attrs.first_notification;
-        const last = attrs.last_notification;
-        const interval = attrs.notification_interval;
-
-        if (first && last && last !== '0') {
-            html += `<div class="dep-rule-detail"><i class="fa-solid fa-stairs"></i> Escalates from notification ${first} to ${last}</div>`;
-        } else if (first) {
-            html += `<div class="dep-rule-detail"><i class="fa-solid fa-stairs"></i> Escalates starting at notification ${first}</div>`;
-        }
-
-        if (interval && interval !== '0') {
-            html += `<div class="dep-rule-detail"><i class="fa-solid fa-rotate"></i> Re-notify every ${interval} minutes</div>`;
-        }
-
-        if (attrs.escalation_period) {
-            html += `<div class="dep-rule-detail"><i class="fa-solid fa-clock"></i> Active during: ${Explorer.escapeHtml(attrs.escalation_period)}</div>`;
-        }
-
-        // Show who gets notified
-        const contacts = [];
-        if (attrs.contacts) contacts.push(attrs.contacts);
-        if (attrs.contact_groups) contacts.push(attrs.contact_groups);
-        if (attrs.escalation_contacts) contacts.push(attrs.escalation_contacts);
-        if (attrs.escalation_contact_groups) contacts.push(attrs.escalation_contact_groups);
-
-        if (contacts.length > 0) {
-            html += `<div class="dep-rule-detail"><i class="fa-solid fa-users"></i> Notifies: ${Explorer.escapeHtml(contacts.join(', '))}</div>`;
-        }
-
-        return html;
-    }
-
-    /**
-     * Render the Group Membership subsection
+     * Render the Group Membership subsection as a 4-column grid
      */
     function renderMembershipSubsection(obj, members, memberOf, transitiveSummary) {
         const totalCount = members.length + memberOf.length;
@@ -674,15 +476,17 @@
         // "Member of" for regular objects
         if (memberOf.length > 0) {
             content += '<div class="ancestry-label">Member of</div>';
-            content += '<div class="ref-type-list">';
+            content += '<div class="dep-grid-list">';
             memberOf.forEach(item => {
+                const type = item.object.object_type.toUpperCase();
                 const displayName = getStagedDisplayName(item.object);
-                content += `
-                    <div class="ref-item" onclick="Explorer.navigateToObjectByIndex(${item.object.global_index})">
-                        <span class="ref-type-badge type-${item.object.object_type}">${item.object.object_type}</span>
-                        <span class="ref-name" title="${Explorer.escapeHtml(displayName)}">${Explorer.escapeHtml(displayName)}</span>
-                    </div>
-                `;
+                const via = item.via || 'members';
+
+                content += `<div class="dep-grid-row dep-grid-row--ok" onclick="Explorer.navigateToObjectByIndex(${item.object.global_index})">`;
+                content += `<span class="dep-grid-status">[✓] <span class="dep-grid-type">${type}</span></span>`;
+                content += `<span class="dep-grid-name" title="${Explorer.escapeHtml(displayName)}">${Explorer.escapeHtml(displayName)}</span>`;
+                content += `<span class="dep-grid-attr">${Explorer.escapeHtml(via)}</span>`;
+                content += '</div>';
             });
             content += '</div>';
         }
@@ -706,29 +510,19 @@
                 }
             }
 
-            // Group by type
-            const grouped = {};
+            content += '<div class="dep-grid-list">';
             members.forEach(m => {
-                const type = m.object.object_type;
-                if (!grouped[type]) grouped[type] = [];
-                grouped[type].push(m);
-            });
+                const type = m.object.object_type.toUpperCase();
+                const displayName = getStagedDisplayName(m.object);
+                const via = m.via || 'members';
 
-            for (const [type, items] of Object.entries(grouped)) {
-                const typeLabel = typeLabels[type] || type;
-                content += `<div class="ref-type-group"><div class="ref-type-header">${typeLabel} (${items.length})</div>`;
-                content += '<div class="ref-type-list">';
-                items.forEach(m => {
-                    const displayName = getStagedDisplayName(m.object);
-                    content += `
-                        <div class="ref-item" onclick="Explorer.navigateToObjectByIndex(${m.object.global_index})">
-                            <span class="ref-type-badge type-${m.object.object_type}">${m.object.object_type}</span>
-                            <span class="ref-name" title="${Explorer.escapeHtml(displayName)}">${Explorer.escapeHtml(displayName)}</span>
-                        </div>
-                    `;
-                });
-                content += '</div></div>';
-            }
+                content += `<div class="dep-grid-row dep-grid-row--ok" onclick="Explorer.navigateToObjectByIndex(${m.object.global_index})">`;
+                content += `<span class="dep-grid-status">[✓] <span class="dep-grid-type">${type}</span></span>`;
+                content += `<span class="dep-grid-name" title="${Explorer.escapeHtml(displayName)}">${Explorer.escapeHtml(displayName)}</span>`;
+                content += `<span class="dep-grid-attr">${Explorer.escapeHtml(via)}</span>`;
+                content += '</div>';
+            });
+            content += '</div>';
         }
 
         return `
