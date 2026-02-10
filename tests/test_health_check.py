@@ -978,6 +978,21 @@ define host {
 }
 """)
 
+        # Services with same description on different hostgroups — NOT duplicates
+        (test_config_path / "services.cfg").write_text("""
+define service {
+    hostgroup_name        linux-hosts
+    service_description   CPU Load
+    check_command         check-host-alive
+}
+
+define service {
+    hostgroup_name        windows-hosts
+    service_description   CPU Load
+    check_command         check-host-alive
+}
+""")
+
         (test_config_path / "commands.cfg").write_text("""
 define command {
     command_name    check-host-alive
@@ -1049,6 +1064,20 @@ define timeperiod {
             # Should mention a .cfg file
             assert ".cfg" in issue["message"], \
                 f"Expected a .cfg filename in message, got: {issue['message']}"
+
+    def test_services_on_different_hosts_not_duplicate(self, app_with_duplicates):
+        """Services with same description on different hostgroups are NOT duplicates."""
+        client = app_with_duplicates.test_client()
+        resp = client.get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        data = resp.get_json()
+
+        dup_issues = [i for i in data["issues"]
+                      if i["type"] == "duplicate"]
+        flagged = [(i["object_type"], i["object"]) for i in dup_issues]
+
+        assert not any(t == "service" for t, _ in flagged), \
+            f"False positive: services with same name on different hosts flagged as duplicate: {flagged}"
 
 
 # ============================================================

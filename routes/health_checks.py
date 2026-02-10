@@ -1099,6 +1099,9 @@ def check_duplicate_objects(ctx):
     objects = ctx["objects"]
     obj_to_index = ctx["obj_to_index"]
 
+    # Object types where identity is scoped by host (not just name)
+    host_scoped_types = {"service", "serviceescalation", "servicedependency"}
+
     identity_map = {}
     for obj in objects:
         if obj.attributes.get("register", "1") == "0":
@@ -1107,6 +1110,10 @@ def check_duplicate_objects(ctx):
         if not name:
             continue
         key = f"{obj.object_type}:{name}"
+        # Services are unique per (host, service_description), not just service_description
+        if obj.object_type in host_scoped_types:
+            host_scope = obj.attributes.get("host_name") or obj.attributes.get("hostgroup_name", "")
+            key = f"{obj.object_type}:{host_scope}:{name}"
         identity_map.setdefault(key, []).append(obj)
 
     for key, objs in identity_map.items():
