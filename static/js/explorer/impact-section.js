@@ -94,6 +94,7 @@
                         isEscalationRule: r.is_escalation_rule || false,
                         isServiceBinding: r.is_service_binding || false,
                         viaGroup: r.via_group || null,
+                        severity: r.severity || 'info',
                     })).filter(r => r.object);
 
                     membersData.members = (data.members || []).map(r => ({

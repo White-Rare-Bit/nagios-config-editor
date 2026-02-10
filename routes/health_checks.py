@@ -128,6 +128,8 @@ def build_context(objects, obj_to_index, template_lookup):
         "timeperiods": set(),
         "templates": {},
         "command_arg_counts": {},
+        "contact_objects": {},
+        "contactgroup_objects": {},
     }
 
     for obj in objects:
@@ -137,6 +139,10 @@ def build_context(objects, obj_to_index, template_lookup):
         is_template = obj.attributes.get("register", "1") == "0"
         if not is_template:
             _add_to_lookup_set(ctx, obj.object_type, name)
+            if obj.object_type == "contact":
+                ctx["contact_objects"][obj.attributes.get("contact_name", "")] = obj
+        if obj.object_type == "contactgroup":
+            ctx["contactgroup_objects"][obj.attributes.get("contactgroup_name", "")] = obj
         if "name" in obj.attributes:
             ctx["templates"].setdefault(obj.object_type, set()).add(obj.attributes["name"])
 
@@ -841,17 +847,9 @@ def _find_template_conflicts(obj, tmpl_names, template_lookup):
 def check_notification_chain(ctx):
     """Check 14: Contact notification chain gaps."""
     issues = []
-    objects = ctx["objects"]
     obj_to_index = ctx["obj_to_index"]
     template_lookup = ctx["template_lookup"]
-
-    contact_objects = {}
-    cg_objects = {}
-    for obj in objects:
-        if obj.object_type == "contact" and obj.attributes.get("register", "1") != "0":
-            contact_objects[obj.attributes.get("contact_name", "")] = obj
-        elif obj.object_type == "contactgroup":
-            cg_objects[obj.attributes.get("contactgroup_name", "")] = obj
+    contact_objects = ctx["contact_objects"]
 
     for cname, contact_obj in contact_objects.items():
         if not cname:
@@ -888,6 +886,90 @@ def _check_contact_notification(contact_name, check_type, contact_objects, templ
     if period_field not in resolved_contact:
         problems.append(f"{contact_name} has no {period_field}")
     return problems
+
+
+# ---------------------------------------------------------------------------
+# Check 14b: Service/host-side notification reachability
+# ---------------------------------------------------------------------------
+
+def _expand_contacts(resolved_attrs, ctx):
+    """Expand contacts and contact_groups to a set of contact names."""
+    names = set()
+    for c in resolved_attrs.get("contacts", "").split(","):
+        c = c.strip().lstrip("+!")
+        if c:
+            names.add(c)
+    for cg_name in resolved_attrs.get("contact_groups", "").split(","):
+        cg_name = cg_name.strip().lstrip("+!")
+        cg_obj = ctx["contactgroup_objects"].get(cg_name)
+        if cg_obj and "members" in cg_obj.attributes:
+            for m in cg_obj.attributes["members"].split(","):
+                m = m.strip()
+                if m:
+                    names.add(m)
+    return names
+
+
+def check_service_host_notification_reachability(ctx):
+    """Check 14b: Services/hosts with no reachable notification path."""
+    issues = []
+    obj_to_index = ctx["obj_to_index"]
+    template_lookup = ctx["template_lookup"]
+    contact_objects = ctx["contact_objects"]
+
+    for obj in ctx["objects"]:
+        if obj.object_type not in ("host", "service"):
+            continue
+        if obj.attributes.get("register", "1") == "0":
+            continue
+
+        resolved = resolve_inherited_attrs(obj, template_lookup)
+        contact_names = _expand_contacts(resolved, ctx)
+
+        if not contact_names:
+            continue
+
+        check_type = obj.object_type if obj.object_type == "host" else "service"
+        broken = []
+        for cname in contact_names:
+            contact_obj = contact_objects.get(cname)
+            if not contact_obj:
+                broken.append(cname)
+                continue
+            resolved_contact = resolve_inherited_attrs(contact_obj, template_lookup)
+            cmd_field = f"{check_type}_notification_commands"
+            period_field = f"{check_type}_notification_period"
+            if cmd_field not in resolved_contact or period_field not in resolved_contact:
+                broken.append(cname)
+
+        if not broken:
+            continue
+
+        obj_name = obj.get_name() or obj.get_display_name()
+        total = len(contact_names)
+        n_broken = len(broken)
+
+        if n_broken == total:
+            issues.append({
+                "type": "notification_unreachable",
+                "severity": "error",
+                "object": obj_name,
+                "object_type": obj.object_type,
+                "file": obj.source_file,
+                "global_index": obj_to_index.get(id(obj)),
+                "message": f"All {total} contact(s) have broken notification chains",
+            })
+        else:
+            issues.append({
+                "type": "notification_unreachable",
+                "severity": "warning",
+                "object": obj_name,
+                "object_type": obj.object_type,
+                "file": obj.source_file,
+                "global_index": obj_to_index.get(id(obj)),
+                "message": f"{n_broken} of {total} contacts have broken notification chains",
+            })
+    return issues
 
 
 # ---------------------------------------------------------------------------
@@ -1438,6 +1520,7 @@ ALL_CHECKS = [
     check_command_arg_mismatch,     # 12
     check_template_conflicts,       # 13
     check_notification_chain,       # 14
+    check_service_host_notification_reachability,  # 14b
     check_unused_commands,          # 15
     check_unused_contacts,          # 16
     check_unused_contactgroups,     # 17
