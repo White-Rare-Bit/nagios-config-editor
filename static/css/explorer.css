@@ -5577,3 +5577,113 @@ body.editing-locked .commit-btn {
 i.tree-icon--new {
     color: var(--nbe-success);
 }
+
+/* =========================================================================
+   Attribute Docs Popover
+   ========================================================================= */
+
+.attr-docs-popover {
+    position: fixed;
+    z-index: calc(var(--nbe-z-dropdown) + 10);
+    width: 320px;
+    max-height: 280px;
+    overflow-y: auto;
+    background: var(--nbe-dark-bg-elevated);
+    border: 1px solid var(--nbe-dark-border-primary);
+    border-radius: var(--nbe-radius-md);
+    box-shadow: var(--nbe-shadow-md);
+    padding: 12px;
+    pointer-events: auto;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.attr-docs-popover.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.attr-docs-popover.above {
+    transform: translateY(-4px);
+}
+
+.attr-docs-popover.above.visible {
+    transform: translateY(0);
+}
+
+.attr-docs-popover .attr-docs-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.attr-docs-popover .attr-docs-name {
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-typography-body-size);
+    color: var(--nbe-dark-accent-primary);
+    font-weight: 600;
+}
+
+.attr-docs-popover .attr-docs-badge {
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.attr-docs-popover .attr-docs-badge--required {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--nbe-dark-accent-danger);
+}
+
+.attr-docs-popover .attr-docs-badge--optional {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--nbe-dark-text-secondary);
+}
+
+.attr-docs-popover .attr-docs-format {
+    font-size: 12px;
+    color: var(--nbe-dark-text-secondary);
+    margin-bottom: 8px;
+}
+
+.attr-docs-popover .attr-docs-format code {
+    font-family: var(--nbe-font-mono);
+    color: var(--nbe-dark-text-primary);
+}
+
+.attr-docs-popover .attr-docs-desc {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--nbe-dark-text-primary);
+    margin-bottom: 8px;
+}
+
+.attr-docs-popover .attr-docs-link {
+    display: inline-block;
+    font-size: 12px;
+    color: var(--nbe-dark-accent-primary);
+    text-decoration: none;
+    opacity: 0.8;
+    transition: opacity 0.15s;
+}
+
+.attr-docs-popover .attr-docs-link:hover {
+    opacity: 1;
+    text-decoration: underline;
+}
+
+/* Make attr-name show pointer cursor when docs are available */
+.attr-name.has-docs {
+    cursor: help;
+}
+
+.attr-name.has-docs:hover {
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 3px;
+}
