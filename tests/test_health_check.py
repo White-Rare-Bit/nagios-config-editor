@@ -257,18 +257,19 @@ define command {
         shutil.rmtree(test_dir, ignore_errors=True)
 
 
-def test_required_fields_host_includes_address():
-    """REQUIRED_FIELDS for host should include 'address' (or template fallback)."""
+def test_required_fields_host_only_requires_host_name():
+    """REQUIRED_FIELDS for host should only require host_name per Nagios spec."""
     host_fields = REQUIRED_FIELDS.get("host", [])
-    # address should be listed (possibly in an OR tuple with 'use')
     flat = []
     for f in host_fields:
         if isinstance(f, tuple):
             flat.extend(f)
         else:
             flat.append(f)
-    assert "address" in flat, \
-        f"'address' should be in host REQUIRED_FIELDS, got: {host_fields}"
+    assert "host_name" in flat
+    # Per spec: address defaults to host_name, others can be inherited
+    assert "address" not in flat
+    assert "max_check_attempts" not in flat
 
 
 def test_required_fields_service_includes_check_command():
@@ -284,8 +285,8 @@ def test_required_fields_service_includes_check_command():
         f"'check_command' should be in service REQUIRED_FIELDS, got: {svc_fields}"
 
 
-def test_required_fields_contact_includes_notification_fields():
-    """REQUIRED_FIELDS for contact should include notification fields."""
+def test_required_fields_contact_only_requires_contact_name():
+    """REQUIRED_FIELDS for contact should only require contact_name per Nagios spec."""
     contact_fields = REQUIRED_FIELDS.get("contact", [])
     flat = []
     for f in contact_fields:
@@ -293,8 +294,8 @@ def test_required_fields_contact_includes_notification_fields():
             flat.extend(f)
         else:
             flat.append(f)
-    assert "host_notification_commands" in flat or "notification_commands" in flat, \
-        f"Contact REQUIRED_FIELDS should include notification commands, got: {contact_fields}"
+    assert "contact_name" in flat
+    assert len(flat) == 1, f"Only contact_name should be required, got: {contact_fields}"
 
 
 def test_edit_object_uses_atomic_write(tmp_path):
@@ -1575,14 +1576,14 @@ class TestConstantsEndpoint:
         assert "required_fields" in data
         rf = data["required_fields"]
 
-        # host should have host_name and address as simple strings
+        # host should only require host_name per spec
         assert "host_name" in rf["host"]
-        assert "address" in rf["host"]
+        assert "address" not in rf["host"]
 
-        # host should have at least one OR condition (list within list)
-        or_conditions = [r for r in rf["host"] if isinstance(r, list)]
+        # service should have at least one OR condition (host_name|hostgroup_name)
+        or_conditions = [r for r in rf["service"] if isinstance(r, list)]
         assert len(or_conditions) >= 1, \
-            f"Expected at least one OR condition in host required_fields, got: {rf['host']}"
+            f"Expected at least one OR condition in service required_fields, got: {rf['service']}"
 
     def test_constants_returns_reference_fields(self, health_client):
         """Endpoint should return reference_fields with correct target types."""
@@ -2102,7 +2103,7 @@ define timeperiod {
             f"good-host should have no missing required fields (inherited from template): {missing_req}"
 
     def test_required_field_missing_despite_template(self, app_with_templates):
-        """Host inheriting from empty template should be flagged for missing address, contacts."""
+        """Host inheriting from empty template should only be flagged for truly missing required fields."""
         client = app_with_templates.test_client()
         resp = client.get("/api/health-check")
         assert resp.status_code == 200  # noqa: PLR2004
@@ -2112,11 +2113,11 @@ define timeperiod {
             i for i in data["issues"]
             if i["type"] == "missing_required_field" and i["object"] == "bad-host"
         ]
-        missing_fields = [i["message"] for i in missing_req]
-        assert any("address" in m for m in missing_fields), \
-            f"Expected missing 'address' for bad-host, got: {missing_fields}"
-        assert any("contacts" in m or "contact_groups" in m for m in missing_fields), \
-            f"Expected missing contacts/contact_groups for bad-host, got: {missing_fields}"
+        # Per spec, only host_name is required; address defaults to host_name,
+        # max_check_attempts and contacts can be inherited
+        # bad-host has host_name defined, so no required field should be missing
+        assert len(missing_req) == 0, \
+            f"bad-host with host_name should have no missing required fields per spec, got: {missing_req}"
 
     def test_or_group_satisfied_by_one(self, app_with_templates):
         """Host with contact_groups but no contacts should NOT be flagged for contacts OR-group."""
