@@ -18,7 +18,7 @@ from file_operations import (
     is_safe_path,
     move_object_between_files,
 )
-from nagios_model import NAME_FIELDS, NagiosObject, OperationResult
+from nagios_model import NAME_FIELDS, NagiosObject, OperationResult, get_object_name
 from nagios_parser import NagiosConfigParser
 from staging_manager import (
     StagingManager,
@@ -935,8 +935,8 @@ class NagiosService:
             elif old_val != new_val:
                 changes.append({"type": "modify", "key": key, "from": old_val, "to": new_val})
 
+        obj_name = get_object_name(target_obj.object_type, old_attrs)
         name_field = NAME_FIELDS.get(target_obj.object_type)
-        obj_name = old_attrs.get(name_field, "") if name_field else ""
         detail_entry = {
             "object_type": target_obj.object_type,
             "object_name": obj_name,
