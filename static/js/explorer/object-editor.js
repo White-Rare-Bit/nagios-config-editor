@@ -585,7 +585,7 @@
             '</div>' +
             '<div class="attr-docs-format">Format: <code>' + Explorer.escapeHtml(directive.format) + '</code></div>' +
             '<div class="attr-docs-desc">' + Explorer.escapeHtml(directive.description) + '</div>' +
-            '<a class="attr-docs-link" href="' + docsHref + '" target="_blank">View in docs \u2192</a>';
+            '<a class="attr-docs-link" href="' + docsHref + '">View in docs \u2192</a>';
 
         positionPopover(targetEl);
 
