@@ -125,10 +125,11 @@ IMPLIED_CONTACT_FIELDS = frozenset({"contacts", "contact_groups"})
 
 VALID_ATTRIBUTES: dict[str, list[str]] = {
     "host": [
-        "host_name", "alias", "display_name", "address", "parents", "hostgroups",
-        "check_command", "initial_state", "max_check_attempts", "check_interval",
-        "retry_interval", "active_checks_enabled", "passive_checks_enabled",
-        "check_period", "obsess_over_host", "check_freshness", "freshness_threshold",
+        "host_name", "alias", "display_name", "address", "parents", "importance",
+        "hostgroups", "check_command", "initial_state", "max_check_attempts",
+        "check_interval", "retry_interval", "active_checks_enabled",
+        "passive_checks_enabled", "check_period", "obsess_over_host", "obsess",
+        "check_freshness", "freshness_threshold",
         "event_handler", "event_handler_enabled", "low_flap_threshold",
         "high_flap_threshold", "flap_detection_enabled", "flap_detection_options",
         "process_perf_data", "retain_status_information", "retain_nonstatus_information",
@@ -144,10 +145,10 @@ VALID_ATTRIBUTES: dict[str, list[str]] = {
     ],
     "service": [
         "host_name", "hostgroup_name", "service_description", "display_name",
-        "servicegroups", "is_volatile", "check_command", "initial_state",
-        "max_check_attempts", "check_interval", "retry_interval",
+        "parents", "servicegroups", "is_volatile", "importance", "check_command",
+        "initial_state", "max_check_attempts", "check_interval", "retry_interval",
         "active_checks_enabled", "passive_checks_enabled", "check_period",
-        "obsess_over_service", "check_freshness", "freshness_threshold",
+        "obsess_over_service", "obsess", "check_freshness", "freshness_threshold",
         "event_handler", "event_handler_enabled", "low_flap_threshold",
         "high_flap_threshold", "flap_detection_enabled", "flap_detection_options",
         "process_perf_data", "retain_status_information", "retain_nonstatus_information",
@@ -166,7 +167,8 @@ VALID_ATTRIBUTES: dict[str, list[str]] = {
         "host_notification_period", "service_notification_period",
         "host_notification_options", "service_notification_options",
         "host_notification_commands", "service_notification_commands",
-        "email", "pager", "addressx", "can_submit_commands",
+        "email", "pager", "address1", "address2", "address3",
+        "address4", "address5", "address6", "can_submit_commands",
         "retain_status_information", "retain_nonstatus_information",
         "use", "name", "register",
     ],
@@ -183,7 +185,8 @@ VALID_ATTRIBUTES: dict[str, list[str]] = {
     ],
     "servicedependency": [
         "dependent_host_name", "dependent_hostgroup_name", "dependent_service_description",
-        "host_name", "hostgroup_name", "service_description", "inherits_parent",
+        "dependent_servicegroup_name", "host_name", "hostgroup_name",
+        "service_description", "servicegroup_name", "inherits_parent",
         "execution_failure_criteria", "notification_failure_criteria",
         "dependency_period", "use", "name", "register",
     ],
@@ -322,7 +325,7 @@ REFERENCE_FIELDS: dict[str, str | None] = {
     "host_name": "host",
     "dependent_host_name": "host",
     "master_host_name": "host",
-    "parents": "host",
+    "parents": None,  # hosts reference hosts, services reference services
 
     # Hostgroup references
     "hostgroup_name": "hostgroup",
@@ -340,6 +343,7 @@ REFERENCE_FIELDS: dict[str, str | None] = {
     "servicegroup_name": "servicegroup",
     "servicegroups": "servicegroup",
     "servicegroup_members": "servicegroup",
+    "dependent_servicegroup_name": "servicegroup",
 
     # Contact references
     "contact_name": "contact",
