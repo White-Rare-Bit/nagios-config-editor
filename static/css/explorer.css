@@ -5593,7 +5593,7 @@ i.tree-icon--new {
     border-radius: var(--nbe-radius-md);
     box-shadow: var(--nbe-shadow-md);
     padding: 12px;
-    pointer-events: auto;
+    pointer-events: none;
     opacity: 0;
     transform: translateY(4px);
     transition: opacity 0.15s ease, transform 0.15s ease;
@@ -5602,6 +5602,7 @@ i.tree-icon--new {
 .attr-docs-popover.visible {
     opacity: 1;
     transform: translateY(0);
+    pointer-events: auto;
 }
 
 .attr-docs-popover.above {
