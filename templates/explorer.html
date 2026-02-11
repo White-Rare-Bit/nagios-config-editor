@@ -287,6 +287,8 @@
 {% endblock %}
 
 {% block scripts %}
+<!-- Docs reference data for attribute popovers -->
+<script src="{{ url_for('static', filename='js/docs-data.js') }}"></script>
 <!-- Explorer Modules (load order matters: namespace first, then utilities, then core, then features) -->
 <script src="{{ url_for('static', filename='js/explorer/main.js') }}"></script>
 <script src="{{ url_for('static', filename='js/explorer/constants.js') }}"></script>
