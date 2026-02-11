@@ -679,9 +679,14 @@
             }
         }
 
-        // Clear selection and hide center pane
+        // Close tabs for deleted objects
+        for (const index of Explorer.getSelectedIndices()) {
+            const obj = state.allObjects.find(o => o.global_index === index);
+            if (obj) Explorer.closeTab(Explorer.getObjectKey(obj));
+        }
+
+        // Clear selection
         Explorer.clearSelection();
-        Explorer.hideCenterPaneObject();
 
         // Centralized refresh ensures all UI components (tree, target, suggestions, commit) stay in sync
         Explorer.saveStagedChanges();
