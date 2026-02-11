@@ -39,6 +39,12 @@ def audit_log():
     return render_template("audit_log.html", config_path=get_config_path())
 
 
+@bp.route("/docs")
+def docs():
+    """Nagios object reference documentation."""
+    return render_template("docs.html")
+
+
 @bp.route("/backups")
 def backups():
     """Backup management interface."""

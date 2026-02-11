@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Docs - Nagios Bulk Editor{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('static', filename='css/explorer.css') }}" rel="stylesheet">
+<link href="{{ url_for('static', filename='css/docs.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="page-container docs-container">
+    <!-- Left Sidebar: Object type tree -->
+    <div class="page-sidebar">
+        <div class="panel-header"><span class="panel-header-title">Object Reference</span></div>
+        <div class="docs-tree-container" id="docsTree"></div>
+    </div>
+
+    <!-- Main Content: Directive reference -->
+    <div class="page-main docs-main">
+        <div id="docsContent">
+            <div class="empty-state empty-state--dark empty-state--flex">
+                <div class="empty-icon"><i class="fa-solid fa-book"></i></div>
+                <h3>Nagios 4 Object Reference</h3>
+                <p>Select an object type from the tree to view its directives</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/docs-data.js') }}"></script>
+<script src="{{ url_for('static', filename='js/docs.js') }}"></script>
+{% endblock %}

@@ -32,6 +32,9 @@
                         <a class="nav-link {% if request.endpoint == 'pages.audit_log' %}active{% endif %}" href="{{ url_for('pages.audit_log') }}">Audit Log</a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'pages.docs' %}active{% endif %}" href="{{ url_for('pages.docs') }}">Docs</a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'pages.backups' %}active{% endif %}" href="{{ url_for('pages.backups') }}">Backups</a>
                     </li>
                     <li class="nav-item u-relative">
