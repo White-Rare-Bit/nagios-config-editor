@@ -256,7 +256,10 @@
             ? '<span class="docs-badge docs-badge--required">Required</span>'
             : '<span class="docs-badge docs-badge--optional">Optional</span>';
 
-        var html = '<tr class="docs-directive-row">';
+        // Use first name (before "|") as the row ID for deep linking
+        var primaryName = directive.name.split('|')[0].trim();
+
+        var html = '<tr class="docs-directive-row" id="directive-' + escapeHtml(primaryName) + '">';
         html += '<td class="docs-cell-name"><code>' + escapeHtml(directive.name) + '</code></td>';
         html += '<td class="docs-cell-req">' + reqBadge + '</td>';
         html += '<td class="docs-cell-format"><code>' + escapeHtml(directive.format) + '</code></td>';
@@ -352,12 +355,35 @@
         }
     }
 
+    function scrollToDirective(directiveName) {
+        // Slight delay to ensure content is rendered
+        setTimeout(function() {
+            var row = document.getElementById('directive-' + directiveName);
+            if (row) {
+                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                row.classList.add('docs-directive-highlight');
+                setTimeout(function() {
+                    row.classList.remove('docs-directive-highlight');
+                }, 2000);
+            }
+        }, 100);
+    }
+
     function loadFromHash() {
         var hash = window.location.hash.replace('#', '');
-        if (hash === SPECIAL_INHERITANCE) {
+        var parts = hash.split('/');
+        var typePart = decodeURIComponent(parts[0] || '');
+        var directivePart = parts[1] ? decodeURIComponent(parts[1]) : null;
+
+        if (typePart === SPECIAL_INHERITANCE) {
             selectType(SPECIAL_INHERITANCE);
-        } else if (hash && REF[hash] && hash !== '_template_directives') {
-            selectType(hash);
+        } else if (typePart && REF[typePart] && typePart !== '_template_directives') {
+            selectType(typePart);
+
+            // Scroll to specific directive if provided
+            if (directivePart) {
+                scrollToDirective(directivePart);
+            }
         }
     }
 

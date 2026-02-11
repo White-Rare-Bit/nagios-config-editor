@@ -448,3 +448,23 @@
     line-height: 1.6;
     white-space: pre;
 }
+
+/* Deep-link highlight animation for directive rows */
+.docs-directive-row.docs-directive-highlight {
+    animation: docsDirectiveHighlight 2s ease-out forwards;
+}
+
+@keyframes docsDirectiveHighlight {
+    0% {
+        background-color: rgba(99, 179, 237, 0.25);
+        box-shadow: inset 3px 0 0 var(--nbe-dark-accent-primary);
+    }
+    70% {
+        background-color: rgba(99, 179, 237, 0.1);
+        box-shadow: inset 3px 0 0 var(--nbe-dark-accent-primary);
+    }
+    100% {
+        background-color: transparent;
+        box-shadow: none;
+    }
+}
