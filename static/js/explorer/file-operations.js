@@ -1040,7 +1040,6 @@
 
         // Handle regular objects
         let staged = 0;
-        let alreadyInFile = 0;
         let cancelled = 0;
 
         // Find the highest line number in target file to append at end
@@ -1064,8 +1063,6 @@
             if (existingMove && existingMove.originalFile === targetFile) {
                 state.stagedMoves.delete(objKey);
                 cancelled++;
-            } else if (!existingMove && objData.source_file === targetFile) {
-                alreadyInFile++;
             } else {
                 maxLine += 100;
                 state.stagedMoves.set(objKey, {
@@ -1099,17 +1096,12 @@
         renderTargetPane();
         Explorer.buildTree();
 
-        if (cancelled > 0 && staged === 0 && alreadyInFile === 0) {
+        if (cancelled > 0 && staged === 0) {
             showToast(`${cancelled === 1 ? 'Object move' : cancelled + ' object moves'} cancelled`, 'info');
         } else if (staged > 0 && cancelled > 0) {
             showToast(`Staged ${staged} object(s). Cancelled ${cancelled} move(s).`, 'info');
-        } else if (staged > 0 && alreadyInFile > 0) {
-            showToast(`Staged ${staged} object(s) to move. ${alreadyInFile} already in file.`, 'info');
         } else if (staged > 0) {
             showToast(`Staged ${staged} object(s) to move. Use Commit to apply.`, 'info');
-        } else if (alreadyInFile > 0) {
-            const msg = `${alreadyInFile === 1 ? 'Object' : 'All ' + alreadyInFile + ' objects'} already in ${extractFileName(targetFile)}`;
-            showToast(msg, 'info');
         }
     }
 
