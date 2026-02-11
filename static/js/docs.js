@@ -3,6 +3,7 @@
     'use strict';
 
     var REF = window.NAGIOS_OBJECT_REFERENCE;
+    var INHERITANCE = window.NAGIOS_INHERITANCE_REFERENCE;
 
     var CATEGORIES = [
         { name: 'Monitoring Objects', types: ['host', 'service'] },
@@ -13,6 +14,9 @@
         { name: 'Escalations', types: ['hostescalation', 'serviceescalation'] },
         { name: 'Extended Info (Deprecated)', types: ['hostextinfo', 'serviceextinfo'] }
     ];
+
+    // Special entries (non-object-type pages)
+    var SPECIAL_INHERITANCE = '_inheritance';
 
     // SVG icons (subset from explorer/ui-utils.js)
     var ICONS = {
@@ -26,6 +30,7 @@
     var expandedCategories = {};
     var focusedIndex = -1;
     var allTypeNodes = []; // flat list for keyboard nav
+    var treeSearchQuery = ''; // global search filter
 
     // =========================================================================
     // Tree rendering
@@ -34,18 +39,41 @@
     function renderTree() {
         var container = document.getElementById('docsTree');
         var html = '';
+        var lower = treeSearchQuery.toLowerCase();
+
         for (var i = 0; i < CATEGORIES.length; i++) {
-            html += renderCategory(CATEGORIES[i], i);
+            html += renderCategory(CATEGORIES[i], i, lower);
         }
+
+        // Inheritance section (standalone entry, not inside a category)
+        var inheritanceVisible = !lower || 'inheritance'.indexOf(lower) !== -1 ||
+            'template'.indexOf(lower) !== -1 || 'use register name'.indexOf(lower) !== -1;
+        if (inheritanceVisible) {
+            html += renderInheritanceRow();
+        }
+
         container.innerHTML = html;
         buildTypeNodeList();
     }
 
-    function renderCategory(cat, catIndex) {
+    function renderCategory(cat, catIndex, searchLower) {
+        // Filter types by search query
+        var visibleTypes = [];
+        for (var i = 0; i < cat.types.length; i++) {
+            var typeName = cat.types[i];
+            var typeData = REF[typeName];
+            if (!searchLower || matchesSearch(typeName, typeData, searchLower)) {
+                visibleTypes.push(typeName);
+            }
+        }
+
+        // Hide entire category if no matching types
+        if (visibleTypes.length === 0) return '';
+
         var isExpanded = expandedCategories[catIndex] !== false; // default expanded
         var totalDirectives = 0;
-        for (var i = 0; i < cat.types.length; i++) {
-            totalDirectives += REF[cat.types[i]].directives.length;
+        for (var i = 0; i < visibleTypes.length; i++) {
+            totalDirectives += REF[visibleTypes[i]].directives.length;
         }
 
         var html = '<div class="workspace-tree-row' + (isExpanded ? ' expanded' : '') + '" data-depth="0" data-cat="' + catIndex + '" onclick="DocsPage.toggleCategory(' + catIndex + ')">';
@@ -56,11 +84,23 @@
         html += '</div>';
 
         html += '<div class="tree-children' + (isExpanded ? ' expanded' : '') + '">';
-        for (var i = 0; i < cat.types.length; i++) {
-            html += renderTypeRow(cat.types[i]);
+        for (var i = 0; i < visibleTypes.length; i++) {
+            html += renderTypeRow(visibleTypes[i]);
         }
         html += '</div>';
         return html;
+    }
+
+    function matchesSearch(typeName, typeData, lower) {
+        // Match against type name, label, description, and directive names
+        if (typeName.indexOf(lower) !== -1) return true;
+        var label = (typeData.label || '').toLowerCase();
+        if (label.indexOf(lower) !== -1) return true;
+        if (typeData.description.toLowerCase().indexOf(lower) !== -1) return true;
+        for (var i = 0; i < typeData.directives.length; i++) {
+            if (typeData.directives[i].name.toLowerCase().indexOf(lower) !== -1) return true;
+        }
+        return false;
     }
 
     function renderTypeRow(typeName) {
@@ -74,6 +114,19 @@
         html += '<span class="tree-icon tree-icon--file">' + ICONS.file + '</span>';
         html += '<span class="tree-label">' + escapeHtml(label) + '</span>';
         html += '<span class="tree-count">' + directiveCount + '</span>';
+        html += '</div>';
+        return html;
+    }
+
+    function renderInheritanceRow() {
+        var isSelected = selectedType === SPECIAL_INHERITANCE;
+        var sectionCount = INHERITANCE ? INHERITANCE.length : 0;
+
+        var html = '<div class="workspace-tree-row' + (isSelected ? ' selected' : '') + '" data-depth="0" data-type="' + SPECIAL_INHERITANCE + '" onclick="DocsPage.selectType(\'' + SPECIAL_INHERITANCE + '\')">';
+        html += '<span class="tree-expand-placeholder"></span>';
+        html += '<span class="tree-icon tree-icon--file">' + ICONS.file + '</span>';
+        html += '<span class="tree-label">Inheritance</span>';
+        html += '<span class="tree-count">' + sectionCount + '</span>';
         html += '</div>';
         return html;
     }
@@ -93,11 +146,18 @@
     function toggleCategory(catIndex) {
         expandedCategories[catIndex] = expandedCategories[catIndex] === false;
         renderTree();
-        updateHash();
     }
 
     function selectType(typeName) {
         selectedType = typeName;
+
+        if (typeName === SPECIAL_INHERITANCE) {
+            renderTree();
+            renderInheritanceContent();
+            updateHash();
+            return;
+        }
+
         // Ensure parent category is expanded
         for (var i = 0; i < CATEGORIES.length; i++) {
             if (CATEGORIES[i].types.indexOf(typeName) !== -1) {
@@ -111,7 +171,22 @@
     }
 
     // =========================================================================
-    // Content rendering
+    // Global tree search
+    // =========================================================================
+
+    function handleTreeSearch(value) {
+        treeSearchQuery = value;
+        // When searching, auto-expand all categories to show results
+        if (value) {
+            for (var i = 0; i < CATEGORIES.length; i++) {
+                expandedCategories[i] = true;
+            }
+        }
+        renderTree();
+    }
+
+    // =========================================================================
+    // Object type content rendering
     // =========================================================================
 
     function renderContent(typeName) {
@@ -205,6 +280,69 @@
     }
 
     // =========================================================================
+    // Inheritance content rendering
+    // =========================================================================
+
+    function renderInheritanceContent() {
+        var container = document.getElementById('docsContent');
+        if (!INHERITANCE || !INHERITANCE.length) {
+            container.innerHTML = '<div class="empty-state empty-state--dark empty-state--flex"><h3>No inheritance data available</h3></div>';
+            return;
+        }
+
+        var html = '<div class="docs-type-header">';
+        html += '<h2 class="docs-type-title">Object Inheritance</h2>';
+        html += '<p class="docs-type-desc">Nagios supports template-based object inheritance, allowing you to define shared defaults in template objects and have other objects inherit those properties. This reduces configuration duplication and makes large deployments manageable.</p>';
+        html += '<div class="docs-type-meta">';
+        html += '<span class="docs-directive-count">' + INHERITANCE.length + ' topics</span>';
+        html += '</div>';
+        html += '</div>';
+
+        html += '<div class="docs-inheritance-container">';
+        for (var i = 0; i < INHERITANCE.length; i++) {
+            html += renderInheritanceSection(INHERITANCE[i], i);
+        }
+        html += '</div>';
+
+        container.innerHTML = html;
+    }
+
+    function renderInheritanceSection(section, index) {
+        var html = '<div class="docs-inheritance-section">';
+        html += '<h3 class="docs-inheritance-title">';
+        html += '<span class="docs-inheritance-number">' + (index + 1) + '</span>';
+        html += escapeHtml(section.title);
+        html += '</h3>';
+        // content may contain <code> tags — render as-is (trusted static data)
+        html += '<div class="docs-inheritance-text">' + section.content + '</div>';
+
+        if (section.table) {
+            html += '<div class="docs-inheritance-table-wrap">';
+            html += '<table class="docs-directive-table docs-inheritance-table">';
+            html += '<thead><tr>';
+            for (var h = 0; h < section.table.headers.length; h++) {
+                html += '<th>' + escapeHtml(section.table.headers[h]) + '</th>';
+            }
+            html += '</tr></thead><tbody>';
+            for (var r = 0; r < section.table.rows.length; r++) {
+                html += '<tr>';
+                for (var c = 0; c < section.table.rows[r].length; c++) {
+                    html += '<td>' + escapeHtml(section.table.rows[r][c]) + '</td>';
+                }
+                html += '</tr>';
+            }
+            html += '</tbody></table>';
+            html += '</div>';
+        }
+
+        if (section.example) {
+            html += '<pre class="docs-code-block"><code>' + escapeHtml(section.example) + '</code></pre>';
+        }
+        html += '</div>';
+        return html;
+    }
+
+    // =========================================================================
     // URL hash navigation
     // =========================================================================
 
@@ -216,7 +354,9 @@
 
     function loadFromHash() {
         var hash = window.location.hash.replace('#', '');
-        if (hash && REF[hash] && hash !== '_template_directives') {
+        if (hash === SPECIAL_INHERITANCE) {
+            selectType(SPECIAL_INHERITANCE);
+        } else if (hash && REF[hash] && hash !== '_template_directives') {
             selectType(hash);
         }
     }
@@ -226,11 +366,15 @@
     // =========================================================================
 
     function handleKeydown(e) {
-        // Don't intercept when typing in search
-        if (e.target.id === 'docsDirectiveSearch') {
+        // Don't intercept when typing in inputs
+        if (e.target.tagName === 'INPUT') {
             if (e.key === 'Escape') {
                 e.target.value = '';
-                filterDirectives('');
+                if (e.target.id === 'docsDirectiveSearch') {
+                    filterDirectives('');
+                } else if (e.target.id === 'docsTreeSearch') {
+                    handleTreeSearch('');
+                }
                 e.target.blur();
                 e.preventDefault();
             }
@@ -262,7 +406,7 @@
             case '/':
                 if (!e.ctrlKey && !e.metaKey) {
                     e.preventDefault();
-                    var search = document.getElementById('docsDirectiveSearch');
+                    var search = document.getElementById('docsTreeSearch');
                     if (search) search.focus();
                 }
                 break;
@@ -305,7 +449,8 @@
 
     window.DocsPage = {
         toggleCategory: toggleCategory,
-        selectType: selectType
+        selectType: selectType,
+        handleTreeSearch: handleTreeSearch
     };
 
     // =========================================================================

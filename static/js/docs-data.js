@@ -1286,3 +1286,70 @@ window.NAGIOS_OBJECT_REFERENCE = {
         ]
     }
 };
+
+/* =============================================================================
+ * Nagios 4 Object Inheritance Reference
+ * Source: https://assets.nagios.com/downloads/nagioscore/docs/nagioscore/4/en/objectinheritance.html
+ * ============================================================================= */
+window.NAGIOS_INHERITANCE_REFERENCE = [
+    {
+        title: 'Template-Based Inheritance',
+        content: 'Nagios allows object definitions to inherit properties from one or more template objects. Three special directives control inheritance across all object types: <code>name</code> (declares a template identity), <code>use</code> (references templates to inherit from), and <code>register</code> (controls whether the definition is instantiated or serves only as a template).',
+        example: 'define host {\n    check_command        check-host-alive\n    max_check_attempts   5\n    name                 generic-host\n    register             0\n}\n\ndefine host {\n    host_name   webserver1\n    address     192.168.1.10\n    use         generic-host\n}'
+    },
+    {
+        title: 'Local vs. Inherited Values',
+        content: 'When an object defines a variable locally AND inherits the same variable from a template, the local value always takes precedence. Inheritance only fills in variables that are not already defined locally. This lets you set defaults in a template and override specific values per object.',
+        example: 'define host {\n    max_check_attempts   5           ; template default\n    name                 generic-host\n    register             0\n}\n\ndefine host {\n    host_name            webserver1\n    max_check_attempts   3           ; local override wins\n    use                  generic-host\n}'
+    },
+    {
+        title: 'Inheritance Chaining',
+        content: 'Objects can inherit from templates that themselves inherit from other templates, forming chains of arbitrary depth. Each level fills in only the variables not already defined at a lower (more specific) level. A template can both provide defaults and inherit from another template by specifying both <code>name</code> and <code>use</code>.',
+        example: 'define host {\n    check_command   check-host-alive\n    name            base-host\n    register        0\n}\n\ndefine host {\n    max_check_attempts   3\n    use                  base-host\n    name                 linux-host\n    register             0\n}\n\ndefine host {\n    host_name   webserver1\n    use         linux-host      ; inherits chain: linux-host → base-host\n}'
+    },
+    {
+        title: 'Incomplete Definitions as Templates',
+        content: 'Template definitions do not need to contain all required variables for their object type. By setting <code>register 0</code>, an incomplete definition serves purely as a template that provides shared defaults. The actual registered objects that use the template must supply the remaining required fields.',
+        example: 'define host {\n    check_command        check-host-alive\n    notification_options d,u,r\n    name                 generic-host\n    register             0          ; not registered — template only\n}\n\ndefine host {\n    host_name   bighost1\n    address     192.168.1.3         ; supplies required fields\n    use         generic-host\n}'
+    },
+    {
+        title: 'Custom Variable Inheritance',
+        content: 'Custom variables (prefixed with an underscore <code>_</code>) defined in templates are inherited exactly like standard variables. If a template defines <code>_snmp_community public</code>, any object using that template inherits the custom variable unless it defines its own local value.',
+        example: 'define host {\n    _snmp_community   public\n    _customvar1       somevalue\n    name              generic-host\n    register          0\n}\n\ndefine host {\n    host_name   bighost1\n    use         generic-host\n    ; inherits both _snmp_community and _customvar1\n}'
+    },
+    {
+        title: 'Cancelling Inherited Values with null',
+        content: 'To prevent a string variable from being inherited from a template, set it to the keyword <code>null</code> in the child object. This cancels inheritance for that specific variable, resulting in it being absent from the final object. This only works for string-type values.',
+        example: 'define host {\n    event_handler   my-event-handler\n    name            generic-host\n    register        0\n}\n\ndefine host {\n    host_name       bighost1\n    event_handler   null            ; cancels inheritance\n    use             generic-host\n    ; result: event_handler is completely absent\n}'
+    },
+    {
+        title: 'Additive Inheritance with + Prefix',
+        content: 'Prepending a plus sign (<code>+</code>) to a local string value causes it to be appended to the inherited value rather than replacing it. The inherited value comes first, followed by the locally defined values. This is useful for building up comma-separated lists like <code>hostgroups</code> or <code>contact_groups</code> across template layers.',
+        example: 'define host {\n    hostgroups   all-servers\n    name         generic-host\n    register     0\n}\n\ndefine host {\n    host_name    linuxserver1\n    hostgroups   +linux-servers,web-servers\n    use          generic-host\n    ; result: hostgroups = all-servers,linux-servers,web-servers\n}'
+    },
+    {
+        title: 'Implied Inheritance from Parent Objects',
+        content: 'Certain object types automatically inherit specific variables from their associated parent objects when not explicitly specified. This is separate from template inheritance — it is based on the logical relationship between objects (e.g., a service belongs to a host).',
+        table: {
+            headers: ['Child Object', 'Variable', 'Inherited From'],
+            rows: [
+                ['Service', 'contact_groups, contacts', "Host's value"],
+                ['Service', 'notification_interval, notification_period', "Host's value"],
+                ['Host Escalation', 'contact_groups, notification_interval', "Host's value"],
+                ['Host Escalation', 'escalation_period', "Host's notification_period"],
+                ['Service Escalation', 'contact_groups, notification_interval', "Service's value"],
+                ['Service Escalation', 'escalation_period', "Service's notification_period"]
+            ]
+        }
+    },
+    {
+        title: 'Multiple Inheritance and Precedence',
+        content: 'An object can inherit from multiple templates by specifying a comma-separated list in the <code>use</code> directive. When the same variable is defined in more than one template, the first template listed takes precedence (leftmost wins). Local variables always override all inherited values regardless of template order.',
+        example: 'define host {\n    check_interval   10\n    name             generic-host\n    register         0\n}\n\ndefine host {\n    check_interval       15\n    notification_options d,u,r\n    name                 dev-server\n    register             0\n}\n\ndefine host {\n    host_name   devweb1\n    use         generic-host,dev-server\n    ; check_interval = 10 (generic-host listed first, wins)\n    ; notification_options = d,u,r (only in dev-server)\n}'
+    },
+    {
+        title: 'Overriding with Important Values (!)',
+        content: 'A template can mark a variable as "important" by prefixing the value with an exclamation mark (<code>!</code>). An important template value takes precedence over the local value in the child object — reversing the normal local-wins rule. This is used in distributed monitoring where a master template needs to force specific values.',
+        example: 'define service {\n    active_checks_enabled   0\n    check_freshness         1\n    check_command           !set_to_stale   ; ! forces this value\n    name                    distributed-svc\n    register                0\n}\n\ndefine service {\n    host_name           host1\n    service_description serviceA\n    check_command       check_http\n    use                 distributed-svc\n    ; result: check_command = set_to_stale (template ! overrides local)\n}'
+    }
+];
