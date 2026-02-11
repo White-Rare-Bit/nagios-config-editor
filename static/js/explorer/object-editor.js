@@ -457,6 +457,173 @@
     }
     Explorer.syncHighlight = syncHighlight;
 
+    // =========================================================================
+    // Attribute Docs Popover
+    // =========================================================================
+
+    var docsPopoverEl = null;
+    var docsPopoverShowTimer = null;
+    var docsPopoverHideTimer = null;
+
+    /**
+     * Look up a directive in NAGIOS_OBJECT_REFERENCE for the given object type.
+     * Handles aliases like "obsess_over_host|obsess" by splitting on "|".
+     * Also checks _template_directives for common template attrs (name, use, register).
+     */
+    function lookupDirective(objectType, attrName) {
+        var ref = window.NAGIOS_OBJECT_REFERENCE;
+        if (!ref) return null;
+
+        var lower = attrName.toLowerCase();
+
+        // Check type-specific directives first
+        var typeData = ref[objectType];
+        if (typeData && typeData.directives) {
+            for (var i = 0; i < typeData.directives.length; i++) {
+                var d = typeData.directives[i];
+                var names = d.name.split('|');
+                for (var j = 0; j < names.length; j++) {
+                    if (names[j].trim().toLowerCase() === lower) return d;
+                }
+            }
+        }
+
+        // Check template directives (name, use, register)
+        var tmpl = ref._template_directives;
+        if (tmpl && tmpl.directives) {
+            for (var i = 0; i < tmpl.directives.length; i++) {
+                var d = tmpl.directives[i];
+                var names = d.name.split('|');
+                for (var j = 0; j < names.length; j++) {
+                    if (names[j].trim().toLowerCase() === lower) return d;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Create the singleton popover element (once).
+     */
+    function ensurePopoverElement() {
+        if (docsPopoverEl) return docsPopoverEl;
+        docsPopoverEl = document.createElement('div');
+        docsPopoverEl.className = 'attr-docs-popover';
+        docsPopoverEl.id = 'attrDocsPopover';
+        document.body.appendChild(docsPopoverEl);
+
+        // Keep popover open when mouse is over it
+        docsPopoverEl.addEventListener('mouseenter', function() {
+            clearTimeout(docsPopoverHideTimer);
+        });
+        docsPopoverEl.addEventListener('mouseleave', function() {
+            scheduleHidePopover();
+        });
+
+        // Dismiss on Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && docsPopoverEl.classList.contains('visible')) {
+                hideDocsPopover();
+            }
+        });
+
+        return docsPopoverEl;
+    }
+
+    /**
+     * Position the popover relative to the target element.
+     * Default below, flip above if not enough room.
+     */
+    function positionPopover(targetEl) {
+        var el = ensurePopoverElement();
+        var rect = targetEl.getBoundingClientRect();
+        var gap = 8;
+
+        // Temporarily show off-screen to measure
+        el.style.left = '-9999px';
+        el.style.top = '-9999px';
+        el.classList.add('visible');
+        var popoverHeight = el.offsetHeight;
+        el.classList.remove('visible');
+
+        var spaceBelow = window.innerHeight - rect.bottom - gap;
+        var placeAbove = spaceBelow < popoverHeight && rect.top > popoverHeight + gap;
+
+        el.classList.toggle('above', placeAbove);
+
+        if (placeAbove) {
+            el.style.top = (rect.top - popoverHeight - gap) + 'px';
+        } else {
+            el.style.top = (rect.bottom + gap) + 'px';
+        }
+
+        // Align left edge with attr-name, clamp to viewport
+        var left = rect.left;
+        var maxLeft = window.innerWidth - 340; // 320px width + 20px margin
+        if (left > maxLeft) left = maxLeft;
+        if (left < 8) left = 8;
+        el.style.left = left + 'px';
+    }
+
+    /**
+     * Show the docs popover for a directive.
+     */
+    function showDocsPopover(targetEl, directive, objectType) {
+        var el = ensurePopoverElement();
+
+        var badgeClass = directive.required ? 'attr-docs-badge--required' : 'attr-docs-badge--optional';
+        var badgeText = directive.required ? 'Required' : 'Optional';
+
+        // Build the deep link: /docs#objectType/directiveName
+        // Use the first alias for the link (before any "|")
+        var directiveName = directive.name.split('|')[0].trim();
+        var docsHref = '/docs#' + encodeURIComponent(objectType) + '/' + encodeURIComponent(directiveName);
+
+        el.innerHTML =
+            '<div class="attr-docs-header">' +
+                '<code class="attr-docs-name">' + Explorer.escapeHtml(directive.name) + '</code>' +
+                '<span class="attr-docs-badge ' + badgeClass + '">' + badgeText + '</span>' +
+            '</div>' +
+            '<div class="attr-docs-format">Format: <code>' + Explorer.escapeHtml(directive.format) + '</code></div>' +
+            '<div class="attr-docs-desc">' + Explorer.escapeHtml(directive.description) + '</div>' +
+            '<a class="attr-docs-link" href="' + docsHref + '" target="_blank">View in docs \u2192</a>';
+
+        positionPopover(targetEl);
+
+        // Trigger transition
+        requestAnimationFrame(function() {
+            el.classList.add('visible');
+        });
+    }
+
+    /**
+     * Hide the popover immediately.
+     */
+    function hideDocsPopover() {
+        clearTimeout(docsPopoverShowTimer);
+        clearTimeout(docsPopoverHideTimer);
+        if (docsPopoverEl) {
+            docsPopoverEl.classList.remove('visible');
+        }
+    }
+    Explorer.hideDocsPopover = hideDocsPopover;
+
+    /**
+     * Schedule hiding the popover after a grace period.
+     */
+    function scheduleHidePopover() {
+        clearTimeout(docsPopoverHideTimer);
+        docsPopoverHideTimer = setTimeout(hideDocsPopover, 200);
+    }
+
+    // Dismiss docs popover when center pane scrolls or window resizes
+    document.addEventListener('DOMContentLoaded', function() {
+        var cb = document.querySelector('.center-body');
+        if (cb) cb.addEventListener('scroll', hideDocsPopover);
+    });
+    window.addEventListener('resize', hideDocsPopover);
+
     function renderCenterAttributes() {
         const container = document.getElementById('centerCardAttributes');
         if (!state.editedObject) return;
@@ -509,6 +676,28 @@
                     <button class="attr-delete" onclick="Explorer.deleteAttribute('${keyHtmlAttr}')">&times;</button>
                 </div>
             `}).join('');
+
+        // Attach docs popover hover listeners to attr-name spans
+        container.querySelectorAll('.attr-name').forEach(function(nameEl) {
+            var attrName = nameEl.textContent;
+            var directive = lookupDirective(objectType, attrName);
+            if (directive) {
+                nameEl.classList.add('has-docs');
+
+                nameEl.addEventListener('mouseenter', function() {
+                    clearTimeout(docsPopoverHideTimer);
+                    clearTimeout(docsPopoverShowTimer);
+                    docsPopoverShowTimer = setTimeout(function() {
+                        showDocsPopover(nameEl, directive, objectType);
+                    }, 300);
+                });
+
+                nameEl.addEventListener('mouseleave', function() {
+                    clearTimeout(docsPopoverShowTimer);
+                    scheduleHidePopover();
+                });
+            }
+        });
 
         // Auto-size textareas on initial render to fit all content
         // Use requestAnimationFrame to ensure DOM is fully rendered first
