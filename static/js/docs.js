@@ -359,13 +359,20 @@
         // Slight delay to ensure content is rendered
         setTimeout(function() {
             var row = document.getElementById('directive-' + directiveName);
-            if (row) {
-                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                row.classList.add('docs-directive-highlight');
-                setTimeout(function() {
-                    row.classList.remove('docs-directive-highlight');
-                }, 2000);
+            if (!row) return;
+
+            // Scroll only the table container, not the body
+            var container = document.querySelector('.docs-table-container');
+            if (container) {
+                var rowTop = row.offsetTop - container.offsetTop;
+                var centerOffset = rowTop - (container.clientHeight / 2) + (row.offsetHeight / 2);
+                container.scrollTo({ top: centerOffset, behavior: 'smooth' });
             }
+
+            row.classList.add('docs-directive-highlight');
+            setTimeout(function() {
+                row.classList.remove('docs-directive-highlight');
+            }, 2000);
         }, 100);
     }
 
