@@ -93,6 +93,7 @@
         }
 
         Explorer.showCenterPaneObject(obj);
+        syncTreeSelection(obj);
         renderTabBar();
         persistTabs();
     }
@@ -164,6 +165,11 @@
         setTimeout(() => {
             const item = document.querySelector(`.tree-item[data-index="${obj.global_index}"]`);
             if (item) {
+                // Ensure parent folder is open
+                const folder = item.closest('.tree-folder');
+                if (folder && !folder.classList.contains('open')) {
+                    folder.classList.add('open');
+                }
                 item.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }, 50);

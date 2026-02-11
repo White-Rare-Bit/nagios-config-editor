@@ -883,12 +883,11 @@
                 document.getElementById('centerCardName').textContent = state.editedObject.display_name;
 
                 // Update tab label if this object has an open tab
-                if (state.activeTabKey) {
-                    const activeTab = state.openTabs.find(t => t.key === state.activeTabKey);
-                    if (activeTab) {
-                        activeTab.label = value || '(unnamed)';
-                        Explorer.renderTabBar();
-                    }
+                const objKey = Explorer.getObjectKey(state.editedObject);
+                const objTab = state.openTabs.find(t => t.key === objKey);
+                if (objTab) {
+                    objTab.label = value || '(unnamed)';
+                    Explorer.renderTabBar();
                 }
 
                 // Update the tree item name in the left panel

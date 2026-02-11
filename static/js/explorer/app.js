@@ -226,16 +226,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (obj) {
             Explorer.openTab(obj);
             selectionRestored = true;
-            setTimeout(() => {
-                const item = document.querySelector(`.tree-item[data-index="${obj.global_index}"]`);
-                if (item) {
-                    const folder = item.closest('.tree-folder');
-                    if (folder && !folder.classList.contains('open')) {
-                        folder.classList.add('open');
-                    }
-                    item.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-            }, 100);
         }
     } else {
         const savedKey = sessionStorage.getItem('explorerSelectedKey');
@@ -244,16 +234,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (obj) {
                 Explorer.openTab(obj);
                 selectionRestored = true;
-                setTimeout(() => {
-                    const item = document.querySelector(`.tree-item[data-index="${obj.global_index}"]`);
-                    if (item) {
-                        const folder = item.closest('.tree-folder');
-                        if (folder && !folder.classList.contains('open')) {
-                            folder.classList.add('open');
-                        }
-                        item.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }
-                }, 100);
             }
         }
     }
