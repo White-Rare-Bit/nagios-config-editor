@@ -5619,6 +5619,13 @@ i.tree-icon--new {
     margin-bottom: 6px;
 }
 
+.attr-docs-popover code {
+    background: none;
+    color: inherit;
+    padding: 0;
+    font-size: inherit;
+}
+
 .attr-docs-popover .attr-docs-name {
     font-family: var(--nbe-font-mono);
     font-size: var(--nbe-typography-body-size);
