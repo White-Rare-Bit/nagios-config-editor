@@ -280,10 +280,28 @@ NOTIFICATION_OPTIONS: dict[str, list] = {
     "service_failure_criteria": [
         "o - OK", "w - Warning", "u - Unknown", "c - Critical", "p - Pending", "n - None",
     ],
+    "host_stalking_options": [
+        "o - Up", "d - Down", "u - Unreachable", "N - Log on Notification",
+    ],
+    "service_stalking_options": [
+        "o - OK", "w - Warning", "u - Unknown", "c - Critical", "N - Log on Notification",
+    ],
+    "host_flap_detection_options": [
+        "o - Up", "d - Down", "u - Unreachable",
+    ],
+    "service_flap_detection_options": [
+        "o - OK", "w - Warning", "u - Unknown", "c - Critical",
+    ],
+    "host_escalation_options": [
+        "d - Down", "u - Unreachable", "r - Recovery",
+    ],
+    "service_escalation_options": [
+        "w - Warning", "u - Unknown", "c - Critical", "r - Recovery",
+    ],
     "notification_option_attrs": [
         "notification_options", "host_notification_options", "service_notification_options",
         "execution_failure_criteria", "notification_failure_criteria",
-        "escalation_options", "stalking_options",
+        "escalation_options", "stalking_options", "flap_detection_options",
     ],
 }
 
