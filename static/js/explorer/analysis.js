@@ -516,7 +516,6 @@ function getCleanupTypeLabel(type) {
  */
 function renderUnifiedSuggestionsList() {
     const container = document.getElementById('suggestionsList');
-    const actionsFooter = document.getElementById('suggestionsActions');
     if (!container) return;
 
     const allSuggestions = collectAllSuggestions();
@@ -548,19 +547,6 @@ function renderUnifiedSuggestionsList() {
     let filtered = allSuggestions;
     if (currentSuggestionFilter !== 'all') {
         filtered = allSuggestions.filter(s => s.severity === currentSuggestionFilter);
-    }
-
-    // Show/hide bulk actions
-    const hasUnused = allSuggestions.some(s => s.type.startsWith('unused_'));
-    const hasMissing = allSuggestions.some(s => s.type === 'missing');
-    if (actionsFooter) {
-        if (hasUnused || hasMissing) {
-            actionsFooter.classList.remove('u-hidden');
-            document.getElementById('bulkDeleteUnused').style.display = hasUnused ? '' : 'none';
-            document.getElementById('bulkCreateMissing').style.display = hasMissing ? '' : 'none';
-        } else {
-            actionsFooter.classList.add('u-hidden');
-        }
     }
 
     // Render empty state
@@ -760,85 +746,6 @@ function stageCleanupDeletion(idx) {
 
         showToast(`Staged "${obj.display_name}" for deletion`, 'success');
     }
-}
-
-/**
- * Bulk delete all unused items
- */
-function bulkDeleteUnused() {
-    const unusedItems = state.allCleanupSuggestions.filter(s =>
-        s.type.startsWith('unused_') || s.type === 'orphan' || s.type === 'empty_group'
-    );
-
-    if (unusedItems.length === 0) {
-        showToast('No unused items to delete', 'info');
-        return;
-    }
-
-    showConfirmDialog({
-        title: 'Delete All Unused',
-        message: `This will stage ${unusedItems.length} unused item(s) for deletion. Continue?`,
-        confirmText: 'Delete All',
-        confirmClass: 'btn-danger',
-        onConfirm: () => {
-            let count = 0;
-            // Delete in reverse order to maintain indices
-            for (let i = state.allCleanupSuggestions.length - 1; i >= 0; i--) {
-                const s = state.allCleanupSuggestions[i];
-                if ((s.type.startsWith('unused_') || s.type === 'orphan' || s.type === 'empty_group') && s.object) {
-                    if (!state.stagedObjectDeletions.has(s.object.global_index)) {
-                        state.stagedObjectDeletions.add(s.object.global_index);
-                        state.pendingEdits.delete(s.object.global_index);
-                        state.allCleanupSuggestions.splice(i, 1);
-                        count++;
-                    }
-                }
-            }
-
-            Explorer.saveStagedChanges();
-            Explorer.refreshAfterObjectChange();
-            renderUnifiedSuggestionsList();
-
-            showToast(`Staged ${count} item(s) for deletion`, 'success');
-        }
-    });
-}
-
-/**
- * Bulk create all missing objects - shows summary of missing items by type
- */
-function bulkCreateMissing() {
-    if (!state.groupedErrors || state.groupedErrors.length === 0) {
-        showToast('No missing objects to create', 'info');
-        return;
-    }
-
-    // Group errors by type
-    const byType = {};
-    for (const group of state.groupedErrors) {
-        const type = group.objectType || 'unknown';
-        if (!byType[type]) byType[type] = [];
-        byType[type].push(group);
-    }
-
-    // Build summary HTML
-    let html = '<p class="u-mb-md dialog-info-text">Create missing objects by type:</p>';
-    html += '<div class="batch-create-list">';
-
-    for (const [type, groups] of Object.entries(byType)) {
-        const count = groups.length;
-        html += `
-            <div class="batch-create-type-row">
-                <span class="batch-create-type-label">${count} missing ${type}${count !== 1 ? 's' : ''}</span>
-                <button class="suggestion-action action-create" onclick="Explorer.createAllMissing('${type}'); Explorer.closeDialog();">
-                    Create All
-                </button>
-            </div>
-        `;
-    }
-    html += '</div>';
-
-    Explorer.showDialog('Create Missing Objects', html, null);
 }
 
 // =========================================================================
@@ -1572,7 +1479,4 @@ Explorer.renderUnifiedSuggestionsList = renderUnifiedSuggestionsList;
 Explorer.handleSuggestionClick = handleSuggestionClick;
 Explorer.handleSuggestionAction = handleSuggestionAction;
 Explorer.filterSuggestions = filterSuggestions;
-Explorer.bulkDeleteUnused = bulkDeleteUnused;
-Explorer.bulkCreateMissing = bulkCreateMissing;
-
 })(Explorer);

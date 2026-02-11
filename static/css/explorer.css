@@ -2429,23 +2429,6 @@
 }
 
 /* Batch create type rows for bulk create dialog */
-.batch-create-type-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--nbe-dark-border-secondary);
-}
-
-.batch-create-type-row:last-child {
-    border-bottom: none;
-}
-
-.batch-create-type-label {
-    font-size: var(--nbe-typography-body-size);
-    color: var(--nbe-dark-text-primary);
-}
-
 /* Expandable detail panel */
 .suggestion-detail-panel {
     padding: 10px 12px 10px 32px;
@@ -2488,34 +2471,6 @@
 }
 
 /* Bulk actions footer */
-.suggestions-actions {
-    display: flex;
-    gap: 8px;
-    padding: 8px 12px;
-    background: var(--nbe-dark-bg-secondary);
-    border-top: 1px solid var(--nbe-dark-border-primary);
-}
-
-.suggestions-bulk-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    background: var(--nbe-dark-bg-tertiary);
-    border: 1px solid var(--nbe-dark-border-primary);
-    border-radius: var(--nbe-radius-sm);
-    color: var(--nbe-dark-text-primary);
-    font-size: var(--nbe-font-size-xs-plus);
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s;
-}
-
-.suggestions-bulk-btn:hover {
-    background: var(--nbe-dark-bg-hover);
-    border-color: var(--nbe-dark-accent-primary);
-}
-
 /* Empty state for suggestions */
 .suggestions-empty {
     display: flex;

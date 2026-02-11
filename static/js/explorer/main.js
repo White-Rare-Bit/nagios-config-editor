@@ -272,9 +272,6 @@ Explorer.initEventDelegation = function() {
 
         // Unified suggestions list actions
         filterSuggestions: (el, e) => Explorer.filterSuggestions(e),
-        bulkDeleteUnused: () => Explorer.bulkDeleteUnused(),
-        bulkCreateMissing: () => Explorer.bulkCreateMissing(),
-
         // Undo action
         undo: () => Explorer.undoLastAction()
     };
