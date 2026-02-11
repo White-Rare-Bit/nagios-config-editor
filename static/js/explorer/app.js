@@ -210,25 +210,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Load any staged changes from server (shared across all users)
     await Explorer.loadStagedChanges();
 
+    // Restore tabs from sessionStorage
+    Explorer.restoreTabs();
+
     // Restore tree folder expanded state from localStorage
     restoreTreeFolderState();
 
     buildTree();
 
-    // Restore selected object from session storage using stable key
-    const savedKey = sessionStorage.getItem('explorerSelectedKey');
     let selectionRestored = false;
-    if (savedKey) {
-        const obj = Explorer.findObjectByKey(savedKey);
+
+    // Restore active tab or fall back to saved selection
+    if (state.openTabs.length > 0 && state.activeTabKey) {
+        const obj = Explorer.findObjectByKey(state.activeTabKey);
         if (obj) {
-            state.selectedKeys.add(savedKey);
-            updateSelection();
+            Explorer.openTab(obj);
             selectionRestored = true;
-            // Scroll to item after DOM is ready
             setTimeout(() => {
                 const item = document.querySelector(`.tree-item[data-index="${obj.global_index}"]`);
                 if (item) {
-                    // Ensure parent folder is open
                     const folder = item.closest('.tree-folder');
                     if (folder && !folder.classList.contains('open')) {
                         folder.classList.add('open');
@@ -237,7 +237,29 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }, 100);
         }
+    } else {
+        const savedKey = sessionStorage.getItem('explorerSelectedKey');
+        if (savedKey) {
+            const obj = Explorer.findObjectByKey(savedKey);
+            if (obj) {
+                Explorer.openTab(obj);
+                selectionRestored = true;
+                setTimeout(() => {
+                    const item = document.querySelector(`.tree-item[data-index="${obj.global_index}"]`);
+                    if (item) {
+                        const folder = item.closest('.tree-folder');
+                        if (folder && !folder.classList.contains('open')) {
+                            folder.classList.add('open');
+                        }
+                        item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 100);
+            }
+        }
     }
+
+    // Render tab bar (may be empty if no tabs restored)
+    Explorer.renderTabBar();
 
     // Show empty state if no selection was restored
     if (!selectionRestored) {
@@ -971,12 +993,17 @@ function updateSelection() {
         const key = Array.from(state.selectedKeys)[0];
         const obj = Explorer.findObjectByKey(key);
         if (obj) {
-            showCenterPaneObject(obj);
-            // Save selected object key for persistence
+            // If this is a tab switch, center pane is already handled
+            if (!state.isTabSwitch) {
+                Explorer.openTab(obj);
+            }
             sessionStorage.setItem('explorerSelectedKey', key);
         }
     } else if (state.selectedKeys.size === 0) {
-        hideCenterPaneObject();
+        // Don't hide if we have open tabs — let tab bar handle it
+        if (state.openTabs.length === 0) {
+            hideCenterPaneObject();
+        }
         sessionStorage.removeItem('explorerSelectedKey');
     } else {
         showCenterPaneMultiple(state.selectedKeys.size);

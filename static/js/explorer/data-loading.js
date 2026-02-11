@@ -65,6 +65,9 @@
             Explorer.applyMetadata(metadataResult.data.data || metadataResult.data);
             Explorer.state.metadataLoaded = true;
         }
+
+        // Validate open tabs against refreshed objects
+        if (Explorer.validateTabs) Explorer.validateTabs();
     };
 
     // =============================================================================

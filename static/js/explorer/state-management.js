@@ -318,6 +318,11 @@
         if (!options.skipCommit && window.updateCommitUI) {
             window.updateCommitUI();
         }
+
+        // Refresh tab bar to update modified indicators
+        if (Explorer.renderTabBar) {
+            Explorer.renderTabBar();
+        }
     };
 
 })(window.Explorer);

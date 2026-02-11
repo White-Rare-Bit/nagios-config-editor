@@ -882,6 +882,15 @@
                 // Update the name display for existing objects
                 document.getElementById('centerCardName').textContent = state.editedObject.display_name;
 
+                // Update tab label if this object has an open tab
+                if (state.activeTabKey) {
+                    const activeTab = state.openTabs.find(t => t.key === state.activeTabKey);
+                    if (activeTab) {
+                        activeTab.label = value || '(unnamed)';
+                        Explorer.renderTabBar();
+                    }
+                }
+
                 // Update the tree item name in the left panel
                 const treeItem = document.querySelector(`.tree-item[data-index="${state.editedObject.global_index}"]`);
                 if (treeItem) {

@@ -72,9 +72,8 @@
             });
         }
 
-        Explorer.clearSelection();
-        selectObjectByIndex(index);
-        Explorer.updateSelection();
+        // Open as tab (handles selection sync and center pane rendering)
+        Explorer.openTab(obj);
 
         // Scroll to item with slight delay to ensure DOM is updated
         setTimeout(() => {
