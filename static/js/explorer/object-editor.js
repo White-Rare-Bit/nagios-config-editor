@@ -16,6 +16,12 @@
     const HOST_FAILURE_CRITERIA = constants.HOST_FAILURE_CRITERIA;
     const SERVICE_FAILURE_CRITERIA = constants.SERVICE_FAILURE_CRITERIA;
     const NOTIFICATION_OPTION_ATTRS = constants.NOTIFICATION_OPTION_ATTRS;
+    const HOST_STALKING_OPTIONS = constants.HOST_STALKING_OPTIONS;
+    const SERVICE_STALKING_OPTIONS = constants.SERVICE_STALKING_OPTIONS;
+    const HOST_FLAP_DETECTION_OPTIONS = constants.HOST_FLAP_DETECTION_OPTIONS;
+    const SERVICE_FLAP_DETECTION_OPTIONS = constants.SERVICE_FLAP_DETECTION_OPTIONS;
+    const HOST_ESCALATION_OPTIONS = constants.HOST_ESCALATION_OPTIONS;
+    const SERVICE_ESCALATION_OPTIONS = constants.SERVICE_ESCALATION_OPTIONS;
     const ATTR_REFERENCE_MAP = constants.ATTR_REFERENCE_MAP;
     const REQUIRED_FIELDS = constants.REQUIRED_FIELDS;
 
@@ -313,15 +319,21 @@
                 }
             } else if (attrName === 'escalation_options') {
                 if (objectType === 'hostescalation') {
-                    return HOST_NOTIFICATION_OPTIONS;
+                    return HOST_ESCALATION_OPTIONS;
                 } else {
-                    return SERVICE_NOTIFICATION_OPTIONS;
+                    return SERVICE_ESCALATION_OPTIONS;
                 }
             } else if (attrName === 'stalking_options') {
                 if (objectType === 'host') {
-                    return ['o - Up', 'd - Down', 'u - Unreachable'];
+                    return HOST_STALKING_OPTIONS;
                 } else {
-                    return ['o - OK', 'w - Warning', 'u - Unknown', 'c - Critical'];
+                    return SERVICE_STALKING_OPTIONS;
+                }
+            } else if (attrName === 'flap_detection_options') {
+                if (objectType === 'host') {
+                    return HOST_FLAP_DETECTION_OPTIONS;
+                } else {
+                    return SERVICE_FLAP_DETECTION_OPTIONS;
                 }
             }
         }

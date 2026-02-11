@@ -55,6 +55,12 @@
         NOTIFICATION_OPTION_ATTRS: [],
         HOST_FAILURE_CRITERIA: [],
         SERVICE_FAILURE_CRITERIA: [],
+        HOST_STALKING_OPTIONS: [],
+        SERVICE_STALKING_OPTIONS: [],
+        HOST_FLAP_DETECTION_OPTIONS: [],
+        SERVICE_FLAP_DETECTION_OPTIONS: [],
+        HOST_ESCALATION_OPTIONS: [],
+        SERVICE_ESCALATION_OPTIONS: [],
     };
 
     /**
@@ -90,6 +96,12 @@
         c.NOTIFICATION_OPTION_ATTRS = opts.notification_option_attrs || [];
         c.HOST_FAILURE_CRITERIA = opts.host_failure_criteria || [];
         c.SERVICE_FAILURE_CRITERIA = opts.service_failure_criteria || [];
+        c.HOST_STALKING_OPTIONS = opts.host_stalking_options || [];
+        c.SERVICE_STALKING_OPTIONS = opts.service_stalking_options || [];
+        c.HOST_FLAP_DETECTION_OPTIONS = opts.host_flap_detection_options || [];
+        c.SERVICE_FLAP_DETECTION_OPTIONS = opts.service_flap_detection_options || [];
+        c.HOST_ESCALATION_OPTIONS = opts.host_escalation_options || [];
+        c.SERVICE_ESCALATION_OPTIONS = opts.service_escalation_options || [];
     };
 
     /**
