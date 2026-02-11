@@ -1445,7 +1445,7 @@
                     let staged = 0;
                     for (const idx of indices) {
                         const obj = state.allObjects.find(o => o.global_index === idx);
-                        if (obj && obj.source_file !== newFile) {
+                        if (obj) {
                             const objKey = Explorer.getObjectKey(obj);
                             state.stagedMoves.set(objKey, {
                                 originalFile: obj.source_file,
@@ -1473,7 +1473,7 @@
                     let staged = 0;
                     for (const idx of indices) {
                         const obj = state.allObjects.find(o => o.global_index === idx);
-                        if (obj && obj.source_file !== targetFile) {
+                        if (obj) {
                             const objKey = Explorer.getObjectKey(obj);
                             state.stagedMoves.set(objKey, {
                                 originalFile: obj.source_file,
