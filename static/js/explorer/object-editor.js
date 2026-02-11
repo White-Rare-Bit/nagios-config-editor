@@ -63,6 +63,7 @@
     // Nagios attribute definitions by object type (from constants, populated by /api/metadata)
 
     function showCenterPaneObject(obj) {
+        hideDocsPopover();
         DebugLogger.debug('Showing object in center pane', {
             displayName: obj.display_name,
             objectType: obj.object_type,
