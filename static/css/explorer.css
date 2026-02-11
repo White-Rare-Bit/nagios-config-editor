@@ -908,7 +908,7 @@
 
 .tree-item.staged.selected {
     opacity: 0.8;
-    background: var(--nbe-dark-accent-warning);
+    background: var(--nbe-dark-validation-warning-border);
 }
 
 .tree-item.dragging {
