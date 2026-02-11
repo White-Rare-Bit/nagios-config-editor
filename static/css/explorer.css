@@ -1112,6 +1112,124 @@
     overflow: hidden;
 }
 
+/* Editor Tab Bar */
+.editor-tab-bar {
+    display: flex;
+    align-items: stretch;
+    background: var(--nbe-dark-bg-secondary);
+    border-bottom: 1px solid var(--nbe-dark-border-primary);
+    min-height: 35px;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.editor-tab-scroll {
+    display: flex;
+    overflow-x: auto;
+    flex: 1;
+    scrollbar-width: none;
+}
+
+.editor-tab-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+.editor-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px;
+    height: 35px;
+    min-width: 0;
+    max-width: 200px;
+    cursor: pointer;
+    border-right: 1px solid var(--nbe-dark-border-secondary);
+    color: var(--nbe-white-alpha-50);
+    font-size: var(--nbe-typography-secondary-size);
+    white-space: nowrap;
+    flex-shrink: 0;
+    user-select: none;
+    position: relative;
+}
+
+.editor-tab:hover {
+    color: var(--nbe-white-alpha-70);
+    background: var(--nbe-white-alpha-05);
+}
+
+.editor-tab.active {
+    color: var(--nbe-text-inverse);
+    background: var(--nbe-dark-bg-primary);
+    border-bottom: 2px solid var(--nbe-dark-accent-info);
+}
+
+.editor-tab-icon {
+    font-size: var(--nbe-typography-muted-size);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+
+.editor-tab-icon i {
+    font-size: var(--nbe-typography-muted-size);
+}
+
+.editor-tab-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.editor-tab-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--nbe-dark-accent-info);
+    flex-shrink: 0;
+}
+
+.editor-tab-close {
+    background: none;
+    border: none;
+    color: var(--nbe-white-alpha-30);
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 2px;
+    cursor: pointer;
+    border-radius: 3px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 4px;
+}
+
+.editor-tab-close:hover {
+    color: var(--nbe-text-inverse);
+    background: var(--nbe-white-alpha-15);
+}
+
+.editor-tab-scroll-btn {
+    background: var(--nbe-dark-bg-secondary);
+    border: none;
+    color: var(--nbe-white-alpha-50);
+    padding: 0 6px;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    z-index: 1;
+}
+
+.editor-tab-scroll-btn.visible {
+    display: flex;
+}
+
+.editor-tab-scroll-btn:hover {
+    color: var(--nbe-text-inverse);
+    background: var(--nbe-white-alpha-10);
+}
+
 .center-content {
     flex: 1;
     display: flex;

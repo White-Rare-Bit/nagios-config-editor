@@ -55,6 +55,11 @@ Explorer.state = {
     externalChangePending: false,
     selectedFolder: null,           // Track selected folder for subfolder creation
 
+    // Tab state
+    openTabs: [],              // Array of { key, objectIndex, label, typeIcon }
+    activeTabKey: null,        // Stable key of currently active tab
+    isTabSwitch: false,        // Guard flag to prevent tab↔tree infinite loop
+
     // Center pane state
     infoPanelObject: null,
     infoPanelData: {},
