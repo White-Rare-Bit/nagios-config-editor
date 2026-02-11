@@ -291,8 +291,9 @@
 
             const clickHandler = isMissing ? '' : `onclick="Explorer.selectObjectByName('${Explorer.escapeJs(node.name)}')"`;
 
+            const badgeLabel = node.is_template ? `${objectType} template` : objectType;
             html += `<span class="${itemClass}" ${clickHandler} title="${Explorer.escapeHtml(displayName)}">`;
-            html += `<span class="ref-type-badge type-${objectType}">${objectType}</span>`;
+            html += `<span class="ref-type-badge type-${objectType}">${badgeLabel}</span>`;
             html += `<span>${Explorer.escapeHtml(displayName)}</span>`;
             if (isMissing) html += `<i class="fa-solid fa-xmark" style="color: var(--nbe-dark-accent-danger); margin-left: 4px;"></i>`;
             html += '</span>';

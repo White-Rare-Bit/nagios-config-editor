@@ -4,6 +4,10 @@ body {
     background-color: var(--nbe-bg-page);
 }
 
+.navbar {
+    border-bottom: 1px solid var(--nbe-dark-border-primary);
+}
+
 .navbar-brand {
     font-weight: bold;
 }

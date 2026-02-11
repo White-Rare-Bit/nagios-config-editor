@@ -173,23 +173,21 @@ console.log('dependencies.js loaded');
             addedNodeIds.add(focusNode);
             focusNodeId = focusNode;  // Set this as the central focus node
 
-            if (expandAll) {
-                // Recursively add all connected nodes (including via inheritance)
-                addAllConnectedRecursively(focusNode);
-            }
-
             // Clear URL params to avoid re-triggering on refresh
             window.history.replaceState({}, '', window.location.pathname);
+
+            // Apply the full graph quick view (sets filters, expands, updates graph)
+            applyQuickView('full');
         } else {
             loadGraphState();  // Restore previous session state
+
+            // Ensure checkboxes match the enabled categories (handles both fresh load and restored state)
+            syncCheckboxesToCategories();
+
+            updateGraph();
+            updateAddedNodesList();
+            saveGraphState();  // Save state so refresh preserves it
         }
-
-        // Ensure checkboxes match the enabled categories (handles both fresh load and restored state)
-        syncCheckboxesToCategories();
-
-        updateGraph();
-        updateAddedNodesList();
-        saveGraphState();  // Save state so refresh preserves it
 
         // Render context-sensitive quick view buttons based on focus node type
         renderQuickViewButtons();
