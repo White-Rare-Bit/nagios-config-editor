@@ -1186,6 +1186,7 @@
 
 .center-header .card-type {
     flex-shrink: 0;
+    margin-bottom: 0;
 }
 
 .center-header .card-file {
@@ -2201,6 +2202,10 @@
 .suggestion-row:hover .suggestion-text {
     white-space: normal;
     overflow: visible;
+}
+
+.suggestion-row.highlighted {
+    animation: highlightPulse 1.5s ease-out;
 }
 
 .suggestion-row.expanded {
@@ -3484,7 +3489,6 @@
     border-radius: 0;
     cursor: pointer;
     margin-left: 6px;
-    margin-bottom: 8px;
     transition: all 0.15s;
     text-transform: uppercase;
 }

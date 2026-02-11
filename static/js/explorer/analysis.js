@@ -1567,6 +1567,7 @@ Explorer.renderNotificationSuggestions = renderNotificationSuggestions;
 // Issues functions exported from analysis-issues.js
 
 // New unified suggestions list
+Explorer.collectAllSuggestions = collectAllSuggestions;
 Explorer.renderUnifiedSuggestionsList = renderUnifiedSuggestionsList;
 Explorer.handleSuggestionClick = handleSuggestionClick;
 Explorer.handleSuggestionAction = handleSuggestionAction;

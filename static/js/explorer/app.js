@@ -1073,49 +1073,76 @@ function getIssueIcon(issue) {
     return '<i class="fa-solid fa-circle-info"></i>';
 }
 
-function navigateToObjectIssue() {
+async function navigateToObjectIssue() {
     if (!state.currentCenterObject) return;
 
-    // Switch to Analysis tab
-    switchRightTab('suggestions');
+    const obj = state.currentCenterObject;
+    const issue = state.currentCenterIssue;
+    const hostListInfo = state.currentCenterHostListInfo;
 
-    if (state.currentCenterIssue) {
-        // Map issue badge types to cleanup suggestion types
-        const cleanupTypeMap = {
-            'orphan': 'orphan',
-            'duplicate_name': 'duplicate',
-            'empty_group': 'empty_group',
-            'unused_template': 'unused_template',
-            'unused_command': 'unused_command',
-            'unused_contact': 'unused_contact',
-            'unused_contactgroup': 'unused_contactgroup',
-            'unused_timeperiod': 'unused_timeperiod'
-        };
+    // Switch to Suggestions tab visually, then load data before highlighting
+    Explorer.switchTabs('.nbe-tab', '.right-tab-content', 'suggestions', 'tab', 'Tab');
+    await loadAllSuggestions();
 
-        const cleanupType = cleanupTypeMap[state.currentCenterIssue.type];
-        if (cleanupType) {
-            switchSuggestionsSubtab('cleanup');
-            // Ensure cleanup suggestions are rendered before highlighting
-            ensureCleanupRendered(() => {
-                if (state.currentCenterIssue.type === 'duplicate_name') {
-                    highlightCleanupItemByObject(state.currentCenterObject.global_index, 'duplicate');
-                } else {
-                    highlightCleanupItem(state.currentCenterObject.global_index, cleanupType);
-                }
-            });
-        } else {
-            // Find and highlight in Errors tab
-            switchSuggestionsSubtab('errors');
-            const objectName = state.currentCenterObject.display_name || state.currentCenterObject.name;
-            highlightAnalysisItem('errors', state.currentCenterObject.object_type, objectName);
+    // Find the matching suggestion for this object's issue
+    const allSuggestions = Explorer.collectAllSuggestions();
+    let matchId = null;
+
+    if (issue) {
+        const objName = obj.display_name || obj.name;
+        const globalIndex = obj.global_index;
+
+        for (const s of allSuggestions) {
+            // Match by object global_index (cleanup suggestions)
+            if (s.data?.object?.global_index === globalIndex) {
+                matchId = s.id;
+                break;
+            }
+            // Match duplicates by objects array
+            if (s.data?.objects?.some(o => o.global_index === globalIndex)) {
+                matchId = s.id;
+                break;
+            }
+            // Match grouped errors by referencing object name
+            if (s.data?.issues?.some(i => i.object === objName && i.object_type === obj.object_type)) {
+                matchId = s.id;
+                break;
+            }
+            // Match health warnings by object name and type
+            if (s.data?.issue?.object === objName && s.data?.issue?.object_type === obj.object_type) {
+                matchId = s.id;
+                break;
+            }
         }
-    } else if (state.currentCenterHostListInfo?.shouldGroup) {
-        // Find and highlight in Cleanup tab
-        switchSuggestionsSubtab('cleanup');
-        // Ensure cleanup suggestions are rendered before highlighting
-        ensureCleanupRendered(() => {
-            highlightCleanupItem(state.currentCenterObject.global_index, 'long_host_list');
-        });
+    } else if (hostListInfo?.shouldGroup) {
+        for (const s of allSuggestions) {
+            if (s.type === 'long_host_list' && s.data?.object?.global_index === obj.global_index) {
+                matchId = s.id;
+                break;
+            }
+        }
+    }
+
+    if (matchId) {
+        highlightSuggestionRow(matchId);
+    }
+}
+
+function highlightSuggestionRow(id) {
+    const container = document.getElementById('suggestionsList');
+    if (!container) return;
+
+    const row = container.querySelector(`.suggestion-row[data-id="${CSS.escape(id)}"]`);
+    if (row) {
+        // Scroll only the container, not the body (prevents navbar layout shift)
+        const rowTop = row.offsetTop - container.offsetTop;
+        const centerOffset = rowTop - (container.clientHeight / 2) + (row.offsetHeight / 2);
+        container.scrollTo({ top: centerOffset, behavior: 'smooth' });
+
+        row.classList.remove('highlighted');
+        void row.offsetWidth;
+        row.classList.add('highlighted');
+        setTimeout(() => row.classList.remove('highlighted'), 1500);
     }
 }
 
