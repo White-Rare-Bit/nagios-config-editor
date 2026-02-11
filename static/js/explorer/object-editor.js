@@ -10,20 +10,9 @@
     // Inheritance cache: stableKey -> {chain, inherited, errors}
     if (!state.inheritanceCache) state.inheritanceCache = new Map();
 
-    // Use constants from Explorer.constants (centralized in constants.js)
-    const HOST_NOTIFICATION_OPTIONS = constants.HOST_NOTIFICATION_OPTIONS;
-    const SERVICE_NOTIFICATION_OPTIONS = constants.SERVICE_NOTIFICATION_OPTIONS;
-    const HOST_FAILURE_CRITERIA = constants.HOST_FAILURE_CRITERIA;
-    const SERVICE_FAILURE_CRITERIA = constants.SERVICE_FAILURE_CRITERIA;
-    const NOTIFICATION_OPTION_ATTRS = constants.NOTIFICATION_OPTION_ATTRS;
-    const HOST_STALKING_OPTIONS = constants.HOST_STALKING_OPTIONS;
-    const SERVICE_STALKING_OPTIONS = constants.SERVICE_STALKING_OPTIONS;
-    const HOST_FLAP_DETECTION_OPTIONS = constants.HOST_FLAP_DETECTION_OPTIONS;
-    const SERVICE_FLAP_DETECTION_OPTIONS = constants.SERVICE_FLAP_DETECTION_OPTIONS;
-    const HOST_ESCALATION_OPTIONS = constants.HOST_ESCALATION_OPTIONS;
-    const SERVICE_ESCALATION_OPTIONS = constants.SERVICE_ESCALATION_OPTIONS;
-    const ATTR_REFERENCE_MAP = constants.ATTR_REFERENCE_MAP;
-    const REQUIRED_FIELDS = constants.REQUIRED_FIELDS;
+    // Access constants via constants.* at call time — NOT cached as local const.
+    // applyMetadata() replaces these with new objects/arrays after page load,
+    // so local const aliases would hold stale references to the initial empties.
 
     /**
      * C-05: Validate object has required fields.
@@ -33,7 +22,7 @@
      */
     function validateRequiredFields(objectType, attributes) {
         const errors = [];
-        const requirements = REQUIRED_FIELDS[objectType];
+        const requirements = constants.REQUIRED_FIELDS[objectType];
 
         if (!requirements) {
             // Unknown object type - allow it (might be a custom type)
@@ -298,47 +287,47 @@
 
     function getAttributeSuggestions(attrName, objectType) {
         // Handle notification options and failure criteria
-        if (NOTIFICATION_OPTION_ATTRS.includes(attrName)) {
+        if (constants.NOTIFICATION_OPTION_ATTRS.includes(attrName)) {
             if (attrName === 'host_notification_options') {
-                return HOST_NOTIFICATION_OPTIONS;
+                return constants.HOST_NOTIFICATION_OPTIONS;
             } else if (attrName === 'service_notification_options') {
-                return SERVICE_NOTIFICATION_OPTIONS;
+                return constants.SERVICE_NOTIFICATION_OPTIONS;
             } else if (attrName === 'notification_options') {
                 // notification_options depends on the object type
                 if (objectType === 'host' || objectType === 'hostescalation' || objectType === 'hostdependency') {
-                    return HOST_NOTIFICATION_OPTIONS;
+                    return constants.HOST_NOTIFICATION_OPTIONS;
                 } else {
-                    return SERVICE_NOTIFICATION_OPTIONS;
+                    return constants.SERVICE_NOTIFICATION_OPTIONS;
                 }
             } else if (attrName === 'execution_failure_criteria' || attrName === 'notification_failure_criteria') {
                 // Failure criteria depends on dependency type
                 if (objectType === 'hostdependency') {
-                    return HOST_FAILURE_CRITERIA;
+                    return constants.HOST_FAILURE_CRITERIA;
                 } else {
-                    return SERVICE_FAILURE_CRITERIA;
+                    return constants.SERVICE_FAILURE_CRITERIA;
                 }
             } else if (attrName === 'escalation_options') {
                 if (objectType === 'hostescalation') {
-                    return HOST_ESCALATION_OPTIONS;
+                    return constants.HOST_ESCALATION_OPTIONS;
                 } else {
-                    return SERVICE_ESCALATION_OPTIONS;
+                    return constants.SERVICE_ESCALATION_OPTIONS;
                 }
             } else if (attrName === 'stalking_options') {
                 if (objectType === 'host') {
-                    return HOST_STALKING_OPTIONS;
+                    return constants.HOST_STALKING_OPTIONS;
                 } else {
-                    return SERVICE_STALKING_OPTIONS;
+                    return constants.SERVICE_STALKING_OPTIONS;
                 }
             } else if (attrName === 'flap_detection_options') {
                 if (objectType === 'host') {
-                    return HOST_FLAP_DETECTION_OPTIONS;
+                    return constants.HOST_FLAP_DETECTION_OPTIONS;
                 } else {
-                    return SERVICE_FLAP_DETECTION_OPTIONS;
+                    return constants.SERVICE_FLAP_DETECTION_OPTIONS;
                 }
             }
         }
 
-        let refType = ATTR_REFERENCE_MAP[attrName];
+        let refType = constants.ATTR_REFERENCE_MAP[attrName];
 
         // Handle special cases
         if (attrName === 'use') {
@@ -533,7 +522,7 @@
 
 
     function filterCommaValueSuggestions(inputValue, allSuggestions, attrKey) {
-        const isNotificationOption = NOTIFICATION_OPTION_ATTRS.includes(attrKey);
+        const isNotificationOption = constants.NOTIFICATION_OPTION_ATTRS.includes(attrKey);
         const parts = inputValue.split(',').map(p => p.trim());
         const currentPart = parts[parts.length - 1].toLowerCase();
         const existingValues = parts.slice(0, -1).map(p => p.trim().toLowerCase());
@@ -622,7 +611,7 @@
 
         // For notification options, extract just the short code (e.g., "d" from "d - Down")
         let insertValue = value;
-        if (NOTIFICATION_OPTION_ATTRS.includes(attrKey) && value.includes(' - ')) {
+        if (constants.NOTIFICATION_OPTION_ATTRS.includes(attrKey) && value.includes(' - ')) {
             insertValue = value.split(' - ')[0];
         }
         // For 'use' attribute, strip the alias suffix (e.g., "template-name (alias)" -> "template-name")
@@ -665,7 +654,7 @@
         const suggestions = getAttributeSuggestions(key, state.editedObject.object_type);
         if (suggestions.length > 0 && value && !isIdentityField) {
             // Skip validation for notification options (they use short codes like d,r,f)
-            if (!NOTIFICATION_OPTION_ATTRS.includes(key)) {
+            if (!constants.NOTIFICATION_OPTION_ATTRS.includes(key)) {
                 const values = Explorer.parseCommaValues(value);
                 const isCommandAttr = ['check_command', 'event_handler', 'host_notification_commands', 'service_notification_commands'].includes(key);
 
@@ -805,7 +794,7 @@
                 const suggestions = getAttributeSuggestions(name, state.editedObject.object_type);
                 if (suggestions.length > 0 && value && !isIdentityField) {
                     // Skip validation for notification options (they use short codes like d,r,f)
-                    if (!NOTIFICATION_OPTION_ATTRS.includes(name)) {
+                    if (!constants.NOTIFICATION_OPTION_ATTRS.includes(name)) {
                         // This attribute references other objects - validate the values
                         const values = Explorer.parseCommaValues(value);
                         // For commands, strip arguments (e.g., "check_ping!100!200" -> "check_ping")
@@ -934,7 +923,7 @@
         // For notification options, extract just the short code (e.g., "d" from "d - Down")
         let insertValue = value;
         const attrName = attrNameInput ? attrNameInput.value.trim() : '';
-        if (NOTIFICATION_OPTION_ATTRS.includes(attrName) && value.includes(' - ')) {
+        if (constants.NOTIFICATION_OPTION_ATTRS.includes(attrName) && value.includes(' - ')) {
             insertValue = value.split(' - ')[0];
         }
         // For 'use' attribute, strip the alias suffix (e.g., "template-name (alias)" -> "template-name")
