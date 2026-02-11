@@ -188,9 +188,6 @@
         document.getElementById('centerCardFile').textContent = filename;
         document.getElementById('centerCardFile').title = obj.source_file; // Full path on hover
 
-        // Show template scope warning if this is a template used by other objects
-        updateTemplateScopeWarning(obj, isTemplate);
-
         renderCenterAttributes();
 
         // Load unified Impact & Relationships section
@@ -1297,50 +1294,6 @@
         } catch (e) {
             // Ignore localStorage errors
         }
-    }
-
-    /**
-     * Update the template scope warning banner
-     * Shows a warning when editing a template that is used by other objects
-     */
-    function updateTemplateScopeWarning(obj, isTemplate) {
-        const warningEl = document.getElementById('templateScopeWarning');
-        const textEl = document.getElementById('templateScopeText');
-
-        if (!warningEl || !textEl) return;
-
-        if (!isTemplate) {
-            warningEl.classList.add('u-hidden');
-            return;
-        }
-
-        // Get the template name (from 'name' attribute for templates)
-        const templateName = obj.attributes.name;
-        if (!templateName) {
-            warningEl.classList.add('u-hidden');
-            return;
-        }
-
-        // Count objects that use this template
-        const inheritors = state.allObjects.filter(o => {
-            if (o.global_index === obj.global_index) return false; // Skip self
-            if (o.object_type !== obj.object_type) return false; // Must be same type
-            const useField = o.attributes.use;
-            if (!useField) return false;
-            // Check if this template is in the use field (can be comma-separated list)
-            const usedTemplates = useField.split(',').map(t => t.trim());
-            return usedTemplates.includes(templateName);
-        });
-
-        if (inheritors.length === 0) {
-            warningEl.classList.add('u-hidden');
-            return;
-        }
-
-        // Show warning
-        const objectWord = inheritors.length === 1 ? 'object' : 'objects';
-        textEl.textContent = `This template is used by ${inheritors.length} ${objectWord} — changes will cascade to all of them`;
-        warningEl.classList.remove('u-hidden');
     }
 
     // =========================================================================

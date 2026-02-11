@@ -141,7 +141,7 @@
         const chain = {
             name: obj.display_name || '(new object)',
             object_type: obj.object_type,
-            is_template: isObjectTemplate(obj),
+            is_template: Explorer.isObjectTemplate(obj),
             parents: []
         };
 

@@ -279,11 +279,13 @@
         const dropdown = document.getElementById('newObjectTypeDropdown');
         if (!dropdown) return;
 
-        const isOpen = dropdown.style.display !== 'none';
+        const isOpen = !dropdown.classList.contains('u-hidden') && dropdown.style.display !== 'none';
 
         if (isOpen) {
+            dropdown.classList.add('u-hidden');
             dropdown.style.display = 'none';
         } else {
+            dropdown.classList.remove('u-hidden');
             // Populate dropdown
             const objectTypes = window.newObjectTypes || [];
             const currentType = state.editedObject.object_type;
@@ -305,6 +307,7 @@
         const dropdown = document.getElementById('newObjectTypeDropdown');
         const btn = document.getElementById('newObjectTypeSelect');
         if (dropdown && btn && !dropdown.contains(event.target) && !btn.contains(event.target)) {
+            dropdown.classList.add('u-hidden');
             dropdown.style.display = 'none';
             document.removeEventListener('click', closeObjectTypeDropdownOnClickOutside);
         }
@@ -313,7 +316,7 @@
     function selectObjectType(newType) {
         // Close dropdown
         const dropdown = document.getElementById('newObjectTypeDropdown');
-        if (dropdown) dropdown.style.display = 'none';
+        if (dropdown) { dropdown.classList.add('u-hidden'); dropdown.style.display = 'none'; }
         document.removeEventListener('click', closeObjectTypeDropdownOnClickOutside);
 
         // Update the button text

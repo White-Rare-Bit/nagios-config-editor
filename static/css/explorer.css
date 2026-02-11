@@ -1344,28 +1344,6 @@
     flex-shrink: 0;
 }
 
-/* Template scope warning banner */
-.template-scope-warning {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    background: var(--nbe-dark-validation-warning-bg);
-    border-bottom: 1px solid var(--nbe-dark-border-primary);
-    color: var(--nbe-dark-accent-warning);
-    font-size: var(--nbe-typography-body-size);
-    font-family: var(--nbe-font-mono);
-}
-
-.template-scope-warning .template-scope-icon {
-    color: var(--nbe-dark-accent-warning);
-    font-size: var(--nbe-typography-h3-size);
-}
-
-.template-scope-warning .template-scope-text {
-    flex: 1;
-}
-
 .center-body {
     flex: 1;
     overflow-y: auto;
@@ -3725,8 +3703,9 @@
 
 .new-object-name-input {
     width: 100%;
-    font-size: var(--nbe-font-size-icon-sm);
+    font-size: var(--nbe-font-size-md);
     font-weight: 600;
+    color: var(--nbe-text-inverse);
     border: none;
     border-bottom: 2px solid var(--color-create);
     background: transparent;
