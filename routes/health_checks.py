@@ -197,7 +197,7 @@ def check_missing_parents(ctx):
         parents_ref = obj.attributes.get("parents", "")
         if parents_ref:
             for parent in parents_ref.split(","):
-                parent = parent.strip()
+                parent = strip_prefix(parent)
                 if parent and parent not in hosts:
                     missing_parents.setdefault(parent, []).append(
                         (obj_name, obj.source_file),
@@ -613,8 +613,8 @@ def _build_host_to_hostgroups(objects):
                 hgs = obj.attributes.get("hostgroups", "")
                 if hgs:
                     host_to_hg[hname] = {
-                        g.strip().lstrip("+").strip()
-                        for g in hgs.split(",") if g.strip()
+                        strip_prefix(g)
+                        for g in hgs.split(",") if strip_prefix(g)
                     }
     return host_to_hg
 
@@ -627,7 +627,7 @@ def _build_hostgroup_to_hosts(objects):
             gname = obj.get_name()
             if gname and "members" in obj.attributes:
                 hg_to_hosts[gname] = {
-                    h.strip() for h in obj.attributes["members"].split(",") if h.strip()
+                    strip_prefix(h) for h in obj.attributes["members"].split(",") if strip_prefix(h)
                 }
     return hg_to_hosts
 
@@ -856,11 +856,11 @@ def _expand_contacts(resolved_attrs, ctx):
     """Expand contacts and contact_groups to a set of contact names."""
     names = set()
     for c in resolved_attrs.get("contacts", "").split(","):
-        c = c.strip().lstrip("+!")
+        c = strip_prefix(c)
         if c:
             names.add(c)
     for cg_name in resolved_attrs.get("contact_groups", "").split(","):
-        cg_name = cg_name.strip().lstrip("+!")
+        cg_name = strip_prefix(cg_name)
         cg_obj = ctx["contactgroup_objects"].get(cg_name)
         if cg_obj and "members" in cg_obj.attributes:
             for m in cg_obj.attributes["members"].split(","):
@@ -1368,7 +1368,7 @@ def check_long_host_lists(ctx):
         host_ref = obj.attributes.get("host_name", "")
         if not host_ref:
             continue
-        host_list = [h.strip() for h in host_ref.split(",") if h.strip()]
+        host_list = [h.strip() for h in host_ref.split(",") if h.strip() and not h.strip().startswith("!")]
         host_count = len(host_list)
         if host_count >= _LONG_HOST_LIST_THRESHOLD:
             obj_name = obj.get_name() or obj.get_display_name()
@@ -1536,7 +1536,7 @@ def check_services_on_empty_hostgroups(ctx):
         # Also check hosts that point to hostgroups via hostgroups attr
         if obj.object_type == "host" and obj.attributes.get("register", "1") != "0":
             for hg in obj.attributes.get("hostgroups", "").split(","):
-                hg = hg.strip().lstrip("+!")
+                hg = strip_prefix(hg)
                 if hg:
                     populated_hostgroups.add(hg)
 
@@ -1562,7 +1562,7 @@ def check_services_on_empty_hostgroups(ctx):
         if not hg_ref:
             continue
         for hg in hg_ref.split(","):
-            hg = hg.strip().lstrip("+!")
+            hg = strip_prefix(hg)
             if hg in empty_hostgroups:
                 obj_name = obj.get_name() or obj.get_display_name()
                 issues.append({
@@ -1787,7 +1787,7 @@ def check_host_reachability(ctx):
         parents = obj.attributes.get("parents", "").strip()
         if not parents:
             continue
-        parent_list = [p.strip() for p in parents.split(",") if p.strip()]
+        parent_list = [strip_prefix(p) for p in parents.split(",") if strip_prefix(p)]
         if len(parent_list) == 1:
             sole_parent_count[parent_list[0]] = sole_parent_count.get(parent_list[0], 0) + 1
 
