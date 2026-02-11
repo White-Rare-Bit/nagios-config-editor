@@ -94,11 +94,20 @@ async function buildGlobalCommitDialogHtml(data, refData = null, isGitConfigured
 
     const fileChanges = buildGlobalFileBasedChanges(pendingEdits, stagedMoves, stagedCreations, stagedObjectDeletions, allObjects, configPath);
 
+    // Inject reference updates into file-based changes
+    if (refData && refData.hasNameChanges) {
+        injectReferenceChanges(fileChanges, refData, configPath);
+    }
+
     let newCount = 0, deletedCount = 0, movedCount = 0, modifyCount = 0;
     fileChanges.forEach(fc => {
         fc.additions.forEach(a => { if (a.isNew) newCount++; else movedCount++; });
         fc.removals.forEach(r => { if (r.isDeletion) deletedCount++; });
-        modifyCount += fc.modifications.length;
+        modifyCount += fc.modifications.filter(m => !m.isReferenceUpdate).length;
+    });
+    let refCount = 0;
+    fileChanges.forEach(fc => {
+        refCount += fc.modifications.filter(m => m.isReferenceUpdate).length;
     });
 
     // Check for external changes (git changes that exist alongside staged changes)
@@ -129,6 +138,7 @@ async function buildGlobalCommitDialogHtml(data, refData = null, isGitConfigured
                 ${deletedCount > 0 ? `<div class="commit-stat deletes"><span class="commit-stat-count">${deletedCount}</span> deleted</div>` : ''}
                 ${movedCount > 0 ? `<div class="commit-stat moves"><span class="commit-stat-count">${movedCount}</span> moved</div>` : ''}
                 ${modifyCount > 0 ? `<div class="commit-stat edits"><span class="commit-stat-count">~${modifyCount}</span> modified</div>` : ''}
+                ${refCount > 0 ? `<div class="commit-stat refs"><span class="commit-stat-count">${refCount}</span> ref update${refCount !== 1 ? 's' : ''}</div>` : ''}
             </div>
             <div class="commit-context-control" title="Number of surrounding lines to show in diffs (drag to adjust)">
                 <label>Context:</label>
@@ -141,7 +151,6 @@ async function buildGlobalCommitDialogHtml(data, refData = null, isGitConfigured
             ${buildFileAndFolderOperationsHtml(stagedFolderCreations, stagedFolderDeletions, stagedFolderMoves, stagedFileCreations, stagedFileDeletions, stagedFileMoves, configPath)}
             ${externalChangesHtml}
         </div>
-        ${refData && refData.hasNameChanges ? buildReferenceChangesSection(refData) : ''}
         <div class="commit-footer">
             <div class="commit-footer-left">
                 ${isGitConfigured ? `
@@ -178,60 +187,58 @@ async function buildGlobalCommitDialogHtml(data, refData = null, isGitConfigured
 }
 
 function toggleReferencePreview(checked) {
-    const refSection = document.getElementById('referenceChangesSection');
-    if (refSection) {
-        refSection.style.display = checked ? 'block' : 'none';
-    }
+    // Rebuild the file changes view to include/exclude reference updates
+    updateGlobalContextLines(
+        baseState.commitContextLines > 9 ? 10 : baseState.commitContextLines
+    );
 }
 
 function buildReferenceChangesSection(refData) {
-    if (!refData || !refData.nameChanges || refData.nameChanges.length === 0) {
-        return '';
-    }
+    // No longer used — reference changes are now shown inline in file diffs
+    return '';
+}
 
-    let itemsHtml = '';
+/**
+ * Injects reference updates into the file-based changes map as synthetic modifications.
+ * Each reference becomes a modification entry showing old_value -> new_value for the affected field.
+ */
+function injectReferenceChanges(fileChanges, refData, configPath) {
+    if (!refData || !refData.nameChanges) return;
+
     for (const change of refData.nameChanges) {
-        const refsHtml = change.references.map(ref =>
-            `<div class="ref-item">
-                <span class="ref-type">${escapeHtml(ref.objectType)}</span>
-                <span class="ref-name">${escapeHtml(ref.objectName)}</span>
-                <span class="ref-field">.${escapeHtml(ref.field)}</span>
-            </div>`
-        ).join('');
+        for (const ref of change.references) {
+            const filePath = ref.sourceFile;
+            if (!filePath) continue;
 
-        const moreCount = change.referenceCount - change.references.length;
+            const file = ensureFileChange(fileChanges, filePath, configPath);
 
-        itemsHtml += `
-            <div class="commit-item expanded">
-                <div class="commit-item-header">
-                    <span class="commit-item-expand">&#9658;</span>
-                    <span class="commit-item-type rename">rename</span>
-                    <span class="commit-item-name">${escapeHtml(change.objectType)}: ${escapeHtml(change.oldName)} → ${escapeHtml(change.newName)}</span>
-                    <span class="commit-item-file">${change.referenceCount} reference${change.referenceCount !== 1 ? 's' : ''} will be updated</span>
-                </div>
-                <div class="commit-item-diff ref-changes-diff">
-                    <div class="diff-content ref-changes-content">
-                        <div class="ref-changes-hint">Objects that reference <strong>${escapeHtml(change.oldName)}</strong> and will be updated:</div>
-                        <div class="ref-list">
-                            ${refsHtml}
-                            ${moreCount > 0 ? `<div class="ref-item ref-more">...and ${moreCount} more</div>` : ''}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+            // Build original and updated attributes showing just the changed field
+            const originalAttrs = {};
+            originalAttrs[ref.field] = ref.oldValue;
+
+            const finalAttrs = {};
+            finalAttrs[ref.field] = ref.newValue;
+
+            file.modifications.push({
+                globalIndex: -1,  // Synthetic — no real global_index
+                object: {
+                    object_type: ref.objectType,
+                    global_index: -1,
+                    source_file: filePath,
+                    line_number: 0,
+                },
+                originalAttrs,
+                finalAttrs,
+                lineNumber: 0,
+                isReferenceUpdate: true,
+                referenceMeta: {
+                    objectName: ref.objectName,
+                    renamedFrom: change.oldName,
+                    renamedTo: change.newName,
+                },
+            });
+        }
     }
-
-    return `
-        <div id="referenceChangesSection" class="commit-changes-list ref-changes-section">
-            <div class="commit-section">
-                <div class="commit-section-title ref-changes-title">
-                    Reference Updates <span class="badge ref-changes-badge">${refData.totalReferences}</span>
-                </div>
-                ${itemsHtml}
-            </div>
-        </div>
-    `;
 }
 
 async function buildGitOnlyCommitDialogHtml(gitChanges, configPath, isGitConfigured = true) {
@@ -963,8 +970,9 @@ function renderGlobalFileDiff(filePath, fileData, allObjects, configPath) {
         .sort((a, b) => a.line_number - b.line_number);
 
     const removalIndices = new Set(removals.map(r => r.object.global_index));
-    const modificationIndices = new Set(modifications.map(m => m.object.global_index));
-    const modificationMap = new Map(modifications.map(m => [m.object.global_index, m]));
+    const regularMods = modifications.filter(m => !m.isReferenceUpdate);
+    const modificationIndices = new Set(regularMods.map(m => m.object.global_index));
+    const modificationMap = new Map(regularMods.map(m => [m.object.global_index, m]));
 
     const existingIndices = new Set(existingObjects.map(o => o.global_index));
     for (const removal of removals) {
@@ -997,6 +1005,15 @@ function renderGlobalFileDiff(filePath, fileData, allObjects, configPath) {
         });
     });
 
+    // Add reference updates as separate items (they don't correspond to existing objects in this file)
+    modifications.filter(m => m.isReferenceUpdate).forEach(mod => {
+        unifiedItems.push({
+            type: 'referenceUpdate',
+            sortKey: Infinity,  // Show at end of file
+            modification: mod,
+        });
+    });
+
     // Sort with additions before existing objects at the same position
     // This ensures items with small insertPosition values (0, 0.25, 0.5)
     // appear before existing objects at line 1, 2, etc.
@@ -1012,7 +1029,7 @@ function renderGlobalFileDiff(filePath, fileData, allObjects, configPath) {
     const maxContext = baseState.commitContextLines;
     const interestingPositions = new Set();
     unifiedItems.forEach((item, pos) => {
-        const isInteresting = item.type === 'addition' ||
+        const isInteresting = item.type === 'addition' || item.type === 'referenceUpdate' ||
                              (item.type === 'existing' && (item.isRemoval || item.isModification));
         if (isInteresting) {
             for (let i = Math.max(0, pos - maxContext); i <= Math.min(unifiedItems.length - 1, pos + maxContext); i++) {
@@ -1075,6 +1092,8 @@ function renderGlobalFileDiff(filePath, fileData, allObjects, configPath) {
             if (mod) {
                 diffHtml += renderGlobalModifiedObject(mod.object, mod.originalAttrs, mod.finalAttrs);
             }
+        } else if (item.type === 'referenceUpdate') {
+            diffHtml += renderReferenceUpdateDiff(item.modification);
         } else {
             diffHtml += renderGlobalObject(item.object.object_type, item.object.attributes, ' ');
         }
@@ -1134,6 +1153,26 @@ function renderGlobalModifiedObject(obj, originalAttrs, finalAttrs) {
     return html;
 }
 
+function renderReferenceUpdateDiff(mod) {
+    const meta = mod.referenceMeta;
+    const objType = mod.object.object_type;
+    let html = `<div class="diff-line modify">  define ${escapeHtml(objType)} {</div>`;
+    html += `<div class="diff-line context">      # ${escapeHtml(meta.objectName)} — ref update (${escapeHtml(meta.renamedFrom)} → ${escapeHtml(meta.renamedTo)})</div>`;
+
+    const allKeys = [...new Set([...Object.keys(mod.originalAttrs), ...Object.keys(mod.finalAttrs)])].sort();
+    allKeys.forEach(key => {
+        const origVal = mod.originalAttrs[key];
+        const newVal = mod.finalAttrs[key];
+        if (origVal !== newVal) {
+            html += `<div class="diff-line remove">-     ${escapeHtml(key.padEnd(30))} ${escapeHtml(origVal || '')}</div>`;
+            html += `<div class="diff-line add">+     ${escapeHtml(key.padEnd(30))} ${escapeHtml(newVal || '')}</div>`;
+        }
+    });
+
+    html += `<div class="diff-line modify">  }</div>`;
+    return html;
+}
+
 function updateGlobalContextLines(value) {
     const intValue = parseInt(value);
     baseState.commitContextLines = intValue === 10 ? 9999 : intValue;
@@ -1166,6 +1205,12 @@ function updateGlobalContextLines(value) {
         });
 
         const fileChanges = buildGlobalFileBasedChanges(pendingEdits, stagedMoves, stagedCreations, stagedObjectDeletions, allObjects, configPath);
+        if (baseState.referenceData && baseState.referenceData.hasNameChanges) {
+            const updateRefsCheckbox = document.getElementById('globalUpdateReferences');
+            if (updateRefsCheckbox && updateRefsCheckbox.checked) {
+                injectReferenceChanges(fileChanges, baseState.referenceData, configPath);
+            }
+        }
         const changesList = document.getElementById('globalCommitChangesList');
         if (changesList) {
             let html = buildGlobalCommitChangesListHtml(fileChanges, configPath, existingFolders, allObjects, hasFileOps);

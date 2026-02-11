@@ -1692,6 +1692,8 @@ def api_staging_analyze_references():
 
     Returns information about objects whose names are being changed,
     and how many references to those objects exist in the configuration.
+    Uses the same broad scan as update_references() to ensure the count
+    matches what will actually be updated at apply time.
     """
     sm = get_staging_manager()
     staging = sm.get_staging()
@@ -1700,7 +1702,7 @@ def api_staging_analyze_references():
         return jsonify({"nameChanges": [], "totalReferences": 0})
 
     service = get_service()
-    p = service.parser
+    objects = service.get_objects()
     pending_edits = staging.get("pendingEdits", {})
     name_changes = []
     total_references = 0
@@ -1728,8 +1730,26 @@ def api_staging_analyze_references():
         new_name = edited.get(name_field)
 
         if old_name and new_name and old_name != new_name:
-            # Count references
-            refs = p.find_references(obj.object_type, old_name)
+            # Scan all attributes of all objects (same logic as update_references)
+            # Skip the renamed object itself — its name change is the primary edit,
+            # not a reference.
+            refs = []
+            for ref_obj in objects:
+                if ref_obj is obj:
+                    continue
+                for field_name, value in ref_obj.attributes.items():
+                    values = [v.strip() for v in value.split(",")]
+                    if old_name in values:
+                        new_values = [new_name if v == old_name else v for v in values]
+                        refs.append({
+                            "objectType": ref_obj.object_type,
+                            "objectName": ref_obj.get_display_name(),
+                            "field": field_name,
+                            "sourceFile": ref_obj.source_file,
+                            "oldValue": value,
+                            "newValue": ",".join(new_values),
+                        })
+
             ref_count = len(refs)
             total_references += ref_count
 
@@ -1739,14 +1759,7 @@ def api_staging_analyze_references():
                 "oldName": old_name,
                 "newName": new_name,
                 "referenceCount": ref_count,
-                "references": [
-                    {
-                        "objectType": ref_obj.object_type,
-                        "objectName": ref_obj.get_display_name(),
-                        "field": ref_field,
-                    }
-                    for ref_obj, ref_field in refs[:10]  # Limit to 10 for display
-                ],
+                "references": refs,
             })
 
     return jsonify({

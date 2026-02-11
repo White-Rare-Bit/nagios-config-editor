@@ -428,3 +428,147 @@ class TestBulkOpsUseStagingSystem:
         assert resp.status_code == 200  # noqa: PLR2004
         staging = resp.json.get("staging", {})
         assert len(staging.get("stagedMoves", {})) > 0
+
+
+class TestAnalyzeReferences:
+    """Tests for the analyze-references endpoint."""
+
+    def test_analyze_references_finds_all_direct_refs(self, client, app):
+        """analyze-references should find refs in all attribute fields, not just REFERENCE_FIELDS."""
+        with app.app_context():
+            config_path = Path(get_config_path())
+            (config_path / "hosts.cfg").write_text("""
+define host {
+    host_name       web-server-01
+    alias           Web Server
+    address         10.0.0.1
+}
+
+define host {
+    host_name       db-server-01
+    alias           DB Server
+    address         10.0.0.2
+}
+""")
+            (config_path / "services.cfg").write_text("""
+define service {
+    host_name               web-server-01
+    service_description     HTTP
+    check_command           check_http
+}
+
+define service {
+    host_name               web-server-01,db-server-01
+    service_description     PING
+    check_command           check_ping
+}
+""")
+            (config_path / "dependencies.cfg").write_text("""
+define hostdependency {
+    host_name               db-server-01
+    dependent_host_name     web-server-01
+}
+""")
+            service = app.extensions["service"]
+            service.reload()
+
+        session_id = "test-session"
+        headers = {"X-Session-Id": session_id}
+
+        resp = client.get("/api/objects")
+        objects = resp.json
+        host_obj = next(o for o in objects
+                        if o["attributes"].get("host_name") == "web-server-01")
+
+        edit_data = {
+            "sessionId": session_id,
+            "pendingEdits": {
+                str(host_obj["global_index"]): {
+                    "object": host_obj,
+                    "original": host_obj["attributes"],
+                    "edited": {**host_obj["attributes"], "host_name": "web-server-renamed"},
+                },
+            },
+        }
+        resp = client.post("/api/staging",
+                           data=json.dumps(edit_data),
+                           content_type="application/json",
+                           headers=headers)
+        assert resp.status_code == 200
+
+        resp = client.get("/api/staging/analyze-references", headers=headers)
+        assert resp.status_code == 200
+        data = resp.json
+
+        assert data["hasNameChanges"] is True
+        assert len(data["nameChanges"]) == 1
+
+        change = data["nameChanges"][0]
+        assert change["oldName"] == "web-server-01"
+        assert change["newName"] == "web-server-renamed"
+
+        # Should find 3 references:
+        # 1. SERVICE HTTP (host_name = web-server-01)
+        # 2. SERVICE PING (host_name = web-server-01,db-server-01)
+        # 3. HOSTDEPENDENCY (dependent_host_name = web-server-01)
+        assert change["referenceCount"] == 3
+        assert data["totalReferences"] == 3
+
+    def test_analyze_references_returns_diff_data(self, client, app):
+        """analyze-references should return old/new values and source_file for each ref."""
+        with app.app_context():
+            config_path = Path(get_config_path())
+            (config_path / "hosts.cfg").write_text("""
+define host {
+    host_name       myhost
+    alias           My Host
+    address         10.0.0.1
+}
+""")
+            (config_path / "services.cfg").write_text("""
+define service {
+    host_name               myhost
+    service_description     HTTP
+    check_command           check_http
+}
+""")
+            service = app.extensions["service"]
+            service.reload()
+
+        session_id = "test-session"
+        headers = {"X-Session-Id": session_id}
+
+        resp = client.get("/api/objects")
+        objects = resp.json
+        host_obj = next(o for o in objects
+                        if o["attributes"].get("host_name") == "myhost")
+
+        edit_data = {
+            "sessionId": session_id,
+            "pendingEdits": {
+                str(host_obj["global_index"]): {
+                    "object": host_obj,
+                    "original": host_obj["attributes"],
+                    "edited": {**host_obj["attributes"], "host_name": "myhost-renamed"},
+                },
+            },
+        }
+        client.post("/api/staging",
+                     data=json.dumps(edit_data),
+                     content_type="application/json",
+                     headers=headers)
+
+        resp = client.get("/api/staging/analyze-references", headers=headers)
+        data = resp.json
+        change = data["nameChanges"][0]
+
+        ref = change["references"][0]
+        assert "sourceFile" in ref
+        assert "field" in ref
+        assert "oldValue" in ref
+        assert "newValue" in ref
+        assert "objectType" in ref
+        assert "objectName" in ref
+
+        assert "myhost" in ref["oldValue"]
+        assert "myhost-renamed" in ref["newValue"]

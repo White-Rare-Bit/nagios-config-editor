@@ -508,6 +508,7 @@
     .commit-stat.edits .commit-stat-count { color: var(--nbe-primary); }
     .commit-stat.moves .commit-stat-count { color: var(--nbe-warning); }
     .commit-stat.deletes .commit-stat-count { color: var(--nbe-danger); }
+    .commit-stat.refs .commit-stat-count { color: var(--nbe-info); }
     .commit-context-control {
         display: flex;
         align-items: center;
@@ -2219,45 +2220,6 @@
     .btn-disabled {
         opacity: 0.5;
         cursor: not-allowed;
-    }
-    /* Reference changes section */
-    .ref-changes-section {
-        margin-top: var(--nbe-space-sm);
-        border-top: 2px solid var(--nbe-info);
-    }
-    .ref-changes-title {
-        background: var(--nbe-dark-bg-tertiary);
-        color: var(--nbe-info);
-    }
-    .ref-changes-badge {
-        background: var(--nbe-info);
-        color: var(--nbe-text-inverse);
-    }
-    .ref-changes-diff {
-        background: var(--nbe-dark-bg-secondary);
-        color: var(--nbe-dark-text-primary);
-    }
-    .ref-changes-content {
-        padding: var(--nbe-space-md);
-    }
-    .ref-changes-hint {
-        font-size: var(--nbe-font-size-xs);
-        color: var(--nbe-dark-text-secondary);
-        margin-bottom: var(--nbe-space-sm);
-    }
-    /* Dark mode ref-items inside commit dialog */
-    .ref-changes-diff .ref-item {
-        background: var(--nbe-dark-bg-tertiary);
-        border: none;
-        border-bottom: 1px solid var(--nbe-dark-border-primary);
-        border-radius: 0;
-        color: var(--nbe-dark-text-primary);
-    }
-    .ref-changes-diff .ref-item:nth-child(even) {
-        background: var(--nbe-dark-bg-secondary);
-    }
-    .ref-changes-diff .ref-item:last-child {
-        border-bottom: none;
     }
     /* Terminal output styling */
     .terminal-command {
