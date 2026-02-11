@@ -48,11 +48,13 @@ _RELATIONSHIP_FIELDS = {
     "servicegroup_name": "servicegroup",
     "servicegroups": "servicegroup",
     "servicegroup_members": "servicegroup",
+    "dependent_servicegroup_name": "servicegroup",
     "contact_name": "contact",
     "contacts": "contact",
     "contact_groups": "contactgroup",
     "contactgroup_name": "contactgroup",
     "contactgroup_members": "contactgroup",
+    "contactgroups": "contactgroup",
     "escalation_contacts": "contact",
     "escalation_contact_groups": "contactgroup",
     "use": "template",
@@ -176,6 +178,16 @@ def _compute_target_node_id(field, target_type, target, obj, resolved_attrs):
         t_type = obj.object_type.replace("group", "")
     else:
         t_type = target_type
+
+    # parents: hosts reference hosts, services reference services
+    if field == "parents" and obj.object_type == "service":
+        t_type = "service"
+        svc_context = resolved_attrs.get("host_name", "")
+        svc_context = ",".join([t.strip().lstrip("+").strip() for t in svc_context.split(",")
+                                if not t.strip().startswith("!")])
+        if svc_context:
+            return f"service:{svc_context}:{target}", t_type
+        return f"service:{target}", t_type
 
     if t_type == "service" and field in ("service_description", "dependent_service_description"):
         if field == "dependent_service_description":
@@ -1092,7 +1104,8 @@ def _build_parent_tree(host_obj, objects, obj_to_index, visited=None):
         return {"name": h_name, "global_index": h_idx, "circular": True}
     visited.add(h_idx)
     p_attr = host_obj.attributes.get("parents", "")
-    parent_names = [p.strip() for p in p_attr.split(",") if p.strip()]
+    parent_names = [p.strip().lstrip("+").strip() for p in p_attr.split(",")
+                    if p.strip() and not p.strip().startswith("!")]
     parent_nodes = []
     for pn in parent_names:
         parent_obj = _find_host_by_name(pn, objects)

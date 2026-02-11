@@ -35,7 +35,8 @@
             'service_description',        // Service dependency master service
             'master_host_name',           // Host dependency master host
             'master_hostgroup_name',      // Host dependency master via group
-            'master_service_description'  // Service dependency master service
+            'master_service_description', // Service dependency master service
+            'dependent_servicegroup_name' // Service dependency dependent via servicegroup
         ],
         // Templates: inheritance chain
         templates: [
@@ -76,6 +77,7 @@
             'contact_name',               // Contact reference
             'contactgroup_name',          // Contact group reference
             'contactgroup_members',       // Contact group -> Members
+            'contactgroups',              // Contact -> Contact group membership
             'escalation_contacts',        // Escalation -> Contact
             'escalation_contact_groups'   // Escalation -> Contact group
         ],
@@ -316,8 +318,8 @@
                 stopAt: []
             },
             network: {
-                // Host binding and service dependencies
-                forward: ['host_name', 'hostgroup_name'],
+                // Host binding, service parents, and service dependencies
+                forward: ['host_name', 'hostgroup_name', 'parents'],
                 backward: ['dependent_service_description', 'service_description'],
                 stopAt: []
             },
@@ -411,7 +413,7 @@
             },
             notifiedBy: {
                 // Objects that notify this contact
-                forward: [],
+                forward: ['contactgroups'],
                 backward: ['contacts', 'members'],
                 atType: {
                     contactgroup: { backward: ['contact_groups'] }
@@ -482,7 +484,9 @@
             },
             network: {
                 // Dependency topology: dependent and master services
-                forward: ['dependent_service_description', 'dependent_host_name', 'dependent_hostgroup_name', 'service_description', 'host_name', 'hostgroup_name', 'master_service_description', 'master_host_name', 'master_hostgroup_name'],
+                forward: ['dependent_service_description', 'dependent_host_name', 'dependent_hostgroup_name',
+                          'dependent_servicegroup_name', 'service_description', 'host_name', 'hostgroup_name',
+                          'servicegroup_name', 'master_service_description', 'master_host_name', 'master_hostgroup_name'],
                 backward: [],
                 stopAt: []
             },
