@@ -12,9 +12,14 @@
     <!-- Left Sidebar: Object type tree -->
     <div class="page-sidebar">
         <div class="panel-header"><span class="panel-header-title">Object Reference</span></div>
-        <div class="docs-sidebar-search search-row">
-            <span class="search-icon" aria-hidden="true"><i class="fa-solid fa-magnifying-glass"></i></span>
-            <input type="text" class="tree-search" id="docsTreeSearch" placeholder="Search types & directives..." oninput="DocsPage.handleTreeSearch(this.value)" aria-label="Search object types" role="searchbox">
+        <div class="sidebar-section docs-section">
+            <div class="sidebar-section-title">Search</div>
+            <div class="sidebar-section-content">
+                <div class="docs-search-row">
+                    <span class="docs-search-icon" aria-hidden="true"><i class="fa-solid fa-magnifying-glass"></i></span>
+                    <input type="text" class="docs-search" id="docsTreeSearch" placeholder="Search types & directives..." oninput="DocsPage.handleTreeSearch(this.value)" aria-label="Search object types" role="searchbox">
+                </div>
+            </div>
         </div>
         <div class="docs-tree-container" id="docsTree"></div>
     </div>

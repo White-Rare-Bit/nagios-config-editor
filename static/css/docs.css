@@ -21,17 +21,64 @@
 }
 
 /* =============================================================================
-   Sidebar Search — matches explorer .search-row + .tree-search
+   Sidebar Search — matches audit log .audit-search-row pattern
    ============================================================================= */
 
-.docs-sidebar-search {
-    padding: 4px 12px;
+.docs-section {
+    border: none;
+    border-radius: 0;
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
-    margin-left: calc(-1 * var(--nbe-space-md));
+    margin-bottom: 0;
+    background: transparent !important;
 }
 
-.docs-sidebar-search .search-icon {
-    left: 22px;
+.docs-container .page-sidebar .sidebar-section-title {
+    padding: var(--nbe-space-sm) 12px;
+    border-bottom: none;
+    font-size: var(--nbe-font-size-xs-plus);
+    color: var(--nbe-dark-text-secondary) !important;
+}
+
+.docs-container .page-sidebar .sidebar-section-content {
+    padding: 0 var(--nbe-space-lg) var(--nbe-space-lg);
+}
+
+.docs-search-row {
+    position: relative;
+}
+
+.docs-search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--nbe-dark-text-muted);
+    font-size: var(--nbe-typography-h3-size);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.docs-search {
+    width: 100%;
+    padding: 8px 12px;
+    padding-left: 32px;
+    border: 1px solid var(--nbe-dark-border-primary);
+    border-radius: var(--nbe-radius-md);
+    font-size: var(--nbe-font-size-sm);
+    background: var(--nbe-dark-bg-tertiary);
+    color: var(--nbe-dark-text-primary);
+    box-sizing: border-box;
+}
+
+.docs-search::placeholder {
+    color: var(--nbe-dark-text-muted);
+}
+
+.docs-search:focus {
+    outline: none;
+    border-color: var(--nbe-dark-accent-primary);
+    background: var(--nbe-dark-bg-secondary);
+    box-shadow: none;
 }
 
 .docs-tree-container {
@@ -56,6 +103,10 @@
    Main Content — Dark Theme
    ============================================================================= */
 
+.docs-container .page-sidebar {
+    overflow: hidden;
+}
+
 .docs-container .page-main,
 .docs-main {
     flex: 1;
@@ -65,8 +116,17 @@
     background: var(--nbe-dark-bg-primary) !important;
 }
 
+#docsContent {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+}
+
 /* Type header */
 .docs-type-header {
+    flex-shrink: 0;
     padding: var(--nbe-space-lg) var(--nbe-space-xl);
     background: var(--nbe-dark-bg-secondary);
     border-bottom: 1px solid var(--nbe-dark-border-primary);
@@ -125,6 +185,7 @@
 
 /* Search bar */
 .docs-search-bar {
+    flex-shrink: 0;
     padding: var(--nbe-space-sm) var(--nbe-space-xl);
     background: var(--nbe-dark-bg-secondary);
     border-bottom: 1px solid var(--nbe-dark-border-primary);
@@ -220,6 +281,7 @@
     font-family: var(--nbe-font-mono);
     font-size: var(--nbe-typography-code-size);
     color: var(--nbe-dark-text-secondary);
+    background: none;
 }
 
 .docs-cell-desc {
@@ -382,6 +444,7 @@
     font-family: var(--nbe-font-mono);
     font-size: var(--nbe-typography-code-size);
     color: var(--nbe-dark-text-primary);
+    background: none;
     line-height: 1.6;
     white-space: pre;
 }
