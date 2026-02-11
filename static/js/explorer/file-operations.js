@@ -946,8 +946,6 @@
             for (const objData of data.objects) {
                 if (!objData || !objData.source_file) continue;
 
-                if (objData.source_file === targetFile) continue;
-
                 // Use same fallback logic as getObjectKey for null-safe key generation
                 const nameComponent = objData.name ?? objData.display_name ?? `idx:${objData.global_index}`;
                 const objKey = `${objData.source_file}|${objData.object_type}|${nameComponent}`;
