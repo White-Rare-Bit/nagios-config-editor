@@ -405,18 +405,18 @@
     --nbe-dark-border-secondary: #333;   /* Secondary borders (subtle dividers) */
     --nbe-dark-border-hover: #505050;    /* Border hover state */
 
-    /* Accent colors - Teal accent for focus/active states */
-    --nbe-dark-accent-primary: #4ec9b0;  /* Primary accent (teal) */
-    --nbe-dark-accent-secondary: #569cd6; /* Secondary accent (blue) */
-    --nbe-dark-accent-warning: #ffc107;  /* Warning accent (yellow) */
-    --nbe-dark-accent-danger: #f14c4c;   /* Danger accent (red) */
-    --nbe-dark-warning-bg: rgba(255, 193, 7, 0.15); /* Warning background for staged items */
+    /* Accent colors - Material Design accents */
+    --nbe-dark-accent-primary: #80CBC4;
+    --nbe-dark-accent-secondary: #90CAF9;
+    --nbe-dark-accent-warning: #FFE082;
+    --nbe-dark-accent-danger: #EF9A9A;
+    --nbe-dark-warning-bg: rgba(255, 224, 130, 0.15);
 
     /* Input/form controls */
     --nbe-dark-input-bg: #2d2d2d;        /* Input background */
     --nbe-dark-input-border: #404040;    /* Input border */
     --nbe-dark-input-border-hover: #505050; /* Input border hover */
-    --nbe-dark-input-focus: #4ec9b0;     /* Input focus border */
+    --nbe-dark-input-focus: #80CBC4;     /* Input focus border */
     --nbe-dark-input-focus-bg: #333;     /* Input focus background */
 
     /* Button tokens for dark theme */
@@ -424,8 +424,8 @@
     --nbe-dark-btn-bg-hover: #383838;    /* Default button hover */
     --nbe-dark-btn-text: #d4d4d4;        /* Default button text */
     --nbe-dark-btn-border: #404040;      /* Default button border */
-    --nbe-dark-btn-primary-bg: #4ec9b0;  /* Primary button background */
-    --nbe-dark-btn-primary-hover: #3fb896; /* Primary button hover */
+    --nbe-dark-btn-primary-bg: #80CBC4;
+    --nbe-dark-btn-primary-hover: #4DB6AC;
     --nbe-dark-btn-danger-bg: rgba(220, 53, 69, 0.8); /* Danger button background */
     --nbe-dark-btn-danger-hover: rgba(220, 53, 69, 1); /* Danger button hover */
 
@@ -436,14 +436,14 @@
     --nbe-dark-tab-text: rgba(255, 255, 255, 0.6); /* Inactive tab text */
     --nbe-dark-tab-text-hover: rgba(255, 255, 255, 0.8); /* Tab hover text */
     --nbe-dark-tab-text-active: #fff;    /* Active tab text */
-    --nbe-dark-tab-border-active: #4ec9b0; /* Active tab border */
+    --nbe-dark-tab-border-active: #80CBC4; /* Active tab border */
 
     /* Alpha overlays for dark theme */
-    --nbe-dark-accent-alpha-10: rgba(78, 201, 176, 0.1);
-    --nbe-dark-accent-alpha-15: rgba(78, 201, 176, 0.15);
-    --nbe-dark-accent-alpha-20: rgba(78, 201, 176, 0.2);
-    --nbe-dark-accent-alpha-30: rgba(78, 201, 176, 0.3);
-    --nbe-dark-accent-alpha-60: rgba(78, 201, 176, 0.6);
+    --nbe-dark-accent-alpha-10: rgba(128, 203, 196, 0.1);
+    --nbe-dark-accent-alpha-15: rgba(128, 203, 196, 0.15);
+    --nbe-dark-accent-alpha-20: rgba(128, 203, 196, 0.2);
+    --nbe-dark-accent-alpha-30: rgba(128, 203, 196, 0.3);
+    --nbe-dark-accent-alpha-60: rgba(128, 203, 196, 0.6);
 
     /* Validation state backgrounds */
     --nbe-dark-validation-success-bg: rgba(40, 167, 69, 0.1);  /* Green background for success/new */
@@ -538,8 +538,8 @@
     --nbe-dark-suggestion-ungrouped-text: #e57373;
 
     /* ---- Additional Dark Theme Accent Hover ---- */
-    --nbe-dark-accent-primary-hover: #5ed4ba;  /* Lighter teal for hover states */
-    --nbe-dark-accent-danger-hover: #ff6b6b;   /* Lighter red for danger hover states */
+    --nbe-dark-accent-primary-hover: #B2DFDB;
+    --nbe-dark-accent-danger-hover: #E57373;
 
     /* ---- Git Diff Colors ---- */
     --nbe-dark-diff-added-bg: rgba(76, 175, 80, 0.15);   /* Green background for added lines */
