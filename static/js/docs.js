@@ -703,6 +703,7 @@
         }
 
         document.addEventListener('keydown', handleKeydown);
+        window.addEventListener('hashchange', loadFromHash);
     });
 
 })();
