@@ -343,44 +343,44 @@
 
     /* ---- Object Type Badges (semantic color categories) ---- */
     /* Infrastructure (green) - hosts, hostgroups */
-    --nbe-type-infra-bg: #dcfce7;
-    --nbe-type-infra-text: #166534;
-    --nbe-type-infra-bg-alt: #d1fae5;
-    --nbe-type-infra-text-alt: #065f46;
+    --nbe-type-infra-bg: #E8F5E9;
+    --nbe-type-infra-text: #1B5E20;
+    --nbe-type-infra-bg-alt: #C8E6C9;
+    --nbe-type-infra-text-alt: #1B5E20;
 
     /* Monitoring (blue) - services, servicegroups */
-    --nbe-type-monitor-bg: #dbeafe;
-    --nbe-type-monitor-text: #1e40af;
-    --nbe-type-monitor-bg-alt: #bfdbfe;
-    --nbe-type-monitor-text-alt: #1e3a8a;
+    --nbe-type-monitor-bg: #E3F2FD;
+    --nbe-type-monitor-text: #0D47A1;
+    --nbe-type-monitor-bg-alt: #BBDEFB;
+    --nbe-type-monitor-text-alt: #0D47A1;
 
-    /* People (orange) - contacts, contactgroups - WCAG AA compliant */
-    --nbe-type-people-bg: #fed7aa;
-    --nbe-type-people-text: #7c2d12;  /* WCAG AA: 5.4:1 on people-bg (was #9a3412 at 3.8:1) */
-    --nbe-type-people-bg-alt: #fdba74;
-    --nbe-type-people-text-alt: #6b2710;  /* Darkened for contrast on alt-bg */
+    /* People (orange) - contacts, contactgroups */
+    --nbe-type-people-bg: #FFF3E0;
+    --nbe-type-people-text: #BF360C;
+    --nbe-type-people-bg-alt: #FFE0B2;
+    --nbe-type-people-text-alt: #BF360C;
 
     /* System (purple) - commands */
-    --nbe-type-system-bg: #e9d5ff;
-    --nbe-type-system-text: #6b21a8;
+    --nbe-type-system-bg: #F3E5F5;
+    --nbe-type-system-text: #4A148C;
 
     /* Neutral (gray) - timeperiods */
-    --nbe-type-neutral-bg: #e5e7eb;
-    --nbe-type-neutral-text: #374151;
+    --nbe-type-neutral-bg: #ECEFF1;
+    --nbe-type-neutral-text: #37474F;
 
     /* Dependencies (cyan) - dependencies, escalations */
-    --nbe-type-deps-bg: #a5f3fc;
-    --nbe-type-deps-text: #155e75;
-    --nbe-type-deps-bg-alt: #bbf7d0;
-    --nbe-type-deps-text-alt: #166534;
+    --nbe-type-deps-bg: #E0F7FA;
+    --nbe-type-deps-text: #006064;
+    --nbe-type-deps-bg-alt: #B2EBF2;
+    --nbe-type-deps-text-alt: #006064;
 
-    /* Validation/Status chips - WCAG AA compliant */
-    --nbe-chip-error-bg: #fee2e2;
-    --nbe-chip-error-text: #991b1b;   /* WCAG AA: 5.4:1 on error-bg (was #dc2626 at 4.0:1) */
-    --nbe-chip-warning-bg: #fef3c7;
-    --nbe-chip-warning-text: #7c2d12; /* WCAG AA: 5.2:1 on warning-bg (was #92400e at 4.3:1) */
-    --nbe-chip-valid-bg: #dcfce7;
-    --nbe-chip-valid-text: #166534;   /* WCAG AA: 5.1:1 on valid-bg - passes */
+    /* Validation/Status chips */
+    --nbe-chip-error-bg: #FFEBEE;
+    --nbe-chip-error-text: #B71C1C;
+    --nbe-chip-warning-bg: #FFF8E1;
+    --nbe-chip-warning-text: #E65100;
+    --nbe-chip-valid-bg: #E8F5E9;
+    --nbe-chip-valid-text: #1B5E20;
 
     /* ---- Dark Theme Tokens (Explorer UI) ---- */
     /* Single source of truth for dark theme - enables theme toggle capability.
