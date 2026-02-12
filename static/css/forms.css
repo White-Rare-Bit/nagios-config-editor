@@ -65,17 +65,12 @@
 }
 
 .form-input:focus,
-.form-select:focus {
-    border-color: var(--nbe-border-focus);
-    box-shadow: var(--nbe-focus-ring);
-    outline: none;
-}
-
-/* Focus-visible for keyboard navigation (modern browsers) */
+.form-select:focus,
 .form-input:focus-visible,
 .form-select:focus-visible {
     border-color: var(--nbe-border-focus);
     box-shadow: var(--nbe-focus-ring);
+    outline: none;
 }
 
 .form-input::placeholder {
