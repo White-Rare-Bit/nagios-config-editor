@@ -130,19 +130,19 @@
     align-items: center;
     gap: 6px;
     padding: 6px 10px;
-    background: var(--nbe-dark-bg-tertiary) !important;
+    background: var(--nbe-dark-bg-tertiary);
     border: 1px solid var(--nbe-dark-border-primary);
     border-radius: var(--nbe-radius-md);
     font-size: var(--nbe-font-size-sm);
-    color: var(--nbe-dark-text-secondary) !important;
+    color: var(--nbe-dark-text-secondary);
     cursor: pointer;
     transition: all var(--nbe-transition-normal);
 }
 
 .audit-container .filter-chip:hover,
 .filter-chip:hover {
-    background: var(--nbe-dark-bg-hover) !important;
-    color: var(--nbe-dark-text-primary) !important;
+    background: var(--nbe-dark-bg-hover);
+    color: var(--nbe-dark-text-primary);
     border-color: var(--nbe-dark-border-hover);
 }
 
@@ -187,17 +187,17 @@
 /* Active state for the whole chip */
 .audit-container .filter-chip.active,
 .filter-chip.active {
-    background: var(--nbe-dark-accent-alpha-15) !important;
+    background: var(--nbe-dark-accent-alpha-15);
     border-color: var(--nbe-dark-accent-primary);
-    color: var(--nbe-dark-accent-primary) !important;
+    color: var(--nbe-dark-accent-primary);
 }
 
 /* Color-coded filter chips when active */
 .audit-container .filter-chip.active[data-type="creates"],
 .filter-chip.active[data-type="creates"] {
-    background: var(--nbe-dark-validation-success-bg) !important;
+    background: var(--nbe-dark-validation-success-bg);
     border-color: var(--nbe-success);
-    color: var(--nbe-success) !important;
+    color: var(--nbe-success);
 }
 
 .audit-container .filter-chip.active[data-type="creates"] input[type="checkbox"],
@@ -208,9 +208,9 @@
 
 .audit-container .filter-chip.active[data-type="attrs"],
 .filter-chip.active[data-type="attrs"] {
-    background: var(--nbe-dark-validation-info-bg) !important;
+    background: var(--nbe-dark-validation-info-bg);
     border-color: var(--nbe-dark-accent-secondary);
-    color: var(--nbe-dark-accent-secondary) !important;
+    color: var(--nbe-dark-accent-secondary);
 }
 
 .audit-container .filter-chip.active[data-type="attrs"] input[type="checkbox"],
@@ -221,9 +221,9 @@
 
 .audit-container .filter-chip.active[data-type="moves"],
 .filter-chip.active[data-type="moves"] {
-    background: var(--nbe-dark-validation-warning-bg) !important;
+    background: var(--nbe-dark-validation-warning-bg);
     border-color: var(--nbe-warning);
-    color: var(--nbe-warning) !important;
+    color: var(--nbe-warning);
 }
 
 .audit-container .filter-chip.active[data-type="moves"] input[type="checkbox"],
@@ -234,9 +234,9 @@
 
 .audit-container .filter-chip.active[data-type="deletes"],
 .filter-chip.active[data-type="deletes"] {
-    background: var(--nbe-dark-validation-error-bg) !important;
+    background: var(--nbe-dark-validation-error-bg);
     border-color: var(--nbe-danger);
-    color: var(--nbe-danger) !important;
+    color: var(--nbe-danger);
 }
 
 .audit-container .filter-chip.active[data-type="deletes"] input[type="checkbox"],
@@ -247,9 +247,9 @@
 
 .audit-container .filter-chip.active[data-type="git"],
 .filter-chip.active[data-type="git"] {
-    background: var(--nbe-dark-validation-info-bg) !important;
+    background: var(--nbe-dark-validation-info-bg);
     border-color: var(--nbe-dark-accent-secondary);
-    color: var(--nbe-dark-accent-secondary) !important;
+    color: var(--nbe-dark-accent-secondary);
 }
 
 .audit-container .filter-chip.active[data-type="git"] input[type="checkbox"],
@@ -260,9 +260,9 @@
 
 .audit-container .filter-chip.active[data-type="backups"],
 .filter-chip.active[data-type="backups"] {
-    background: var(--nbe-dark-bg-hover) !important;
+    background: var(--nbe-dark-bg-hover);
     border-color: var(--nbe-dark-text-muted);
-    color: var(--nbe-dark-text-primary) !important;
+    color: var(--nbe-dark-text-primary);
 }
 
 .audit-container .filter-chip.active[data-type="backups"] input[type="checkbox"],
