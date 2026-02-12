@@ -18,7 +18,7 @@ body {
 
 .card-header {
     background-color: var(--nbe-bg-surface);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+    border-bottom: 1px solid var(--nbe-border-light);
 }
 
 .card-header h5,
@@ -39,16 +39,16 @@ body {
 pre {
     background-color: var(--nbe-bg-page);
     border: 1px solid var(--nbe-border);
-    border-radius: 0.25rem;
-    padding: 1rem;
+    border-radius: var(--nbe-radius-sm);
+    padding: var(--nbe-space-lg);
     font-size: var(--nbe-font-size-md);
     overflow-x: auto;
 }
 
 code {
     background-color: var(--nbe-bg-subtle);
-    padding: 0.125rem 0.25rem;
-    border-radius: 0.25rem;
+    padding: 2px var(--nbe-space-xs);
+    border-radius: var(--nbe-radius-sm);
     font-size: var(--nbe-font-size-md);
 }
 
@@ -90,7 +90,7 @@ mark {
 
 .table-sm td,
 .table-sm th {
-    padding: 0.5rem;
+    padding: var(--nbe-space-sm);
 }
 
 /* Badges */
@@ -100,18 +100,18 @@ mark {
 
 /* Button group spacing */
 .btn + .btn {
-    margin-left: 0.25rem;
+    margin-left: var(--nbe-space-xs);
 }
 
 /* Form improvements */
 .form-label {
     font-weight: 500;
-    margin-bottom: 0.25rem;
+    margin-bottom: var(--nbe-space-xs);
 }
 
 /* Alert improvements */
 .alert {
-    border-radius: 0.25rem;
+    border-radius: var(--nbe-radius-sm);
 }
 
 /* Scrollable containers */
