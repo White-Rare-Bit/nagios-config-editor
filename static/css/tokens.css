@@ -100,9 +100,9 @@
     --nbe-surface-at-3: color-mix(in srgb, var(--nbe-surface-tint) 11%, var(--nbe-bg-surface));
     --nbe-surface-at-5: color-mix(in srgb, var(--nbe-surface-tint) 14%, var(--nbe-bg-surface));
 
-    --nbe-dark-surface-tint: var(--nbe-dark-accent-primary);
-    --nbe-dark-surface-at-1: color-mix(in srgb, var(--nbe-dark-surface-tint) 5%, var(--nbe-dark-bg-primary));
-    --nbe-dark-surface-at-2: color-mix(in srgb, var(--nbe-dark-surface-tint) 8%, var(--nbe-dark-bg-primary));
+    --nbe-dark-surface-tint: #c0c0c0;
+    --nbe-dark-surface-at-1: color-mix(in srgb, var(--nbe-dark-surface-tint) 3%, var(--nbe-dark-bg-primary));
+    --nbe-dark-surface-at-2: color-mix(in srgb, var(--nbe-dark-surface-tint) 5%, var(--nbe-dark-bg-primary));
     --nbe-dark-surface-at-3: color-mix(in srgb, var(--nbe-dark-surface-tint) 11%, var(--nbe-dark-bg-primary));
     --nbe-dark-surface-at-5: color-mix(in srgb, var(--nbe-dark-surface-tint) 14%, var(--nbe-dark-bg-primary));
 

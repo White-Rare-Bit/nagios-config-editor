@@ -411,7 +411,7 @@ document.querySelector('.tree-panel').addEventListener('scroll', () => hideConte
 
 function setView(view) {
     state.currentView = view;
-    document.querySelectorAll('.tree-panel .right-pane-header .nbe-tab').forEach(btn => {
+    document.querySelectorAll('.tree-panel .panel-tab-header .nbe-tab').forEach(btn => {
         const isActive = btn.dataset.view === view;
         btn.classList.toggle('active', isActive);
         btn.setAttribute('aria-selected', isActive);

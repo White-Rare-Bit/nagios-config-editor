@@ -397,8 +397,9 @@
 
 /* Tree Panel - Enterprise Style */
 .tree-panel {
+    --nbe-panel-bg: var(--nbe-dark-surface-at-1);
     width: var(--nbe-panel-width);
-    background: var(--nbe-dark-bg-primary);
+    background: var(--nbe-panel-bg);
     border-right: 1px solid var(--nbe-dark-border-primary);
     display: flex;
     flex-direction: column;
@@ -650,12 +651,6 @@
     color: var(--nbe-dark-text-primary);
 }
 
-/* Tree pane header with view tabs (matches right-pane-header) */
-.tree-pane-header {
-    padding: 0;
-    border-bottom: 2px solid var(--nbe-dark-border-secondary);
-    background: var(--nbe-dark-bg-secondary);
-}
 
 .tree-pane-header .nbe-tabs {
     padding: 0;
@@ -709,37 +704,9 @@
 .tree-content {
     flex: 1;
     overflow-y: auto;
-    scrollbar-gutter: stable;
     padding: 0;
-    background: var(--nbe-dark-bg-primary);
 }
 
-/* Extend rows into scrollbar gutter so backgrounds reach the edge */
-.tree-content > .tree-folder {
-    margin-right: -8px;
-}
-
-.tree-folder-header,
-.tree-item {
-    margin-right: -8px;
-}
-
-.tree-content::-webkit-scrollbar {
-    width: 8px;
-}
-
-.tree-content::-webkit-scrollbar-track {
-    background: var(--nbe-dark-bg-primary);
-}
-
-.tree-content::-webkit-scrollbar-thumb {
-    background: var(--nbe-dark-border-primary);
-    border-radius: var(--nbe-radius-md);
-}
-
-.tree-content::-webkit-scrollbar-thumb:hover {
-    background: var(--nbe-dark-border-hover);
-}
 
 .tree-shortcuts-bar {
     display: flex;
@@ -874,7 +841,7 @@
     border: none;
     border-left: 3px solid transparent;
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
-    background: var(--nbe-dark-bg-primary);
+    background: var(--nbe-panel-bg);
     color: var(--nbe-dark-text-primary);
     -webkit-user-drag: element;
     user-select: none;
@@ -1103,10 +1070,11 @@
 
 /* Center Pane (Object Editor) */
 .center-pane {
+    --nbe-panel-bg: var(--nbe-dark-surface-at-2);
     flex: 1;
     display: flex;
     flex-direction: column;
-    background: var(--nbe-dark-bg-primary);
+    background: var(--nbe-panel-bg);
     overflow: hidden;
 }
 
@@ -1159,7 +1127,7 @@
 
 .editor-tab.active {
     color: var(--nbe-text-inverse);
-    background: var(--nbe-dark-bg-primary);
+    background: var(--nbe-panel-bg);
     border-bottom: 2px solid var(--nbe-dark-accent-info);
 }
 
@@ -1348,46 +1316,44 @@
     flex: 1;
     overflow-y: auto;
     padding: var(--nbe-space-lg-plus);
-    background: var(--nbe-dark-bg-primary);
 }
 
 /* Right Pane (Tabbed) - matches left pane style */
 .right-pane {
+    --nbe-panel-bg: var(--nbe-dark-surface-at-1);
     position: relative;
     width: 440px;
     display: flex;
     flex-direction: column;
-    background: var(--nbe-dark-bg-primary);
+    background: var(--nbe-panel-bg);
     border-left: 1px solid var(--nbe-dark-border-primary);
     overflow: hidden;
 }
 
-.right-pane-header {
+.panel-tab-header {
     padding: 0;
     border-bottom: 2px solid var(--nbe-dark-border-secondary);
-    background: var(--nbe-dark-bg-primary);
 }
 
-/* Right pane uses shared .nbe-tabs from tokens.css */
-/* Add padding override for explorer's stretched tabs */
-.right-pane-header .nbe-tabs {
+/* Padding override for explorer's stretched tabs */
+.panel-tab-header .nbe-tabs {
     padding: 0;
     overflow: hidden;
 }
 
 /* Tab styling uses dark tab tokens directly (consistent with M2 component pattern) */
-.right-pane-header .nbe-tab {
+.panel-tab-header .nbe-tab {
     padding: var(--nbe-space-md) var(--nbe-space-sm);
     font-size: var(--nbe-font-size-base);
     background: var(--nbe-dark-tab-bg);
     color: var(--nbe-dark-tab-text);
 }
 
-.right-pane-header .nbe-tab:hover {
+.panel-tab-header .nbe-tab:hover {
     color: var(--nbe-dark-tab-text-hover);
 }
 
-.right-pane-header .nbe-tab.active {
+.panel-tab-header .nbe-tab.active {
     color: var(--nbe-dark-tab-text-active);
     border-bottom-color: var(--nbe-dark-tab-border-active);
 }
@@ -1538,7 +1504,7 @@
     cursor: pointer;
     transition: all 0.15s;
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
-    background: var(--nbe-dark-bg-primary);
+    background: var(--nbe-panel-bg);
     color: var(--nbe-dark-text-primary);
 }
 
@@ -2155,7 +2121,6 @@
     align-items: center;
     gap: var(--nbe-space-sm-plus);
     padding: var(--nbe-space-sm-plus) var(--nbe-space-md);
-    background: var(--nbe-dark-bg-primary);
     border-left: 4px solid var(--nbe-danger);
     border-bottom: 1px solid var(--nbe-dark-border-primary);
     font-size: var(--nbe-typography-secondary-size);
@@ -2286,7 +2251,7 @@
     gap: var(--nbe-space-sm-plus);
     padding: var(--nbe-space-sm) var(--nbe-space-md);
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
-    background: var(--nbe-dark-bg-primary);
+    background: var(--nbe-panel-bg);
     cursor: pointer;
     transition: background 0.15s;
 }
@@ -2521,7 +2486,7 @@
     gap: var(--nbe-space-sm-plus);
     padding: var(--nbe-space-md) var(--nbe-space-md) var(--nbe-space-md) var(--nbe-space-lg);
     cursor: pointer;
-    background: var(--nbe-dark-bg-primary);
+    background: var(--nbe-panel-bg);
     transition: background 0.15s;
     user-select: none;
     position: relative;
@@ -2672,7 +2637,7 @@
     cursor: pointer;
     transition: all 0.15s;
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
-    background: var(--nbe-dark-bg-primary);
+    background: var(--nbe-panel-bg);
 }
 
 .template-suggestion:hover {
@@ -2953,7 +2918,7 @@
     cursor: pointer;
     transition: all 0.15s;
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
-    background: var(--nbe-dark-bg-primary);
+    background: var(--nbe-panel-bg);
 }
 
 .cleanup-suggestion:hover {
@@ -3198,7 +3163,7 @@
     cursor: pointer;
     transition: all 0.15s;
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
-    background: var(--nbe-dark-bg-primary);
+    background: var(--nbe-panel-bg);
 }
 
 .issue-item:hover {
