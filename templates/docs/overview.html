@@ -1,4 +1,94 @@
 <div class="docs-prose">
     <h2>Overview</h2>
-    <p>Placeholder — content will be added in a later task.</p>
+
+    <p>
+        Nagios Bulk Editor is a web application for managing Nagios monitoring configurations
+        at scale. It reads your <code>.cfg</code> files, parses every object definition, and
+        presents them in a browsable, editable interface — so you can make sweeping changes
+        across hundreds of hosts, services, and templates without hand-editing raw config files.
+    </p>
+
+    <h3>Key Capabilities</h3>
+
+    <h4>Visual Object Explorer</h4>
+    <p>
+        A three-pane layout lets you browse every Nagios object type — hosts, services,
+        commands, contacts, timeperiods, templates, and more. The left pane shows a tree
+        of config files and folders. The center pane lists the objects in the selected file.
+        The right pane is an attribute editor for the selected object.
+    </p>
+
+    <h4>Bulk Editing</h4>
+    <p>
+        Select multiple objects at once and edit shared attributes in a single operation.
+        Use find &amp; replace to update values across your entire configuration. Changes
+        propagate instantly across all selected objects.
+    </p>
+
+    <h4>Staging System</h4>
+    <p>
+        All changes are held in memory — nothing is written to disk until you explicitly
+        click Apply. You can review every pending change, undo individual edits, or clear
+        all staged changes at any time.
+    </p>
+
+    <h4>Git Integration</h4>
+    <p>
+        View diffs of your staged changes, commit directly from the UI, and track your
+        configuration's version history. The commit dialog shows a complete diff of every
+        change before you confirm.
+    </p>
+
+    <h4>File Management</h4>
+    <p>
+        Create, move, rename, and delete config files and folders from within the app.
+        Move objects between files by dragging them in the explorer. Create new files and
+        folders to reorganize your configuration structure.
+    </p>
+
+    <h4>Validation</h4>
+    <p>
+        Run <code>nagios -v</code> directly from the UI to verify your configuration is
+        valid before reloading Nagios. Validation output is displayed inline so you can
+        identify and fix errors without leaving the app.
+    </p>
+
+    <h3>How It Works</h3>
+
+    <p>
+        When the app starts, it reads all <code>.cfg</code> files in your configured Nagios
+        directory and parses every <code>define { ... }</code> block into structured objects.
+        These objects are presented in the Object Explorer where you can browse, search, and
+        edit them.
+    </p>
+    <p>
+        As you make changes — editing attributes, moving objects, creating or deleting files —
+        each change is recorded in the staging system. Nothing touches your config files on
+        disk. You can review the full list of pending changes in the commit dialog, undo
+        anything you don't want, and refine your edits until you're satisfied.
+    </p>
+    <p>
+        When you click Apply, all staged changes are written atomically to disk. If Git is
+        configured, you can then commit the changes with a message describing what you did.
+    </p>
+
+    <div class="docs-note">
+        The staging system makes it safe to experiment. Since no changes are written to disk
+        until you click Apply, you can freely explore edits, undo them, and try different
+        approaches without any risk to your live configuration.
+    </div>
+
+    <h3>Architecture at a Glance</h3>
+
+    <p>
+        Nagios Bulk Editor is a Flask application with a vanilla JavaScript frontend. The
+        backend is organized as a set of service classes — parsing, staging, file operations,
+        Git, backups, validation — each with a clear responsibility. The frontend communicates
+        with the backend through a REST API.
+    </p>
+    <p>
+        There is no database. All state comes from the filesystem: your Nagios <code>.cfg</code>
+        files are the source of truth, and staged changes are held in server memory until applied.
+        Configuration settings are stored in a single JSON file.
+    </p>
 </div>

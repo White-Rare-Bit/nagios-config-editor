@@ -1,0 +1,91 @@
+<div class="docs-prose">
+    <h2>Installation</h2>
+
+    <h3>Requirements</h3>
+
+    <ul>
+        <li><strong>Python 3.8+</strong></li>
+        <li><strong>Flask 2.0+</strong> (installed automatically via <code>requirements.txt</code>)</li>
+        <li>Access to your Nagios <code>.cfg</code> configuration files</li>
+        <li><strong>Git</strong> (optional — needed only for version control features)</li>
+    </ul>
+
+    <h3>Install Dependencies</h3>
+
+    <p>
+        Clone or download the application, then install the Python dependencies:
+    </p>
+
+    <pre><code>pip install -r requirements.txt</code></pre>
+
+    <p>
+        This installs Flask and any other required packages. There are no external databases
+        or additional services to set up.
+    </p>
+
+    <h3>Configuration</h3>
+
+    <p>
+        Application settings are stored in <code>config/settings.json</code>. The key settings are:
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Setting</th>
+                <th>Description</th>
+                <th>Default</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>nagios_cfg_dir</code></td>
+                <td>Directory containing your Nagios <code>.cfg</code> files</td>
+                <td><code>/usr/local/nagios/etc/objects</code></td>
+            </tr>
+            <tr>
+                <td><code>nagios_bin</code></td>
+                <td>Path to the Nagios binary (for validation)</td>
+                <td><code>/usr/local/nagios/bin/nagios</code></td>
+            </tr>
+            <tr>
+                <td><code>nagios_main_cfg</code></td>
+                <td>Path to the main <code>nagios.cfg</code> file</td>
+                <td><code>/usr/local/nagios/etc/nagios.cfg</code></td>
+            </tr>
+            <tr>
+                <td><code>backup_dir</code></td>
+                <td>Directory where backups are stored</td>
+                <td><code>backups/</code></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p>
+        You can configure these settings in three ways, listed in order of precedence:
+    </p>
+
+    <ol>
+        <li><strong>Environment variables</strong> — override all other settings</li>
+        <li><strong>Settings page</strong> — edit <code>config/settings.json</code> from within the app</li>
+        <li><strong>Config file</strong> — edit <code>config/settings.json</code> directly</li>
+    </ol>
+
+    <h3>Running the App</h3>
+
+    <p>Start the development server:</p>
+
+    <pre><code>python3 app.py</code></pre>
+
+    <p>
+        The app runs on <strong>port 8080</strong> by default. Open
+        <code>http://localhost:8080</code> in your browser to access it.
+    </p>
+
+    <div class="docs-note">
+        For production use, run the app behind a WSGI server such as Gunicorn or uWSGI
+        instead of the built-in Flask development server. The application uses
+        <code>multiprocessing.Lock</code> for thread safety, so it is compatible with
+        multi-process WSGI deployments.
+    </div>
+</div>

@@ -1,0 +1,80 @@
+<div class="docs-prose">
+    <h2>Quick Start</h2>
+
+    <p>
+        This guide walks you through the basic workflow: loading your configuration,
+        making changes, reviewing them, and applying them to disk.
+    </p>
+
+    <h3>1. Load Configuration</h3>
+
+    <p>
+        When the app starts, it automatically reads all <code>.cfg</code> files from your
+        configured Nagios directory. Navigate to the <strong>Object Explorer</strong> page
+        to begin browsing your configuration.
+    </p>
+
+    <h3>2. Browse Objects</h3>
+
+    <p>
+        The Object Explorer uses a three-pane layout:
+    </p>
+
+    <ul>
+        <li><strong>Left pane</strong> — a tree of your config files and folders. Click a file to view its contents.</li>
+        <li><strong>Center pane</strong> — lists all objects defined in the selected file. Click an object to edit it.</li>
+        <li><strong>Right pane</strong> — the attribute editor for the selected object. Each attribute is shown as an editable field.</li>
+    </ul>
+
+    <h3>3. Make Changes</h3>
+
+    <p>
+        Edit any attribute in the right pane — your changes are staged immediately. A staging
+        indicator in the navbar shows how many changes are pending.
+    </p>
+
+    <p>You can also:</p>
+
+    <ul>
+        <li><strong>Add attributes</strong> — use the add attribute control at the bottom of the editor</li>
+        <li><strong>Delete attributes</strong> — clear an attribute's value to remove it</li>
+        <li><strong>Move objects</strong> — drag objects between files in the explorer</li>
+        <li><strong>Create new objects</strong> — add new Nagios object definitions</li>
+        <li><strong>Create files and folders</strong> — organize your configuration structure</li>
+    </ul>
+
+    <h3>4. Review Changes</h3>
+
+    <p>
+        Click the <strong>Commit</strong> button in the navbar to open the commit dialog. This
+        shows a diff of every staged change — edits, moves, creations, and deletions — so you
+        can review exactly what will be written to disk.
+    </p>
+
+    <h3>5. Apply</h3>
+
+    <p>
+        Click <strong>Apply</strong> in the commit dialog to write all staged changes atomically
+        to disk. A backup is created automatically before any files are modified.
+    </p>
+
+    <p>
+        If Git is configured for your Nagios config directory, you can enter a commit message
+        and commit the changes directly from the same dialog.
+    </p>
+
+    <h3>6. Validate</h3>
+
+    <p>
+        After applying changes, navigate to the <strong>Validate</strong> page and run
+        <code>nagios -v</code> to verify your configuration is valid. Fix any errors and
+        repeat the cycle.
+    </p>
+
+    <hr>
+
+    <div class="docs-warning">
+        Until you click Apply, no changes are written to disk. You can undo individual changes
+        or clear all staging at any time.
+    </div>
+</div>
