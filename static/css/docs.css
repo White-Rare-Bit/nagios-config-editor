@@ -468,3 +468,173 @@
         box-shadow: none;
     }
 }
+
+/* =============================================================================
+   Prose Content (App Docs)
+   ============================================================================= */
+
+.docs-prose {
+    padding: var(--nbe-space-xl) var(--nbe-space-xxl);
+    max-width: 800px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.docs-prose h2 {
+    font-size: var(--nbe-typography-h1-size);
+    font-weight: 600;
+    color: var(--nbe-dark-text-primary);
+    margin: 0 0 var(--nbe-space-lg);
+    padding-bottom: var(--nbe-space-sm);
+    border-bottom: 1px solid var(--nbe-dark-border-secondary);
+}
+
+.docs-prose h3 {
+    font-size: var(--nbe-typography-h2-size);
+    font-weight: 600;
+    color: var(--nbe-dark-text-primary);
+    margin: var(--nbe-space-xl) 0 var(--nbe-space-md);
+}
+
+.docs-prose h4 {
+    font-size: var(--nbe-typography-h3-size);
+    font-weight: 600;
+    color: var(--nbe-dark-text-primary);
+    margin: var(--nbe-space-lg) 0 var(--nbe-space-sm);
+}
+
+.docs-prose p {
+    font-size: var(--nbe-typography-body-size);
+    color: var(--nbe-dark-text-secondary);
+    line-height: var(--nbe-line-height-relaxed);
+    margin: 0 0 var(--nbe-space-md);
+}
+
+.docs-prose ul,
+.docs-prose ol {
+    margin: 0 0 var(--nbe-space-md);
+    padding-left: var(--nbe-space-xl);
+    color: var(--nbe-dark-text-secondary);
+    line-height: var(--nbe-line-height-relaxed);
+    font-size: var(--nbe-typography-body-size);
+}
+
+.docs-prose li {
+    margin-bottom: var(--nbe-space-xs);
+}
+
+.docs-prose code {
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-typography-code-size);
+    color: var(--nbe-dark-accent-primary);
+    background: var(--nbe-dark-bg-tertiary);
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+
+.docs-prose pre {
+    margin: 0 0 var(--nbe-space-md);
+    padding: var(--nbe-space-md);
+    background: var(--nbe-dark-bg-tertiary);
+    border: 1px solid var(--nbe-dark-border-primary);
+    border-radius: var(--nbe-radius-md);
+    overflow-x: auto;
+}
+
+.docs-prose pre code {
+    background: none;
+    padding: 0;
+    font-size: var(--nbe-typography-code-size);
+    color: var(--nbe-dark-text-primary);
+    line-height: 1.6;
+}
+
+.docs-prose table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 var(--nbe-space-md);
+    font-size: var(--nbe-font-size-sm);
+}
+
+.docs-prose th {
+    text-align: left;
+    padding: var(--nbe-space-sm) var(--nbe-space-md);
+    background: var(--nbe-dark-bg-secondary);
+    color: var(--nbe-dark-text-primary);
+    font-weight: 600;
+    border-bottom: 2px solid var(--nbe-dark-border-primary);
+}
+
+.docs-prose td {
+    padding: var(--nbe-space-sm) var(--nbe-space-md);
+    color: var(--nbe-dark-text-secondary);
+    border-bottom: 1px solid var(--nbe-dark-border-secondary);
+    vertical-align: top;
+}
+
+.docs-prose td code {
+    font-size: var(--nbe-typography-code-size);
+}
+
+.docs-prose .docs-note {
+    padding: var(--nbe-space-md);
+    margin: 0 0 var(--nbe-space-md);
+    background: rgba(99, 179, 237, 0.08);
+    border: 1px solid rgba(99, 179, 237, 0.25);
+    border-radius: var(--nbe-radius-md);
+    color: var(--nbe-dark-text-secondary);
+    font-size: var(--nbe-typography-body-size);
+    line-height: var(--nbe-line-height-relaxed);
+}
+
+.docs-prose .docs-note strong {
+    color: var(--nbe-dark-accent-primary);
+}
+
+.docs-prose .docs-warning {
+    padding: var(--nbe-space-md);
+    margin: 0 0 var(--nbe-space-md);
+    background: var(--nbe-dark-validation-warning-bg);
+    border: 1px solid var(--nbe-warning);
+    border-radius: var(--nbe-radius-md);
+    color: var(--nbe-dark-text-secondary);
+    font-size: var(--nbe-typography-body-size);
+    line-height: var(--nbe-line-height-relaxed);
+}
+
+.docs-prose .docs-warning strong {
+    color: var(--nbe-warning);
+}
+
+.docs-prose strong {
+    color: var(--nbe-dark-text-primary);
+    font-weight: 600;
+}
+
+.docs-prose hr {
+    border: none;
+    border-top: 1px solid var(--nbe-dark-border-secondary);
+    margin: var(--nbe-space-xl) 0;
+}
+
+.docs-prose a {
+    color: var(--nbe-dark-accent-primary);
+    text-decoration: none;
+}
+
+.docs-prose a:hover {
+    text-decoration: underline;
+}
+
+/* Key-cap style for keyboard shortcuts in docs */
+.docs-prose kbd {
+    display: inline-block;
+    padding: 2px 6px;
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-font-size-xs-plus);
+    color: var(--nbe-dark-text-primary);
+    background: var(--nbe-dark-bg-tertiary);
+    border: 1px solid var(--nbe-dark-border-primary);
+    border-radius: 3px;
+    box-shadow: 0 1px 0 var(--nbe-dark-border-primary);
+}
