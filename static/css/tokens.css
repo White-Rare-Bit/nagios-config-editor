@@ -265,9 +265,9 @@
     --nbe-commit-shadow-hover: 0 4px 12px rgba(245, 78, 0, 0.5);
 
     /* ---- Code/Terminal (dark theme) ---- */
-    --nbe-code-bg: #1e1e1e;
-    --nbe-code-text: #d4d4d4;
-    --nbe-code-border: #3c3c3c;
+    --nbe-code-bg: #263238;
+    --nbe-code-text: #ECEFF1;
+    --nbe-code-border: #37474F;
 
     /* ---- Diff Colors (dark theme context) ---- */
     --nbe-diff-add: #4DB6AC;
@@ -278,14 +278,14 @@
     --nbe-diff-hunk: #42A5F5;
     --nbe-diff-context: #9E9E9E;
 
-    /* ---- Disabled State - WCAG AA compliant (4.8:1 contrast) ---- */
-    --nbe-disabled-bg: #5a5a5a;
-    --nbe-disabled-text: #d0d0d0;
+    /* ---- Disabled State ---- */
+    --nbe-disabled-bg: #616161;
+    --nbe-disabled-text: #E0E0E0;
 
     /* ---- Undo Button ---- */
-    --nbe-undo-bg: #5a6268;
-    --nbe-undo-bg-hover: #6c757d;
-    --nbe-undo-text: #ffffff;
+    --nbe-undo-bg: #546E7A;
+    --nbe-undo-bg-hover: #607D8B;
+    --nbe-undo-text: #FFFFFF;
 
     /* ---- Terminal/Git Panel ---- */
     --nbe-terminal-bg: #000000;
