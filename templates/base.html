@@ -113,8 +113,8 @@
             </div>
             <p id="confirmDialogMessage" class="confirm-dialog-message"></p>
             <div class="confirm-dialog-buttons">
-                <button class="nbe-btn nbe-btn--secondary nbe-btn--sm" id="confirmDialogCancel">Cancel</button>
-                <button class="nbe-btn nbe-btn--primary nbe-btn--sm" id="confirmDialogConfirm">Confirm</button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--sm" id="confirmDialogCancel">Cancel</button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--primary nbe-btn--sm" id="confirmDialogConfirm">Confirm</button>
             </div>
         </div>
     </div>
@@ -881,32 +881,6 @@
     .confirm-dialog-message {
         color: var(--nbe-dark-text-secondary);
     }
-    .confirm-dialog-buttons .nbe-btn--secondary {
-        background: var(--nbe-dark-bg-tertiary);
-        border: 1px solid var(--nbe-dark-border-primary);
-        color: var(--nbe-dark-text-primary);
-    }
-    .confirm-dialog-buttons .nbe-btn--secondary:hover {
-        background: var(--nbe-dark-bg-hover);
-        border-color: var(--nbe-dark-border-hover);
-    }
-    .confirm-dialog-buttons .nbe-btn--primary {
-        background: var(--nbe-dark-accent-primary);
-        border: none;
-        color: var(--nbe-dark-bg-primary);
-    }
-    .confirm-dialog-buttons .nbe-btn--primary:hover {
-        background: #5ed4ba;
-    }
-    .confirm-dialog-buttons .nbe-btn--danger {
-        background: var(--nbe-dark-accent-danger);
-        border: none;
-        color: #fff;
-    }
-    .confirm-dialog-buttons .nbe-btn--danger:hover {
-        background: #ff6b6b;
-    }
-
     /* Git Result Panel Styles - Authentic Terminal */
     .git-result-overlay {
         display: none;
@@ -1257,48 +1231,6 @@
         font-size: var(--nbe-font-size-base);
     }
 
-    /* Buttons — matches .actions-btn */
-    .page-sidebar .page-btn {
-        padding: var(--nbe-btn-padding-xs);
-        background: var(--nbe-bg-surface);
-        border: 1px solid var(--nbe-border);
-        border-radius: var(--nbe-radius-md);
-        font-size: var(--nbe-font-size-base);
-        cursor: pointer;
-        color: var(--nbe-text-primary);
-        white-space: nowrap;
-    }
-
-    .page-sidebar .page-btn:hover {
-        background: var(--nbe-bg-hover);
-    }
-
-    .page-sidebar .page-btn-block {
-        padding: 6px 10px;
-        white-space: normal;
-    }
-
-    .page-sidebar .page-btn-primary {
-        background: var(--nbe-success);
-        border-color: var(--nbe-success);
-        color: var(--nbe-text-inverse);
-        font-weight: 500;
-    }
-
-    .page-sidebar .page-btn-primary:hover {
-        background: var(--nbe-btn-success-hover);
-    }
-
-    .page-sidebar .page-btn-danger {
-        background: var(--nbe-danger-light);
-        color: var(--color-delete);
-        border-color: var(--nbe-danger-border);
-    }
-
-    .page-sidebar .page-btn-danger:hover {
-        background: var(--nbe-danger-border);
-    }
-
     /* Search with icon — matches .search-row + .search-icon in explorer */
     .page-sidebar .search-row {
         position: relative;
@@ -1431,70 +1363,6 @@
         margin: 0;
     }
 
-    /* ========================================
-       SHARED BUTTON STYLES
-       ======================================== */
-
-    .page-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        padding: var(--nbe-btn-padding-md);
-        border: 1px solid var(--nbe-border);
-        border-radius: var(--nbe-radius-md);
-        background: var(--nbe-bg-surface);
-        font-size: var(--nbe-font-size-base);
-        cursor: pointer;
-        transition: all var(--nbe-transition-normal);
-    }
-
-    .page-btn:hover {
-        background: var(--nbe-bg-subtle);
-    }
-
-    .page-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-
-    .page-btn:focus-visible {
-        outline: none;
-        box-shadow: var(--nbe-focus-ring);
-    }
-
-    /* Small button */
-    .page-btn-sm {
-        padding: var(--nbe-btn-padding-sm);
-        font-size: var(--nbe-font-size-sm);
-    }
-
-    /* Full width */
-    .page-btn-block {
-        width: 100%;
-    }
-
-    /* Green primary (for main actions like Create, Apply, Restore) */
-    .page-btn-primary {
-        background: var(--nbe-success);
-        border: none;
-        color: var(--nbe-text-inverse);
-        font-weight: 500;
-    }
-    .page-btn-primary:hover {
-        background: var(--nbe-btn-success-hover);
-    }
-
-    /* Red danger (for delete/discard - light background) */
-    .page-btn-danger {
-        background: var(--nbe-danger-light);
-        color: var(--color-delete);
-        border-color: var(--nbe-danger-border);
-    }
-    .page-btn-danger:hover {
-        background: var(--nbe-danger-border);
-    }
-
     /* Navbar buttons - for dark navbar */
     .nav-btn {
         display: inline-flex;
@@ -1580,47 +1448,6 @@
 
     @keyframes spin {
         to { transform: rotate(360deg); }
-    }
-
-    /* Button loading state */
-    .page-btn.loading {
-        position: relative;
-        pointer-events: none;
-        color: transparent !important;
-    }
-
-    .page-btn.loading::after {
-        content: '';
-        position: absolute;
-        width: 16px;
-        height: 16px;
-        top: 50%;
-        left: 50%;
-        margin-left: -8px;
-        margin-top: -8px;
-        border: 2px solid currentColor;
-        border-top-color: transparent;
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-    }
-
-    .page-btn.loading::before {
-        /* Preserve the original text color for the spinner */
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: inherit;
-        border-radius: inherit;
-    }
-
-    .page-btn-primary.loading::after {
-        border-color: rgba(255, 255, 255, 0.3);
-        border-top-color: white;
-    }
-
-    .page-btn-danger.loading::after {
-        border-color: rgba(255, 255, 255, 0.3);
-        border-top-color: white;
     }
 
     /* Inline loading spinner (for use in text) */
@@ -1854,45 +1681,6 @@
     .lock-banner .lock-break-btn:focus-visible {
         outline: none;
         box-shadow: 0 0 0 2px var(--nbe-white-alpha-50);
-    }
-
-    /* ========================================
-       SHARED ICON BUTTON STYLES
-       ======================================== */
-
-    .page-btn-icon {
-        width: 32px;
-        height: 32px;
-        padding: 0;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border: 1px solid var(--nbe-border);
-        border-radius: var(--nbe-radius-md);
-        background: var(--nbe-bg-surface);
-        font-size: var(--nbe-font-size-md);
-        cursor: pointer;
-        transition: all var(--nbe-transition-normal);
-        flex-shrink: 0;
-    }
-
-    .page-btn-icon:hover {
-        background: var(--nbe-bg-subtle);
-    }
-
-    .page-btn-icon:focus-visible {
-        outline: none;
-        box-shadow: var(--nbe-focus-ring);
-    }
-
-    .page-btn-icon.page-btn-danger {
-        background: var(--nbe-danger-light);
-        color: var(--color-delete);
-        border-color: var(--nbe-danger-border);
-    }
-
-    .page-btn-icon.page-btn-danger:hover {
-        background: var(--nbe-danger-border);
     }
 
     /* Keyboard Shortcuts Dialog */
