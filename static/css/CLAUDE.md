@@ -44,6 +44,10 @@ Base class `.nbe-btn` with modifiers. All defined in `tokens.css`.
 **Dark theme**: Add `--dark` (e.g. `.nbe-btn--dark.nbe-btn--primary`)
 **Loading state**: Set `data-loading="true"` in JS
 
+## Spacing Tokens
+
+`2xs`=2px · `xs`=4px · `xs-plus`=6px · `sm`=8px · `sm-plus`=10px · `md`=12px · `lg`=16px · `lg-plus`=20px · `xl`=24px · `2xl`=32px
+
 ## Typography Tokens
 
 Semantic groups in `tokens.css`, each with `-size`, `-weight`, `-line-height` variants:
