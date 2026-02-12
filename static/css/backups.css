@@ -1,41 +1,7 @@
 /* Backups page - Dark theme */
 
-/* Override page container for dark theme */
-.page-container.backup-container {
-    background: var(--nbe-dark-bg-primary) !important;
-}
-
 .backup-container .page-sidebar {
     padding: 0 0 0 var(--nbe-space-md);
-    background: var(--nbe-dark-bg-primary) !important;
-    border-right: 1px solid var(--nbe-dark-border-primary) !important;
-}
-
-/* Panel header in sidebar - dark theme */
-.backup-container .page-sidebar .panel-header {
-    background: var(--nbe-dark-bg-secondary) !important;
-    color: var(--nbe-dark-text-primary) !important;
-    border-bottom: 1px solid var(--nbe-dark-border-primary);
-}
-
-/* Sidebar sections — flat separators */
-.backup-container .page-sidebar .sidebar-section {
-    border: none;
-    border-radius: 0;
-    border-bottom: 1px solid var(--nbe-dark-border-secondary);
-    margin-bottom: 0;
-    background: transparent !important;
-}
-
-.backup-container .page-sidebar .sidebar-section-title {
-    padding: var(--nbe-space-sm) 12px;
-    border-bottom: none;
-    font-size: var(--nbe-font-size-xs-plus);
-    color: var(--nbe-dark-text-secondary) !important;
-}
-
-.backup-container .page-sidebar .sidebar-section-content {
-    padding: var(--nbe-space-sm) 12px var(--nbe-space-md);
 }
 
 /* Form elements in sidebar */
@@ -70,18 +36,6 @@
 
 .backup-container .page-sidebar .form-input::placeholder {
     color: var(--nbe-dark-text-muted);
-}
-
-/* Info text in sidebar */
-.backup-container .page-sidebar .sidebar-info-text {
-    font-size: var(--nbe-font-size-sm);
-    color: var(--nbe-dark-text-secondary);
-    margin: 0 0 var(--nbe-space-sm);
-    line-height: 1.5;
-}
-
-.backup-container .page-sidebar .sidebar-info-text:last-child {
-    margin-bottom: 0;
 }
 
 /* Danger zone styling */
@@ -160,7 +114,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: var(--nbe-dark-bg-primary) !important;
+    background: var(--nbe-dark-bg-primary);
 }
 
 /* Header */
@@ -172,8 +126,8 @@
     align-items: center;
     height: 36px;
     padding: 0 var(--nbe-space-lg);
-    background: var(--nbe-dark-bg-secondary) !important;
-    border-bottom: 1px solid var(--nbe-dark-border-primary) !important;
+    background: var(--nbe-dark-bg-secondary);
+    border-bottom: 1px solid var(--nbe-dark-border-primary);
 }
 
 .backup-container .page-title,
@@ -181,14 +135,14 @@
     margin: 0;
     font-size: var(--nbe-font-size-lg);
     font-weight: 600;
-    color: var(--nbe-dark-text-primary) !important;
+    color: var(--nbe-dark-text-primary);
 }
 
 .backup-container .badge-count,
 .backup-header .badge-count {
     font-size: var(--nbe-font-size-sm);
-    color: var(--nbe-dark-text-secondary) !important;
-    background: var(--nbe-dark-bg-tertiary) !important;
+    color: var(--nbe-dark-text-secondary);
+    background: var(--nbe-dark-bg-tertiary);
     padding: var(--nbe-space-xs) var(--nbe-space-sm);
     border-radius: var(--nbe-radius-md);
 }
@@ -391,7 +345,7 @@
 }
 
 .backup-row.restoring {
-    background: var(--nbe-dark-accent-alpha-10) !important;
+    background: var(--nbe-dark-accent-alpha-10);
     outline: 2px solid var(--nbe-dark-accent-primary);
     outline-offset: -2px;
 }

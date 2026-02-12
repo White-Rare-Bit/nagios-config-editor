@@ -4,10 +4,6 @@
    Page Layout Override
    ============================================================================ */
 
-.page-container.git-container {
-    background: var(--nbe-dark-bg-primary) !important;
-}
-
 /* ============================================================================
    Left Sidebar
    ============================================================================ */
@@ -15,49 +11,6 @@
 .git-container .page-sidebar,
 .git-container .git-sidebar {
     padding: 0 0 0 var(--nbe-space-md);
-    background: var(--nbe-dark-bg-primary) !important;
-    border-right: 1px solid var(--nbe-dark-border-primary) !important;
-}
-
-/* Panel header */
-.git-container .panel-header {
-    background: var(--nbe-dark-bg-secondary) !important;
-    color: var(--nbe-dark-text-primary) !important;
-    border-bottom: 1px solid var(--nbe-dark-border-primary) !important;
-}
-
-/* Sidebar sections */
-.git-container .sidebar-section,
-.git-container .git-section {
-    border: none !important;
-    border-radius: 0 !important;
-    border-bottom: 1px solid var(--nbe-dark-border-secondary) !important;
-    margin-bottom: 0 !important;
-    background: transparent !important;
-}
-
-.git-container .sidebar-section-title {
-    padding: var(--nbe-space-sm) 12px;
-    border-bottom: none;
-    font-size: var(--nbe-font-size-xs-plus);
-    color: var(--nbe-dark-text-secondary) !important;
-    background: transparent !important;
-}
-
-.git-container .sidebar-section-content {
-    padding: var(--nbe-space-sm) 12px var(--nbe-space-md);
-    background: transparent !important;
-}
-
-.git-container .sidebar-info-text {
-    font-size: var(--nbe-font-size-sm);
-    color: var(--nbe-dark-text-secondary) !important;
-    margin: 0 0 var(--nbe-space-sm);
-    line-height: 1.5;
-}
-
-.git-container .sidebar-info-text:last-child {
-    margin-bottom: 0;
 }
 
 /* Branch display */
@@ -157,7 +110,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: var(--nbe-dark-bg-primary) !important;
+    background: var(--nbe-dark-bg-primary);
 }
 
 /* Header with tabs */
@@ -168,15 +121,15 @@
     align-items: center;
     height: 36px;
     padding: 0 var(--nbe-space-lg);
-    background: var(--nbe-dark-bg-secondary) !important;
-    border-bottom: 1px solid var(--nbe-dark-border-primary) !important;
+    background: var(--nbe-dark-bg-secondary);
+    border-bottom: 1px solid var(--nbe-dark-border-primary);
 }
 
 .git-container .page-title {
     margin: 0;
     font-size: var(--nbe-font-size-lg);
     font-weight: 600;
-    color: var(--nbe-dark-text-primary) !important;
+    color: var(--nbe-dark-text-primary);
 }
 
 /* Tabs */
@@ -574,7 +527,7 @@
 }
 
 .git-loading-text {
-    color: var(--nbe-dark-text-muted) !important;
+    color: var(--nbe-dark-text-muted);
 }
 
 /* Not a repo state */

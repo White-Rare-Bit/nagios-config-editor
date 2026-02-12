@@ -1,21 +1,7 @@
 /* Settings page - Dark theme */
 
-/* Override page container for dark theme */
-.page-container.settings-container {
-    background: var(--nbe-dark-bg-primary) !important;
-}
-
 .page-sidebar.settings-sidebar {
     padding: 0 0 0 var(--nbe-space-md);
-    background: var(--nbe-dark-bg-primary) !important;
-    border-right: 1px solid var(--nbe-dark-border-primary) !important;
-}
-
-/* Panel header in sidebar - dark theme */
-.page-sidebar.settings-sidebar .panel-header {
-    background: var(--nbe-dark-bg-secondary) !important;
-    color: var(--nbe-dark-text-primary) !important;
-    border-bottom: 1px solid var(--nbe-dark-border-primary);
 }
 
 /* Sidebar sections — flat separators matching explorer */
@@ -24,14 +10,14 @@
     border-radius: 0;
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
     margin-bottom: 0;
-    background: transparent !important;
+    background: transparent;
 }
 
 .page-sidebar.settings-sidebar .settings-section-title {
     padding: var(--nbe-space-sm) 12px;
     border-bottom: none;
     font-size: var(--nbe-font-size-xs-plus);
-    color: var(--nbe-dark-text-secondary) !important;
+    color: var(--nbe-dark-text-secondary);
 }
 
 .page-sidebar.settings-sidebar .settings-section-content {
@@ -166,7 +152,7 @@
 
 .settings-empty {
     font-size: var(--nbe-font-size-sm);
-    color: var(--nbe-dark-text-muted) !important;
+    color: var(--nbe-dark-text-muted);
 }
 
 .settings-status-table {
@@ -176,31 +162,31 @@
 
 .settings-status-table td {
     padding: 6px 0;
-    border-bottom: 1px solid var(--nbe-dark-border-secondary) !important;
+    border-bottom: 1px solid var(--nbe-dark-border-secondary);
     color: var(--nbe-dark-text-primary);
 }
 
 .settings-status-table td:first-child {
-    color: var(--nbe-dark-text-secondary) !important;
+    color: var(--nbe-dark-text-secondary);
     width: 100px;
 }
 
 .settings-status-table td:last-child {
     font-family: var(--nbe-font-mono);
     font-size: var(--nbe-font-size-xs-plus);
-    color: var(--nbe-dark-text-primary) !important;
+    color: var(--nbe-dark-text-primary);
     word-break: break-all;
 }
 
 .settings-status-table tr:last-child td {
-    border-bottom: none !important;
+    border-bottom: none;
 }
 
 .settings-info-list {
     margin: 0;
     padding: 0 0 0 var(--nbe-space-lg);
     font-size: var(--nbe-font-size-sm);
-    color: var(--nbe-dark-text-secondary) !important;
+    color: var(--nbe-dark-text-secondary);
     line-height: 1.6;
 }
 
@@ -214,11 +200,11 @@
 }
 
 .settings-info-list code {
-    background: var(--nbe-dark-bg-tertiary) !important;
+    background: var(--nbe-dark-bg-tertiary);
     padding: 2px 6px;
     border-radius: var(--nbe-radius-sm);
     font-size: var(--nbe-font-size-xs);
-    color: var(--nbe-dark-accent-primary) !important;
+    color: var(--nbe-dark-accent-primary);
     border: 1px solid var(--nbe-dark-border-primary);
 }
 
@@ -301,8 +287,8 @@ body.editing-locked .settings-container #identityTab {
 }
 
 .form-input-readonly {
-    background: var(--nbe-dark-bg-tertiary) !important;
-    color: var(--nbe-dark-text-muted) !important;
+    background: var(--nbe-dark-bg-tertiary);
+    color: var(--nbe-dark-text-muted);
     cursor: not-allowed;
 }
 
@@ -359,14 +345,14 @@ body.editing-locked .settings-container #identityTab {
 
 .page-sidebar.settings-sidebar .nbe-btn--secondary,
 .settings-sidebar .nbe-btn--secondary {
-    background: var(--nbe-dark-bg-tertiary) !important;
-    border: 1px solid var(--nbe-dark-border-primary) !important;
-    color: var(--nbe-dark-text-primary) !important;
+    background: var(--nbe-dark-bg-tertiary);
+    border: 1px solid var(--nbe-dark-border-primary);
+    color: var(--nbe-dark-text-primary);
 }
 
 .page-sidebar.settings-sidebar .nbe-btn--secondary:hover,
 .settings-sidebar .nbe-btn--secondary:hover {
-    background: var(--nbe-dark-bg-hover) !important;
+    background: var(--nbe-dark-bg-hover);
 }
 
 /* Tab badge override for dark theme */
