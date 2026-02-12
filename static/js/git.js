@@ -476,7 +476,7 @@ function renderGitHistory() {
                 <td class="history-cell-actions">
                     ${isCurrent
                         ? '<span class="history-current-label">Current</span>'
-                        : `<button class="nbe-btn nbe-btn--secondary nbe-btn--sm" data-action="restore-commit" data-hash="${escapeHtml(commit.hash)}" data-message="${escapedMessage}">Restore</button>`
+                        : `<button class="nbe-btn nbe-btn--dark nbe-btn--sm" data-action="restore-commit" data-hash="${escapeHtml(commit.hash)}" data-message="${escapedMessage}">Restore</button>`
                     }
                 </td>
             </tr>
