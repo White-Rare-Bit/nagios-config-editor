@@ -8,6 +8,85 @@
         and suggestions on the right.
     </p>
 
+    <div class="docs-diagram">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 220">
+            <rect width="1020" height="220" fill="#1e1e1e" rx="6"/>
+
+            <text x="510" y="28" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="14" font-weight="600">Object Explorer: Three-Pane Layout</text>
+
+            <!-- Left Pane -->
+            <rect x="30" y="44" width="280" height="160" rx="5" fill="#2d2d2d" stroke="#4ec9b0" stroke-width="2"/>
+            <rect x="30" y="44" width="280" height="26" rx="5" fill="#333" stroke="#4ec9b0" stroke-width="2"/>
+            <text x="170" y="62" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="12" font-weight="600">Object Tree</text>
+
+            <!-- Tab bar for left pane -->
+            <rect x="40" y="78" width="60" height="20" rx="3" fill="rgba(78, 201, 176, 0.15)" stroke="rgba(78, 201, 176, 0.3)"/>
+            <text x="70" y="92" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="9">By File</text>
+            <rect x="104" y="78" width="60" height="20" rx="3" fill="#252525" stroke="#404040"/>
+            <text x="134" y="92" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="9">By Type</text>
+
+            <!-- Search box -->
+            <rect x="40" y="106" width="260" height="22" rx="3" fill="#252525" stroke="#404040"/>
+            <text x="52" y="121" fill="#666" font-family="Inter, sans-serif" font-size="10">Search objects...</text>
+
+            <!-- Tree items -->
+            <text x="52" y="148" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="10">hosts.cfg</text>
+            <text x="66" y="164" fill="#888" font-family="Inter, sans-serif" font-size="10">webserver01</text>
+            <rect x="142" y="155" width="30" height="14" rx="3" fill="rgba(78, 201, 176, 0.15)" stroke="rgba(78, 201, 176, 0.3)"/>
+            <text x="157" y="165" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="8">host</text>
+            <text x="66" y="180" fill="#888" font-family="Inter, sans-serif" font-size="10">webserver02</text>
+            <rect x="142" y="171" width="30" height="14" rx="3" fill="rgba(78, 201, 176, 0.15)" stroke="rgba(78, 201, 176, 0.3)"/>
+            <text x="157" y="181" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="8">host</text>
+            <text x="52" y="196" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="10">services.cfg</text>
+
+            <!-- Center Pane -->
+            <rect x="324" y="44" width="370" height="160" rx="5" fill="#2d2d2d" stroke="#569cd6" stroke-width="2"/>
+            <rect x="324" y="44" width="370" height="26" rx="5" fill="#333" stroke="#569cd6" stroke-width="2"/>
+            <text x="509" y="62" text-anchor="middle" fill="#569cd6" font-family="Inter, sans-serif" font-size="12" font-weight="600">Attribute Editor</text>
+
+            <!-- Tab bar -->
+            <rect x="334" y="78" width="80" height="20" rx="3" fill="rgba(86, 156, 214, 0.15)" stroke="rgba(86, 156, 214, 0.3)"/>
+            <text x="374" y="92" text-anchor="middle" fill="#569cd6" font-family="Inter, sans-serif" font-size="9">webserver01</text>
+            <rect x="418" y="78" width="80" height="20" rx="3" fill="#252525" stroke="#404040"/>
+            <text x="458" y="92" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="9">webserver02</text>
+
+            <!-- Attribute rows -->
+            <text x="344" y="120" fill="#888" font-family="Inter, sans-serif" font-size="10">host_name</text>
+            <rect x="430" y="108" width="240" height="20" rx="3" fill="#252525" stroke="#404040"/>
+            <text x="442" y="122" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">webserver01</text>
+
+            <text x="344" y="146" fill="#888" font-family="Inter, sans-serif" font-size="10">address</text>
+            <rect x="430" y="134" width="240" height="20" rx="3" fill="#252525" stroke="#404040"/>
+            <text x="442" y="148" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">192.168.1.10</text>
+
+            <text x="344" y="172" fill="#888" font-family="Inter, sans-serif" font-size="10">check_command</text>
+            <rect x="430" y="160" width="240" height="20" rx="3" fill="#252525" stroke="#404040"/>
+            <text x="442" y="174" fill="#4ec9b0" font-family="JetBrains Mono, monospace" font-size="10">check-host-alive</text>
+
+            <!-- Right Pane -->
+            <rect x="708" y="44" width="282" height="160" rx="5" fill="#2d2d2d" stroke="#ffb74d" stroke-width="2"/>
+            <rect x="708" y="44" width="282" height="26" rx="5" fill="#333" stroke="#ffb74d" stroke-width="2"/>
+            <text x="849" y="62" text-anchor="middle" fill="#ffb74d" font-family="Inter, sans-serif" font-size="12" font-weight="600">Workspace</text>
+
+            <!-- Tab bar -->
+            <rect x="718" y="78" width="42" height="20" rx="3" fill="rgba(255, 183, 77, 0.15)" stroke="rgba(255, 183, 77, 0.3)"/>
+            <text x="739" y="92" text-anchor="middle" fill="#ffb74d" font-family="Inter, sans-serif" font-size="9">Files</text>
+            <rect x="764" y="78" width="76" height="20" rx="3" fill="#252525" stroke="#404040"/>
+            <text x="802" y="92" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="9">Suggestions</text>
+            <rect x="844" y="78" width="48" height="20" rx="3" fill="#252525" stroke="#404040"/>
+            <text x="868" y="92" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="9">Errors</text>
+            <rect x="896" y="78" width="76" height="20" rx="3" fill="#252525" stroke="#404040"/>
+            <text x="934" y="92" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="9">Validation</text>
+
+            <!-- File tree items -->
+            <text x="728" y="120" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="10">hosts/</text>
+            <text x="742" y="136" fill="#888" font-family="Inter, sans-serif" font-size="10">hosts.cfg</text>
+            <text x="742" y="152" fill="#888" font-family="Inter, sans-serif" font-size="10">templates.cfg</text>
+            <text x="728" y="168" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="10">services/</text>
+            <text x="742" y="184" fill="#888" font-family="Inter, sans-serif" font-size="10">services.cfg</text>
+        </svg>
+    </div>
+
     <h3>Left Pane: Object Tree</h3>
 
     <p>
