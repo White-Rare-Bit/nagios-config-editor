@@ -986,6 +986,12 @@
     border: none;
 }
 
+.nbe-btn--dark.nbe-btn--info {
+    background: var(--nbe-primary);
+    color: var(--nbe-text-inverse);
+    border: none;
+}
+
 .nbe-btn--dark.nbe-btn--ghost {
     background: transparent;
     color: var(--nbe-dark-text-secondary);
