@@ -62,7 +62,7 @@
     font-weight: 900;
     font-size: var(--nbe-font-size-xs);
     margin-left: auto;
-    transition: transform 0.2s;
+    transition: transform var(--nbe-transition-slow);
 }
 
 .git-container .danger-zone[open] .danger-zone-toggle::after {

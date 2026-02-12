@@ -117,7 +117,7 @@
     color: var(--nbe-dark-text-secondary);
     font-size: var(--nbe-font-size-xs);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all var(--nbe-transition-normal);
 }
 
 .quick-view-btn i {

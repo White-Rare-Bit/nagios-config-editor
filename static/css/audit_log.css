@@ -301,7 +301,7 @@
     font-weight: 900;
     font-size: var(--nbe-typography-muted-size);
     margin-left: auto;
-    transition: transform 0.2s;
+    transition: transform var(--nbe-transition-slow);
 }
 
 .audit-container .page-sidebar .danger-zone[open] .danger-zone-toggle::after {
