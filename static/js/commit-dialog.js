@@ -178,7 +178,7 @@ async function buildGlobalCommitDialogHtml(data, refData = null, isGitConfigured
             <div class="commit-footer-right">
                 <button class="nbe-btn nbe-btn--dark nbe-btn--danger" onclick="discardGlobalChanges()">Discard All</button>
                 <button class="nbe-btn nbe-btn--dark" onclick="closeGlobalCommitDialog()">Cancel</button>
-                <button class="nbe-btn nbe-btn--dark nbe-btn--primary" id="globalApplyBtn" onclick="applyGlobalCommit()" ${isGitConfigured ? '' : 'disabled'}>Apply Changes</button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--filled" id="globalApplyBtn" onclick="applyGlobalCommit()" ${isGitConfigured ? '' : 'disabled'}>Apply Changes</button>
             </div>
         </div>
     `;
@@ -291,7 +291,7 @@ async function buildGitOnlyCommitDialogHtml(gitChanges, configPath, isGitConfigu
             <div class="commit-footer-right">
                 <button class="nbe-btn nbe-btn--dark nbe-btn--danger" onclick="discardGitChanges()">Discard All</button>
                 <button class="nbe-btn nbe-btn--dark" onclick="closeGlobalCommitDialog()">Cancel</button>
-                <button class="nbe-btn nbe-btn--dark nbe-btn--primary" id="globalApplyBtn" onclick="applyGitCommit()" ${isGitConfigured ? '' : 'disabled'}>Apply Changes</button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--filled" id="globalApplyBtn" onclick="applyGitCommit()" ${isGitConfigured ? '' : 'disabled'}>Apply Changes</button>
             </div>
         </div>
     `;

@@ -1109,7 +1109,7 @@ function fixDuplicate(idx) {
                         <span class="cleanup-detail-file">${Explorer.escapeHtml(file)}</span>
                         <span class="cleanup-detail-line">Line ${o.line_number || '?'}</span>
                     </div>
-                    <button class="nbe-btn nbe-btn--dark nbe-btn--secondary nbe-btn--sm" onclick="Explorer.keepDuplicateAndDeleteOthers(${idx}, ${i})">Keep This</button>
+                    <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--sm" onclick="Explorer.keepDuplicateAndDeleteOthers(${idx}, ${i})">Keep This</button>
                 </div>
                 ${diffHtml ? `<div class="code-preview">${diffHtml}</div>` : ''}
             </div>`

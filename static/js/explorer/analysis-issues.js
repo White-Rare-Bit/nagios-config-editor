@@ -154,7 +154,7 @@
             // Check if this group has resolvable items (can create missing objects)
             const hasResolvableItems = groupType !== 'other' && items.some(({ group }) => group.objectType);
             const createAllBtn = hasResolvableItems
-                ? `<button class="nbe-btn nbe-btn--primary nbe-btn--xs" onclick="event.stopPropagation(); Explorer.createAllMissing('${groupType}')" title="Create all missing ${groupType}s">Create All</button>`
+                ? `<button class="nbe-btn nbe-btn--dark nbe-btn--filled nbe-btn--xs" onclick="event.stopPropagation(); Explorer.createAllMissing('${groupType}')" title="Create all missing ${groupType}s">Create All</button>`
                 : '';
 
             html += `
