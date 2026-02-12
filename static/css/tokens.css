@@ -270,13 +270,13 @@
     --nbe-code-border: #3c3c3c;
 
     /* ---- Diff Colors (dark theme context) ---- */
-    --nbe-diff-add: #4ec9b0;
-    --nbe-diff-add-bg: rgba(35, 134, 54, 0.3);
-    --nbe-diff-remove: #f14c4c;
-    --nbe-diff-remove-bg: rgba(220, 53, 69, 0.3);
-    --nbe-diff-header: #569cd6;
-    --nbe-diff-hunk: #61afef;
-    --nbe-diff-context: #808080;
+    --nbe-diff-add: #4DB6AC;
+    --nbe-diff-add-bg: rgba(76, 175, 80, 0.3);
+    --nbe-diff-remove: #EF5350;
+    --nbe-diff-remove-bg: rgba(244, 67, 54, 0.3);
+    --nbe-diff-header: #64B5F6;
+    --nbe-diff-hunk: #42A5F5;
+    --nbe-diff-context: #9E9E9E;
 
     /* ---- Disabled State - WCAG AA compliant (4.8:1 contrast) ---- */
     --nbe-disabled-bg: #5a5a5a;
@@ -329,12 +329,12 @@
     --nbe-syntax-path: #dcdcaa;        /* File paths */
 
     /* ---- Diff Colors (GitHub-style dark theme) ---- */
-    --nbe-diff-add-text: #3fb950;
-    --nbe-diff-add-bg: rgba(46, 160, 67, 0.15);
-    --nbe-diff-remove-text: #f85149;
-    --nbe-diff-remove-bg: rgba(248, 81, 73, 0.15);
-    --nbe-diff-header-text: #58a6ff;
-    --nbe-diff-hunk-bg: rgba(56, 139, 253, 0.1);
+    --nbe-diff-add-text: #81C784;
+    --nbe-diff-add-bg: rgba(76, 175, 80, 0.15);
+    --nbe-diff-remove-text: #E57373;
+    --nbe-diff-remove-bg: rgba(244, 67, 54, 0.15);
+    --nbe-diff-header-text: #64B5F6;
+    --nbe-diff-hunk-bg: rgba(33, 150, 243, 0.1);
 
     /* ---- Tree Panel (explorer-specific but shared with graph) ---- */
     --nbe-tree-row-height: 32px;
@@ -446,14 +446,14 @@
     --nbe-dark-accent-alpha-60: rgba(128, 203, 196, 0.6);
 
     /* Validation state backgrounds */
-    --nbe-dark-validation-success-bg: rgba(40, 167, 69, 0.1);  /* Green background for success/new */
-    --nbe-dark-validation-success-badge: rgba(40, 167, 69, 0.2); /* Green badge background */
-    --nbe-dark-validation-error-bg: rgba(244, 67, 54, 0.1);    /* Red background for errors/deletions */
-    --nbe-dark-validation-error-badge: rgba(244, 67, 54, 0.2);  /* Red badge background */
-    --nbe-dark-validation-warning-bg: rgba(255, 193, 7, 0.1);  /* Yellow background for warnings/moves */
-    --nbe-dark-validation-warning-badge: rgba(255, 193, 7, 0.2); /* Yellow badge background */
-    --nbe-dark-validation-info-bg: rgba(56, 139, 253, 0.1);    /* Info state blue (GitHub blue for familiarity); 0.1 opacity matches success/danger/warning pattern */
-    --nbe-dark-validation-info-badge: rgba(56, 139, 253, 0.2); /* Info badge background; 0.2 opacity matches success/danger/warning pattern */
+    --nbe-dark-validation-success-bg: rgba(76, 175, 80, 0.1);
+    --nbe-dark-validation-success-badge: rgba(76, 175, 80, 0.2);
+    --nbe-dark-validation-error-bg: rgba(244, 67, 54, 0.1);
+    --nbe-dark-validation-error-badge: rgba(244, 67, 54, 0.2);
+    --nbe-dark-validation-warning-bg: rgba(255, 193, 7, 0.1);
+    --nbe-dark-validation-warning-badge: rgba(255, 193, 7, 0.2);
+    --nbe-dark-validation-info-bg: rgba(33, 150, 243, 0.1);
+    --nbe-dark-validation-info-badge: rgba(33, 150, 243, 0.2);
 
     /* Validation state text colors (for dark theme) */
     --nbe-dark-validation-success-text: #81c784;  /* Light green text */
@@ -463,9 +463,9 @@
 
     /* Validation state borders (for dark theme) */
     --nbe-dark-validation-success-border: rgba(76, 175, 80, 0.3);
-    --nbe-dark-validation-error-border: rgba(241, 76, 76, 0.3);
+    --nbe-dark-validation-error-border: rgba(244, 67, 54, 0.3);
     --nbe-dark-validation-warning-border: rgba(255, 193, 7, 0.3);
-    --nbe-dark-validation-info-border: rgba(56, 139, 253, 0.3);
+    --nbe-dark-validation-info-border: rgba(33, 150, 243, 0.3);
 
     /* ---- Dark Theme Object Type Badge Colors ---- */
     /* Infrastructure (green) - hosts, hostgroups */
@@ -495,8 +495,8 @@
     --nbe-dark-type-timeperiod-text: #90a4ae;
 
     /* Dependencies (red/purple) - dependencies, escalations */
-    --nbe-dark-type-hostdependency-bg: rgba(241, 76, 76, 0.2);
-    --nbe-dark-type-hostdependency-text: #f77;
+    --nbe-dark-type-hostdependency-bg: rgba(244, 67, 54, 0.2);
+    --nbe-dark-type-hostdependency-text: #EF9A9A;
     --nbe-dark-type-servicedependency-bg: rgba(197, 134, 192, 0.2);
     --nbe-dark-type-servicedependency-text: #c586c0;
     --nbe-dark-type-hostescalation-bg: rgba(208, 160, 205, 0.2);
@@ -542,10 +542,10 @@
     --nbe-dark-accent-danger-hover: #E57373;
 
     /* ---- Git Diff Colors ---- */
-    --nbe-dark-diff-added-bg: rgba(76, 175, 80, 0.15);   /* Green background for added lines */
-    --nbe-dark-diff-added-text: #81c784;                 /* Light green text for added lines */
-    --nbe-dark-diff-removed-bg: rgba(241, 76, 76, 0.15); /* Red background for removed lines */
-    --nbe-dark-diff-removed-text: #f77;                  /* Light red text for removed lines */
+    --nbe-dark-diff-added-bg: rgba(76, 175, 80, 0.15);
+    --nbe-dark-diff-added-text: #81C784;
+    --nbe-dark-diff-removed-bg: rgba(244, 67, 54, 0.15);
+    --nbe-dark-diff-removed-text: #E57373;
 }
 
 /* =============================================================================
