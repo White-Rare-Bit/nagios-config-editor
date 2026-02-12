@@ -15,8 +15,8 @@
         <div class="dep-section">
             <div class="dep-section-title">Find & Add</div>
             <div class="dep-section-content">
-                <div class="dep-search-wrap search-row">
-                    <i class="fa-solid fa-magnifying-glass search-icon" aria-hidden="true"></i>
+                <div class="search-row">
+                    <span class="search-icon" aria-hidden="true"><i class="fa-solid fa-magnifying-glass"></i></span>
                     <input type="text" class="form-input" id="nodeSearchAdd"
                            placeholder="Search objects..." autocomplete="off"
                            data-action="onNodeSearchInput"
@@ -24,8 +24,8 @@
                            aria-autocomplete="list" aria-controls="nodeSearchResults">
                     <div id="nodeSearchResults" class="dep-search-dropdown" role="listbox" aria-label="Search results"></div>
                 </div>
-                <button class="nbe-btn nbe-btn--secondary nbe-btn--full" data-action="fitGraph">Fit to View</button>
-                <button class="nbe-btn nbe-btn--secondary nbe-btn--full dep-btn-toggle" id="toggleLabelsBtn" data-action="toggleEdgeLabels">Hide Connection Labels</button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--secondary nbe-btn--full" data-action="fitGraph">Fit to View</button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--secondary nbe-btn--full dep-btn-toggle" id="toggleLabelsBtn" data-action="toggleEdgeLabels">Hide Connection Labels</button>
             </div>
         </div>
 
@@ -139,7 +139,7 @@
         <div class="dep-section dep-section-grow">
             <div class="dep-section-title">
                 <span>Nodes <span class="dep-badge" id="nodeCount">0</span></span>
-                <button class="nbe-btn nbe-btn--danger nbe-btn--xs" id="clearGraphBtn" data-action="clearGraph" style="display: none;">Clear</button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--danger nbe-btn--xs" id="clearGraphBtn" data-action="clearGraph" style="display: none;">Clear</button>
             </div>
             <div class="dep-section-content dep-node-list" id="addedNodesList" role="list" aria-label="Nodes in graph">
                 <div class="dep-empty">No nodes added yet</div>

@@ -18,11 +18,7 @@
     color: var(--nbe-dark-accent-primary);
 }
 
-.validate-container .nbe-btn--primary {
-    background: var(--nbe-dark-accent-primary);
-    border: none;
-    color: var(--nbe-dark-bg-primary);
-}
+
 
 .validate-main {
     flex: 1;

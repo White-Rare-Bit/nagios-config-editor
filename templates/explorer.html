@@ -16,11 +16,11 @@
         </div>
         <!-- View Tabs -->
         <div class="panel-tab-header">
-            <div class="nbe-tabs nbe-tabs--stretched" role="tablist" aria-label="View mode">
-                <button class="nbe-tab active" data-view="file" data-action="setView" title="Group objects by their .cfg file location" role="tab" aria-selected="true">
+            <div class="nbe-tabs nbe-tabs--stretched nbe-tabs--dark" role="tablist" aria-label="View mode">
+                <button class="nbe-tab nbe-tab--dark active" data-view="file" data-action="setView" title="Group objects by their .cfg file location" role="tab" aria-selected="true">
                     <i class="fa-solid fa-folder"></i> By File
                 </button>
-                <button class="nbe-tab" data-view="type" data-action="setView" title="Group objects by Nagios type (host, service, contact, etc.)" role="tab" aria-selected="false">
+                <button class="nbe-tab nbe-tab--dark" data-view="type" data-action="setView" title="Group objects by Nagios type (host, service, contact, etc.)" role="tab" aria-selected="false">
                     <i class="fa-solid fa-layer-group"></i> By Type
                 </button>
             </div>
@@ -28,7 +28,7 @@
         <div class="tree-header" role="toolbar" aria-label="Object filters">
             <div class="toolbar-row search-row">
                 <span class="search-icon" aria-hidden="true"><i class="fa-solid fa-magnifying-glass"></i></span>
-                <input type="text" class="tree-search" id="treeSearch" placeholder="Search objects..." data-action="filterTree" aria-label="Search objects" role="searchbox">
+                <input type="text" class="form-input" id="treeSearch" placeholder="Search objects..." data-action="filterTree" aria-label="Search objects" role="searchbox">
             </div>
             <div class="toolbar-row" role="group" aria-label="Filter options">
                 <span class="toolbar-label" id="showLabel">Show:</span>
@@ -114,14 +114,14 @@
 
         <!-- Main Tabs -->
         <div class="panel-tab-header">
-            <div class="nbe-tabs nbe-tabs--stretched" role="tablist" aria-label="Workspace tabs">
-                <button class="nbe-tab active" data-tab="files" data-action="switchRightTab" role="tab" aria-selected="true" aria-controls="filesTab">
+            <div class="nbe-tabs nbe-tabs--stretched nbe-tabs--dark" role="tablist" aria-label="Workspace tabs">
+                <button class="nbe-tab nbe-tab--dark active" data-tab="files" data-action="switchRightTab" role="tab" aria-selected="true" aria-controls="filesTab">
                     <i class="fa-solid fa-folder-tree"></i> Files
                 </button>
-                <button class="nbe-tab" data-tab="suggestions" data-action="switchRightTab" role="tab" aria-selected="false" aria-controls="suggestionsTab">
+                <button class="nbe-tab nbe-tab--dark" data-tab="suggestions" data-action="switchRightTab" role="tab" aria-selected="false" aria-controls="suggestionsTab">
                     <i class="fa-solid fa-lightbulb"></i> Suggestions <span class="nbe-tab-badge nbe-tab-badge--warning u-hidden" id="suggestionsBadge" aria-label="suggestions count">0</span>
                 </button>
-                <button class="nbe-tab" data-tab="validation" data-action="switchRightTab" role="tab" aria-selected="false" aria-controls="validationTab">
+                <button class="nbe-tab nbe-tab--dark" data-tab="validation" data-action="switchRightTab" role="tab" aria-selected="false" aria-controls="validationTab">
                     <i class="fa-solid fa-circle-check"></i> Validation <span class="nbe-tab-badge u-hidden" id="validationBadge" aria-label="validation issues">!</span>
                 </button>
             </div>

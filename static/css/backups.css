@@ -18,24 +18,8 @@
 }
 
 .backup-container .page-sidebar .form-input {
-    width: 100%;
-    padding: var(--nbe-space-sm) var(--nbe-space-md);
     font-family: var(--nbe-font-mono);
     font-size: var(--nbe-font-size-sm);
-    background: var(--nbe-dark-bg-tertiary);
-    border: 1px solid var(--nbe-dark-border-primary);
-    border-radius: var(--nbe-radius-md);
-    color: var(--nbe-dark-text-primary);
-}
-
-.backup-container .page-sidebar .form-input:focus {
-    outline: none;
-    border-color: var(--nbe-dark-accent-primary);
-    background: var(--nbe-dark-bg-secondary);
-}
-
-.backup-container .page-sidebar .form-input::placeholder {
-    color: var(--nbe-dark-text-muted);
 }
 
 /* Danger zone styling */
@@ -82,18 +66,7 @@
     margin: 0 0 var(--nbe-space-sm);
 }
 
-/* Button overrides in sidebar */
-.backup-container .page-sidebar .nbe-btn--primary {
-    background: var(--nbe-dark-accent-primary);
-    border: none;
-    color: var(--nbe-dark-bg-primary);
-}
 
-.backup-container .page-sidebar .nbe-btn--danger {
-    background: var(--nbe-dark-accent-danger);
-    border: none;
-    color: var(--nbe-text-inverse);
-}
 
 /* ============================================================================
    Main Content Area
@@ -290,26 +263,7 @@
     margin-left: var(--nbe-space-xs);
 }
 
-/* Button overrides in table */
-.backup-table .nbe-btn--secondary {
-    background: var(--nbe-dark-bg-tertiary);
-    border: 1px solid var(--nbe-dark-border-primary);
-    color: var(--nbe-dark-text-primary);
-}
 
-.backup-table .nbe-btn--secondary:hover {
-    border-color: var(--nbe-dark-border-hover);
-}
-
-.backup-table .nbe-btn--danger {
-    background: transparent;
-    border: 1px solid var(--nbe-dark-accent-danger);
-    color: var(--nbe-dark-accent-danger);
-}
-
-.backup-table .nbe-btn--danger:hover {
-    color: var(--nbe-text-inverse);
-}
 
 /* Row states */
 .backup-row.deleting {

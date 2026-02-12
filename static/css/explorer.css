@@ -440,56 +440,10 @@
     box-shadow: var(--nbe-shadow-xs);
 }
 
-.tree-header > .tree-search {
-    width: 100%;
-    box-sizing: border-box;
-}
 
-/* Search Row */
-.search-row {
-    position: relative;
-}
-
+/* Search icon offset for explorer toolbar padding */
 .search-row .search-icon {
     left: 22px; /* 12px toolbar-row padding + 10px offset */
-}
-
-.search-icon {
-    position: absolute;
-    left: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--nbe-dark-text-muted);
-    font-size: var(--nbe-typography-h3-size);
-    pointer-events: none;
-    z-index: 1;
-}
-
-.search-row .tree-search {
-    padding-left: var(--nbe-space-2xl);
-}
-
-.tree-search {
-    flex: 1;
-    padding: var(--nbe-space-sm) var(--nbe-space-md);
-    border: 1px solid var(--nbe-dark-border-primary);
-    border-radius: var(--nbe-radius-md);
-    font-size: var(--nbe-font-size-sm);
-    outline: none;
-    background: var(--nbe-dark-bg-tertiary);
-    color: var(--nbe-dark-text-primary);
-    width: 100%;
-    box-sizing: border-box;
-}
-
-.tree-search::placeholder {
-    color: var(--nbe-dark-text-muted);
-}
-
-.tree-search:focus {
-    border-color: var(--nbe-dark-accent-primary);
-    background: var(--nbe-dark-bg-secondary);
-    box-shadow: none;
 }
 
 /* Actions Dropdown */
@@ -651,16 +605,6 @@
     color: var(--nbe-dark-text-primary);
 }
 
-
-.tree-pane-header .nbe-tabs {
-    padding: 0;
-    overflow: hidden;
-}
-
-.tree-pane-header .nbe-tab {
-    padding: var(--nbe-space-md) var(--nbe-space-sm);
-    font-size: var(--nbe-font-size-base);
-}
 
 .tree-filter-option {
     display: flex;
@@ -1335,28 +1279,6 @@
     border-bottom: 2px solid var(--nbe-dark-border-secondary);
 }
 
-/* Padding override for explorer's stretched tabs */
-.panel-tab-header .nbe-tabs {
-    padding: 0;
-    overflow: hidden;
-}
-
-/* Tab styling uses dark tab tokens directly (consistent with M2 component pattern) */
-.panel-tab-header .nbe-tab {
-    padding: var(--nbe-space-md) var(--nbe-space-sm);
-    font-size: var(--nbe-font-size-base);
-    background: var(--nbe-dark-tab-bg);
-    color: var(--nbe-dark-tab-text);
-}
-
-.panel-tab-header .nbe-tab:hover {
-    color: var(--nbe-dark-tab-text-hover);
-}
-
-.panel-tab-header .nbe-tab.active {
-    color: var(--nbe-dark-tab-text-active);
-    border-bottom-color: var(--nbe-dark-tab-border-active);
-}
 
 .right-tab-content {
     flex: 1;

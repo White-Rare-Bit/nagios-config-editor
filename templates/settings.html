@@ -35,11 +35,11 @@
     <!-- Main Settings -->
     <div class="settings-main">
         <!-- Tab Navigation -->
-        <div class="nbe-tabs">
-            <button class="nbe-tab active" data-action="switchTab" data-tab="server">
+        <div class="nbe-tabs nbe-tabs--dark">
+            <button class="nbe-tab nbe-tab--dark active" data-action="switchTab" data-tab="server">
                 <i class="fa-solid fa-server"></i> Server Settings
             </button>
-            <button class="nbe-tab" data-action="switchTab" data-tab="identity">
+            <button class="nbe-tab nbe-tab--dark" data-action="switchTab" data-tab="identity">
                 <i class="fa-solid fa-user"></i> Your Identity
                 <span class="nbe-tab-badge nbe-tab-badge--warning" id="gitIdentityBadge">Not Set</span>
             </button>
@@ -56,7 +56,7 @@
                             <input type="text" class="form-input" id="nagiosConfigPath"
                                    value="{{ config.nagios_config_path }}"
                                    placeholder="./sample-config">
-                            <button class="nbe-btn nbe-btn--secondary nbe-btn--sm" data-action="browseDir" data-target="nagiosConfigPath">Browse</button>
+                            <button class="nbe-btn nbe-btn--dark nbe-btn--secondary nbe-btn--sm" data-action="browseDir" data-target="nagiosConfigPath">Browse</button>
                         </div>
                         <span class="form-hint">Directory containing your Nagios .cfg files</span>
                     </div>
@@ -67,7 +67,7 @@
                             <input type="text" class="form-input" id="backupPath"
                                    value="{{ config.backup_path or '' }}"
                                    placeholder="Leave empty for default (config_path/backups)">
-                            <button class="nbe-btn nbe-btn--secondary nbe-btn--sm" data-action="browseDir" data-target="backupPath">Browse</button>
+                            <button class="nbe-btn nbe-btn--dark nbe-btn--secondary nbe-btn--sm" data-action="browseDir" data-target="backupPath">Browse</button>
                         </div>
                         <span class="form-hint">Where to store configuration backups</span>
                     </div>
@@ -83,7 +83,7 @@
                             <input type="text" class="form-input" id="nagiosBin"
                                    value="{{ config.nagios_bin }}"
                                    placeholder="/usr/local/nagios/bin/nagios">
-                            <button class="nbe-btn nbe-btn--secondary nbe-btn--sm" data-action="browseFile" data-target="nagiosBin">Browse</button>
+                            <button class="nbe-btn nbe-btn--dark nbe-btn--secondary nbe-btn--sm" data-action="browseFile" data-target="nagiosBin">Browse</button>
                         </div>
                         <span class="form-hint">Path to the nagios executable (for validation)</span>
                     </div>
@@ -94,7 +94,7 @@
                             <input type="text" class="form-input" id="nagiosCfg"
                                    value="{{ config.nagios_cfg }}"
                                    placeholder="./sample-config/nagios.cfg">
-                            <button class="nbe-btn nbe-btn--secondary nbe-btn--sm" data-action="browseFile" data-target="nagiosCfg">Browse</button>
+                            <button class="nbe-btn nbe-btn--dark nbe-btn--secondary nbe-btn--sm" data-action="browseFile" data-target="nagiosCfg">Browse</button>
                         </div>
                         <span class="form-hint">Path to nagios.cfg (for validation)</span>
                     </div>
@@ -139,7 +139,7 @@
                         <label class="settings-label">Log File</label>
                         <div class="form-input-group">
                             <input type="text" class="form-input form-input-readonly" id="loggingFilePath" readonly>
-                            <button class="nbe-btn nbe-btn--secondary nbe-btn--sm" data-action="downloadLog">Download</button>
+                            <button class="nbe-btn nbe-btn--dark nbe-btn--secondary nbe-btn--sm" data-action="downloadLog">Download</button>
                         </div>
                         <span class="form-hint" id="loggingFileSize">File size: --</span>
                     </div>
@@ -147,8 +147,8 @@
             </div>
 
             <div class="settings-actions" id="serverSettingsActions">
-                <button class="nbe-btn nbe-btn--primary" data-action="saveServerSettings">Save Server Settings</button>
-                <button class="nbe-btn nbe-btn--secondary" data-action="resetToDefaults">Reset to Defaults</button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--primary" data-action="saveServerSettings">Save Server Settings</button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--secondary" data-action="resetToDefaults">Reset to Defaults</button>
             </div>
         </div>
 
@@ -175,7 +175,7 @@
                         <span class="form-hint" id="gitUserEmailHint">Your email address for git commits</span>
                     </div>
                     <div class="settings-actions">
-                        <button class="nbe-btn nbe-btn--primary" data-action="saveIdentity">Save Identity</button>
+                        <button class="nbe-btn nbe-btn--dark nbe-btn--primary" data-action="saveIdentity">Save Identity</button>
                     </div>
                 </div>
             </div>
@@ -196,7 +196,7 @@
                 <div class="mb-3">
                     <div class="input-group">
                         <input type="text" class="form-control" id="browsePath" placeholder="/">
-                        <button class="nbe-btn nbe-btn--secondary" type="button" data-action="navigateTo">Go</button>
+                        <button class="nbe-btn nbe-btn--dark nbe-btn--secondary" type="button" data-action="navigateTo">Go</button>
                     </div>
                 </div>
                 <div id="browseContent" class="browse-content-scroll">
@@ -204,8 +204,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="nbe-btn nbe-btn--secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="nbe-btn nbe-btn--primary" data-action="selectPath">Select</button>
+                <button type="button" class="nbe-btn nbe-btn--dark nbe-btn--secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="nbe-btn nbe-btn--dark nbe-btn--primary" data-action="selectPath">Select</button>
             </div>
         </div>
     </div>

@@ -36,28 +36,8 @@
     background: var(--nbe-dark-bg-primary);
 }
 
-/* Settings page uses shared .nbe-tabs from tokens.css */
-/* Override tabs to use dark theme — underline only, no fill */
 .settings-main .nbe-tabs {
     margin-bottom: var(--nbe-space-lg);
-    border-bottom: 1px solid var(--nbe-dark-border-primary);
-}
-
-.settings-main .nbe-tab {
-    background: transparent;
-    color: var(--nbe-dark-text-secondary);
-    border: none;
-    border-bottom: 2px solid transparent;
-}
-
-.settings-main .nbe-tab:hover {
-    color: var(--nbe-dark-text-primary);
-}
-
-.settings-main .nbe-tab.active {
-    color: var(--nbe-dark-text-primary);
-    border-bottom: 2px solid var(--nbe-dark-accent-primary);
-    background: transparent;
 }
 
 .settings-section {
@@ -106,27 +86,10 @@
 
 .settings-field .form-input {
     font-family: var(--nbe-font-mono);
-    background: var(--nbe-dark-bg-tertiary);
-    border: 1px solid var(--nbe-dark-border-primary);
-    color: var(--nbe-dark-text-primary);
-    padding: var(--nbe-space-sm) var(--nbe-space-md);
-    border-radius: var(--nbe-radius-md);
-}
-
-.settings-field .form-input:focus {
-    outline: none;
-    border-color: var(--nbe-dark-accent-primary);
-    background: var(--nbe-dark-bg-secondary);
-}
-
-.settings-field .form-input::placeholder {
-    color: var(--nbe-dark-text-muted);
 }
 
 /* Select elements */
 .settings-field select.form-input {
-    background: var(--nbe-dark-bg-tertiary);
-    color: var(--nbe-dark-text-primary);
     cursor: pointer;
 }
 
@@ -311,52 +274,6 @@ body.editing-locked .settings-container #identityTab {
     padding: var(--nbe-space-sm);
 }
 
-/* Tab content */
-.nbe-tab-content {
-    display: none;
-}
-
-.nbe-tab-content.active {
-    display: block;
-}
-
-/* Override button styles for settings page */
-.settings-main .nbe-btn--secondary {
-    background: var(--nbe-dark-bg-tertiary);
-    border: 1px solid var(--nbe-dark-border-primary);
-    color: var(--nbe-dark-text-primary);
-}
-
-.settings-main .nbe-btn--secondary:hover {
-    border-color: var(--nbe-dark-border-hover);
-}
-
-.settings-main .nbe-btn--primary {
-    background: var(--nbe-dark-accent-primary);
-    border: none;
-    color: var(--nbe-dark-bg-primary);
-}
-
-.settings-sidebar .nbe-btn--secondary {
-    background: var(--nbe-dark-bg-tertiary);
-    border: 1px solid var(--nbe-dark-border-primary);
-    color: var(--nbe-dark-text-primary);
-}
-
-/* Tab badge override for dark theme */
-.settings-main .nbe-tab-badge {
-    background: var(--nbe-dark-validation-warning-bg);
-    color: var(--nbe-warning);
-    font-size: var(--nbe-font-size-xs);
-    padding: var(--nbe-space-2xs) var(--nbe-space-xs-plus);
-    border-radius: var(--nbe-radius-2xl);
-    margin-left: var(--nbe-space-sm);
-}
-
-.settings-main .nbe-tab-badge--success {
-    background: var(--nbe-dark-validation-success-bg);
-    color: var(--nbe-success);
-}
 
 /* Scrollbar - dark theme */
 .settings-sidebar::-webkit-scrollbar,

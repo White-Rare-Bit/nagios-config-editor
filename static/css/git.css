@@ -79,18 +79,7 @@
     margin: 0 0 var(--nbe-space-sm);
 }
 
-/* Button overrides in sidebar */
-.git-container .page-sidebar .nbe-btn--primary {
-    background: var(--nbe-dark-accent-primary);
-    border: none;
-    color: var(--nbe-dark-bg-primary);
-}
 
-.git-container .page-sidebar .nbe-btn--danger {
-    background: var(--nbe-dark-accent-danger);
-    border: none;
-    color: var(--nbe-text-inverse);
-}
 
 /* ============================================================================
    Main Content Area
@@ -705,16 +694,7 @@
     font-style: italic;
 }
 
-/* Button overrides in table */
-.git-history-table .nbe-btn--secondary {
-    background: var(--nbe-dark-bg-tertiary);
-    border: 1px solid var(--nbe-dark-border-primary);
-    color: var(--nbe-dark-text-primary);
-}
 
-.git-history-table .nbe-btn--secondary:hover {
-    border-color: var(--nbe-dark-border-hover);
-}
 
 /* Scrollbar for history table */
 .git-history-table-container::-webkit-scrollbar {

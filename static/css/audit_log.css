@@ -62,43 +62,6 @@
    Search Bar
    ============================================================================ */
 
-.audit-search-row {
-    position: relative;
-}
-
-.audit-search-icon {
-    position: absolute;
-    left: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--nbe-dark-text-muted);
-    font-size: var(--nbe-typography-h3-size);
-    pointer-events: none;
-    z-index: 1;
-}
-
-.audit-search {
-    width: 100%;
-    padding: var(--nbe-space-sm) var(--nbe-space-md);
-    padding-left: var(--nbe-space-2xl);
-    border: 1px solid var(--nbe-dark-border-primary);
-    border-radius: var(--nbe-radius-md);
-    font-size: var(--nbe-font-size-sm);
-    background: var(--nbe-dark-bg-tertiary);
-    color: var(--nbe-dark-text-primary);
-    box-sizing: border-box;
-}
-
-.audit-search::placeholder {
-    color: var(--nbe-dark-text-muted);
-}
-
-.audit-search:focus {
-    outline: none;
-    border-color: var(--nbe-dark-accent-primary);
-    background: var(--nbe-dark-bg-secondary);
-    box-shadow: none;
-}
 
 /* ============================================================================
    Filter Chips
@@ -318,12 +281,6 @@
     margin: 0 0 var(--nbe-space-sm);
 }
 
-/* Button overrides in sidebar */
-.audit-container .page-sidebar .nbe-btn--danger {
-    background: var(--nbe-dark-accent-danger);
-    border: none;
-    color: var(--nbe-text-inverse);
-}
 
 /* ============================================================================
    Archives List

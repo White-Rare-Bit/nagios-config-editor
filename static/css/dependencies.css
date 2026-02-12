@@ -51,26 +51,8 @@
    Search
    ============================================================================ */
 
-.dep-search-wrap {
-    position: relative;
+.dep-sidebar .search-row {
     margin-bottom: var(--nbe-space-sm-plus);
-}
-
-.dep-search-wrap .form-input {
-    width: 100%;
-    padding: var(--nbe-space-sm) var(--nbe-space-md) var(--nbe-space-sm) 32px;
-    font-size: var(--nbe-font-size-sm);
-}
-
-.dep-search-wrap .search-icon {
-    position: absolute;
-    left: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--nbe-dark-text-muted);
-    font-size: var(--nbe-font-size-md);
-    pointer-events: none;
-    z-index: 1;
 }
 
 /* Filter row with Type and Layout dropdowns */
@@ -328,24 +310,6 @@
 .type-badge--hostescalation { background: var(--nbe-palette-pink); color: var(--nbe-text-inverse); }
 .type-badge--serviceescalation { background: var(--nbe-palette-pink); color: var(--nbe-text-inverse); }
 
-.dep-container .form-input,
-.dep-sidebar .form-input {
-    background: var(--nbe-dark-bg-tertiary);
-    border: 1px solid var(--nbe-dark-border-primary);
-    color: var(--nbe-dark-text-primary);
-}
-
-.dep-container .form-input:focus,
-.dep-sidebar .form-input:focus {
-    border-color: var(--nbe-dark-accent-primary);
-    background: var(--nbe-dark-bg-secondary);
-    outline: none;
-}
-
-.dep-container .form-input::placeholder,
-.dep-sidebar .form-input::placeholder {
-    color: var(--nbe-dark-text-muted);
-}
 
 .dep-container .form-select option,
 .dep-sidebar .form-select option {
@@ -588,37 +552,7 @@
     flex-shrink: 0;
 }
 
-/* ============================================================================
-   Button Overrides
-   ============================================================================ */
 
-.dep-container .nbe-btn--secondary,
-.dep-sidebar .nbe-btn--secondary,
-.dep-container .page-sidebar .nbe-btn--secondary {
-    background: var(--nbe-dark-bg-tertiary);
-    border: 1px solid var(--nbe-dark-border-primary);
-    color: var(--nbe-dark-text-primary);
-}
-
-.dep-container .nbe-btn--secondary:hover,
-.dep-sidebar .nbe-btn--secondary:hover,
-.dep-container .page-sidebar .nbe-btn--secondary:hover {
-    border-color: var(--nbe-dark-border-hover);
-}
-
-.dep-container .nbe-btn--danger,
-.dep-sidebar .nbe-btn--danger,
-.dep-container .page-sidebar .nbe-btn--danger {
-    background: transparent;
-    border: 1px solid var(--nbe-dark-accent-danger);
-    color: var(--nbe-dark-accent-danger);
-}
-
-.dep-container .nbe-btn--danger:hover,
-.dep-sidebar .nbe-btn--danger:hover,
-.dep-container .page-sidebar .nbe-btn--danger:hover {
-    color: var(--nbe-text-inverse);
-}
 
 /* ============================================================================
    Graph Area
