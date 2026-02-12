@@ -143,6 +143,8 @@ document.addEventListener('DOMContentLoaded', () => {
             navigateTo();
         } else if (action === 'selectPath') {
             selectPath();
+        } else if (action === 'closeBrowse') {
+            closeBrowse();
         } else if (action === 'switchTab') {
             const tab = actionEl.dataset.tab;
             if (tab) switchTab(tab);
@@ -333,57 +335,68 @@ function openBrowser(path) {
     currentBrowsePath = path;
     document.getElementById('browsePath').value = path;
     loadDirectory(path);
-    new bootstrap.Modal(document.getElementById('browseModal')).show();
+    document.getElementById('browseOverlay').classList.add('visible');
 }
+
+function closeBrowse() {
+    document.getElementById('browseOverlay').classList.remove('visible');
+}
+
+// Close browse dialog on backdrop click
+document.getElementById('browseOverlay').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeBrowse();
+});
+
+const BROWSE_ICONS = {
+    folder: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>',
+    file: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>',
+    parent: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>'
+};
 
 async function loadDirectory(path) {
     const container = document.getElementById('browseContent');
 
     // Show loading state
-    container.innerHTML = '<p class="text-muted p-3">Loading...</p>';
+    container.innerHTML = '<p class="browse-empty">Loading...</p>';
 
     const result = await ApiClient.post('/api/settings/browse', { path }, { silent: true });
 
     if (!result.success || result.data?.error) {
         container.innerHTML =
-            `<p class="text-danger p-3">${escapeHtml(result.data?.error || result.error)}</p>`;
+            `<p class="browse-empty" style="color: var(--nbe-danger)">${escapeHtml(result.data?.error || result.error)}</p>`;
         return;
     }
 
     currentBrowsePath = result.data.path;
     document.getElementById('browsePath').value = result.data.path;
 
-    let html = '<div class="list-group">';
+    let html = '';
 
     if (result.data.parent) {
-        html += `
-            <a href="#" class="list-group-item list-group-item-action" data-action="loadDirectory" data-path="${escapeHtml(result.data.parent)}">
-                <i class="text-muted">..</i> (parent directory)
-            </a>
-        `;
+        html += `<a href="#" class="browse-tree-row" data-action="loadDirectory" data-path="${escapeHtml(result.data.parent)}">
+            <span class="browse-tree-icon browse-tree-icon--parent">${BROWSE_ICONS.parent}</span>
+            <span class="browse-tree-label">..</span>
+        </a>`;
     }
 
     for (const entry of result.data.entries) {
         if (entry.is_dir) {
-            html += `
-                <a href="#" class="list-group-item list-group-item-action" data-action="loadDirectory" data-path="${escapeHtml(entry.path)}">
-                    <strong>${escapeHtml(entry.name)}/</strong>
-                </a>
-            `;
+            html += `<a href="#" class="browse-tree-row" data-action="loadDirectory" data-path="${escapeHtml(entry.path)}">
+                <span class="browse-tree-icon browse-tree-icon--folder">${BROWSE_ICONS.folder}</span>
+                <span class="browse-tree-label browse-tree-label--folder">${escapeHtml(entry.name)}</span>
+            </a>`;
         } else if (browseMode === 'file') {
-            html += `
-                <a href="#" class="list-group-item list-group-item-action" data-action="selectFile" data-path="${escapeHtml(entry.path)}">
-                    ${escapeHtml(entry.name)}
-                </a>
-            `;
+            html += `<a href="#" class="browse-tree-row" data-action="selectFile" data-path="${escapeHtml(entry.path)}">
+                <span class="browse-tree-icon browse-tree-icon--file">${BROWSE_ICONS.file}</span>
+                <span class="browse-tree-label">${escapeHtml(entry.name)}</span>
+            </a>`;
         }
     }
 
     if (result.data.entries.length === 0) {
-        html += '<p class="text-muted p-3">Empty directory</p>';
+        html += '<p class="browse-empty">Empty directory</p>';
     }
 
-    html += '</div>';
     container.innerHTML = html;
 }
 
@@ -396,14 +409,14 @@ function selectPath() {
     if (browseTargetField) {
         document.getElementById(browseTargetField).value = currentBrowsePath;
     }
-    bootstrap.Modal.getInstance(document.getElementById('browseModal')).hide();
+    closeBrowse();
 }
 
 function selectFile(path) {
     if (browseTargetField) {
         document.getElementById(browseTargetField).value = path;
     }
-    bootstrap.Modal.getInstance(document.getElementById('browseModal')).hide();
+    closeBrowse();
 }
 
 async function loadGitIdentity() {

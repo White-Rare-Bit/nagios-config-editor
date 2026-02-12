@@ -264,14 +264,159 @@ body.editing-locked .settings-container #identityTab {
     flex: 1;
 }
 
-/* Browse modal - dark theme */
+/* Browse filesystem dialog */
+.browse-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--nbe-overlay-darker);
+    z-index: var(--nbe-z-modal);
+    align-items: center;
+    justify-content: center;
+}
+
+.browse-overlay.visible {
+    display: flex;
+}
+
+.browse-dialog {
+    background: var(--nbe-dark-bg-secondary);
+    border: 1px solid var(--nbe-dark-border-primary);
+    border-radius: var(--nbe-radius-xl);
+    box-shadow: var(--nbe-shadow-lg);
+    width: 90%;
+    max-width: 600px;
+    animation: confirmSlideIn 0.2s ease;
+}
+
+.browse-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--nbe-space-lg) var(--nbe-space-xl);
+    border-bottom: 1px solid var(--nbe-dark-border-secondary);
+}
+
+.browse-dialog-header h3 {
+    margin: 0;
+    font-size: var(--nbe-typography-h2-size);
+    font-weight: 600;
+    color: var(--nbe-dark-text-primary);
+}
+
+.browse-dialog-close {
+    background: none;
+    border: none;
+    color: var(--nbe-dark-text-muted);
+    font-size: var(--nbe-typography-h1-size);
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.browse-dialog-close:hover {
+    color: var(--nbe-dark-text-primary);
+}
+
+.browse-dialog-body {
+    padding: var(--nbe-space-lg) var(--nbe-space-xl);
+}
+
+.browse-path-bar {
+    display: flex;
+    gap: var(--nbe-space-sm);
+    margin-bottom: var(--nbe-space-md);
+}
+
+.browse-path-bar .form-input {
+    flex: 1;
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-typography-code-size);
+}
+
 .browse-content-scroll {
     max-height: 400px;
     overflow-y: auto;
     background: var(--nbe-dark-bg-primary);
     border: 1px solid var(--nbe-dark-border-primary);
     border-radius: var(--nbe-radius-md);
-    padding: var(--nbe-space-sm);
+}
+
+/* Tree rows - matches .workspace-tree-row from explorer */
+.browse-tree-row {
+    display: flex;
+    align-items: center;
+    height: var(--nbe-tree-row-height);
+    padding: 0 var(--nbe-space-md) 0 var(--nbe-space-sm);
+    cursor: pointer;
+    text-decoration: none;
+    border-left: 3px solid transparent;
+    transition: background-color 0.1s;
+}
+
+.browse-tree-row:hover {
+    background-color: var(--nbe-dark-bg-hover);
+}
+
+/* Tree icons - matches .tree-icon from explorer */
+.browse-tree-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-right: var(--nbe-space-sm);
+    flex-shrink: 0;
+}
+
+.browse-tree-icon svg {
+    width: var(--nbe-tree-icon-size);
+    height: var(--nbe-tree-icon-size);
+}
+
+.browse-tree-icon--folder {
+    color: var(--nbe-dark-text-secondary);
+}
+
+.browse-tree-icon--file {
+    color: var(--nbe-dark-text-secondary);
+}
+
+.browse-tree-icon--parent {
+    color: var(--nbe-dark-text-muted);
+}
+
+/* Tree labels - matches .tree-label from explorer */
+.browse-tree-label {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--nbe-typography-body-size);
+    font-weight: 500;
+    color: var(--nbe-dark-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.browse-tree-label--folder {
+    font-weight: 600;
+}
+
+.browse-empty {
+    padding: var(--nbe-space-lg);
+    color: var(--nbe-dark-text-muted);
+    font-size: var(--nbe-typography-secondary-size);
+}
+
+.browse-dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--nbe-space-sm);
+    padding: var(--nbe-space-md) var(--nbe-space-xl);
+    border-top: 1px solid var(--nbe-dark-border-secondary);
 }
 
 
