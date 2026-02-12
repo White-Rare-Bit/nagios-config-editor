@@ -1,11 +1,43 @@
-/* Docs page — Nagios object reference browser */
+/* Docs page — App documentation + Nagios object reference browser */
 (function() {
     'use strict';
 
     var REF = window.NAGIOS_OBJECT_REFERENCE;
     var INHERITANCE = window.NAGIOS_INHERITANCE_REFERENCE;
 
-    var CATEGORIES = [
+    // =========================================================================
+    // App Docs tree structure (labels + slugs only — content from server)
+    // =========================================================================
+
+    var APP_DOCS_TREE = [
+        { section: 'Getting Started', items: [
+            { slug: 'overview', label: 'Overview' },
+            { slug: 'installation', label: 'Installation & Setup' },
+            { slug: 'quick-start', label: 'Quick Start Guide' }
+        ]},
+        { section: 'User Guide', items: [
+            { slug: 'explorer-navigation', label: 'Explorer & Navigation' },
+            { slug: 'editing-objects', label: 'Editing Objects' },
+            { slug: 'bulk-operations', label: 'Bulk Operations' },
+            { slug: 'staging-system', label: 'Staging System' },
+            { slug: 'file-folder-management', label: 'File & Folder Management' },
+            { slug: 'git-integration', label: 'Git Integration' },
+            { slug: 'search-filtering', label: 'Search & Filtering' },
+            { slug: 'keyboard-shortcuts', label: 'Keyboard Shortcuts' }
+        ]},
+        { section: 'Developer Guide', items: [
+            { slug: 'architecture', label: 'Architecture Overview' },
+            { slug: 'backend-services', label: 'Backend Services' },
+            { slug: 'api-reference', label: 'API Reference' },
+            { slug: 'frontend-architecture', label: 'Frontend Architecture' },
+            { slug: 'data-flow-staging', label: 'Data Flow & Staging Internals' },
+            { slug: 'configuration', label: 'Configuration System' },
+            { slug: 'contributing', label: 'Contributing' }
+        ]}
+    ];
+
+    // Nagios reference categories (unchanged)
+    var NAGIOS_CATEGORIES = [
         { name: 'Monitoring Objects', types: ['host', 'service'] },
         { name: 'Groups', types: ['hostgroup', 'servicegroup', 'contactgroup'] },
         { name: 'Contacts', types: ['contact'] },
@@ -15,10 +47,9 @@
         { name: 'Extended Info (Deprecated)', types: ['hostextinfo', 'serviceextinfo'] }
     ];
 
-    // Special entries (non-object-type pages)
     var SPECIAL_INHERITANCE = '_inheritance';
 
-    // SVG icons (subset from explorer/ui-utils.js)
+    // SVG icons
     var ICONS = {
         chevron: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>',
         folder: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>',
@@ -26,11 +57,14 @@
         file: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>'
     };
 
-    var selectedType = null;
-    var expandedCategories = {};
+    // State
+    var selectedType = null;     // Nagios type name or null
+    var selectedAppDoc = null;   // App doc slug or null
+    var expandedSections = {};   // keyed by 'app', 'app-<index>', 'nagios', 'nagios-<catIndex>'
     var focusedIndex = -1;
-    var allTypeNodes = []; // flat list for keyboard nav
-    var treeSearchQuery = ''; // global search filter
+    var allSelectableNodes = []; // flat list for keyboard nav
+    var treeSearchQuery = '';
+    var appDocCache = {};        // slug → HTML string
 
     // =========================================================================
     // Tree rendering
@@ -41,42 +75,135 @@
         var html = '';
         var lower = treeSearchQuery.toLowerCase();
 
-        for (var i = 0; i < CATEGORIES.length; i++) {
-            html += renderCategory(CATEGORIES[i], i, lower);
-        }
-
-        // Inheritance section (standalone entry, not inside a category)
-        var inheritanceVisible = !lower || 'inheritance'.indexOf(lower) !== -1 ||
-            'template'.indexOf(lower) !== -1 || 'use register name'.indexOf(lower) !== -1;
-        if (inheritanceVisible) {
-            html += renderInheritanceRow();
-        }
+        html += renderAppDocsFolder(lower);
+        html += renderNagiosFolder(lower);
 
         container.innerHTML = html;
-        buildTypeNodeList();
+        buildSelectableNodeList();
     }
 
-    function renderCategory(cat, catIndex, searchLower) {
-        // Filter types by search query
+    // --- App Docs folder ---
+
+    function renderAppDocsFolder(searchLower) {
+        var hasVisibleItems = false;
+        var sectionsHtml = '';
+
+        for (var i = 0; i < APP_DOCS_TREE.length; i++) {
+            var section = APP_DOCS_TREE[i];
+            var sectionHtml = renderAppSection(section, i, searchLower);
+            if (sectionHtml) {
+                hasVisibleItems = true;
+                sectionsHtml += sectionHtml;
+            }
+        }
+
+        if (!hasVisibleItems && searchLower) return '';
+
+        var isExpanded = expandedSections['app'] !== false;
+
+        var html = '<div class="workspace-tree-row' + (isExpanded ? ' expanded' : '') + '" data-depth="0" data-folder="app" onclick="DocsPage.toggleFolder(\'app\')">';
+        html += '<button class="tree-expand-btn' + (isExpanded ? ' expanded' : '') + '">' + ICONS.chevron + '</button>';
+        html += '<span class="tree-icon tree-icon--folder' + (isExpanded ? ' expanded' : '') + '">' + (isExpanded ? ICONS.folderOpen : ICONS.folder) + '</span>';
+        html += '<span class="tree-label tree-label--folder">App Docs</span>';
+        html += '</div>';
+
+        html += '<div class="tree-children' + (isExpanded ? ' expanded' : '') + '">';
+        html += sectionsHtml;
+        html += '</div>';
+        return html;
+    }
+
+    function renderAppSection(section, sectionIndex, searchLower) {
+        var visibleItems = [];
+        for (var i = 0; i < section.items.length; i++) {
+            var item = section.items[i];
+            if (!searchLower || item.label.toLowerCase().indexOf(searchLower) !== -1 || item.slug.indexOf(searchLower) !== -1) {
+                visibleItems.push(item);
+            }
+        }
+        if (visibleItems.length === 0) return '';
+
+        var key = 'app-' + sectionIndex;
+        var isExpanded = expandedSections[key] !== false;
+
+        var html = '<div class="workspace-tree-row' + (isExpanded ? ' expanded' : '') + '" data-depth="1" data-folder="' + key + '" onclick="DocsPage.toggleFolder(\'' + key + '\')">';
+        html += '<button class="tree-expand-btn' + (isExpanded ? ' expanded' : '') + '">' + ICONS.chevron + '</button>';
+        html += '<span class="tree-icon tree-icon--folder' + (isExpanded ? ' expanded' : '') + '">' + (isExpanded ? ICONS.folderOpen : ICONS.folder) + '</span>';
+        html += '<span class="tree-label tree-label--folder">' + escapeHtml(section.section) + '</span>';
+        html += '<span class="tree-count">' + visibleItems.length + '</span>';
+        html += '</div>';
+
+        html += '<div class="tree-children' + (isExpanded ? ' expanded' : '') + '">';
+        for (var j = 0; j < visibleItems.length; j++) {
+            var item = visibleItems[j];
+            var isSelected = selectedAppDoc === item.slug;
+            html += '<div class="workspace-tree-row' + (isSelected ? ' selected' : '') + '" data-depth="2" data-app-doc="' + item.slug + '" onclick="DocsPage.selectAppDoc(\'' + item.slug + '\')">';
+            html += '<span class="tree-expand-placeholder"></span>';
+            html += '<span class="tree-icon tree-icon--file">' + ICONS.file + '</span>';
+            html += '<span class="tree-label">' + escapeHtml(item.label) + '</span>';
+            html += '</div>';
+        }
+        html += '</div>';
+        return html;
+    }
+
+    // --- Nagios Reference folder ---
+
+    function renderNagiosFolder(searchLower) {
+        var hasVisibleItems = false;
+        var categoriesHtml = '';
+
+        for (var i = 0; i < NAGIOS_CATEGORIES.length; i++) {
+            var catHtml = renderNagiosCategory(NAGIOS_CATEGORIES[i], i, searchLower);
+            if (catHtml) {
+                hasVisibleItems = true;
+                categoriesHtml += catHtml;
+            }
+        }
+
+        // Inheritance entry
+        var inheritanceVisible = !searchLower || 'inheritance'.indexOf(searchLower) !== -1 ||
+            'template'.indexOf(searchLower) !== -1 || 'use register name'.indexOf(searchLower) !== -1;
+        if (inheritanceVisible) {
+            hasVisibleItems = true;
+            categoriesHtml += renderInheritanceRow();
+        }
+
+        if (!hasVisibleItems && searchLower) return '';
+
+        var isExpanded = expandedSections['nagios'] === true; // collapsed by default
+
+        var html = '<div class="workspace-tree-row' + (isExpanded ? ' expanded' : '') + '" data-depth="0" data-folder="nagios" onclick="DocsPage.toggleFolder(\'nagios\')">';
+        html += '<button class="tree-expand-btn' + (isExpanded ? ' expanded' : '') + '">' + ICONS.chevron + '</button>';
+        html += '<span class="tree-icon tree-icon--folder' + (isExpanded ? ' expanded' : '') + '">' + (isExpanded ? ICONS.folderOpen : ICONS.folder) + '</span>';
+        html += '<span class="tree-label tree-label--folder">Nagios Reference</span>';
+        html += '</div>';
+
+        html += '<div class="tree-children' + (isExpanded ? ' expanded' : '') + '">';
+        html += categoriesHtml;
+        html += '</div>';
+        return html;
+    }
+
+    function renderNagiosCategory(cat, catIndex, searchLower) {
         var visibleTypes = [];
         for (var i = 0; i < cat.types.length; i++) {
             var typeName = cat.types[i];
             var typeData = REF[typeName];
-            if (!searchLower || matchesSearch(typeName, typeData, searchLower)) {
+            if (!searchLower || matchesNagiosSearch(typeName, typeData, searchLower)) {
                 visibleTypes.push(typeName);
             }
         }
-
-        // Hide entire category if no matching types
         if (visibleTypes.length === 0) return '';
 
-        var isExpanded = expandedCategories[catIndex] !== false; // default expanded
+        var key = 'nagios-' + catIndex;
+        var isExpanded = expandedSections[key] !== false;
         var totalDirectives = 0;
         for (var i = 0; i < visibleTypes.length; i++) {
             totalDirectives += REF[visibleTypes[i]].directives.length;
         }
 
-        var html = '<div class="workspace-tree-row' + (isExpanded ? ' expanded' : '') + '" data-depth="0" data-cat="' + catIndex + '" onclick="DocsPage.toggleCategory(' + catIndex + ')">';
+        var html = '<div class="workspace-tree-row' + (isExpanded ? ' expanded' : '') + '" data-depth="1" data-folder="' + key + '" onclick="DocsPage.toggleFolder(\'' + key + '\')">';
         html += '<button class="tree-expand-btn' + (isExpanded ? ' expanded' : '') + '">' + ICONS.chevron + '</button>';
         html += '<span class="tree-icon tree-icon--folder' + (isExpanded ? ' expanded' : '') + '">' + (isExpanded ? ICONS.folderOpen : ICONS.folder) + '</span>';
         html += '<span class="tree-label tree-label--folder">' + escapeHtml(cat.name) + '</span>';
@@ -85,14 +212,13 @@
 
         html += '<div class="tree-children' + (isExpanded ? ' expanded' : '') + '">';
         for (var i = 0; i < visibleTypes.length; i++) {
-            html += renderTypeRow(visibleTypes[i]);
+            html += renderNagiosTypeRow(visibleTypes[i]);
         }
         html += '</div>';
         return html;
     }
 
-    function matchesSearch(typeName, typeData, lower) {
-        // Match against type name, label, description, and directive names
+    function matchesNagiosSearch(typeName, typeData, lower) {
         if (typeName.indexOf(lower) !== -1) return true;
         var label = (typeData.label || '').toLowerCase();
         if (label.indexOf(lower) !== -1) return true;
@@ -103,17 +229,16 @@
         return false;
     }
 
-    function renderTypeRow(typeName) {
+    function renderNagiosTypeRow(typeName) {
         var typeData = REF[typeName];
         var isSelected = selectedType === typeName;
-        var directiveCount = typeData.directives.length;
         var label = typeData.label || typeName;
 
-        var html = '<div class="workspace-tree-row' + (isSelected ? ' selected' : '') + '" data-depth="1" data-type="' + typeName + '" onclick="DocsPage.selectType(\'' + typeName + '\')">';
+        var html = '<div class="workspace-tree-row' + (isSelected ? ' selected' : '') + '" data-depth="2" data-type="' + typeName + '" onclick="DocsPage.selectType(\'' + typeName + '\')">';
         html += '<span class="tree-expand-placeholder"></span>';
         html += '<span class="tree-icon tree-icon--file">' + ICONS.file + '</span>';
         html += '<span class="tree-label">' + escapeHtml(label) + '</span>';
-        html += '<span class="tree-count">' + directiveCount + '</span>';
+        html += '<span class="tree-count">' + typeData.directives.length + '</span>';
         html += '</div>';
         return html;
     }
@@ -122,7 +247,7 @@
         var isSelected = selectedType === SPECIAL_INHERITANCE;
         var sectionCount = INHERITANCE ? INHERITANCE.length : 0;
 
-        var html = '<div class="workspace-tree-row' + (isSelected ? ' selected' : '') + '" data-depth="0" data-type="' + SPECIAL_INHERITANCE + '" onclick="DocsPage.selectType(\'' + SPECIAL_INHERITANCE + '\')">';
+        var html = '<div class="workspace-tree-row' + (isSelected ? ' selected' : '') + '" data-depth="1" data-type="' + SPECIAL_INHERITANCE + '" onclick="DocsPage.selectType(\'' + SPECIAL_INHERITANCE + '\')">';
         html += '<span class="tree-expand-placeholder"></span>';
         html += '<span class="tree-icon tree-icon--file">' + ICONS.file + '</span>';
         html += '<span class="tree-label">Inheritance</span>';
@@ -131,11 +256,11 @@
         return html;
     }
 
-    function buildTypeNodeList() {
-        allTypeNodes = [];
-        var rows = document.querySelectorAll('.docs-tree-container .workspace-tree-row[data-type]');
+    function buildSelectableNodeList() {
+        allSelectableNodes = [];
+        var rows = document.querySelectorAll('.docs-tree-container .workspace-tree-row[data-app-doc], .docs-tree-container .workspace-tree-row[data-type]');
         for (var i = 0; i < rows.length; i++) {
-            allTypeNodes.push(rows[i]);
+            allSelectableNodes.push(rows[i]);
         }
     }
 
@@ -143,14 +268,41 @@
     // Tree interactions
     // =========================================================================
 
-    function toggleCategory(catIndex) {
-        expandedCategories[catIndex] = expandedCategories[catIndex] === false;
+    function toggleFolder(key) {
+        if (key === 'nagios') {
+            expandedSections[key] = expandedSections[key] !== true;
+        } else {
+            expandedSections[key] = expandedSections[key] === false;
+        }
         renderTree();
+    }
+
+    function selectAppDoc(slug) {
+        selectedAppDoc = slug;
+        selectedType = null;
+
+        // Ensure parent sections are expanded
+        expandedSections['app'] = true;
+        for (var i = 0; i < APP_DOCS_TREE.length; i++) {
+            for (var j = 0; j < APP_DOCS_TREE[i].items.length; j++) {
+                if (APP_DOCS_TREE[i].items[j].slug === slug) {
+                    expandedSections['app-' + i] = true;
+                    break;
+                }
+            }
+        }
+
+        renderTree();
+        loadAppDocContent(slug);
+        updateHash();
     }
 
     function selectType(typeName) {
         selectedType = typeName;
+        selectedAppDoc = null;
 
+        // Ensure Nagios folder is expanded
+        expandedSections['nagios'] = true;
         if (typeName === SPECIAL_INHERITANCE) {
             renderTree();
             renderInheritanceContent();
@@ -158,16 +310,48 @@
             return;
         }
 
-        // Ensure parent category is expanded
-        for (var i = 0; i < CATEGORIES.length; i++) {
-            if (CATEGORIES[i].types.indexOf(typeName) !== -1) {
-                expandedCategories[i] = true;
+        for (var i = 0; i < NAGIOS_CATEGORIES.length; i++) {
+            if (NAGIOS_CATEGORIES[i].types.indexOf(typeName) !== -1) {
+                expandedSections['nagios-' + i] = true;
                 break;
             }
         }
         renderTree();
-        renderContent(typeName);
+        renderNagiosContent(typeName);
         updateHash();
+    }
+
+    // =========================================================================
+    // App doc content loading
+    // =========================================================================
+
+    function loadAppDocContent(slug) {
+        var container = document.getElementById('docsContent');
+
+        if (appDocCache[slug]) {
+            container.innerHTML = appDocCache[slug];
+            return;
+        }
+
+        container.innerHTML = '<div class="empty-state empty-state--dark empty-state--flex"><div class="empty-icon"><i class="fa-solid fa-spinner fa-spin"></i></div><p>Loading...</p></div>';
+
+        fetch('/api/docs/' + encodeURIComponent(slug))
+            .then(function(resp) {
+                if (!resp.ok) throw new Error('Not found');
+                return resp.text();
+            })
+            .then(function(html) {
+                appDocCache[slug] = html;
+                // Only update if still the selected doc
+                if (selectedAppDoc === slug) {
+                    container.innerHTML = html;
+                }
+            })
+            .catch(function() {
+                if (selectedAppDoc === slug) {
+                    container.innerHTML = '<div class="empty-state empty-state--dark empty-state--flex"><div class="empty-icon"><i class="fa-solid fa-triangle-exclamation"></i></div><h3>Page not found</h3><p>This documentation page is not available yet.</p></div>';
+                }
+            });
     }
 
     // =========================================================================
@@ -176,20 +360,25 @@
 
     function handleTreeSearch(value) {
         treeSearchQuery = value;
-        // When searching, auto-expand all categories to show results
         if (value) {
-            for (var i = 0; i < CATEGORIES.length; i++) {
-                expandedCategories[i] = true;
+            // Expand everything to show results
+            expandedSections['app'] = true;
+            expandedSections['nagios'] = true;
+            for (var i = 0; i < APP_DOCS_TREE.length; i++) {
+                expandedSections['app-' + i] = true;
+            }
+            for (var j = 0; j < NAGIOS_CATEGORIES.length; j++) {
+                expandedSections['nagios-' + j] = true;
             }
         }
         renderTree();
     }
 
     // =========================================================================
-    // Object type content rendering
+    // Nagios reference content rendering (unchanged logic)
     // =========================================================================
 
-    function renderContent(typeName) {
+    function renderNagiosContent(typeName) {
         var typeData = REF[typeName];
         var container = document.getElementById('docsContent');
         var label = typeData.label || typeName;
@@ -224,12 +413,10 @@
         html += '</tr></thead>';
         html += '<tbody id="docsDirectiveBody">';
 
-        // Type-specific directives
         for (var i = 0; i < typeData.directives.length; i++) {
             html += renderDirectiveRow(typeData.directives[i]);
         }
 
-        // Template directives (common to all types)
         if (templateDirs.length > 0) {
             html += '<tr class="docs-section-divider"><td colspan="4">Template Directives (common to all types)</td></tr>';
             for (var j = 0; j < templateDirs.length; j++) {
@@ -242,7 +429,6 @@
 
         container.innerHTML = html;
 
-        // Attach search listener
         var searchInput = document.getElementById('docsDirectiveSearch');
         if (searchInput) {
             searchInput.addEventListener('input', function() {
@@ -256,7 +442,6 @@
             ? '<span class="docs-badge docs-badge--required">Required</span>'
             : '<span class="docs-badge docs-badge--optional">Optional</span>';
 
-        // Use first name (before "|") as the row ID for deep linking
         var primaryName = directive.name.split('|')[0].trim();
 
         var html = '<tr class="docs-directive-row" id="directive-' + escapeHtml(primaryName) + '">';
@@ -275,7 +460,6 @@
             var text = rows[i].textContent.toLowerCase();
             rows[i].style.display = (!lower || text.indexOf(lower) !== -1) ? '' : 'none';
         }
-        // Also handle section divider visibility
         var dividers = document.querySelectorAll('#docsDirectiveBody .docs-section-divider');
         for (var j = 0; j < dividers.length; j++) {
             dividers[j].style.display = lower ? 'none' : '';
@@ -283,7 +467,7 @@
     }
 
     // =========================================================================
-    // Inheritance content rendering
+    // Inheritance content rendering (unchanged)
     // =========================================================================
 
     function renderInheritanceContent() {
@@ -316,7 +500,6 @@
         html += '<span class="docs-inheritance-number">' + (index + 1) + '</span>';
         html += escapeHtml(section.title);
         html += '</h3>';
-        // content may contain <code> tags — render as-is (trusted static data)
         html += '<div class="docs-inheritance-text">' + section.content + '</div>';
 
         if (section.table) {
@@ -350,25 +533,23 @@
     // =========================================================================
 
     function updateHash() {
-        if (selectedType) {
+        if (selectedAppDoc) {
+            history.replaceState(null, '', '#app/' + selectedAppDoc);
+        } else if (selectedType) {
             history.replaceState(null, '', '#' + selectedType);
         }
     }
 
     function scrollToDirective(directiveName) {
-        // Slight delay to ensure content is rendered
         setTimeout(function() {
             var row = document.getElementById('directive-' + directiveName);
             if (!row) return;
-
-            // Scroll only the table container, not the body
             var container = document.querySelector('.docs-table-container');
             if (container) {
                 var rowTop = row.offsetTop - container.offsetTop;
                 var centerOffset = rowTop - (container.clientHeight / 2) + (row.offsetHeight / 2);
                 container.scrollTo({ top: centerOffset, behavior: 'smooth' });
             }
-
             row.classList.add('docs-directive-highlight');
             setTimeout(function() {
                 row.classList.remove('docs-directive-highlight');
@@ -378,16 +559,24 @@
 
     function loadFromHash() {
         var hash = window.location.hash.replace('#', '');
+        if (!hash) return;
+
         var parts = hash.split('/');
-        var typePart = decodeURIComponent(parts[0] || '');
+
+        // App docs: #app/<slug>
+        if (parts[0] === 'app' && parts[1]) {
+            selectAppDoc(decodeURIComponent(parts[1]));
+            return;
+        }
+
+        // Nagios reference: #<type> or #<type>/<directive>
+        var typePart = decodeURIComponent(parts[0]);
         var directivePart = parts[1] ? decodeURIComponent(parts[1]) : null;
 
         if (typePart === SPECIAL_INHERITANCE) {
             selectType(SPECIAL_INHERITANCE);
         } else if (typePart && REF[typePart] && typePart !== '_template_directives') {
             selectType(typePart);
-
-            // Scroll to specific directive if provided
             if (directivePart) {
                 scrollToDirective(directivePart);
             }
@@ -399,7 +588,6 @@
     // =========================================================================
 
     function handleKeydown(e) {
-        // Don't intercept when typing in inputs
         if (e.target.tagName === 'INPUT') {
             if (e.key === 'Escape') {
                 e.target.value = '';
@@ -414,7 +602,6 @@
             return;
         }
 
-        // Don't interfere with other overlays
         if (document.querySelector('.keyboard-shortcuts-overlay.visible') ||
             document.querySelector('.confirm-dialog-overlay.visible')) {
             return;
@@ -423,17 +610,20 @@
         switch (e.key) {
             case 'ArrowDown':
                 e.preventDefault();
-                navigateTypes(1);
+                navigateNodes(1);
                 break;
             case 'ArrowUp':
                 e.preventDefault();
-                navigateTypes(-1);
+                navigateNodes(-1);
                 break;
             case 'Enter':
                 e.preventDefault();
-                if (focusedIndex >= 0 && focusedIndex < allTypeNodes.length) {
-                    var typeName = allTypeNodes[focusedIndex].getAttribute('data-type');
-                    if (typeName) selectType(typeName);
+                if (focusedIndex >= 0 && focusedIndex < allSelectableNodes.length) {
+                    var node = allSelectableNodes[focusedIndex];
+                    var appDoc = node.getAttribute('data-app-doc');
+                    var typeName = node.getAttribute('data-type');
+                    if (appDoc) selectAppDoc(appDoc);
+                    else if (typeName) selectType(typeName);
                 }
                 break;
             case '/':
@@ -446,13 +636,15 @@
         }
     }
 
-    function navigateTypes(direction) {
-        if (allTypeNodes.length === 0) return;
+    function navigateNodes(direction) {
+        if (allSelectableNodes.length === 0) return;
 
-        // Find current index based on selected type
-        if (focusedIndex < 0 && selectedType) {
-            for (var i = 0; i < allTypeNodes.length; i++) {
-                if (allTypeNodes[i].getAttribute('data-type') === selectedType) {
+        if (focusedIndex < 0) {
+            // Try to find currently selected node
+            for (var i = 0; i < allSelectableNodes.length; i++) {
+                var node = allSelectableNodes[i];
+                if ((selectedAppDoc && node.getAttribute('data-app-doc') === selectedAppDoc) ||
+                    (selectedType && node.getAttribute('data-type') === selectedType)) {
                     focusedIndex = i;
                     break;
                 }
@@ -461,10 +653,13 @@
 
         focusedIndex += direction;
         if (focusedIndex < 0) focusedIndex = 0;
-        if (focusedIndex >= allTypeNodes.length) focusedIndex = allTypeNodes.length - 1;
+        if (focusedIndex >= allSelectableNodes.length) focusedIndex = allSelectableNodes.length - 1;
 
-        var typeName = allTypeNodes[focusedIndex].getAttribute('data-type');
-        if (typeName) selectType(typeName);
+        var node = allSelectableNodes[focusedIndex];
+        var appDoc = node.getAttribute('data-app-doc');
+        var typeName = node.getAttribute('data-type');
+        if (appDoc) selectAppDoc(appDoc);
+        else if (typeName) selectType(typeName);
     }
 
     // =========================================================================
@@ -481,8 +676,9 @@
     // =========================================================================
 
     window.DocsPage = {
-        toggleCategory: toggleCategory,
+        toggleFolder: toggleFolder,
         selectType: selectType,
+        selectAppDoc: selectAppDoc,
         handleTreeSearch: handleTreeSearch
     };
 
@@ -491,10 +687,13 @@
     // =========================================================================
 
     document.addEventListener('DOMContentLoaded', function() {
-        // Default: expand all categories
-        for (var i = 0; i < CATEGORIES.length; i++) {
-            expandedCategories[i] = true;
+        // App docs expanded by default, Nagios reference collapsed
+        expandedSections['app'] = true;
+        for (var i = 0; i < APP_DOCS_TREE.length; i++) {
+            expandedSections['app-' + i] = true;
         }
+        expandedSections['nagios'] = false;
+
         renderTree();
         loadFromHash();
         document.addEventListener('keydown', handleKeydown);

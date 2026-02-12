@@ -10,28 +10,28 @@
 
 {% block content %}
 <div class="page-container docs-container">
-    <!-- Left Sidebar: Object type tree -->
+    <!-- Left Sidebar: Docs tree -->
     <div class="page-sidebar">
-        <div class="panel-header"><span class="panel-header-title">Object Reference</span></div>
+        <div class="panel-header"><span class="panel-header-title">Documentation</span></div>
         <div class="sidebar-section docs-section">
             <div class="sidebar-section-title">Search</div>
             <div class="sidebar-section-content">
                 <div class="docs-search-row">
                     <span class="docs-search-icon" aria-hidden="true"><i class="fa-solid fa-magnifying-glass"></i></span>
-                    <input type="text" class="docs-search" id="docsTreeSearch" placeholder="Search types & directives..." oninput="DocsPage.handleTreeSearch(this.value)" aria-label="Search object types" role="searchbox">
+                    <input type="text" class="docs-search" id="docsTreeSearch" placeholder="Search docs..." oninput="DocsPage.handleTreeSearch(this.value)" aria-label="Search documentation" role="searchbox">
                 </div>
             </div>
         </div>
         <div class="docs-tree-container" id="docsTree"></div>
     </div>
 
-    <!-- Main Content: Directive reference -->
+    <!-- Main Content -->
     <div class="page-main docs-main">
         <div id="docsContent">
             <div class="empty-state empty-state--dark empty-state--flex">
                 <div class="empty-icon"><i class="fa-solid fa-book"></i></div>
-                <h3>Nagios 4 Object Reference</h3>
-                <p>Select an object type from the tree to view its directives</p>
+                <h3>Documentation</h3>
+                <p>Select a topic from the tree to get started</p>
             </div>
         </div>
     </div>
