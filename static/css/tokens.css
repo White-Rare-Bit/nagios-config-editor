@@ -976,29 +976,16 @@
     border: none;
 }
 
-.nbe-btn--dark.nbe-btn--filled:hover {
-    background: var(--nbe-dark-accent-primary-hover);
-}
-
 .nbe-btn--dark.nbe-btn--tonal {
     background: var(--nbe-dark-accent-alpha-20);
     color: var(--nbe-dark-accent-primary);
     border: none;
 }
 
-.nbe-btn--dark.nbe-btn--tonal:hover {
-    background: var(--nbe-dark-accent-alpha-30);
-}
-
 .nbe-btn--dark.nbe-btn--outlined {
     background: transparent;
     color: var(--nbe-dark-text-primary);
     border: 1px solid var(--nbe-dark-border-primary);
-}
-
-.nbe-btn--dark.nbe-btn--outlined:hover {
-    background: var(--nbe-dark-bg-hover);
-    border-color: var(--nbe-dark-border-hover);
 }
 
 .nbe-btn--dark.nbe-btn--text {
