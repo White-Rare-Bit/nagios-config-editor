@@ -1,5 +1,9 @@
 /* Docs page styles — extends explorer tree classes from explorer.css */
 
+/* Utility classes for inline color references */
+.docs-text-success { color: var(--nbe-success); }
+.docs-text-danger { color: var(--nbe-danger); }
+
 /* =============================================================================
    Page Layout
    ============================================================================= */

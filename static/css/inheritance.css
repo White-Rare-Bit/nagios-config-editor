@@ -1,3 +1,7 @@
+/* Object list scroll containers (extracted from inline styles) */
+.object-list-scroll { max-height: 400px; overflow-y: auto; }
+.object-list-scroll--tall { max-height: 600px; overflow-y: auto; }
+
 /* Object list styles */
 .object-list-item {
     padding: var(--nbe-space-sm) var(--nbe-space-md);
