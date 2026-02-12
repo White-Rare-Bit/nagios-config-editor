@@ -327,26 +327,26 @@
 
 /* Type badges in filters */
 .type-badge {
-    font-size: 9px;
-    font-weight: 600;
-    padding: 1px 4px;
-    border-radius: 3px;
+    font-size: var(--nbe-typography-badge-size);
+    font-weight: var(--nbe-typography-badge-weight);
+    padding: 1px var(--nbe-space-xs);
+    border-radius: var(--nbe-radius-sm);
     text-transform: lowercase;
     white-space: nowrap;
 }
 
-.type-badge--host { background: #4CAF50; color: white; }
-.type-badge--hostgroup { background: #8BC34A; color: white; }
-.type-badge--service { background: #2196F3; color: white; }
-.type-badge--servicegroup { background: #03A9F4; color: white; }
-.type-badge--contact { background: #FF9800; color: white; }
-.type-badge--contactgroup { background: #FFC107; color: #333; }
-.type-badge--command { background: #9C27B0; color: white; }
-.type-badge--timeperiod { background: #607D8B; color: white; }
-.type-badge--hostdependency { background: #795548; color: white; }
-.type-badge--servicedependency { background: #795548; color: white; }
-.type-badge--hostescalation { background: #E91E63; color: white; }
-.type-badge--serviceescalation { background: #E91E63; color: white; }
+.type-badge--host { background: var(--nbe-palette-green); color: var(--nbe-text-inverse); }
+.type-badge--hostgroup { background: var(--nbe-palette-light-green); color: var(--nbe-text-inverse); }
+.type-badge--service { background: var(--nbe-palette-blue); color: var(--nbe-text-inverse); }
+.type-badge--servicegroup { background: var(--nbe-palette-light-blue); color: var(--nbe-text-inverse); }
+.type-badge--contact { background: var(--nbe-palette-orange); color: var(--nbe-text-inverse); }
+.type-badge--contactgroup { background: var(--nbe-palette-amber); color: var(--nbe-text-primary); }
+.type-badge--command { background: var(--nbe-palette-purple); color: var(--nbe-text-inverse); }
+.type-badge--timeperiod { background: var(--nbe-palette-gray); color: var(--nbe-text-inverse); }
+.type-badge--hostdependency { background: var(--nbe-palette-brown); color: var(--nbe-text-inverse); }
+.type-badge--servicedependency { background: var(--nbe-palette-brown); color: var(--nbe-text-inverse); }
+.type-badge--hostescalation { background: var(--nbe-palette-pink); color: var(--nbe-text-inverse); }
+.type-badge--serviceescalation { background: var(--nbe-palette-pink); color: var(--nbe-text-inverse); }
 
 .dep-container .form-input,
 .dep-sidebar .form-input {
