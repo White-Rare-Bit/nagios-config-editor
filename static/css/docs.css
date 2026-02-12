@@ -511,7 +511,7 @@
 
 .docs-prose code {
     font-family: var(--nbe-font-mono);
-    font-size: 13px;
+    font-size: var(--nbe-font-size-base);
     color: var(--nbe-dark-accent-primary);
     background: var(--nbe-dark-bg-tertiary);
     padding: 2px 6px;
@@ -530,7 +530,7 @@
 .docs-prose pre code {
     background: none;
     padding: 0;
-    font-size: 13px;
+    font-size: var(--nbe-font-size-base);
     color: var(--nbe-dark-text-primary);
     line-height: 1.7;
 }
@@ -539,7 +539,7 @@
     width: 100%;
     border-collapse: collapse;
     margin: 0 0 20px;
-    font-size: 14px;
+    font-size: var(--nbe-font-size-md);
 }
 
 .docs-prose th {
@@ -559,7 +559,7 @@
 }
 
 .docs-prose td code {
-    font-size: 12px;
+    font-size: var(--nbe-font-size-sm);
 }
 
 .docs-prose .docs-note {
@@ -672,7 +672,7 @@
 .docs-swatch-name {
     display: block;
     font-family: var(--nbe-font-mono);
-    font-size: 10px;
+    font-size: var(--nbe-font-size-xs);
     color: var(--nbe-dark-text-primary);
     line-height: 1.4;
 }
@@ -680,7 +680,7 @@
 .docs-swatch-value {
     display: block;
     font-family: var(--nbe-font-mono);
-    font-size: 9px;
+    font-size: var(--nbe-font-size-2xs);
     color: var(--nbe-dark-text-muted);
     line-height: 1.4;
 }
