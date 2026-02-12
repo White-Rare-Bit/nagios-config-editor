@@ -1,0 +1,201 @@
+<div class="docs-prose">
+    <h2>Dependency Graph</h2>
+
+    <p>
+        The Graph View page (accessible from the navbar as "Graph View") visualizes
+        relationships between Nagios objects as an interactive node-and-edge diagram.
+        It uses the Cytoscape.js library to render a zoomable, pannable graph where
+        each node represents a Nagios object and each edge represents a reference
+        between them.
+    </p>
+
+    <h3>Adding Nodes</h3>
+
+    <p>
+        The graph starts empty. Use the search box in the left sidebar to find an
+        object by name, then click it to add it to the graph. You can add as many
+        nodes as you like.
+    </p>
+
+    <h3>Quick Views</h3>
+
+    <p>
+        When you select a node, <strong>quick view buttons</strong> appear in the
+        sidebar. These expand the graph to show related objects using a layout
+        appropriate for the relationship type. The available views depend on the
+        selected object type:
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>View</th>
+                <th>Available For</th>
+                <th>Shows</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Inheritance</strong></td>
+                <td>All types</td>
+                <td>Template chain &mdash; parent templates and objects that inherit
+                    from the selected template.</td>
+            </tr>
+            <tr>
+                <td><strong>Network</strong></td>
+                <td>Hosts</td>
+                <td>Host parent/child topology and bound services.</td>
+            </tr>
+            <tr>
+                <td><strong>Services</strong></td>
+                <td>Hosts</td>
+                <td>All services monitoring this host.</td>
+            </tr>
+            <tr>
+                <td><strong>Notifications</strong></td>
+                <td>Hosts, services</td>
+                <td>Notification routing to contacts and contact groups.</td>
+            </tr>
+            <tr>
+                <td><strong>Members</strong></td>
+                <td>Groups</td>
+                <td>All members of the selected group.</td>
+            </tr>
+            <tr>
+                <td><strong>Notified By</strong></td>
+                <td>Contacts</td>
+                <td>Objects that send notifications to this contact.</td>
+            </tr>
+            <tr>
+                <td><strong>Used By</strong></td>
+                <td>Commands, timeperiods</td>
+                <td>All objects that reference this command or timeperiod.</td>
+            </tr>
+            <tr>
+                <td><strong>Monitoring</strong></td>
+                <td>Hosts, services</td>
+                <td>Check commands and time periods assigned to this object.</td>
+            </tr>
+            <tr>
+                <td><strong>Escalations</strong></td>
+                <td>Hosts, services</td>
+                <td>Escalation rules and their contacts.</td>
+            </tr>
+            <tr>
+                <td><strong>Dependencies</strong></td>
+                <td>Hosts, services</td>
+                <td>Dependency rules (master/dependent relationships).</td>
+            </tr>
+            <tr>
+                <td><strong>Full Graph</strong></td>
+                <td>All types</td>
+                <td>Every relationship involving the selected object.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Filtering</h3>
+
+    <p>
+        The <strong>Custom Filters</strong> section in the sidebar offers two ways
+        to control what the graph displays:
+    </p>
+
+    <ul>
+        <li><strong>Object type checkboxes</strong> &mdash; show or hide nodes by type
+            (host, service, contact, command, etc.). Unchecking a type hides those
+            nodes and their edges.</li>
+        <li><strong>Edge category checkboxes</strong> &mdash; show or hide edges by
+            relationship category:
+            <ul>
+                <li><em>Dependencies</em> &mdash; host parents, host/service dependencies</li>
+                <li><em>Templates</em> &mdash; inheritance via <code>use</code></li>
+                <li><em>Groups</em> &mdash; group membership</li>
+                <li><em>Contacts</em> &mdash; notification routing</li>
+                <li><em>Commands</em> &mdash; check commands, event handlers</li>
+                <li><em>Schedules</em> &mdash; time periods, escalation periods</li>
+            </ul>
+        </li>
+    </ul>
+
+    <h3>Layout Options</h3>
+
+    <p>
+        The layout dropdown controls how nodes are arranged:
+    </p>
+
+    <ul>
+        <li><strong>Force-Directed</strong> &mdash; nodes repel each other and edges
+            act as springs. Good for exploring general relationships.</li>
+        <li><strong>Hierarchical (Top-Bottom)</strong> &mdash; edges flow top to bottom.
+            Good for inheritance chains and network topology.</li>
+        <li><strong>Hierarchical (Left-Right)</strong> &mdash; edges flow left to right.
+            Good for notification routing and escalation paths.</li>
+    </ul>
+
+    <p>
+        Quick views automatically select the layout that best fits the relationship
+        type.
+    </p>
+
+    <h3>Graph Interaction</h3>
+
+    <ul>
+        <li><strong>Pan</strong> &mdash; click and drag the canvas background.</li>
+        <li><strong>Zoom</strong> &mdash; scroll wheel or pinch gesture.</li>
+        <li><strong>Select</strong> &mdash; click a node. Shift+click for multi-select.
+            Shift+drag for box selection.</li>
+        <li><strong>Delete</strong> &mdash; press Delete or Backspace to remove selected
+            nodes.</li>
+        <li><strong>Fit to View</strong> &mdash; button in the sidebar to auto-zoom
+            so all nodes are visible.</li>
+        <li><strong>Toggle Edge Labels</strong> &mdash; show or hide relationship labels
+            on edges.</li>
+    </ul>
+
+    <h4>Context Menu</h4>
+
+    <p>
+        Right-click any node to access:
+    </p>
+
+    <ul>
+        <li><strong>Expand connections</strong> &mdash; add all directly connected
+            objects to the graph.</li>
+        <li><strong>Show only connections</strong> &mdash; isolate this node and its
+            immediate connections, removing everything else.</li>
+        <li><strong>Center on node</strong> &mdash; pan and zoom to this node.</li>
+        <li><strong>Set as layout center</strong> &mdash; use this node as the root
+            for hierarchical layouts.</li>
+        <li><strong>Remove from graph</strong> &mdash; remove just this node.</li>
+        <li><strong>Remove disconnected</strong> &mdash; remove all nodes that have
+            no edges.</li>
+        <li><strong>Open in Explorer</strong> &mdash; navigate to this object in the
+            <a href="#app/explorer-navigation">Object Explorer</a>.</li>
+    </ul>
+
+    <h3>Node Appearance</h3>
+
+    <p>
+        Each object type has a distinct color and icon. A collapsible legend overlay
+        in the bottom-right corner of the graph shows all type colors. Templates are
+        drawn with a dashed border. Objects that are referenced but do not exist in
+        your configuration appear with a red indicator.
+    </p>
+
+    <h3>State Persistence</h3>
+
+    <p>
+        The graph state &mdash; nodes, edges, layout, and filter settings &mdash; is
+        saved to your browser's local storage. When you return to the Graph View page,
+        it restores your previous graph. Use the <strong>Clear</strong> button in the
+        nodes list to start fresh.
+    </p>
+
+    <div class="docs-note">
+        You can link directly to the graph with a specific object pre-loaded using the
+        URL parameter <code>?node=type:name&amp;expand=true</code>. For example,
+        <code>/dependencies?node=host:web-server&amp;expand=true</code> opens the graph
+        with that host and its connections expanded.
+    </div>
+</div>

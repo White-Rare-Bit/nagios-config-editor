@@ -1,0 +1,110 @@
+<div class="docs-prose">
+    <h2>Audit Log</h2>
+
+    <p>
+        The Audit Log page shows a chronological record of every action performed in
+        the application. Each entry captures the operation type, affected objects, the
+        user who made the change, and a timestamp.
+    </p>
+
+    <h3>Viewing Entries</h3>
+
+    <p>
+        Entries are displayed newest-first. Each entry shows:
+    </p>
+
+    <ul>
+        <li>A <strong>timestamp</strong> for when the action occurred.</li>
+        <li>The <strong>user</strong> name and email (from the identity configured in
+            <a href="#app/settings">Settings</a>).</li>
+        <li><strong>Badges</strong> summarizing what changed &mdash; object creations,
+            attribute edits, moves, deletions, file/folder operations, and any errors
+            that occurred.</li>
+        <li>For git and backup operations, a <strong>labeled badge</strong> describing
+            the action (e.g. "git commit", "backup created", "backup restored").</li>
+    </ul>
+
+    <h3>Filtering</h3>
+
+    <p>
+        Filter chips at the top of the page let you narrow the log to a specific
+        operation type:
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Filter</th>
+                <th>Shows</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>All</strong></td>
+                <td>Every entry (default).</td>
+            </tr>
+            <tr>
+                <td><strong>Creates</strong></td>
+                <td>Entries that include object, file, or folder creations.</td>
+            </tr>
+            <tr>
+                <td><strong>Attributes</strong></td>
+                <td>Entries that include attribute edits on existing objects.</td>
+            </tr>
+            <tr>
+                <td><strong>Moves</strong></td>
+                <td>Entries that include object, file, or folder relocations.</td>
+            </tr>
+            <tr>
+                <td><strong>Deletes</strong></td>
+                <td>Entries that include deletions of any kind.</td>
+            </tr>
+            <tr>
+                <td><strong>Git</strong></td>
+                <td>Git operations: commits, discards, history clears, initializations,
+                    and restores to previous commits.</td>
+            </tr>
+            <tr>
+                <td><strong>Backups</strong></td>
+                <td>Backup operations: created, restored, and deleted.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p>
+        Multiple filters can be active at once &mdash; entries matching any active
+        filter are shown. Selecting the <strong>All</strong> filter clears all other
+        selections. The entry count at the top updates to reflect the filtered result.
+    </p>
+
+    <h3>Searching</h3>
+
+    <p>
+        The search box performs a full-text search across all entry fields: timestamps,
+        usernames, emails, action types, object names, file paths, git commit hashes,
+        commit messages, and backup names. The search is case-insensitive and filters
+        in real time as you type.
+    </p>
+
+    <p>
+        Search and filter chips work together &mdash; you can search within a filtered
+        view.
+    </p>
+
+    <h3>Archives</h3>
+
+    <p>
+        The sidebar shows archived audit logs. When the active log exceeds 1000 entries,
+        older entries are automatically moved to a timestamped archive file. Click any
+        archive in the sidebar to load and view its entries. The file size is shown next
+        to each archive name.
+    </p>
+
+    <h3>Clearing the Log</h3>
+
+    <div class="docs-warning">
+        The <strong>Clear Log</strong> button at the bottom of the page permanently
+        deletes all entries in the current log. This cannot be undone. Archived logs
+        are not affected.
+    </div>
+</div>

@@ -1,0 +1,139 @@
+<div class="docs-prose">
+    <h2>Settings</h2>
+
+    <p>
+        The Settings page lets you configure application paths, logging, and your
+        personal identity. It is accessible from the navbar at the top-right of
+        every page.
+    </p>
+
+    <h3>Server Settings</h3>
+
+    <p>
+        The Server Settings tab configures where the app reads Nagios configuration
+        and how it logs operations. Changes here are saved to
+        <code>config/settings.json</code> on the server.
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Setting</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Nagios Config Path</strong></td>
+                <td>The directory containing your <code>.cfg</code> files. Changing this
+                    reloads all objects from the new path.</td>
+            </tr>
+            <tr>
+                <td><strong>Backup Path</strong></td>
+                <td>Where backup zip files are stored. Defaults to a <code>backups/</code>
+                    subdirectory inside the config path.</td>
+            </tr>
+            <tr>
+                <td><strong>Nagios Binary</strong></td>
+                <td>Path to the <code>nagios</code> executable, used by the
+                    <a href="#app/validation">Validation</a> page. Can also be set via the
+                    <code>NAGIOS_BIN</code> environment variable.</td>
+            </tr>
+            <tr>
+                <td><strong>Nagios Config File</strong></td>
+                <td>Path to your main <code>nagios.cfg</code> file, used as the entry
+                    point for <code>nagios -v</code> validation.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p>
+        Each path field has a <strong>Browse</strong> button that opens a filesystem
+        browser. Navigate directories or type a path directly in the browser's path
+        bar. Path inputs are validated against traversal attacks and invalid characters
+        before saving.
+    </p>
+
+    <h4>Logging</h4>
+
+    <p>
+        The logging section controls operation logging &mdash; structured JSON logs
+        of backend operations for debugging and auditing.
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Setting</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Logging Enabled</strong></td>
+                <td>Toggle operation logging on or off.</td>
+            </tr>
+            <tr>
+                <td><strong>Log Level</strong></td>
+                <td>Minimum severity to log: DEBUG, INFO, WARNING, or ERROR.</td>
+            </tr>
+            <tr>
+                <td><strong>Max File Size</strong></td>
+                <td>Maximum log file size in MB (1&ndash;100) before rotation.</td>
+            </tr>
+            <tr>
+                <td><strong>Max Backup Files</strong></td>
+                <td>Number of rotated log files to retain (1&ndash;20).</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p>
+        A <strong>Download Log</strong> button lets you download the current operation
+        log file for offline review.
+    </p>
+
+    <h4>Current Status</h4>
+
+    <p>
+        The status panel on the right shows the currently loaded config path, total
+        object count, and number of config files. This updates after saving new
+        settings.
+    </p>
+
+    <h3>Your Identity</h3>
+
+    <p>
+        The Identity tab configures your name and email address. These are used for:
+    </p>
+
+    <ul>
+        <li><strong>Git commits</strong> &mdash; your name and email appear as the
+            commit author.</li>
+        <li><strong>Audit log entries</strong> &mdash; your identity is recorded with
+            each action.</li>
+        <li><strong>Backup metadata</strong> &mdash; backups are tagged with who
+            created them.</li>
+    </ul>
+
+    <p>
+        Identity is stored in your browser's local storage, not on the server. Each
+        user sets their own identity independently. A badge next to the Settings
+        link in the navbar shows whether your identity is configured.
+    </p>
+
+    <div class="docs-note">
+        If your identity is not set, the app prompts you to configure it the first
+        time you try to commit changes via Git. You can also set it proactively from
+        the Settings page at any time.
+    </div>
+
+    <h3>Lock Behavior</h3>
+
+    <p>
+        Server settings cannot be saved while another user has pending staged changes.
+        This prevents config path changes from conflicting with in-progress edits. If
+        a lock is active, the save button is disabled and a message indicates who holds
+        the lock.
+    </p>
+</div>

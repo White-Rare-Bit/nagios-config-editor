@@ -1,0 +1,124 @@
+<div class="docs-prose">
+    <h2>Backups</h2>
+
+    <p>
+        The Backups page manages snapshots of your Nagios configuration. Backups are
+        zip archives of every <code>.cfg</code> file in your config directory. The app
+        creates backups automatically before any apply or restore operation, and you can
+        create manual backups at any time.
+    </p>
+
+    <h3>Backup List</h3>
+
+    <p>
+        The main table shows all existing backups with these columns:
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Column</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Date/Time</strong></td>
+                <td>When the backup was created. Click the column header to sort.</td>
+            </tr>
+            <tr>
+                <td><strong>Description</strong></td>
+                <td>A label describing the backup. Automatic backups are labeled with the
+                    operation that triggered them (e.g. "pre_apply"). Manual backups show
+                    whatever description you entered.</td>
+            </tr>
+            <tr>
+                <td><strong>Files</strong></td>
+                <td>The number of config files captured in the archive. Click the column
+                    header to sort.</td>
+            </tr>
+            <tr>
+                <td><strong>User</strong></td>
+                <td>The name and email of the user who created the backup, based on the
+                    identity configured in <a href="#app/settings">Settings</a>.</td>
+            </tr>
+            <tr>
+                <td><strong>Actions</strong></td>
+                <td>Restore and Delete buttons for each backup.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p>
+        The list is paginated at 25 backups per page. A badge in the page header shows
+        the total backup count.
+    </p>
+
+    <h3>Creating a Manual Backup</h3>
+
+    <p>
+        Enter an optional description in the text field at the top of the page and click
+        <strong>Create Backup</strong>. The backup is created immediately and appears in
+        the list. Manual backups capture the current on-disk state of all config files.
+    </p>
+
+    <h3>Restoring from a Backup</h3>
+
+    <p>
+        Click <strong>Restore</strong> on any backup row. A confirmation dialog appears
+        explaining what will happen. When you confirm:
+    </p>
+
+    <ol>
+        <li>A <strong>safety backup</strong> is created automatically, capturing your
+            current config files before the restore overwrites them.</li>
+        <li>All config files are replaced with the contents of the selected backup.</li>
+        <li>The app reloads the configuration from disk.</li>
+    </ol>
+
+    <div class="docs-warning">
+        Restoring a backup replaces your entire configuration directory. Any changes made
+        since the backup was created will be lost. The automatic safety backup lets you
+        undo the restore if needed.
+    </div>
+
+    <h3>Deleting Backups</h3>
+
+    <p>
+        Click <strong>Delete</strong> on a backup row to remove a single backup. A
+        confirmation dialog appears since deletions cannot be undone.
+    </p>
+
+    <p>
+        The <strong>Delete All Backups</strong> button in the danger zone at the bottom
+        removes every backup in a single operation. Use this to reclaim disk space when
+        you no longer need historical snapshots.
+    </p>
+
+    <h3>Automatic Backups</h3>
+
+    <p>
+        The app creates backups automatically in these situations:
+    </p>
+
+    <ul>
+        <li><strong>Before apply</strong> &mdash; when you apply staged changes from the
+            commit dialog, a backup is created first.</li>
+        <li><strong>Before restore</strong> &mdash; when you restore from a backup, a
+            safety backup is created of the current state.</li>
+    </ul>
+
+    <p>
+        Automatic backups are labeled with the operation name (e.g. "pre_apply",
+        "pre_restore") so you can identify them in the list.
+    </p>
+
+    <h3>Backup Storage</h3>
+
+    <p>
+        Backups are stored as zip files in the backup directory configured in
+        <a href="#app/settings">Settings</a>. By default this is a <code>backups/</code>
+        subdirectory inside your Nagios config path. Each backup file is named with a
+        timestamp for easy identification.
+    </p>
+</div>

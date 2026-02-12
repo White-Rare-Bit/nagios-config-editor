@@ -479,7 +479,7 @@
    ============================================================================= */
 
 .docs-prose {
-    padding: var(--nbe-space-xl) var(--nbe-space-xxl);
+    padding: 48px var(--nbe-space-xxl);
     max-width: 900px;
     margin: 0 auto;
 }

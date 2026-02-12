@@ -22,7 +22,14 @@
             { slug: 'staging-system', label: 'Staging System' },
             { slug: 'file-folder-management', label: 'File & Folder Management' },
             { slug: 'git-integration', label: 'Git Integration' },
+            { slug: 'validation', label: 'Validation' },
+            { slug: 'backups', label: 'Backups' },
             { slug: 'search-filtering', label: 'Search & Filtering' },
+            { slug: 'inheritance-viewer', label: 'Inheritance Viewer' },
+            { slug: 'dependency-graph', label: 'Dependency Graph' },
+            { slug: 'analysis-tools', label: 'Analysis Tools' },
+            { slug: 'audit-log', label: 'Audit Log' },
+            { slug: 'settings', label: 'Settings' },
             { slug: 'keyboard-shortcuts', label: 'Keyboard Shortcuts' }
         ]},
         { section: 'Developer Guide', items: [

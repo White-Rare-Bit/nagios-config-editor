@@ -1,0 +1,74 @@
+<div class="docs-prose">
+    <h2>Validation</h2>
+
+    <p>
+        The Validation page lets you run <code>nagios -v</code> directly from the browser
+        to verify that your Nagios configuration is syntactically correct and internally
+        consistent. This is the same preflight check that Nagios performs before starting
+        or reloading.
+    </p>
+
+    <h3>Requirements</h3>
+
+    <p>
+        Validation requires two things to be configured in
+        <a href="#app/settings">Settings</a>:
+    </p>
+
+    <ul>
+        <li><strong>Nagios binary path</strong> &mdash; the path to the <code>nagios</code>
+            executable (e.g. <code>/usr/local/nagios/bin/nagios</code>). You can also set
+            this via the <code>NAGIOS_BIN</code> environment variable.</li>
+        <li><strong>Nagios config file</strong> &mdash; the path to your main
+            <code>nagios.cfg</code> file, which Nagios uses as the entry point for
+            validation.</li>
+    </ul>
+
+    <p>
+        When the page loads, it checks whether the Nagios binary is available. If not,
+        a message explains what to configure. If the binary is found, the
+        <strong>Run Validation</strong> button is enabled.
+    </p>
+
+    <h3>Running Validation</h3>
+
+    <p>
+        Click <strong>Run Validation</strong> to execute <code>nagios -v</code> against
+        your configuration. The button shows a spinner while the check runs. Validation
+        has a 60-second timeout &mdash; large configurations may take several seconds.
+    </p>
+
+    <p>
+        When validation completes, the results panel shows:
+    </p>
+
+    <ul>
+        <li>A <strong>status banner</strong> &mdash; green "Configuration is valid!" or
+            red "Configuration has errors!"</li>
+        <li><strong>Error count</strong> and <strong>warning count</strong> badges in the
+            panel header.</li>
+        <li>An <strong>Errors section</strong> listing each error with its source file,
+            line number, and message.</li>
+        <li>A <strong>Warnings section</strong> listing each warning message.</li>
+        <li>The <strong>raw output</strong> from <code>nagios -v</code> in a scrollable
+            monospace block for full context.</li>
+    </ul>
+
+    <h3>Typical Workflow</h3>
+
+    <ol>
+        <li>Make your edits in the <a href="#app/explorer-navigation">Object Explorer</a>.</li>
+        <li>Apply staged changes via the <a href="#app/staging-system">Commit dialog</a>.</li>
+        <li>Navigate to the Validation page and click <strong>Run Validation</strong>.</li>
+        <li>If errors appear, return to the explorer to fix them, then re-apply and
+            re-validate.</li>
+        <li>Once valid, optionally commit to Git from the
+            <a href="#app/git-integration">Git page</a>.</li>
+    </ol>
+
+    <div class="docs-note">
+        Validation runs against the files on disk, not your staged changes. You must
+        apply your changes before validating. If you have pending staged changes, the
+        validation result reflects the previous on-disk state.
+    </div>
+</div>

@@ -1,0 +1,103 @@
+<div class="docs-prose">
+    <h2>Inheritance Viewer</h2>
+
+    <p>
+        The Inheritance Viewer visualizes Nagios template inheritance chains. Select
+        any object to see which templates it inherits from, what attributes each
+        template contributes, and what the final resolved attribute set looks like
+        after all inheritance is applied.
+    </p>
+
+    <h3>Selecting an Object</h3>
+
+    <p>
+        The left panel provides two controls for finding objects:
+    </p>
+
+    <ul>
+        <li><strong>Object type dropdown</strong> &mdash; select the Nagios object type
+            (host, service, contact, etc.) to populate the object list.</li>
+        <li><strong>Search box</strong> &mdash; filters the object list by name as you
+            type.</li>
+    </ul>
+
+    <p>
+        The object list sorts templates first (marked with a yellow "template" badge),
+        then regular objects alphabetically. Each list item shows the object name and,
+        if it uses templates, a "uses:" label with the template names.
+    </p>
+
+    <h3>Inheritance Chain</h3>
+
+    <p>
+        When you click an object, the right panel shows its inheritance chain as a
+        vertical tree. The selected object appears at the top, followed by its parent
+        templates, their parents, and so on up to the root template.
+    </p>
+
+    <p>
+        Each node in the chain shows:
+    </p>
+
+    <ul>
+        <li>The object or template name (bold).</li>
+        <li>A <strong>template badge</strong> for objects with <code>register 0</code>.</li>
+        <li>Up to <strong>5 sample attributes</strong> with their values, plus a count
+            of additional attributes if there are more.</li>
+    </ul>
+
+    <p>
+        If a template referenced in the <code>use</code> directive does not exist, the
+        chain shows an error indicator at that point.
+    </p>
+
+    <h3>Resolved Attributes</h3>
+
+    <p>
+        Below the chain, a table shows the <strong>final resolved attribute set</strong>
+        after all inheritance is applied. This is what Nagios will actually use at
+        runtime. The table has three columns:
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Column</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Attribute</strong></td>
+                <td>The directive name, sorted alphabetically.</td>
+            </tr>
+            <tr>
+                <td><strong>Value</strong></td>
+                <td>The resolved value that Nagios will use.</td>
+            </tr>
+            <tr>
+                <td><strong>Source</strong></td>
+                <td>Which object or template provides this value. Attributes defined
+                    directly on the object show "self" (highlighted); inherited values
+                    show the template name.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="docs-note">
+        Nagios inheritance uses a "first match wins" rule: if both a child and a parent
+        template define the same attribute, the child's value takes precedence. The
+        resolved attributes table reflects this behavior.
+    </div>
+
+    <h3>Use Cases</h3>
+
+    <ul>
+        <li><strong>Debugging inheritance issues</strong> &mdash; see exactly which
+            template provides a specific value and whether the child overrides it.</li>
+        <li><strong>Understanding template structure</strong> &mdash; visualize
+            multi-level template chains before making changes.</li>
+        <li><strong>Identifying missing templates</strong> &mdash; the chain flags
+            templates that are referenced but do not exist.</li>
+    </ul>
+</div>

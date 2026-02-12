@@ -1,0 +1,176 @@
+<div class="docs-prose">
+    <h2>Analysis Tools</h2>
+
+    <p>
+        Nagios Bulk Editor includes several analysis features that help you understand
+        and improve your configuration. These tools detect common issues, suggest
+        organizational improvements, and trace notification escalation paths.
+    </p>
+
+    <h3>Health Check</h3>
+
+    <p>
+        The health check scans your configuration for common problems. It is accessible
+        from the Object Explorer's right panel. Issues found include:
+    </p>
+
+    <ul>
+        <li><strong>Missing required fields</strong> &mdash; objects that lack mandatory
+            directives (e.g. a host without <code>host_name</code>).</li>
+        <li><strong>Invalid references</strong> &mdash; attributes that point to objects
+            that do not exist (e.g. a service with a <code>check_command</code> that
+            references an undefined command).</li>
+        <li><strong>Circular template dependencies</strong> &mdash; inheritance chains
+            that loop back on themselves.</li>
+        <li><strong>Unused templates</strong> &mdash; templates (<code>register 0</code>
+            objects) that no other object inherits from.</li>
+        <li><strong>Duplicate names</strong> &mdash; multiple objects of the same type
+            with the same name.</li>
+    </ul>
+
+    <p>
+        Objects with issues are flagged with badges in the explorer tree. The "Issues"
+        filter checkbox in the left pane lets you view only objects with problems.
+    </p>
+
+    <h3>Orphan Detection</h3>
+
+    <p>
+        Orphan objects are those that no other object references. These are cleanup
+        candidates &mdash; for example, a command that no service uses, or a contact
+        group that no notification rule references.
+    </p>
+
+    <p>
+        Use the <strong>Orphans</strong> filter checkbox in the
+        <a href="#app/explorer-navigation">Object Explorer</a> left pane to show only
+        orphan objects. Combine it with the search box to narrow results by type
+        (e.g. type "command" with the Orphans filter to find unused commands).
+    </p>
+
+    <h3>Object References</h3>
+
+    <p>
+        The Impact &amp; Relationships section in the
+        <a href="#app/editing-objects">object editor</a> shows every relationship
+        involving the selected object. This includes:
+    </p>
+
+    <ul>
+        <li><strong>Outgoing references</strong> &mdash; objects that this object
+            points to (e.g. a service's check command, host, or contact groups).</li>
+        <li><strong>Incoming references</strong> &mdash; objects that point to this
+            object (e.g. services that monitor a host, or objects that inherit from
+            a template).</li>
+        <li><strong>Group membership</strong> &mdash; groups this object belongs to
+            and members of this object (for group types).</li>
+        <li><strong>Dependency rules</strong> &mdash; host or service dependency
+            relationships where this object acts as master or dependent.</li>
+        <li><strong>Escalation rules</strong> &mdash; escalation definitions that
+            apply to this object.</li>
+        <li><strong>Template inheritance</strong> &mdash; the inheritance chain and
+            which templates this object uses.</li>
+        <li><strong>Transitive impact</strong> &mdash; for templates, shows how many
+            objects would be affected by a change, including objects that inherit
+            indirectly through intermediate templates.</li>
+    </ul>
+
+    <h3>Escalation Path Analysis</h3>
+
+    <p>
+        The escalation path traces the full notification chain for a host or service.
+        It shows:
+    </p>
+
+    <ul>
+        <li><strong>Base contacts</strong> &mdash; who gets notified initially, including
+            contacts assigned directly and via contact groups. Each contact shows their
+            notification commands and periods.</li>
+        <li><strong>Escalation levels</strong> &mdash; subsequent notification tiers,
+            sorted by the <code>first_notification</code> count. Each level shows the
+            notification range, interval, escalation period, and the contacts who are
+            notified at that level.</li>
+    </ul>
+
+    <p>
+        This is useful for verifying that the right people are notified at the right
+        time, especially in complex escalation setups.
+    </p>
+
+    <h3>Smart Grouping Suggestions</h3>
+
+    <p>
+        The smart grouping feature analyzes your hosts and suggests hostgroups you
+        might want to create. Suggestions are based on patterns found in your
+        configuration:
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Pattern</th>
+                <th>Description</th>
+                <th>Example</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>IP subnet</strong></td>
+                <td>Hosts in the same /24 subnet.</td>
+                <td>3 hosts in 192.168.1.0/24 &rarr; suggest "subnet-192-168-1"</td>
+            </tr>
+            <tr>
+                <td><strong>Hostname prefix</strong></td>
+                <td>Hosts whose names share a common prefix.</td>
+                <td>web-01, web-02, web-03 &rarr; suggest "web-servers"</td>
+            </tr>
+            <tr>
+                <td><strong>Hostname suffix</strong></td>
+                <td>Hosts whose names share a common suffix.</td>
+                <td>db-prod, app-prod, cache-prod &rarr; suggest "prod-systems"</td>
+            </tr>
+            <tr>
+                <td><strong>Check command</strong></td>
+                <td>Hosts using the same check command.</td>
+                <td>Hosts checked by check-ssh &rarr; suggest "ssh-checked"</td>
+            </tr>
+            <tr>
+                <td><strong>Network parent</strong></td>
+                <td>Hosts behind the same parent host.</td>
+                <td>Hosts parented to "core-switch" &rarr; suggest "behind-core-switch"</td>
+            </tr>
+            <tr>
+                <td><strong>Ungrouped</strong></td>
+                <td>Hosts not in any hostgroup.</td>
+                <td>Orphan hosts &rarr; suggest "ungrouped-hosts"</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p>
+        Each suggestion includes a confidence score based on the number of matching
+        hosts and the pattern type. You can create a new hostgroup directly from a
+        suggestion or add the suggested hosts to an existing group.
+    </p>
+
+    <h3>Template Issues</h3>
+
+    <p>
+        The template issues analyzer checks for problems in your template hierarchy:
+    </p>
+
+    <ul>
+        <li><strong>Invalid <code>use</code> references</strong> &mdash; objects
+            referencing templates that do not exist.</li>
+        <li><strong>Circular dependencies</strong> &mdash; template chains that
+            create loops (e.g. template A uses template B, which uses template A).</li>
+        <li><strong>Unused templates</strong> &mdash; templates that no object
+            inherits from, which may be candidates for cleanup.</li>
+    </ul>
+
+    <p>
+        These issues are surfaced in the
+        <a href="#app/inheritance-viewer">Inheritance Viewer</a> and as badges in the
+        explorer tree.
+    </p>
+</div>
