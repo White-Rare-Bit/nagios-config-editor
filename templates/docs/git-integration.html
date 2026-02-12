@@ -13,6 +13,88 @@
         <code>git init</code> automatically when you make your first commit.
     </div>
 
+    <div class="docs-diagram">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 260">
+            <defs>
+                <marker id="git-arrow" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 3.5 L 0 7 z" fill="#4ec9b0"/>
+                </marker>
+                <marker id="git-arrow-red" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 3.5 L 0 7 z" fill="#e57373"/>
+                </marker>
+            </defs>
+
+            <rect width="1020" height="260" fill="#1e1e1e" rx="6"/>
+
+            <text x="510" y="28" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="14" font-weight="600">Git Integration Workflow</text>
+
+            <!-- Happy path label -->
+            <text x="30" y="60" fill="#81c784" font-family="Inter, sans-serif" font-size="11" font-weight="600">Commit Path</text>
+
+            <!-- Step 1: Edit -->
+            <rect x="30" y="70" width="150" height="56" rx="5" fill="#2d2d2d" stroke="#4ec9b0" stroke-width="2"/>
+            <text x="105" y="94" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="13" font-weight="600">Edit Objects</text>
+            <text x="105" y="112" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Changes go to staging</text>
+
+            <line x1="180" y1="98" x2="220" y2="98" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#git-arrow)"/>
+
+            <!-- Step 2: Review -->
+            <rect x="222" y="70" width="150" height="56" rx="5" fill="#2d2d2d" stroke="#569cd6" stroke-width="2"/>
+            <text x="297" y="94" text-anchor="middle" fill="#569cd6" font-family="Inter, sans-serif" font-size="13" font-weight="600">Review Diffs</text>
+            <text x="297" y="112" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Commit dialog</text>
+
+            <line x1="372" y1="98" x2="412" y2="98" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#git-arrow)"/>
+
+            <!-- Step 3: Apply -->
+            <rect x="414" y="70" width="150" height="56" rx="5" fill="#2d2d2d" stroke="#81c784" stroke-width="2"/>
+            <text x="489" y="94" text-anchor="middle" fill="#81c784" font-family="Inter, sans-serif" font-size="13" font-weight="600">Apply to Disk</text>
+            <text x="489" y="112" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Writes .cfg files</text>
+
+            <line x1="564" y1="98" x2="604" y2="98" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#git-arrow)"/>
+
+            <!-- Step 4: Git Commit -->
+            <rect x="606" y="70" width="170" height="56" rx="5" fill="#2d2d2d" stroke="#404040"/>
+            <text x="691" y="94" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="13" font-weight="600">Git Commit</text>
+            <text x="691" y="112" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">git add -A &amp;&amp; git commit</text>
+
+            <line x1="776" y1="98" x2="816" y2="98" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#git-arrow)"/>
+
+            <!-- Step 5: Done -->
+            <rect x="818" y="70" width="170" height="56" rx="5" fill="rgba(76, 175, 80, 0.1)" stroke="rgba(76, 175, 80, 0.3)"/>
+            <text x="903" y="94" text-anchor="middle" fill="#81c784" font-family="Inter, sans-serif" font-size="13" font-weight="600">Committed</text>
+            <text x="903" y="112" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Staging cleared, page reloads</text>
+
+            <!-- Discard paths -->
+            <text x="30" y="162" fill="#e57373" font-family="Inter, sans-serif" font-size="11" font-weight="600">Discard Paths</text>
+
+            <!-- Discard staging only -->
+            <rect x="30" y="172" width="460" height="70" rx="5" fill="rgba(244, 67, 54, 0.06)" stroke="rgba(241, 76, 76, 0.2)" stroke-dasharray="4 2"/>
+
+            <rect x="46" y="184" width="180" height="46" rx="5" fill="#2d2d2d" stroke="#404040"/>
+            <text x="136" y="206" text-anchor="middle" fill="#e57373" font-family="Inter, sans-serif" font-size="12" font-weight="600">Discard All (staging)</text>
+            <text x="136" y="222" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Clears staging, releases lock</text>
+
+            <line x1="226" y1="207" x2="268" y2="207" stroke="#e57373" stroke-width="1.5" marker-end="url(#git-arrow-red)"/>
+
+            <rect x="270" y="184" width="206" height="46" rx="5" fill="rgba(76, 175, 80, 0.06)" stroke="rgba(76, 175, 80, 0.2)"/>
+            <text x="373" y="206" text-anchor="middle" fill="#81c784" font-family="Inter, sans-serif" font-size="12" font-weight="600">Config files unchanged</text>
+            <text x="373" y="222" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Nothing written to disk</text>
+
+            <!-- Discard git changes -->
+            <rect x="520" y="172" width="470" height="70" rx="5" fill="rgba(244, 67, 54, 0.06)" stroke="rgba(241, 76, 76, 0.2)" stroke-dasharray="4 2"/>
+
+            <rect x="536" y="184" width="200" height="46" rx="5" fill="#2d2d2d" stroke="#404040"/>
+            <text x="636" y="206" text-anchor="middle" fill="#e57373" font-family="Inter, sans-serif" font-size="12" font-weight="600">Discard (git changes)</text>
+            <text x="636" y="222" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">git checkout / git clean</text>
+
+            <line x1="736" y1="207" x2="778" y2="207" stroke="#e57373" stroke-width="1.5" marker-end="url(#git-arrow-red)"/>
+
+            <rect x="780" y="184" width="196" height="46" rx="5" fill="rgba(255, 193, 7, 0.08)" stroke="rgba(255, 193, 7, 0.2)"/>
+            <text x="878" y="206" text-anchor="middle" fill="#ffb74d" font-family="Inter, sans-serif" font-size="12" font-weight="600">Files restored to HEAD</text>
+            <text x="878" y="222" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Irreversible</text>
+        </svg>
+    </div>
+
     <h3>The Git Page</h3>
 
     <p>

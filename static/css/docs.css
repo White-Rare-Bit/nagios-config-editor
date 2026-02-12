@@ -635,6 +635,95 @@
     text-decoration: underline;
 }
 
+/* Inline SVG diagrams — allowed to extend wider than prose max-width */
+.docs-diagram {
+    margin: var(--nbe-space-xl) -60px;
+    border: 1px solid var(--nbe-dark-border-secondary);
+    border-radius: var(--nbe-radius-md);
+    overflow: hidden;
+}
+
+.docs-diagram svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+/* Color palette swatches */
+.docs-palette {
+    margin: var(--nbe-space-xl) 0;
+}
+
+.docs-palette-section {
+    margin-bottom: var(--nbe-space-lg);
+}
+
+.docs-palette-title {
+    font-size: var(--nbe-font-size-xs-plus);
+    font-weight: 600;
+    color: var(--nbe-dark-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: var(--nbe-space-sm);
+}
+
+.docs-palette-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: var(--nbe-space-sm);
+}
+
+.docs-palette-grid--wide {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+}
+
+.docs-swatch {
+    border: 1px solid var(--nbe-dark-border-primary);
+    border-radius: var(--nbe-radius-md);
+    overflow: hidden;
+}
+
+.docs-swatch-color {
+    height: 36px;
+}
+
+.docs-swatch-label {
+    padding: 4px 8px;
+    background: var(--nbe-dark-bg-secondary);
+}
+
+.docs-swatch-name {
+    display: block;
+    font-family: var(--nbe-font-mono);
+    font-size: 10px;
+    color: var(--nbe-dark-text-primary);
+    line-height: 1.4;
+}
+
+.docs-swatch-value {
+    display: block;
+    font-family: var(--nbe-font-mono);
+    font-size: 9px;
+    color: var(--nbe-dark-text-muted);
+    line-height: 1.4;
+}
+
+/* Badge-style swatches (for type badges, validation states) */
+.docs-palette-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nbe-space-sm);
+}
+
+.docs-swatch-badge {
+    padding: 6px 14px;
+    border-radius: var(--nbe-radius-md);
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-font-size-xs-plus);
+    font-weight: 600;
+    border: 1px solid;
+}
+
 /* Key-cap style for keyboard shortcuts in docs */
 .docs-prose kbd {
     display: inline-block;

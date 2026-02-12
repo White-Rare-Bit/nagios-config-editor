@@ -8,6 +8,108 @@
         changes before committing them.
     </p>
 
+    <div class="docs-diagram">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 340">
+            <defs>
+                <marker id="stg-arrow" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 3.5 L 0 7 z" fill="#4ec9b0"/>
+                </marker>
+                <marker id="stg-arrow-muted" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 3.5 L 0 7 z" fill="#666"/>
+                </marker>
+            </defs>
+
+            <rect width="1020" height="340" fill="#1e1e1e" rx="6"/>
+
+            <text x="510" y="28" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="14" font-weight="600">Staging Workflow</text>
+
+            <!-- Main flow: 4 large stages across the top -->
+            <!-- Stage 1: Make Changes -->
+            <rect x="30" y="50" width="200" height="60" rx="5" fill="#2d2d2d" stroke="#4ec9b0" stroke-width="2"/>
+            <text x="130" y="76" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="14" font-weight="600">Make Changes</text>
+            <text x="130" y="96" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">Edit, move, create, delete</text>
+
+            <line x1="230" y1="80" x2="274" y2="80" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#stg-arrow)"/>
+
+            <!-- Stage 2: Review -->
+            <rect x="276" y="50" width="200" height="60" rx="5" fill="#2d2d2d" stroke="#569cd6" stroke-width="2"/>
+            <text x="376" y="76" text-anchor="middle" fill="#569cd6" font-family="Inter, sans-serif" font-size="14" font-weight="600">Review Diffs</text>
+            <text x="376" y="96" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">Commit dialog shows all changes</text>
+
+            <line x1="476" y1="80" x2="520" y2="80" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#stg-arrow)"/>
+
+            <!-- Stage 3: Apply -->
+            <rect x="522" y="50" width="200" height="60" rx="5" fill="#2d2d2d" stroke="#81c784" stroke-width="2"/>
+            <text x="622" y="76" text-anchor="middle" fill="#81c784" font-family="Inter, sans-serif" font-size="14" font-weight="600">Apply</text>
+            <text x="622" y="96" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">Write to .cfg files (10 phases)</text>
+
+            <line x1="722" y1="80" x2="766" y2="80" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#stg-arrow)"/>
+
+            <!-- Stage 4: Git Commit -->
+            <rect x="768" y="50" width="220" height="60" rx="5" fill="#2d2d2d" stroke="#404040"/>
+            <text x="878" y="76" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="14" font-weight="600">Git Commit</text>
+            <text x="878" y="96" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">Optional version control</text>
+
+            <!-- 10 operation types feeding into "Make Changes" -->
+            <text x="130" y="138" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11" font-weight="600">10 Operation Types</text>
+
+            <!-- Left column -->
+            <rect x="20" y="152" width="108" height="26" rx="4" fill="#252525" stroke="#404040"/>
+            <text x="74" y="170" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="10">Object edits</text>
+
+            <rect x="20" y="184" width="108" height="26" rx="4" fill="#252525" stroke="#404040"/>
+            <text x="74" y="202" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="10">Object moves</text>
+
+            <rect x="20" y="216" width="108" height="26" rx="4" fill="rgba(76, 175, 80, 0.1)" stroke="rgba(76, 175, 80, 0.3)"/>
+            <text x="74" y="234" text-anchor="middle" fill="#81c784" font-family="Inter, sans-serif" font-size="10">Object creates</text>
+
+            <rect x="20" y="248" width="108" height="26" rx="4" fill="rgba(244, 67, 54, 0.1)" stroke="rgba(241, 76, 76, 0.3)"/>
+            <text x="74" y="266" text-anchor="middle" fill="#e57373" font-family="Inter, sans-serif" font-size="10">Object deletes</text>
+
+            <rect x="20" y="280" width="108" height="26" rx="4" fill="#252525" stroke="#404040"/>
+            <text x="74" y="298" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="10">File creates</text>
+
+            <!-- Right column -->
+            <rect x="140" y="152" width="108" height="26" rx="4" fill="#252525" stroke="#404040"/>
+            <text x="194" y="170" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="10">File deletes</text>
+
+            <rect x="140" y="184" width="108" height="26" rx="4" fill="#252525" stroke="#404040"/>
+            <text x="194" y="202" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="10">File moves</text>
+
+            <rect x="140" y="216" width="108" height="26" rx="4" fill="#252525" stroke="#404040"/>
+            <text x="194" y="234" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="10">Folder creates</text>
+
+            <rect x="140" y="248" width="108" height="26" rx="4" fill="#252525" stroke="#404040"/>
+            <text x="194" y="266" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="10">Folder deletes</text>
+
+            <rect x="140" y="280" width="108" height="26" rx="4" fill="#252525" stroke="#404040"/>
+            <text x="194" y="298" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="10">Folder moves</text>
+
+            <!-- Safety features: Undo + Backup + Conflict detection -->
+            <text x="622" y="138" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11" font-weight="600">Safety Features</text>
+
+            <!-- Undo -->
+            <rect x="522" y="152" width="200" height="46" rx="5" fill="rgba(78, 201, 176, 0.08)" stroke="rgba(78, 201, 176, 0.2)"/>
+            <text x="622" y="174" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="12" font-weight="600">Undo Stack</text>
+            <text x="622" y="190" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Ctrl+Z reverses each operation</text>
+
+            <!-- Backup -->
+            <rect x="522" y="206" width="200" height="46" rx="5" fill="rgba(78, 201, 176, 0.08)" stroke="rgba(78, 201, 176, 0.2)"/>
+            <text x="622" y="228" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="12" font-weight="600">Auto Backup</text>
+            <text x="622" y="244" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Created before every Apply</text>
+
+            <!-- Conflict detection -->
+            <rect x="522" y="260" width="200" height="46" rx="5" fill="rgba(78, 201, 176, 0.08)" stroke="rgba(78, 201, 176, 0.2)"/>
+            <text x="622" y="282" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="12" font-weight="600">Conflict Detection</text>
+            <text x="622" y="298" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Blocks if files changed externally</text>
+
+            <!-- Lock info -->
+            <rect x="768" y="152" width="220" height="46" rx="5" fill="rgba(255, 193, 7, 0.08)" stroke="rgba(255, 193, 7, 0.2)"/>
+            <text x="878" y="174" text-anchor="middle" fill="#ffb74d" font-family="Inter, sans-serif" font-size="12" font-weight="600">Session Lock</text>
+            <text x="878" y="190" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">One user edits at a time</text>
+        </svg>
+    </div>
+
     <h3>What Gets Staged</h3>
 
     <p>

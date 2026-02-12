@@ -8,6 +8,94 @@
         <code>get_staging_manager()</code>.
     </p>
 
+    <div class="docs-diagram">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 300">
+            <rect width="1020" height="300" fill="#1e1e1e" rx="6"/>
+
+            <text x="510" y="28" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="14" font-weight="600">Backend Service Map</text>
+
+            <!-- NagiosService -->
+            <rect x="30" y="44" width="300" height="248" rx="5" fill="#2d2d2d" stroke="#404040"/>
+            <rect x="30" y="44" width="300" height="30" rx="5" fill="#333" stroke="#404040"/>
+            <text x="180" y="64" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="13" font-weight="600">NagiosService</text>
+
+            <text x="48" y="96" fill="#888" font-family="Inter, sans-serif" font-size="10" font-weight="600">QUERY</text>
+            <text x="48" y="112" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">get_objects() · find_by_key()</text>
+            <text x="48" y="126" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">get_references() · get_health()</text>
+
+            <line x1="48" y1="136" x2="312" y2="136" stroke="#404040"/>
+
+            <text x="48" y="154" fill="#888" font-family="Inter, sans-serif" font-size="10" font-weight="600">MUTATION</text>
+            <text x="48" y="170" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">create() · update() · delete()</text>
+            <text x="48" y="184" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">move() · clone() · bulk_rename()</text>
+
+            <line x1="48" y1="194" x2="312" y2="194" stroke="#404040"/>
+
+            <text x="48" y="212" fill="#888" font-family="Inter, sans-serif" font-size="10" font-weight="600">APPLY PHASES</text>
+            <text x="48" y="228" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">apply_edits() · apply_moves()</text>
+            <text x="48" y="242" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">apply_creations() · apply_deletions()</text>
+            <text x="48" y="256" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">apply_file_*() · apply_folder_*()</text>
+
+            <rect x="38" y="270" width="64" height="14" rx="3" fill="rgba(255, 193, 7, 0.15)" stroke="rgba(255, 193, 7, 0.3)"/>
+            <text x="70" y="280" text-anchor="middle" fill="#ffb74d" font-family="Inter, sans-serif" font-size="9">mp.Lock</text>
+
+            <!-- StagingManager -->
+            <rect x="348" y="44" width="310" height="248" rx="5" fill="#2d2d2d" stroke="#404040"/>
+            <rect x="348" y="44" width="310" height="30" rx="5" fill="#333" stroke="#404040"/>
+            <text x="503" y="64" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="13" font-weight="600">StagingManager</text>
+
+            <text x="366" y="96" fill="#888" font-family="Inter, sans-serif" font-size="10" font-weight="600">STATE</text>
+            <text x="366" y="112" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">get_staging() · save_staging()</text>
+            <text x="366" y="126" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">clear() · get_counts()</text>
+
+            <line x1="366" y1="136" x2="640" y2="136" stroke="#404040"/>
+
+            <text x="366" y="154" fill="#888" font-family="Inter, sans-serif" font-size="10" font-weight="600">LOCK</text>
+            <text x="366" y="170" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">can_modify() · acquire_lock()</text>
+            <text x="366" y="184" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">release_lock() · break_lock()</text>
+
+            <line x1="366" y1="194" x2="640" y2="194" stroke="#404040"/>
+
+            <text x="366" y="212" fill="#888" font-family="Inter, sans-serif" font-size="10" font-weight="600">UNDO + CONFLICT</text>
+            <text x="366" y="228" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">push_undo() · pop_undo()</text>
+            <text x="366" y="242" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">update_checksums()</text>
+            <text x="366" y="256" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">detect_conflicts()</text>
+
+            <rect x="356" y="270" width="80" height="14" rx="3" fill="rgba(56, 139, 253, 0.15)" stroke="rgba(56, 139, 253, 0.3)"/>
+            <text x="396" y="280" text-anchor="middle" fill="#64b5f6" font-family="Inter, sans-serif" font-size="9">Atomic write</text>
+
+            <!-- GitService + BackupManager -->
+            <rect x="676" y="44" width="160" height="120" rx="5" fill="#2d2d2d" stroke="#404040"/>
+            <rect x="676" y="44" width="160" height="30" rx="5" fill="#333" stroke="#404040"/>
+            <text x="756" y="64" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="13" font-weight="600">GitService</text>
+            <text x="694" y="92" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">status() · commit()</text>
+            <text x="694" y="108" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">diff() · log()</text>
+            <text x="694" y="124" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">restore() · discard()</text>
+            <rect x="684" y="142" width="64" height="14" rx="3" fill="rgba(255, 193, 7, 0.15)" stroke="rgba(255, 193, 7, 0.3)"/>
+            <text x="716" y="152" text-anchor="middle" fill="#ffb74d" font-family="Inter, sans-serif" font-size="9">mp.Lock</text>
+
+            <rect x="850" y="44" width="140" height="120" rx="5" fill="#2d2d2d" stroke="#404040"/>
+            <rect x="850" y="44" width="140" height="30" rx="5" fill="#333" stroke="#404040"/>
+            <text x="920" y="64" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="13" font-weight="600">BackupManager</text>
+            <text x="868" y="92" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">create_backup()</text>
+            <text x="868" y="108" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">restore()</text>
+            <text x="868" y="124" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">list() · delete()</text>
+
+            <!-- Parser + Writer + Config -->
+            <rect x="676" y="180" width="160" height="80" rx="5" fill="#2d2d2d" stroke="#404040"/>
+            <rect x="676" y="180" width="160" height="30" rx="5" fill="#333" stroke="#404040"/>
+            <text x="756" y="200" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="13" font-weight="600">NagiosParser</text>
+            <text x="694" y="228" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">parse() · reload()</text>
+            <text x="694" y="244" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">find_by_key()</text>
+
+            <rect x="850" y="180" width="140" height="80" rx="5" fill="#2d2d2d" stroke="#404040"/>
+            <rect x="850" y="180" width="140" height="30" rx="5" fill="#333" stroke="#404040"/>
+            <text x="920" y="200" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="13" font-weight="600">ServerConfig</text>
+            <text x="868" y="228" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">load() · save()</text>
+            <text x="868" y="244" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">get() · set()</text>
+        </svg>
+    </div>
+
     <h3>Service Overview</h3>
 
     <table>

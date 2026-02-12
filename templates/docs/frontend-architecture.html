@@ -8,6 +8,144 @@
         globals.
     </p>
 
+    <div class="docs-diagram">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 380">
+            <defs>
+                <marker id="fe-arrow" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 3.5 L 0 7 z" fill="#4ec9b0"/>
+                </marker>
+            </defs>
+
+            <rect width="1020" height="380" fill="#1e1e1e" rx="6"/>
+
+            <text x="510" y="28" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="14" font-weight="600">Frontend Module Architecture</text>
+
+            <!-- Tier 1: Core Modules (loaded on every page) -->
+            <rect x="30" y="44" width="960" height="72" rx="5" fill="rgba(78, 201, 176, 0.06)" stroke="rgba(78, 201, 176, 0.2)"/>
+            <text x="50" y="62" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="11" font-weight="600">CORE (loaded on every page via base.html)</text>
+
+            <rect x="44" y="72" width="108" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="98" y="93" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">api-client</text>
+
+            <rect x="160" y="72" width="108" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="214" y="93" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">base-state</text>
+
+            <rect x="276" y="72" width="122" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="337" y="93" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">session-mgr</text>
+
+            <rect x="406" y="72" width="128" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="470" y="93" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">ui-notifications</text>
+
+            <rect x="542" y="72" width="85" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="584" y="93" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">git-ui</text>
+
+            <rect x="635" y="72" width="120" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="695" y="93" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">commit-dialog</text>
+
+            <rect x="763" y="72" width="108" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="817" y="93" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">lock-mgr</text>
+
+            <rect x="879" y="72" width="100" height="32" rx="4" fill="#2d2d2d" stroke="#4ec9b0"/>
+            <text x="929" y="93" text-anchor="middle" fill="#4ec9b0" font-family="JetBrains Mono, monospace" font-size="9">base</text>
+
+            <!-- Arrow down -->
+            <line x1="510" y1="116" x2="510" y2="134" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#fe-arrow)"/>
+            <text x="550" y="128" fill="#666" font-family="Inter, sans-serif" font-size="10">depends on</text>
+
+            <!-- Tier 2: Page-Specific Modules -->
+            <rect x="30" y="136" width="960" height="72" rx="5" fill="rgba(86, 156, 214, 0.06)" stroke="rgba(86, 156, 214, 0.2)"/>
+            <text x="50" y="154" fill="#569cd6" font-family="Inter, sans-serif" font-size="11" font-weight="600">PAGE MODULES (one per page)</text>
+
+            <rect x="44" y="164" width="82" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="85" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">git</text>
+
+            <rect x="134" y="164" width="82" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="175" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">backups</text>
+
+            <rect x="224" y="164" width="82" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="265" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">settings</text>
+
+            <rect x="314" y="164" width="82" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="355" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">audit-log</text>
+
+            <rect x="404" y="164" width="82" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="445" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">validate</text>
+
+            <rect x="494" y="164" width="110" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="549" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">dependencies</text>
+
+            <rect x="612" y="164" width="110" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="667" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">inheritance</text>
+
+            <rect x="730" y="164" width="110" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="785" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">bulk-rename</text>
+
+            <rect x="848" y="164" width="110" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="903" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">reorganize</text>
+
+            <!-- Arrow down -->
+            <line x1="510" y1="208" x2="510" y2="226" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#fe-arrow)"/>
+
+            <!-- Tier 3: Explorer Modules -->
+            <rect x="30" y="228" width="960" height="140" rx="5" fill="rgba(255, 193, 7, 0.04)" stroke="rgba(255, 193, 7, 0.15)"/>
+            <text x="50" y="246" fill="#ffb74d" font-family="Inter, sans-serif" font-size="11" font-weight="600">EXPLORER MODULES (16 modules, window.Explorer namespace)</text>
+
+            <!-- Row 1 -->
+            <rect x="44" y="256" width="108" height="32" rx="4" fill="#2d2d2d" stroke="#ffb74d" stroke-opacity="0.4"/>
+            <text x="98" y="277" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">main</text>
+
+            <rect x="160" y="256" width="108" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="214" y="277" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">constants</text>
+
+            <rect x="276" y="256" width="130" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="341" y="277" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">state-mgmt</text>
+
+            <rect x="414" y="256" width="108" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="468" y="277" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">app (tree)</text>
+
+            <rect x="530" y="256" width="130" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="595" y="277" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">object-editor</text>
+
+            <rect x="668" y="256" width="130" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="733" y="277" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">file-operations</text>
+
+            <rect x="806" y="256" width="130" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="871" y="277" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">context-menu</text>
+
+            <!-- Row 2 -->
+            <rect x="44" y="296" width="108" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="98" y="317" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">dialogs</text>
+
+            <rect x="160" y="296" width="108" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="214" y="317" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">data-loading</text>
+
+            <rect x="276" y="296" width="108" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="330" y="317" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">drag-drop</text>
+
+            <rect x="392" y="296" width="108" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="446" y="317" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">analysis</text>
+
+            <rect x="508" y="296" width="130" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="573" y="317" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">analysis-issues</text>
+
+            <rect x="646" y="296" width="108" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="700" y="317" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">badge-issues</text>
+
+            <rect x="762" y="296" width="130" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="827" y="317" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">relations-loader</text>
+
+            <!-- Row 3 (remaining) -->
+            <rect x="44" y="336" width="130" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="109" y="357" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">impact-section</text>
+
+            <rect x="182" y="336" width="108" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="236" y="357" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">ui-utils</text>
+
+            <rect x="298" y="336" width="168" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="382" y="357" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">analysis-suggestions</text>
+        </svg>
+    </div>
+
     <h3>Core Modules</h3>
 
     <p>
@@ -321,6 +459,158 @@ const actionHandlers = {
     </ul>
 
     <h3>CSS Architecture</h3>
+
+    <div class="docs-palette">
+        <div class="docs-palette-section">
+            <div class="docs-palette-title">Backgrounds</div>
+            <div class="docs-palette-grid">
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-bg-primary)"></div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">primary</span><span class="docs-swatch-value">#1e1e1e</span></div>
+                </div>
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-bg-secondary)"></div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">secondary</span><span class="docs-swatch-value">#2d2d2d</span></div>
+                </div>
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-bg-tertiary)"></div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">tertiary</span><span class="docs-swatch-value">#252525</span></div>
+                </div>
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-bg-hover)"></div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">hover</span><span class="docs-swatch-value">#2a2a2a</span></div>
+                </div>
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-bg-elevated)"></div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">elevated</span><span class="docs-swatch-value">#333333</span></div>
+                </div>
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-bg-subtle)"></div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">subtle</span><span class="docs-swatch-value">#383838</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="docs-palette-section">
+            <div class="docs-palette-title">Text</div>
+            <div class="docs-palette-grid">
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-bg-secondary); display: flex; align-items: center; justify-content: center; color: var(--nbe-dark-text-primary); font-size: 13px;">Primary text</div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">primary · 11.4:1</span><span class="docs-swatch-value">#d4d4d4</span></div>
+                </div>
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-bg-secondary); display: flex; align-items: center; justify-content: center; color: var(--nbe-dark-text-secondary); font-size: 13px;">Secondary</div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">secondary · 4.7:1</span><span class="docs-swatch-value">#888888</span></div>
+                </div>
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-bg-secondary); display: flex; align-items: center; justify-content: center; color: var(--nbe-dark-text-muted); font-size: 13px;">Muted</div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">muted · 4.5:1</span><span class="docs-swatch-value">#666666</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="docs-palette-section">
+            <div class="docs-palette-title">Accents</div>
+            <div class="docs-palette-grid">
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-accent-primary)"></div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">primary (teal)</span><span class="docs-swatch-value">#4ec9b0</span></div>
+                </div>
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-accent-secondary)"></div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">secondary (blue)</span><span class="docs-swatch-value">#569cd6</span></div>
+                </div>
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-accent-warning)"></div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">warning</span><span class="docs-swatch-value">#ffc107</span></div>
+                </div>
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-accent-danger)"></div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">danger</span><span class="docs-swatch-value">#f14c4c</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="docs-palette-section">
+            <div class="docs-palette-title">Borders</div>
+            <div class="docs-palette-grid">
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-bg-primary); border: 3px solid var(--nbe-dark-border-primary); box-sizing: border-box;"></div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">primary</span><span class="docs-swatch-value">#404040</span></div>
+                </div>
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-bg-primary); border: 3px solid var(--nbe-dark-border-secondary); box-sizing: border-box;"></div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">secondary</span><span class="docs-swatch-value">#333333</span></div>
+                </div>
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-bg-primary); border: 3px solid var(--nbe-dark-border-hover); box-sizing: border-box;"></div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">hover</span><span class="docs-swatch-value">#505050</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="docs-palette-section">
+            <div class="docs-palette-title">Validation States</div>
+            <div class="docs-palette-grid--wide" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
+                <div class="docs-swatch-badge" style="background: var(--nbe-dark-validation-success-bg); color: var(--nbe-dark-validation-success-text); border-color: var(--nbe-dark-validation-success-border);">Success / Created</div>
+                <div class="docs-swatch-badge" style="background: var(--nbe-dark-validation-error-bg); color: var(--nbe-dark-validation-error-text); border-color: var(--nbe-dark-validation-error-border);">Error / Deleted</div>
+                <div class="docs-swatch-badge" style="background: var(--nbe-dark-validation-warning-bg); color: var(--nbe-dark-validation-warning-text); border-color: var(--nbe-dark-validation-warning-border);">Warning / Modified</div>
+                <div class="docs-swatch-badge" style="background: var(--nbe-dark-validation-info-bg); color: var(--nbe-dark-validation-info-text); border-color: var(--nbe-dark-validation-info-border);">Info / Renamed</div>
+            </div>
+        </div>
+
+        <div class="docs-palette-section">
+            <div class="docs-palette-title">Object Type Badges</div>
+            <div class="docs-palette-badges">
+                <span class="docs-swatch-badge" style="background: var(--nbe-dark-type-host-bg); color: var(--nbe-dark-type-host-text); border-color: var(--nbe-dark-type-host-text);">host</span>
+                <span class="docs-swatch-badge" style="background: var(--nbe-dark-type-hostgroup-bg); color: var(--nbe-dark-type-hostgroup-text); border-color: var(--nbe-dark-type-hostgroup-text);">hostgroup</span>
+                <span class="docs-swatch-badge" style="background: var(--nbe-dark-type-service-bg); color: var(--nbe-dark-type-service-text); border-color: var(--nbe-dark-type-service-text);">service</span>
+                <span class="docs-swatch-badge" style="background: var(--nbe-dark-type-servicegroup-bg); color: var(--nbe-dark-type-servicegroup-text); border-color: var(--nbe-dark-type-servicegroup-text);">servicegroup</span>
+                <span class="docs-swatch-badge" style="background: var(--nbe-dark-type-contact-bg); color: var(--nbe-dark-type-contact-text); border-color: var(--nbe-dark-type-contact-text);">contact</span>
+                <span class="docs-swatch-badge" style="background: var(--nbe-dark-type-contactgroup-bg); color: var(--nbe-dark-type-contactgroup-text); border-color: var(--nbe-dark-type-contactgroup-text);">contactgroup</span>
+                <span class="docs-swatch-badge" style="background: var(--nbe-dark-type-command-bg); color: var(--nbe-dark-type-command-text); border-color: var(--nbe-dark-type-command-text);">command</span>
+                <span class="docs-swatch-badge" style="background: var(--nbe-dark-type-timeperiod-bg); color: var(--nbe-dark-type-timeperiod-text); border-color: var(--nbe-dark-type-timeperiod-text);">timeperiod</span>
+                <span class="docs-swatch-badge" style="background: var(--nbe-dark-type-hostdependency-bg); color: var(--nbe-dark-type-hostdependency-text); border-color: var(--nbe-dark-type-hostdependency-text);">hostdependency</span>
+                <span class="docs-swatch-badge" style="background: var(--nbe-dark-type-servicedependency-bg); color: var(--nbe-dark-type-servicedependency-text); border-color: var(--nbe-dark-type-servicedependency-text);">servicedependency</span>
+                <span class="docs-swatch-badge" style="background: var(--nbe-dark-type-hostescalation-bg); color: var(--nbe-dark-type-hostescalation-text); border-color: var(--nbe-dark-type-hostescalation-text);">hostescalation</span>
+                <span class="docs-swatch-badge" style="background: var(--nbe-dark-type-serviceescalation-bg); color: var(--nbe-dark-type-serviceescalation-text); border-color: var(--nbe-dark-type-serviceescalation-text);">serviceescalation</span>
+            </div>
+        </div>
+
+        <div class="docs-palette-section">
+            <div class="docs-palette-title">Diff Colors</div>
+            <div class="docs-palette-badges">
+                <span class="docs-swatch-badge" style="background: var(--nbe-dark-diff-added-bg); color: var(--nbe-dark-diff-added-text); border-color: rgba(76, 175, 80, 0.3); font-family: var(--nbe-font-mono);">+ Added line</span>
+                <span class="docs-swatch-badge" style="background: var(--nbe-dark-diff-removed-bg); color: var(--nbe-dark-diff-removed-text); border-color: rgba(241, 76, 76, 0.3); font-family: var(--nbe-font-mono);">- Removed line</span>
+            </div>
+        </div>
+
+        <div class="docs-palette-section">
+            <div class="docs-palette-title">Teal Alpha Ramp</div>
+            <div class="docs-palette-grid">
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-accent-alpha-10)"></div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">alpha-10</span><span class="docs-swatch-value">10% opacity</span></div>
+                </div>
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-accent-alpha-15)"></div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">alpha-15</span><span class="docs-swatch-value">15% opacity</span></div>
+                </div>
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-accent-alpha-20)"></div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">alpha-20</span><span class="docs-swatch-value">20% opacity</span></div>
+                </div>
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-accent-alpha-30)"></div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">alpha-30</span><span class="docs-swatch-value">30% opacity</span></div>
+                </div>
+                <div class="docs-swatch">
+                    <div class="docs-swatch-color" style="background: var(--nbe-dark-accent-alpha-60)"></div>
+                    <div class="docs-swatch-label"><span class="docs-swatch-name">alpha-60</span><span class="docs-swatch-value">60% opacity</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <p>
         Styles use a design token system with CSS custom properties. All tokens are defined
