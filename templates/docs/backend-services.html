@@ -1,0 +1,677 @@
+<div class="docs-prose">
+    <h2>Backend Services</h2>
+
+    <p>
+        The backend is organized into service classes, each responsible for a single domain.
+        All services are instantiated during app creation and stored in <code>app.extensions</code>.
+        Route handlers access them via helper functions like <code>get_service()</code> and
+        <code>get_staging_manager()</code>.
+    </p>
+
+    <h3>Service Overview</h3>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Service</th>
+                <th>Module</th>
+                <th>Responsibility</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>NagiosService</strong></td>
+                <td><code>nagios_service.py</code></td>
+                <td>CRUD operations on Nagios objects, apply phases for staging</td>
+            </tr>
+            <tr>
+                <td><strong>StagingManager</strong></td>
+                <td><code>staging_manager.py</code></td>
+                <td>Staging state, session locks, undo stack, conflict detection</td>
+            </tr>
+            <tr>
+                <td><strong>GitService</strong></td>
+                <td><code>git_service.py</code></td>
+                <td>Git subprocess wrapper, retry logic, identity injection</td>
+            </tr>
+            <tr>
+                <td><strong>BackupManager</strong></td>
+                <td><code>backup_manager.py</code></td>
+                <td>Zip backup creation, restore, cleanup</td>
+            </tr>
+            <tr>
+                <td><strong>NagiosParser</strong></td>
+                <td><code>nagios_parser.py</code></td>
+                <td>Parse <code>.cfg</code> files, object lookups</td>
+            </tr>
+            <tr>
+                <td><strong>NagiosWriter</strong></td>
+                <td><code>nagios_writer.py</code></td>
+                <td>Write <code>.cfg</code> files with atomic writes</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>NagiosService</h3>
+
+    <p>
+        The primary service for interacting with Nagios configuration objects. Handles all
+        CRUD operations and the multi-phase apply process for staging. All mutation methods
+        acquire a <code>multiprocessing.Lock</code> to ensure thread safety.
+    </p>
+
+    <h4>Query Methods</h4>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Method</th>
+                <th>Returns</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>get_objects()</code></td>
+                <td><code>List[NagiosObject]</code></td>
+                <td>Return all parsed objects from all config files</td>
+            </tr>
+            <tr>
+                <td><code>find_object_by_index(idx)</code></td>
+                <td><code>Optional[NagiosObject]</code></td>
+                <td>Get a single object by its global index</td>
+            </tr>
+            <tr>
+                <td><code>find_object_by_stable_key(key)</code></td>
+                <td><code>Optional[Tuple[int, NagiosObject]]</code></td>
+                <td>Get object by stable key (survives parser reloads)</td>
+            </tr>
+            <tr>
+                <td><code>search_objects(query, type, field, regex)</code></td>
+                <td><code>List[NagiosObject]</code></td>
+                <td>Search objects with optional type/field/regex filters</td>
+            </tr>
+            <tr>
+                <td><code>get_object_stats()</code></td>
+                <td><code>Dict</code></td>
+                <td>Counts grouped by object type and source file</td>
+            </tr>
+            <tr>
+                <td><code>get_name_field(object_type)</code></td>
+                <td><code>str</code></td>
+                <td>Get the name field for a given object type (e.g., <code>host_name</code> for hosts)</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h4>Mutation Methods</h4>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Method</th>
+                <th>Returns</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>create_object(target_file, obj_type, attrs, after_block_line)</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Create a new object in the specified file</td>
+            </tr>
+            <tr>
+                <td><code>update_object(file, line, attrs, type)</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Update attributes of an existing object</td>
+            </tr>
+            <tr>
+                <td><code>delete_object(file, line)</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Delete an object from its file</td>
+            </tr>
+            <tr>
+                <td><code>move_object(src_file, src_line, tgt_file, type, attrs, insert_line)</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Move an object between files</td>
+            </tr>
+            <tr>
+                <td><code>update_references(objects, old_name, new_name)</code></td>
+                <td><code>int</code></td>
+                <td>Update all references when an object is renamed (returns count updated)</td>
+            </tr>
+            <tr>
+                <td><code>transform_name(name, find, replace, prefix, suffix, regex)</code></td>
+                <td><code>Optional[str]</code></td>
+                <td>Transform a name using find/replace, prefix, or suffix</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h4>Apply Phase Methods</h4>
+
+    <p>
+        These methods execute the staged changes during the apply process. They are called
+        in a specific order (see <a href="#app/data-flow-staging">Data Flow &amp; Staging</a>):
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Method</th>
+                <th>Phase</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>apply_folder_creations(staging_data, is_safe)</code></td>
+                <td>1. Create folders (parent-first)</td>
+            </tr>
+            <tr>
+                <td><code>apply_file_creations(staging_data, is_safe)</code></td>
+                <td>2. Create files</td>
+            </tr>
+            <tr>
+                <td><code>apply_object_deletions(staging_data)</code></td>
+                <td>3. Delete objects (reverse line order)</td>
+            </tr>
+            <tr>
+                <td><code>apply_object_moves(staging_data)</code></td>
+                <td>4. Move objects between files</td>
+            </tr>
+            <tr>
+                <td><code>apply_object_edits(staging_data)</code></td>
+                <td>5. Edit object attributes</td>
+            </tr>
+            <tr>
+                <td><code>apply_object_creations(staging_data)</code></td>
+                <td>6. Create new objects</td>
+            </tr>
+            <tr>
+                <td><code>apply_file_moves(staging_data, is_safe)</code></td>
+                <td>7. Move/rename files</td>
+            </tr>
+            <tr>
+                <td><code>apply_folder_moves(staging_data, is_safe)</code></td>
+                <td>8. Move/rename folders</td>
+            </tr>
+            <tr>
+                <td><code>apply_file_deletions(staging_data, is_safe)</code></td>
+                <td>9. Delete files</td>
+            </tr>
+            <tr>
+                <td><code>apply_folder_deletions(staging_data, is_safe)</code></td>
+                <td>10. Delete folders (child-first)</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h4>Other Methods</h4>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Method</th>
+                <th>Returns</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>get_typed_staging()</code></td>
+                <td><code>Optional[StagingState]</code></td>
+                <td>Get a typed StagingState instance from current staging data</td>
+            </tr>
+            <tr>
+                <td><code>reload()</code></td>
+                <td><code>NagiosConfigParser</code></td>
+                <td>Force parser to re-read all config files from disk</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>StagingManager</h3>
+
+    <p>
+        Manages the staging lifecycle: lock acquisition, staged operation storage, undo stack,
+        and conflict detection. Internally delegates to composed managers:
+    </p>
+
+    <ul>
+        <li><code>sm.checksums</code> (ChecksumManager) — file checksums and conflict detection</li>
+        <li><code>sm.undo</code> (UndoStackManager) — undo stack operations</li>
+        <li><code>sm.file_ops</code> (FileOperationsStager) — file/folder staging operations</li>
+    </ul>
+
+    <h4>Staging State</h4>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Method</th>
+                <th>Returns</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>get_staging()</code></td>
+                <td><code>Optional[Dict]</code></td>
+                <td>Get current staging data (all operations)</td>
+            </tr>
+            <tr>
+                <td><code>save_staging(data)</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Save staging data atomically to disk</td>
+            </tr>
+            <tr>
+                <td><code>save_staging_atomic(data, session_id, lock)</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Save with atomic lock validation</td>
+            </tr>
+            <tr>
+                <td><code>clear_staging()</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Clear all staging data and release lock</td>
+            </tr>
+            <tr>
+                <td><code>has_staging()</code></td>
+                <td><code>bool</code></td>
+                <td>Check if any session holds the staging lock</td>
+            </tr>
+            <tr>
+                <td><code>get_staging_info()</code></td>
+                <td><code>Dict</code></td>
+                <td>Summary with counts for each operation type</td>
+            </tr>
+            <tr>
+                <td><code>get_total_staged_count()</code></td>
+                <td><code>int</code></td>
+                <td>Total count of all staged operations</td>
+            </tr>
+            <tr>
+                <td><code>get_empty_staging_structure()</code></td>
+                <td><code>Dict</code></td>
+                <td>Get empty staging with all required fields initialized</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h4>Lock Management</h4>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Method</th>
+                <th>Returns</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>can_modify(session_id)</code></td>
+                <td><code>bool</code></td>
+                <td>Check if the given session holds the staging lock</td>
+            </tr>
+            <tr>
+                <td><code>validate_or_acquire_lock(session_id)</code></td>
+                <td><code>bool</code></td>
+                <td>Acquire lock if available, or validate existing ownership</td>
+            </tr>
+            <tr>
+                <td><code>get_lock_owner()</code></td>
+                <td><code>Optional[str]</code></td>
+                <td>Get the session ID that currently holds the lock</td>
+            </tr>
+            <tr>
+                <td><code>get_lock_status(session_id)</code></td>
+                <td><code>Dict</code></td>
+                <td>Detailed lock info (owner, is_owner, locked state)</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h4>Undo Stack</h4>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Method</th>
+                <th>Returns</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>add_to_undo_stack(type, data, desc, staging)</code></td>
+                <td><code>Optional[str]</code></td>
+                <td>Push an undo entry; returns entry ID</td>
+            </tr>
+            <tr>
+                <td><code>peek_undo_stack()</code></td>
+                <td><code>Optional[Dict]</code></td>
+                <td>View top entry without removing it</td>
+            </tr>
+            <tr>
+                <td><code>pop_undo_stack()</code></td>
+                <td><code>Optional[Dict]</code></td>
+                <td>Pop and return the top undo entry</td>
+            </tr>
+            <tr>
+                <td><code>get_undo_stack_count()</code></td>
+                <td><code>int</code></td>
+                <td>Number of entries in the undo stack</td>
+            </tr>
+            <tr>
+                <td><code>clear_undo_stack()</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Clear all undo entries</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h4>Conflict Detection</h4>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Method</th>
+                <th>Returns</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>compute_file_checksum(path)</code></td>
+                <td><code>Optional[str]</code></td>
+                <td>SHA256 checksum of a single file</td>
+            </tr>
+            <tr>
+                <td><code>compute_base_checksums(paths)</code></td>
+                <td><code>Dict[str, str]</code></td>
+                <td>Compute checksums for multiple files</td>
+            </tr>
+            <tr>
+                <td><code>update_base_checksums(paths)</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Store base checksums for later conflict detection</td>
+            </tr>
+            <tr>
+                <td><code>detect_conflicts()</code></td>
+                <td><code>List[Dict]</code></td>
+                <td>Find files modified outside the app since staging began</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h4>File/Folder Staging</h4>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Method</th>
+                <th>Returns</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>stage_file_creation(path)</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Stage a new file to be created</td>
+            </tr>
+            <tr>
+                <td><code>stage_file_deletion(path)</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Stage a file for deletion</td>
+            </tr>
+            <tr>
+                <td><code>stage_file_move(src, tgt)</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Stage a file move/rename</td>
+            </tr>
+            <tr>
+                <td><code>stage_folder_creation(path)</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Stage a new folder to be created</td>
+            </tr>
+            <tr>
+                <td><code>stage_folder_deletion(path)</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Stage a folder for deletion</td>
+            </tr>
+            <tr>
+                <td><code>stage_folder_move(src, tgt)</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Stage a folder move/rename</td>
+            </tr>
+            <tr>
+                <td><code>unstage_operation(op_id, op_type)</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Remove a staged operation by its ID and type</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>GitService</h3>
+
+    <p>
+        Wraps all Git operations in subprocess calls with timeout management, retry logic for
+        transient errors, and per-operation identity injection. Multi-step mutations are
+        serialized via a <code>multiprocessing.Lock</code>.
+    </p>
+
+    <h4>Methods</h4>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Method</th>
+                <th>Returns</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>is_repo()</code></td>
+                <td><code>OperationResult[bool]</code></td>
+                <td>Check if config directory is inside a git repo</td>
+            </tr>
+            <tr>
+                <td><code>get_user_identity()</code></td>
+                <td><code>OperationResult[Dict]</code></td>
+                <td>Get configured <code>user.name</code> and <code>user.email</code></td>
+            </tr>
+            <tr>
+                <td><code>get_status(excluded_paths)</code></td>
+                <td><code>OperationResult[GitStatusResult]</code></td>
+                <td>Git status in porcelain format, with path exclusions</td>
+            </tr>
+            <tr>
+                <td><code>get_diff(filepath, staged, full_file, context_lines)</code></td>
+                <td><code>OperationResult[str]</code></td>
+                <td>Get diff for a specific file or all changes</td>
+            </tr>
+            <tr>
+                <td><code>get_workspace_diff(excluded)</code></td>
+                <td><code>OperationResult[Dict]</code></td>
+                <td>Structured diff for commit dialog (per-file diffs)</td>
+            </tr>
+            <tr>
+                <td><code>get_log(limit)</code></td>
+                <td><code>OperationResult[Dict]</code></td>
+                <td>Commit history (default limit: 200)</td>
+            </tr>
+            <tr>
+                <td><code>has_uncommitted_changes()</code></td>
+                <td><code>OperationResult[bool]</code></td>
+                <td>Check if the working directory has uncommitted changes</td>
+            </tr>
+            <tr>
+                <td><code>init_repo()</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Initialize a new git repository</td>
+            </tr>
+            <tr>
+                <td><code>commit(message, files, user_name, user_email)</code></td>
+                <td><code>OperationResult[Dict]</code></td>
+                <td>Stage files and commit with identity injection</td>
+            </tr>
+            <tr>
+                <td><code>discard(filepath)</code></td>
+                <td><code>OperationResult[Dict]</code></td>
+                <td>Discard changes to a specific file</td>
+            </tr>
+            <tr>
+                <td><code>discard_all()</code></td>
+                <td><code>OperationResult[Dict]</code></td>
+                <td>Hard reset + clean untracked files</td>
+            </tr>
+            <tr>
+                <td><code>restore(commit_hash)</code></td>
+                <td><code>OperationResult[Dict]</code></td>
+                <td>Restore working directory to a specific commit</td>
+            </tr>
+            <tr>
+                <td><code>clear_history(user_name, user_email)</code></td>
+                <td><code>OperationResult[Dict]</code></td>
+                <td>Delete <code>.git</code> and reinitialize with a fresh commit</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h4>Retry Logic</h4>
+
+    <p>
+        The internal <code>_run_git()</code> method implements exponential backoff for transient
+        Git lock errors. If the error output contains patterns like <code>index.lock</code>,
+        <code>unable to create</code>, or <code>cannot lock ref</code>, the operation is retried
+        up to 3 times with increasing delays.
+    </p>
+
+    <h4>Timeout Presets</h4>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Preset</th>
+                <th>Timeout</th>
+                <th>Used For</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>TIMEOUT_QUERY</code></td>
+                <td>5 seconds</td>
+                <td><code>rev-parse</code>, config lookups</td>
+            </tr>
+            <tr>
+                <td><code>TIMEOUT_STATUS</code></td>
+                <td>10 seconds</td>
+                <td><code>status</code>, <code>reset</code>, <code>branch</code></td>
+            </tr>
+            <tr>
+                <td><code>TIMEOUT_MUTATE</code></td>
+                <td>30 seconds</td>
+                <td><code>commit</code>, <code>checkout</code>, <code>clean</code>, <code>add</code>, <code>diff</code></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h4>Identity Injection</h4>
+
+    <p>
+        Git user identity is passed per-operation rather than stored in global config. The
+        commit method executes:
+    </p>
+
+    <pre><code>git -c user.name="John Doe" -c user.email="john@example.com" commit -m "message"</code></pre>
+
+    <p>
+        This ensures each commit is attributed to the correct user without modifying the
+        system's Git configuration.
+    </p>
+
+    <h3>BackupManager</h3>
+
+    <p>
+        Handles zip backup creation, listing, restore, and cleanup. A backup is automatically
+        created before every apply operation.
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Method</th>
+                <th>Returns</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>create_backup(desc, user_name, user_email)</code></td>
+                <td><code>str</code></td>
+                <td>Create zip backup with metadata; returns backup path</td>
+            </tr>
+            <tr>
+                <td><code>list_backups()</code></td>
+                <td><code>List[Dict]</code></td>
+                <td>List all backups (zip + legacy directory format)</td>
+            </tr>
+            <tr>
+                <td><code>restore_backup(name, user_name, user_email)</code></td>
+                <td><code>Dict</code></td>
+                <td>Restore from backup (creates safety backup first)</td>
+            </tr>
+            <tr>
+                <td><code>delete_backup(name)</code></td>
+                <td><code>bool</code></td>
+                <td>Delete a specific backup</td>
+            </tr>
+            <tr>
+                <td><code>cleanup_old_backups(keep_count)</code></td>
+                <td><code>int</code></td>
+                <td>Keep N most recent backups, delete the rest; returns count deleted</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>NagiosWriter</h3>
+
+    <p>
+        Handles writing Nagios configuration back to <code>.cfg</code> files. All writes use
+        an atomic pattern to prevent data corruption:
+    </p>
+
+    <ol>
+        <li>Write to a temporary file in the same directory</li>
+        <li>Call <code>flush()</code> and <code>os.fsync()</code> to ensure data reaches disk</li>
+        <li>Use <code>os.replace()</code> for an atomic rename (POSIX guarantee)</li>
+    </ol>
+
+    <p>
+        Block editing uses <code>find_block_range()</code> to locate the character offsets of a
+        <code>define { ... }</code> block by line number, then rewrites the file with the updated
+        block content. The block range finder handles nested braces, quoted strings, and escape
+        sequences.
+    </p>
+
+    <h3>Path Safety</h3>
+
+    <p>
+        All file and folder operations pass through <code>is_safe_path(path, base_dir)</code>
+        before execution. This function checks for:
+    </p>
+
+    <ul>
+        <li>Null byte injection</li>
+        <li>Path traversal attempts (<code>..</code> in path)</li>
+        <li>Symlink resolution (ensures the resolved path stays within the base directory)</li>
+        <li>Base directory containment (the final resolved path must be under the config directory)</li>
+    </ul>
+
+    <div class="docs-warning">
+        Never bypass <code>is_safe_path()</code> when adding new file operations. It is the
+        primary defense against directory traversal attacks.
+    </div>
+</div>

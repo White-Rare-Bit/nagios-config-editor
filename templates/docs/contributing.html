@@ -1,0 +1,267 @@
+<div class="docs-prose">
+    <h2>Contributing</h2>
+
+    <p>
+        This guide covers the conventions, patterns, and processes for contributing to
+        Nagios Bulk Editor.
+    </p>
+
+    <h3>Code Style</h3>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Language</th>
+                <th>Convention</th>
+                <th>Examples</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Python</td>
+                <td><code>snake_case</code></td>
+                <td><code>get_staging_info</code>, <code>staging_manager</code>, <code>apply_object_edits</code></td>
+            </tr>
+            <tr>
+                <td>JavaScript</td>
+                <td><code>camelCase</code></td>
+                <td><code>getStagingInfo</code>, <code>refreshAfterObjectChange</code>, <code>buildTypeDropdown</code></td>
+            </tr>
+            <tr>
+                <td>CSS classes</td>
+                <td><code>kebab-case</code></td>
+                <td><code>docs-prose</code>, <code>commit-dialog</code>, <code>lock-banner</code></td>
+            </tr>
+            <tr>
+                <td>CSS variables</td>
+                <td><code>--nbe-*</code> prefix</td>
+                <td><code>--nbe-bg-primary</code>, <code>--nbe-text-muted</code>, <code>--nbe-dark-bg-primary</code></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h4>API Field Names</h4>
+
+    <p>
+        The REST API uses <code>snake_case</code> for all field names in both requests and
+        responses. The frontend preserves API field names in requests (it does not convert
+        to camelCase when sending data to the backend).
+    </p>
+
+    <h3>Backend Patterns</h3>
+
+    <h4>OperationResult</h4>
+
+    <p>
+        All service methods that perform mutations must return an <code>OperationResult</code>.
+        Never raise exceptions from service methods — catch them and return
+        <code>OperationResult(success=False, error=str(e))</code>.
+    </p>
+
+    <pre><code>def my_service_method(self, param):
+    try:
+        # do work...
+        return OperationResult(success=True, data=result_data)
+    except Exception as e:
+        return OperationResult(success=False, error=str(e))</code></pre>
+
+    <h4>Backup Before Mutation</h4>
+
+    <p>
+        Any operation that writes to disk must create a backup first:
+    </p>
+
+    <pre><code>bm.create_backup("pre_operation_name")</code></pre>
+
+    <h4>Lock Check for Staging Mutations</h4>
+
+    <p>
+        Route handlers that modify staging state must verify session ownership:
+    </p>
+
+    <pre><code>if not sm.can_modify(request.headers.get('X-Session-Id')):
+    return jsonify({'error': 'Locked by another user', 'locked': True}), 423</code></pre>
+
+    <h4>Parser Modification</h4>
+
+    <p>
+        When multiple parser mutations need to run atomically, use the context manager:
+    </p>
+
+    <pre><code>with get_parser_for_modification() as p:
+    # multi-step mutation — lock is held, parser reloads on exit</code></pre>
+
+    <h3>Frontend Patterns</h3>
+
+    <h4>Event Delegation</h4>
+
+    <p>
+        Use <code>data-action</code> attributes on HTML elements and dispatch via an
+        <code>actionHandlers</code> map. Do not bind event listeners to individual elements
+        that will be re-rendered:
+    </p>
+
+    <pre><code>// Good: event delegation
+&lt;button data-action="saveObject"&gt;Save&lt;/button&gt;
+actionHandlers.saveObject = (el) =&gt; { ... };
+
+// Avoid: direct binding (breaks on re-render)
+document.querySelector('.save-btn').addEventListener('click', ...);</code></pre>
+
+    <h4>API Calls</h4>
+
+    <p>
+        Always use <code>ApiClient.get()</code> or <code>ApiClient.post()</code> for API calls.
+        Never use raw <code>fetch()</code>. The <code>ApiClient</code> handles session headers,
+        JSON serialization, and error normalization:
+    </p>
+
+    <pre><code>const result = await ApiClient.post('/api/staging', { data: payload });
+if (!result.success) {
+    showToast(result.error, 'danger');
+    return;
+}
+// use result.data</code></pre>
+
+    <h3>Testing</h3>
+
+    <h4>Running Tests</h4>
+
+    <p>
+        Tests use pytest. Run the full suite from the project root:
+    </p>
+
+    <pre><code>python3 -m pytest tests/ -v</code></pre>
+
+    <p>
+        The test suite runs fast (under 1 second for the full suite).
+    </p>
+
+    <h4>Test Structure</h4>
+
+    <p>
+        Tests are organized in the <code>tests/</code> directory. Each test module typically
+        tests a single service or route module. Tests use Flask's test client for API endpoint
+        testing and direct service instantiation for unit tests.
+    </p>
+
+    <h3>Adding a New Object Type</h3>
+
+    <p>
+        To add support for a new Nagios object type (for example, a custom object definition):
+    </p>
+
+    <ol>
+        <li>
+            <strong>Update <code>nagios_model.py</code></strong> — Add the type to the
+            relevant domain constants:
+            <ul>
+                <li><code>NAME_FIELDS</code> — Which attribute holds the object's name</li>
+                <li><code>REFERENCE_FIELDS</code> — Which attributes reference other objects</li>
+                <li><code>REQUIRED_FIELDS</code> — Mandatory attributes for the type</li>
+                <li><code>NAGIOS_ATTRIBUTES</code> — All known attributes</li>
+                <li><code>DEFAULT_ATTRIBUTES</code> — Attributes shown when creating a new object</li>
+            </ul>
+        </li>
+        <li>
+            <strong>That is it.</strong> The frontend fetches metadata from
+            <code>GET /api/metadata</code> at startup and picks up the new type automatically.
+            No JavaScript changes needed.
+        </li>
+    </ol>
+
+    <div class="docs-note">
+        The domain metadata system is designed as a single source of truth. All Nagios
+        object type information is defined once in <code>nagios_model.py</code>, served via
+        the metadata API, and consumed by the frontend at startup. Never hardcode domain
+        metadata in JavaScript files.
+    </div>
+
+    <h3>CSS Token System</h3>
+
+    <p>
+        All colors, spacing, and typography values should use design tokens from
+        <code>tokens.css</code>. Tokens use the <code>--nbe-</code> prefix:
+    </p>
+
+    <h4>Light Theme Tokens</h4>
+
+    <pre><code>--nbe-bg-primary        /* Main background */
+--nbe-bg-secondary      /* Secondary background */
+--nbe-text-primary      /* Main text color */
+--nbe-text-muted        /* De-emphasized text */
+--nbe-border-primary    /* Standard border */
+--nbe-accent-primary    /* Brand/accent color */</code></pre>
+
+    <h4>Dark Theme Tokens</h4>
+
+    <p>
+        Dark theme tokens follow the pattern <code>--nbe-dark-{category}-{variant}</code>
+        and are currently used on the Explorer page only:
+    </p>
+
+    <pre><code>--nbe-dark-bg-primary
+--nbe-dark-bg-secondary
+--nbe-dark-text-primary
+--nbe-dark-border-primary</code></pre>
+
+    <p>
+        Categories include: <code>bg</code>, <code>text</code>, <code>border</code>,
+        <code>accent</code>, <code>input</code>, <code>btn</code>, <code>tab</code>,
+        <code>validation</code>.
+    </p>
+
+    <h4>Button System</h4>
+
+    <p>
+        Use the <code>.nbe-btn</code> base class with modifiers:
+    </p>
+
+    <ul>
+        <li><strong>Variants</strong>: <code>--primary</code>, <code>--secondary</code>, <code>--danger</code>, <code>--info</code>, <code>--ghost</code></li>
+        <li><strong>Sizes</strong>: <code>--xs</code>, <code>--sm</code>, (default), <code>--lg</code></li>
+        <li><strong>Modifiers</strong>: <code>--icon</code> (square), <code>--full</code> (full width), <code>.nbe-btn-group</code></li>
+        <li><strong>Dark theme</strong>: Add <code>--dark</code> (e.g., <code>.nbe-btn--dark.nbe-btn--primary</code>)</li>
+        <li><strong>Loading state</strong>: Set <code>data-loading="true"</code> via JavaScript</li>
+    </ul>
+
+    <h4>Typography Tokens</h4>
+
+    <p>
+        Semantic typography groups each provide <code>-size</code>, <code>-weight</code>,
+        and <code>-line-height</code> variants:
+    </p>
+
+    <ul>
+        <li><code>h1</code> (20px), <code>h2</code> (16px), <code>h3</code> (14px)</li>
+        <li><code>label</code> (12px/600), <code>body</code> (13px), <code>secondary</code> (12px), <code>muted</code> (10px)</li>
+        <li><code>code</code> (12px/mono), <code>badge</code> (10px/600)</li>
+        <li><code>button</code> (13px), <code>button-sm</code> (12px), <code>input</code> (13px)</li>
+    </ul>
+
+    <p>
+        Fonts: Inter (<code>--nbe-font-sans</code>) and JetBrains Mono
+        (<code>--nbe-font-mono</code>), both bundled as woff2 files.
+    </p>
+
+    <h3>Structured Logging</h3>
+
+    <p>
+        Backend operations use the <code>OperationLogger</code> for structured JSON logging.
+        Log entries include the module, operation, parameters, and result:
+    </p>
+
+    <pre><code>if op_logger:
+    op_logger.info('service', 'create_object',
+                   params={'file': file_path, 'obj_type': obj_type},
+                   result='success')
+    op_logger.error('service', 'create_object',
+                    params={'file': file_path},
+                    error=str(e))</code></pre>
+
+    <p>
+        Log levels: <code>DEBUG</code> (parser reload), <code>INFO</code> (successful
+        operations), <code>WARNING</code> (retries, partial failures), <code>ERROR</code>
+        (failures).
+    </p>
+</div>

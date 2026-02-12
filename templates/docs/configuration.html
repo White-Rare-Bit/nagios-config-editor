@@ -1,0 +1,252 @@
+<div class="docs-prose">
+    <h2>Configuration</h2>
+
+    <p>
+        Application settings are stored in <code>config/settings.json</code>. The configuration
+        system supports three levels of precedence, from highest to lowest:
+    </p>
+
+    <ol>
+        <li><strong>Environment variables</strong> — Override everything</li>
+        <li><strong>Config file</strong> — <code>config/settings.json</code></li>
+        <li><strong>Default values</strong> — Built into the <code>ServerConfig</code> dataclass</li>
+    </ol>
+
+    <p>
+        If no config file exists on first run, one is created automatically with default values.
+    </p>
+
+    <h3>Configuration Structure</h3>
+
+    <p>
+        The config file is a JSON document with two sections: <code>paths</code> and
+        <code>logging</code>.
+    </p>
+
+    <h4>Path Settings</h4>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Default</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>nagios_config_path</code></td>
+                <td><code>str</code></td>
+                <td><code>"./sample-config"</code></td>
+                <td>Path to the directory containing Nagios <code>.cfg</code> files</td>
+            </tr>
+            <tr>
+                <td><code>backup_path</code></td>
+                <td><code>str | null</code></td>
+                <td><code>null</code></td>
+                <td>Custom path for storing backups (defaults to a <code>backups/</code> subdirectory inside the config path)</td>
+            </tr>
+            <tr>
+                <td><code>nagios_bin</code></td>
+                <td><code>str</code></td>
+                <td><code>"/usr/local/nagios/bin/nagios"</code></td>
+                <td>Path to the Nagios binary (for <code>nagios -v</code> validation)</td>
+            </tr>
+            <tr>
+                <td><code>nagios_cfg</code></td>
+                <td><code>str</code></td>
+                <td><code>"./sample-config/nagios.cfg"</code></td>
+                <td>Path to the main <code>nagios.cfg</code> file (used by validation)</td>
+            </tr>
+            <tr>
+                <td><code>resource_cfg</code></td>
+                <td><code>str</code></td>
+                <td><code>""</code></td>
+                <td>Path to a <code>resource.cfg</code> file (for macro resolution)</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h4>Logging Settings</h4>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Default</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>enabled</code></td>
+                <td><code>bool</code></td>
+                <td><code>true</code></td>
+                <td>Whether operation logging is enabled</td>
+            </tr>
+            <tr>
+                <td><code>log_level</code></td>
+                <td><code>str</code></td>
+                <td><code>"INFO"</code></td>
+                <td>Logging level (DEBUG, INFO, WARNING, ERROR)</td>
+            </tr>
+            <tr>
+                <td><code>log_dir</code></td>
+                <td><code>str</code></td>
+                <td><code>"logs"</code></td>
+                <td>Directory for log files</td>
+            </tr>
+            <tr>
+                <td><code>log_filename</code></td>
+                <td><code>str</code></td>
+                <td><code>"operations.jsonl"</code></td>
+                <td>Log file name (JSON Lines format)</td>
+            </tr>
+            <tr>
+                <td><code>max_file_size_mb</code></td>
+                <td><code>int</code></td>
+                <td><code>10</code></td>
+                <td>Maximum log file size before rotation (MB)</td>
+            </tr>
+            <tr>
+                <td><code>max_backup_files</code></td>
+                <td><code>int</code></td>
+                <td><code>5</code></td>
+                <td>Number of rotated log files to keep</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h4>Example Config File</h4>
+
+    <pre><code>{
+  "version": 1,
+  "paths": {
+    "nagios_config_path": "/etc/nagios/objects",
+    "backup_path": null,
+    "nagios_bin": "/usr/local/nagios/bin/nagios",
+    "nagios_cfg": "/etc/nagios/nagios.cfg",
+    "resource_cfg": ""
+  },
+  "logging": {
+    "enabled": true,
+    "log_level": "INFO",
+    "log_dir": "logs",
+    "log_filename": "operations.jsonl",
+    "max_file_size_mb": 10,
+    "max_backup_files": 5
+  }
+}</code></pre>
+
+    <h3>Environment Variable Overrides</h3>
+
+    <p>
+        Environment variables take the highest precedence. When set, they override
+        both the config file and default values. Changes via environment variables
+        are applied at load time and are not persisted to the config file.
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Environment Variable</th>
+                <th>Overrides</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>NAGIOS_CONFIG_PATH</code></td>
+                <td><code>paths.nagios_config_path</code> (normalized to absolute path)</td>
+            </tr>
+            <tr>
+                <td><code>BACKUP_PATH</code></td>
+                <td><code>paths.backup_path</code></td>
+            </tr>
+            <tr>
+                <td><code>NAGIOS_BIN</code></td>
+                <td><code>paths.nagios_bin</code></td>
+            </tr>
+            <tr>
+                <td><code>NAGIOS_CFG</code></td>
+                <td><code>paths.nagios_cfg</code></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="docs-note">
+        The <code>nagios_config_path</code> is always normalized to an absolute path, whether
+        set via environment variable or config file. Relative paths are resolved against the
+        application's working directory.
+    </div>
+
+    <h3>Config Loading</h3>
+
+    <p>
+        Configuration is loaded by <code>load_config()</code> in <code>server_config.py</code>.
+        The loading process:
+    </p>
+
+    <ol>
+        <li>Ensure the <code>config/</code> directory exists</li>
+        <li>Start with default <code>ServerConfig</code> values</li>
+        <li>If <code>config/settings.json</code> exists, parse it and overlay onto defaults</li>
+        <li>Apply environment variable overrides</li>
+        <li>If no config file existed, create one with the resolved values</li>
+    </ol>
+
+    <p>
+        The config is saved atomically using the same temp-file + <code>os.replace()</code>
+        pattern used throughout the application.
+    </p>
+
+    <h3>Updating Configuration</h3>
+
+    <p>
+        Configuration can be updated in two ways:
+    </p>
+
+    <h4>Settings Page</h4>
+
+    <p>
+        The <a href="#app/settings">Settings</a> page provides a UI for editing paths and
+        logging configuration. Changes made here are saved to <code>config/settings.json</code>
+        via <code>POST /api/settings</code>.
+    </p>
+
+    <h4>Programmatic Updates</h4>
+
+    <p>
+        The <code>update_config(updates)</code> function accepts a dictionary of updates,
+        supports both flat and nested key formats:
+    </p>
+
+    <pre><code># Flat keys (backward compatibility)
+update_config({'nagios_config_path': '/new/path'})
+
+# Nested keys
+update_config({'paths': {'nagios_config_path': '/new/path'}})
+
+# Logging updates
+update_config({'logging': {'log_level': 'DEBUG'}})</code></pre>
+
+    <p>
+        The function loads the current config, applies updates, saves, and returns the
+        updated <code>ServerConfig</code>.
+    </p>
+
+    <div class="docs-warning">
+        Environment variables always take precedence on the next <code>load_config()</code>
+        call. Saving a config file does not override environment variables — the env var
+        will win again when the config is reloaded.
+    </div>
+
+    <h3>Config Schema Version</h3>
+
+    <p>
+        The config file includes a <code>version</code> field (currently <code>1</code>)
+        for future schema migrations. When saving, the version is always updated to the
+        current <code>CONFIG_VERSION</code>.
+    </p>
+</div>

@@ -1,0 +1,287 @@
+<div class="docs-prose">
+    <h2>Architecture</h2>
+
+    <p>
+        Nagios Bulk Editor is a Flask application with a vanilla JavaScript frontend. The backend
+        is organized around an app factory pattern with dedicated service classes for each domain
+        responsibility. There is no database — all state comes from the filesystem and in-memory
+        staging.
+    </p>
+
+    <h3>App Factory</h3>
+
+    <p>
+        The application is created by <code>create_app()</code> in <code>app.py</code>. During
+        initialization, all service instances are stored in <code>app.extensions</code>, a
+        dictionary attached to the Flask app object. Route handlers access services through
+        helper functions rather than importing service instances directly:
+    </p>
+
+    <pre><code>from .helpers import get_service, get_staging_manager, get_backup_manager, get_server_config</code></pre>
+
+    <p>
+        This pattern keeps service creation centralized and makes testing easier — you can
+        swap service instances by replacing entries in <code>app.extensions</code>.
+    </p>
+
+    <h3>Service Layer</h3>
+
+    <p>
+        Each backend responsibility is encapsulated in a dedicated service class:
+    </p>
+
+    <ul>
+        <li><strong>NagiosService</strong> — CRUD operations on Nagios objects, apply phases, parser access</li>
+        <li><strong>StagingManager</strong> — Staging state, session locks, undo stack, conflict detection</li>
+        <li><strong>GitService</strong> — Git subprocess wrapper with retry logic and identity injection</li>
+        <li><strong>BackupManager</strong> — Zip backup creation, restore, cleanup</li>
+        <li><strong>ServerConfig</strong> — Configuration loading, saving, and environment overrides</li>
+    </ul>
+
+    <p>
+        Route handlers call service methods, receive an <code>OperationResult</code>, and
+        translate it into a JSON response. Services never access Flask request/response
+        objects directly.
+    </p>
+
+    <h3>OperationResult Pattern</h3>
+
+    <p>
+        All service methods that perform mutations return an <code>OperationResult</code> dataclass:
+    </p>
+
+    <pre><code>@dataclass
+class OperationResult:
+    success: bool
+    error: Optional[str] = None
+    data: Any = None</code></pre>
+
+    <p>
+        This provides a uniform contract between service methods and route handlers. The route
+        layer checks <code>result.success</code> and returns the appropriate HTTP status code:
+    </p>
+
+    <pre><code>result = service.create_object(...)
+if not result.success:
+    return jsonify({'error': result.error}), 500
+return jsonify({'success': True, 'data': result.data})</code></pre>
+
+    <p>
+        The <code>operation_response()</code> helper in <code>routes/helpers.py</code> automates
+        this conversion from <code>OperationResult</code> to a Flask JSON response with the
+        correct status code.
+    </p>
+
+    <h3>Thread Safety</h3>
+
+    <p>
+        Because WSGI servers may use multiple processes (not just threads), the application uses
+        <code>multiprocessing.Lock</code> instead of <code>threading.Lock</code> for
+        synchronization:
+    </p>
+
+    <ul>
+        <li><strong>NagiosService</strong> — Lock held for all mutation operations (create, update, delete, move)</li>
+        <li><strong>GitService</strong> — Lock held for multi-step mutations (add + commit must be atomic)</li>
+        <li><strong>StagingManager</strong> — Uses atomic file writes (temp file + <code>os.replace()</code>) instead of locks</li>
+    </ul>
+
+    <div class="docs-note">
+        The staging system uses a session-based lock for edit ownership (only one user can edit
+        at a time), which is separate from the process-level locks used for thread safety.
+    </div>
+
+    <h3>Request Lifecycle</h3>
+
+    <p>
+        A typical API request flows through these layers:
+    </p>
+
+    <ol>
+        <li><strong>HTTP request</strong> arrives at a Flask route handler</li>
+        <li><strong>Route handler</strong> validates input, extracts parameters, checks session lock if needed</li>
+        <li><strong>Service method</strong> performs the operation (CRUD, staging, git, etc.)</li>
+        <li><strong>OperationResult</strong> is returned from the service</li>
+        <li><strong>JSON response</strong> is sent back with the appropriate HTTP status code</li>
+    </ol>
+
+    <p>
+        For staging mutations, there is an additional lock check step: the route handler verifies
+        that the requesting session holds the staging lock before calling the service method:
+    </p>
+
+    <pre><code>if not sm.can_modify(request.headers.get('X-Session-Id')):
+    return jsonify({'error': 'Locked by another user', 'locked': True}), 423</code></pre>
+
+    <h3>HTTP Status Codes</h3>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Code</th>
+                <th>Meaning</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>200</code></td>
+                <td>Success</td>
+            </tr>
+            <tr>
+                <td><code>400</code></td>
+                <td>Invalid input (missing parameters, bad format)</td>
+            </tr>
+            <tr>
+                <td><code>404</code></td>
+                <td>Object or resource not found</td>
+            </tr>
+            <tr>
+                <td><code>409</code></td>
+                <td>Staging conflict (external file modification detected)</td>
+            </tr>
+            <tr>
+                <td><code>423</code></td>
+                <td>Staging locked by another session</td>
+            </tr>
+            <tr>
+                <td><code>500</code></td>
+                <td>Internal server error</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Module Index</h3>
+
+    <p>
+        The backend is organized into the following modules:
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Module</th>
+                <th>Responsibility</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>app.py</code></td>
+                <td>App factory, service initialization, extension registration</td>
+            </tr>
+            <tr>
+                <td><code>server_config.py</code></td>
+                <td>Configuration load/save, environment variable overrides</td>
+            </tr>
+            <tr>
+                <td><code>nagios_service.py</code></td>
+                <td>CRUD operations on objects, apply phases for staging</td>
+            </tr>
+            <tr>
+                <td><code>staging_manager.py</code></td>
+                <td>Staging state management, session locks, undo stack</td>
+            </tr>
+            <tr>
+                <td><code>backup_manager.py</code></td>
+                <td>Zip backup creation, restore, cleanup</td>
+            </tr>
+            <tr>
+                <td><code>nagios_parser.py</code></td>
+                <td>Parse <code>.cfg</code> files into structured objects</td>
+            </tr>
+            <tr>
+                <td><code>nagios_writer.py</code></td>
+                <td>Write <code>.cfg</code> files with atomic writes</td>
+            </tr>
+            <tr>
+                <td><code>nagios_model.py</code></td>
+                <td>NagiosObject model, NAME_FIELDS, REFERENCE_FIELDS, domain constants</td>
+            </tr>
+            <tr>
+                <td><code>file_operations.py</code></td>
+                <td>Atomic file operations, path safety validation</td>
+            </tr>
+            <tr>
+                <td><code>git_service.py</code></td>
+                <td>Git subprocess wrapper, retry logic, identity injection</td>
+            </tr>
+            <tr>
+                <td><code>validator.py</code></td>
+                <td>Run <code>nagios -v</code> validation</td>
+            </tr>
+            <tr>
+                <td><code>operation_logger.py</code></td>
+                <td>Structured JSON logging for operations</td>
+            </tr>
+            <tr>
+                <td><code>audit_service.py</code></td>
+                <td>Audit log writer for tracking user actions</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Route Organization</h3>
+
+    <p>
+        Routes are organized into Flask blueprints, each registered in
+        <code>routes/__init__.py</code>. Each blueprint handles a specific domain:
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Blueprint</th>
+                <th>Routes</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>pages.py</code></td>
+                <td>HTML page endpoints (<code>/explorer</code>, <code>/git</code>, <code>/settings</code>, etc.)</td>
+            </tr>
+            <tr>
+                <td><code>objects.py</code></td>
+                <td>Object CRUD (<code>/api/objects</code>, <code>/api/delete-objects</code>, <code>/api/clone-objects</code>)</td>
+            </tr>
+            <tr>
+                <td><code>staging.py</code></td>
+                <td>Staging operations (<code>/api/staging</code>, <code>/api/staging/apply</code>, <code>/api/staging/undo</code>)</td>
+            </tr>
+            <tr>
+                <td><code>files.py</code></td>
+                <td>File/folder operations (<code>/api/files</code>, <code>/api/folders</code>)</td>
+            </tr>
+            <tr>
+                <td><code>git.py</code></td>
+                <td>Git integration (<code>/api/git/status</code>, <code>/api/git/commit</code>)</td>
+            </tr>
+            <tr>
+                <td><code>bulk_ops.py</code></td>
+                <td>Bulk rename and move (<code>/api/apply-rename</code>, <code>/api/move-objects</code>)</td>
+            </tr>
+            <tr>
+                <td><code>backups.py</code></td>
+                <td>Backup management (<code>/api/backups</code>)</td>
+            </tr>
+            <tr>
+                <td><code>analysis.py</code></td>
+                <td>Dependencies, inheritance, smart grouping</td>
+            </tr>
+            <tr>
+                <td><code>validation.py</code></td>
+                <td>Config reload, validation, health checks</td>
+            </tr>
+            <tr>
+                <td><code>settings.py</code></td>
+                <td>App settings, logging config, audit log</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <hr>
+
+    <p>
+        For detailed method signatures and return types, see
+        <a href="#app/backend-services">Backend Services</a>. For a full list of REST
+        endpoints, see <a href="#app/api-reference">API Reference</a>.
+    </p>
+</div>

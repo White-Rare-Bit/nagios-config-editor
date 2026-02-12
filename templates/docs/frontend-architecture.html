@@ -1,0 +1,349 @@
+<div class="docs-prose">
+    <h2>Frontend Architecture</h2>
+
+    <p>
+        The frontend is vanilla JavaScript with no build system, no framework, and no bundler.
+        All modules use the IIFE (Immediately Invoked Function Expression) pattern. Explorer
+        modules attach to the <code>window.Explorer</code> namespace; core modules are standalone
+        globals.
+    </p>
+
+    <h3>Core Modules</h3>
+
+    <p>
+        These modules are loaded on every page via <code>base.html</code>. They are loaded in
+        a specific order so that each module can rely on the ones before it:
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Module</th>
+                <th>Responsibility</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>api-client.js</code></td>
+                <td>Fetch wrapper with staging headers; all API calls return <code>{success, data, error}</code></td>
+            </tr>
+            <tr>
+                <td><code>base-state.js</code></td>
+                <td>Shared state (lock status, session info) accessible from any module</td>
+            </tr>
+            <tr>
+                <td><code>session-manager.js</code></td>
+                <td>Session ID generation and user identity management</td>
+            </tr>
+            <tr>
+                <td><code>ui-notifications.js</code></td>
+                <td>Toast notifications, flash messages</td>
+            </tr>
+            <tr>
+                <td><code>git-ui.js</code></td>
+                <td>Git result panel UI (terminal-style output)</td>
+            </tr>
+            <tr>
+                <td><code>commit-dialog.js</code></td>
+                <td>Commit overlay, staged changes display, diff viewer</td>
+            </tr>
+            <tr>
+                <td><code>lock-manager.js</code></td>
+                <td>Staging lock polling and lock banner display</td>
+            </tr>
+            <tr>
+                <td><code>base.js</code></td>
+                <td>Initialization, event delegation, keyboard shortcuts, DebugLogger</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Page-Specific Modules</h3>
+
+    <p>
+        Each page loads additional modules specific to its functionality. These are included
+        in the page template's <code>scripts</code> block:
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Module</th>
+                <th>Page</th>
+                <th>Responsibility</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>audit-log.js</code></td>
+                <td><code>/audit-log</code></td>
+                <td>Audit log filtering and pagination</td>
+            </tr>
+            <tr>
+                <td><code>backups.js</code></td>
+                <td><code>/backups</code></td>
+                <td>Backup list, restore, delete</td>
+            </tr>
+            <tr>
+                <td><code>bulk-rename.js</code></td>
+                <td><code>/bulk-rename</code></td>
+                <td>Pattern-based bulk rename with preview</td>
+            </tr>
+            <tr>
+                <td><code>dependencies.js</code></td>
+                <td><code>/dependencies</code></td>
+                <td>Cytoscape graph visualization</td>
+            </tr>
+            <tr>
+                <td><code>dependencies-config.js</code></td>
+                <td><code>/dependencies</code></td>
+                <td>Graph layout and style configuration</td>
+            </tr>
+            <tr>
+                <td><code>git.js</code></td>
+                <td><code>/git</code></td>
+                <td>File list, diff viewer, commit/discard</td>
+            </tr>
+            <tr>
+                <td><code>inheritance.js</code></td>
+                <td><code>/inheritance</code></td>
+                <td>Inheritance tree visualization</td>
+            </tr>
+            <tr>
+                <td><code>reorganize.js</code></td>
+                <td><code>/reorganize</code></td>
+                <td>File/folder restructuring</td>
+            </tr>
+            <tr>
+                <td><code>settings.js</code></td>
+                <td><code>/settings</code></td>
+                <td>Identity config, git preferences, config paths</td>
+            </tr>
+            <tr>
+                <td><code>validate.js</code></td>
+                <td><code>/validate</code></td>
+                <td>Nagios <code>-v</code> output display</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Explorer Component Architecture</h3>
+
+    <p>
+        The Object Explorer (<code>/explorer</code>) is the most complex page, with 16 modules
+        in the <code>Explorer</code> namespace. All modules attach to <code>window.Explorer</code>
+        and share state via <code>Explorer.state</code>.
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Module</th>
+                <th>Responsibility</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>main.js</code></td>
+                <td>Namespace definition, state structure (allObjects, selections, staging maps, undo stack)</td>
+            </tr>
+            <tr>
+                <td><code>constants.js</code></td>
+                <td>Domain metadata from <code>/api/metadata</code>, UI-only constants, shared helpers</td>
+            </tr>
+            <tr>
+                <td><code>state-management.js</code></td>
+                <td>Stable key helpers, pending edit get/set, <code>refreshAfterObjectChange()</code></td>
+            </tr>
+            <tr>
+                <td><code>app.js</code></td>
+                <td>Left pane: tree rendering, filtering, selection, autocomplete</td>
+            </tr>
+            <tr>
+                <td><code>object-editor.js</code></td>
+                <td>Center pane: attribute editor, validation, create/delete workflows</td>
+            </tr>
+            <tr>
+                <td><code>file-operations.js</code></td>
+                <td>Right pane: file tree, navigation, folder operations. Helper: <code>afterStagingChange()</code></td>
+            </tr>
+            <tr>
+                <td><code>context-menu.js</code></td>
+                <td>Right-click menus, bulk actions. Helper: <code>getOrCreatePendingEdit(obj)</code></td>
+            </tr>
+            <tr>
+                <td><code>dialogs.js</code></td>
+                <td>Create/delete/rename dialogs, dialog content helpers, <code>buildTypeDropdown()</code></td>
+            </tr>
+            <tr>
+                <td><code>data-loading.js</code></td>
+                <td>API calls, staging sync/polling, initial load</td>
+            </tr>
+            <tr>
+                <td><code>drag-drop.js</code></td>
+                <td>Drag-drop cleanup utilities</td>
+            </tr>
+            <tr>
+                <td><code>analysis.js</code></td>
+                <td>Suggestions tab: template detection, validation errors</td>
+            </tr>
+            <tr>
+                <td><code>analysis-issues.js</code></td>
+                <td>Grouped validation errors, batch create missing objects</td>
+            </tr>
+            <tr>
+                <td><code>analysis-suggestions.js</code></td>
+                <td>Template consolidation and hostgroup suggestions</td>
+            </tr>
+            <tr>
+                <td><code>badge-issues.js</code></td>
+                <td>Issue badge rendering and counts for tree nodes</td>
+            </tr>
+            <tr>
+                <td><code>relations-loader.js</code></td>
+                <td>Reference and inheritance loading for center pane</td>
+            </tr>
+            <tr>
+                <td><code>impact-section.js</code></td>
+                <td>Impact analysis and resolved attributes in center pane</td>
+            </tr>
+            <tr>
+                <td><code>ui-utils.js</code></td>
+                <td>Icons, <code>formatObjectName()</code>, <code>buildBreadcrumb()</code>, tab switching</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Event Delegation</h3>
+
+    <p>
+        Instead of attaching event listeners to individual elements, the frontend uses
+        event delegation via <code>data-action</code> attributes. When a user clicks an
+        element, the click bubbles up to a parent handler that reads the
+        <code>data-action</code> attribute and dispatches to the matching function in an
+        <code>actionHandlers</code> map:
+    </p>
+
+    <pre><code>// HTML
+&lt;button data-action="deleteObject" data-index="42"&gt;Delete&lt;/button&gt;
+
+// JavaScript
+const actionHandlers = {
+    deleteObject: (el) =&gt; {
+        const index = el.dataset.index;
+        // handle delete...
+    }
+};</code></pre>
+
+    <p>
+        This pattern avoids the need to re-bind listeners when the DOM is rebuilt (which
+        happens frequently as the tree and editor re-render).
+    </p>
+
+    <h3>ApiClient</h3>
+
+    <p>
+        All API calls go through the <code>ApiClient</code> module, which wraps
+        <code>fetch()</code> and normalizes responses into a consistent format:
+    </p>
+
+    <pre><code>const result = await ApiClient.post('/api/staging', { data: stagingData });
+// result = { success: true, data: { ... } }
+// or:     { success: false, error: "Description of problem" }</code></pre>
+
+    <p>
+        The <code>ApiClient</code> automatically attaches the <code>X-Session-Id</code> header
+        to every request, which the backend uses for staging lock validation. It also handles
+        JSON serialization and error normalization.
+    </p>
+
+    <h3>State Management</h3>
+
+    <p>
+        <code>base-state.js</code> provides shared state accessible from any module on any
+        page. It holds lock status and session information. For the Explorer page,
+        <code>Explorer.state</code> (defined in <code>main.js</code>) holds the full
+        application state including:
+    </p>
+
+    <ul>
+        <li><strong>allObjects</strong> — All parsed Nagios objects</li>
+        <li><strong>selections</strong> — Currently selected objects in the tree</li>
+        <li><strong>Staging maps</strong> — Pending edits, staged moves, creations, deletions</li>
+        <li><strong>Undo stack</strong> — Local undo history</li>
+    </ul>
+
+    <p>
+        State is updated in response to API calls and user interactions. When staging state
+        changes, the Explorer calls <code>refreshAfterObjectChange()</code> to re-render
+        affected UI components.
+    </p>
+
+    <h3>Domain Metadata</h3>
+
+    <p>
+        All Nagios domain constants (type labels, name fields, required fields, reference
+        fields, attributes) are defined in <code>nagios_model.py</code> on the backend and
+        served via <code>GET /api/metadata</code>. The frontend fetches this once at startup
+        and stores it in <code>Explorer.constants</code>.
+    </p>
+
+    <div class="docs-warning">
+        Never hardcode Nagios domain metadata in JavaScript. Always read from the metadata
+        API. To add a new object type or reference field, update <code>nagios_model.py</code>
+        and the frontend picks it up automatically.
+    </div>
+
+    <h4>Metadata from API (source of truth)</h4>
+
+    <ul>
+        <li><code>typeLabels</code> — Display names for each object type</li>
+        <li><code>nameFields</code> — Which attribute holds the name for each type</li>
+        <li><code>REQUIRED_FIELDS</code> — Mandatory fields per object type</li>
+        <li><code>referenceFields</code> — Fields that reference other objects</li>
+        <li><code>ATTR_REFERENCE_MAP</code> — Maps attributes to referenced object types</li>
+        <li><code>NAGIOS_ATTRIBUTES</code> — All known attributes per object type</li>
+        <li><code>defaultAttributes</code> — Default attribute sets for new objects</li>
+        <li><code>groupStructure</code> — Group membership relationships</li>
+    </ul>
+
+    <h4>Hardcoded Constants (UI-only)</h4>
+
+    <p>
+        A small number of UI-only constants are hardcoded in <code>constants.js</code> because
+        they have no backend equivalent:
+    </p>
+
+    <ul>
+        <li><code>identityFields</code> — Fields that identify an object (for display)</li>
+        <li><code>inheritanceAttrs</code> — Attributes related to template inheritance</li>
+        <li><code>referenceAttrs</code> — Attributes that reference other objects (for UI highlighting)</li>
+    </ul>
+
+    <h3>CSS Architecture</h3>
+
+    <p>
+        Styles use a design token system with CSS custom properties. All tokens are defined
+        in <code>tokens.css</code> with the <code>--nbe-</code> prefix:
+    </p>
+
+    <ul>
+        <li><strong>Light theme</strong> — <code>--nbe-{category}-{variant}</code></li>
+        <li><strong>Dark theme</strong> — <code>--nbe-dark-{category}-{variant}</code> (Explorer page only)</li>
+        <li><strong>Categories</strong> — <code>bg</code>, <code>text</code>, <code>border</code>, <code>accent</code>, <code>input</code>, <code>btn</code>, <code>tab</code>, <code>validation</code></li>
+    </ul>
+
+    <p>
+        Component styles are in separate CSS files per page. The button system uses
+        <code>.nbe-btn</code> as the base class with modifier classes like
+        <code>--primary</code>, <code>--danger</code>, <code>--ghost</code>, and
+        size modifiers like <code>--xs</code>, <code>--sm</code>.
+    </p>
+
+    <p>
+        Typography tokens provide semantic groups (<code>h1</code>, <code>h2</code>,
+        <code>body</code>, <code>code</code>, etc.) each with <code>-size</code>,
+        <code>-weight</code>, and <code>-line-height</code> variants. Fonts are Inter
+        (sans-serif) and JetBrains Mono (monospace), bundled as woff2 files.
+    </p>
+</div>
