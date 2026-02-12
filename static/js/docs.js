@@ -696,6 +696,12 @@
 
         renderTree();
         loadFromHash();
+
+        // If nothing was selected from hash, show overview by default
+        if (!selectedAppDoc && !selectedType) {
+            selectAppDoc('overview');
+        }
+
         document.addEventListener('keydown', handleKeydown);
     });
 
