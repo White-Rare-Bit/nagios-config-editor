@@ -177,10 +177,14 @@
     --nbe-typography-input-line-height: var(--nbe-line-height-normal);
 
     /* ---- Spacing ---- */
+    --nbe-space-2xs: 2px;
     --nbe-space-xs: 4px;
+    --nbe-space-xs-plus: 6px;
     --nbe-space-sm: 8px;
+    --nbe-space-sm-plus: 10px;
     --nbe-space-md: 12px;
     --nbe-space-lg: 16px;
+    --nbe-space-lg-plus: 20px;
     --nbe-space-xl: 24px;
     --nbe-space-2xl: 32px;
 
