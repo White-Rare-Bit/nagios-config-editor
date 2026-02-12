@@ -1,0 +1,125 @@
+<div class="docs-prose">
+    <h2>Search &amp; Filtering</h2>
+
+    <p>
+        Nagios configurations can contain hundreds or thousands of objects. Nagios Bulk Editor
+        provides several search and filtering tools to help you find what you need quickly.
+        All searches run entirely in the browser &mdash; results appear instantly as you type.
+    </p>
+
+    <h3>Object Tree Search</h3>
+
+    <p>
+        At the top of the left pane in the <a href="#app/explorer-navigation">Object Explorer</a>,
+        a search box labeled <strong>"Search objects..."</strong> filters the object tree in
+        real time. The search matches against:
+    </p>
+
+    <ul>
+        <li><strong>Object names</strong> &mdash; the display name of each object (e.g., a
+            host's <code>host_name</code>, a service's <code>service_description</code>).</li>
+        <li><strong>Object types</strong> &mdash; type "host" to see only hosts, "service" for
+            services, etc.</li>
+        <li><strong>Attribute keys and values</strong> &mdash; any attribute on any object is
+            searchable. For example, searching for "192.168" will find hosts whose
+            <code>address</code> attribute contains that subnet.</li>
+        <li><strong>File names</strong> &mdash; in the "By File" view, matching file names are
+            included in the results.</li>
+    </ul>
+
+    <p>
+        The tree collapses to show only matching items and their parent containers (files or
+        type groups). Clear the search box to restore the full tree.
+    </p>
+
+    <h3>Filter Checkboxes</h3>
+
+    <p>
+        Below the search box, two filter checkboxes let you narrow the tree further:
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Filter</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Orphans</strong></td>
+                <td>Show only objects that are not referenced by any other object. These are
+                    potential cleanup candidates &mdash; a host template that no host uses, or a
+                    command that no service references.</td>
+            </tr>
+            <tr>
+                <td><strong>Issues</strong></td>
+                <td>Show only objects with configuration errors, such as missing required
+                    fields or references to non-existent objects. Issue counts appear as
+                    badges on tree nodes.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p>
+        Filters stack: you can combine the search box with one or both checkboxes. For
+        example, type "service" in the search box and check "Issues" to find all services
+        with configuration problems.
+    </p>
+
+    <h3>Tree View Modes</h3>
+
+    <p>
+        The left pane offers two view modes that affect how the tree is organized:
+    </p>
+
+    <ul>
+        <li><strong>By File</strong> &mdash; objects grouped under their source
+            <code>.cfg</code> file. Useful for understanding file organization.</li>
+        <li><strong>By Type</strong> &mdash; objects grouped by their Nagios type (hosts,
+            services, commands, etc.). Useful when you want to see all objects of one kind
+            regardless of which file they live in.</li>
+    </ul>
+
+    <p>
+        The search and filter options work identically in both view modes.
+    </p>
+
+    <h3>Documentation Search</h3>
+
+    <p>
+        On the <strong>Docs</strong> page, a separate search box at the top of the sidebar
+        filters the documentation tree. This search works across both sections of the tree:
+    </p>
+
+    <ul>
+        <li><strong>App Docs</strong> &mdash; matches page titles and section names in the
+            user guide and developer guide.</li>
+        <li><strong>Nagios Reference</strong> &mdash; matches Nagios object type names
+            (e.g., "host", "servicegroup", "timeperiod").</li>
+    </ul>
+
+    <p>
+        When you type a search term, both tree sections expand automatically to show matching
+        items. Clear the search box or press <kbd>Escape</kbd> to reset.
+    </p>
+
+    <h4>Directive Search</h4>
+    <p>
+        Inside any Nagios Reference page, a <strong>"Filter directives..."</strong> input
+        appears above the directive table. This filters the attribute list for that specific
+        object type, making it easy to find a particular directive in types that have many
+        attributes.
+    </p>
+
+    <h3>Tips</h3>
+
+    <ul>
+        <li>Searches are <strong>case-insensitive</strong>. Typing "WEB" finds objects named
+            "web-server" or "WebApp".</li>
+        <li>In the Object Explorer, the search result count is not displayed explicitly, but
+            the tree visually collapses to show only matches, making it clear what was found.</li>
+        <li>Combine the Orphans filter with a type search (e.g., "command" + Orphans) to find
+            unused commands for cleanup.</li>
+    </ul>
+</div>

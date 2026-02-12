@@ -1,0 +1,163 @@
+<div class="docs-prose">
+    <h2>Keyboard Shortcuts</h2>
+
+    <p>
+        Nagios Bulk Editor supports keyboard shortcuts for common operations. Press
+        <kbd>?</kbd> at any time (when not typing in a text field) to open the shortcuts
+        help overlay inside the application.
+    </p>
+
+    <div class="docs-note">
+        On macOS, <kbd>Ctrl</kbd> is replaced by <kbd>Cmd</kbd> for modifier shortcuts.
+        The help overlay detects your platform and shows the correct modifier key.
+    </div>
+
+    <h3>General</h3>
+
+    <p>These shortcuts work on every page of the application.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Shortcut</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><kbd>Ctrl</kbd> + <kbd>Z</kbd></td>
+                <td>Undo last action. Pops the most recent operation from the undo stack (only when not typing in a text field and no dialog is open).</td>
+            </tr>
+            <tr>
+                <td><kbd>Escape</kbd></td>
+                <td>Close the current dialog, overlay, or preview. Also clears the object selection in the explorer if no object is being edited.</td>
+            </tr>
+            <tr>
+                <td><kbd>?</kbd></td>
+                <td>Show the keyboard shortcuts help overlay.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Object Explorer</h3>
+
+    <p>These shortcuts are specific to the Object Explorer page.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Shortcut</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><kbd>Space</kbd></td>
+                <td>Quick preview the selected object as raw Nagios config syntax. Shows a read-only preview of the <code>define</code> block.</td>
+            </tr>
+            <tr>
+                <td><kbd>M</kbd></td>
+                <td>Move the selected objects to another file. Opens the move dialog where you can pick a target file.</td>
+            </tr>
+            <tr>
+                <td><kbd>Delete</kbd></td>
+                <td>Stage deletion of the selected objects. A confirmation dialog appears before the objects are staged for removal.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Selection</h3>
+
+    <p>These mouse-based shortcuts control how objects are selected in the tree.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Shortcut</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><kbd>Ctrl</kbd> + Click</td>
+                <td>Toggle an individual item in the selection. The clicked item is added to or removed from the current selection without affecting other selected items.</td>
+            </tr>
+            <tr>
+                <td><kbd>Shift</kbd> + Click</td>
+                <td>Select a range of items. All items between the last clicked item and the current click target are selected.</td>
+            </tr>
+            <tr>
+                <td>Right-click</td>
+                <td>Open the context menu for the clicked object. Provides actions like Rename, Clone, Delete, Move to file, Add to group, and View in Graph.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Autocomplete</h3>
+
+    <p>
+        When editing attribute values in the center pane, certain fields offer autocomplete
+        suggestions (for example, <code>host_name</code> suggests existing hosts,
+        <code>check_command</code> suggests known commands).
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Shortcut</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><kbd>&darr;</kbd> <kbd>&uarr;</kbd></td>
+                <td>Navigate through the suggestions list. The highlighted suggestion moves up or down.</td>
+            </tr>
+            <tr>
+                <td><kbd>Enter</kbd></td>
+                <td>Accept the currently highlighted suggestion and insert it into the field.</td>
+            </tr>
+            <tr>
+                <td><kbd>Escape</kbd></td>
+                <td>Close the suggestions dropdown without accepting any value.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Drag &amp; Drop</h3>
+
+    <p>
+        Drag and drop is used to move objects between files and to reorganize the workspace
+        tree.
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Action</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Drag object from tree</td>
+                <td>Move an object (or the entire selection) to a different file. Drag from the left pane tree and drop onto a file in the workspace tab.</td>
+            </tr>
+            <tr>
+                <td>Drag file or folder</td>
+                <td>Move a file or folder to a different parent folder in the workspace tree.</td>
+            </tr>
+            <tr>
+                <td>Hover over folder (800 ms)</td>
+                <td>While dragging, hovering over a collapsed folder for 800 milliseconds will automatically expand it, allowing you to drop into nested folders.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <hr>
+
+    <p>
+        Keyboard shortcuts are disabled when the cursor is inside a text input, textarea, or
+        content-editable element to avoid interfering with normal typing.
+    </p>
+</div>

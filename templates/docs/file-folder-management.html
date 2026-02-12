@@ -1,0 +1,181 @@
+<div class="docs-prose">
+    <h2>File &amp; Folder Management</h2>
+
+    <p>
+        Nagios configuration is organized into <code>.cfg</code> files within folders. The
+        <strong>Workspace tab</strong> in the right pane of the Object Explorer gives you full
+        control over this file structure: create, move, rename, and delete files and folders,
+        all through a familiar tree interface.
+    </p>
+
+    <div class="docs-note">
+        All file and folder operations are <strong>staged</strong>, not immediately written to
+        disk. Nothing changes until you click <strong>Apply</strong> in the commit dialog. See
+        <a href="#app/staging-system">Staging System</a> for details.
+    </div>
+
+    <h3>The Workspace Tab</h3>
+
+    <p>
+        The workspace tab lives in the right pane of the Object Explorer, alongside the
+        Relations and Analysis tabs. It displays a tree of all <code>.cfg</code> files and
+        folders in your Nagios configuration directory. The tree header shows the root folder
+        name and total object count.
+    </p>
+
+    <p>At the top of the workspace tree you will find toolbar buttons for:</p>
+
+    <ul>
+        <li><strong>New File</strong> &mdash; creates a new <code>.cfg</code> file in the currently selected folder (or root)</li>
+        <li><strong>New Folder</strong> &mdash; creates a new subfolder in the currently selected folder (or root)</li>
+        <li><strong>Collapse All</strong> &mdash; collapses every folder in the workspace tree</li>
+        <li><strong>Refresh</strong> &mdash; reloads the workspace tree from the server</li>
+    </ul>
+
+    <h3>Creating Files</h3>
+
+    <p>
+        To create a new configuration file, click the <strong>New File</strong> button in the
+        workspace toolbar. An inline text input appears where you type the filename. Press
+        <kbd>Enter</kbd> to confirm or <kbd>Escape</kbd> to cancel.
+    </p>
+
+    <ul>
+        <li>Filenames must end in <code>.cfg</code> &mdash; the extension is added automatically if you omit it.</li>
+        <li>Invalid characters (<code>/ \ : * ? " &lt; &gt; |</code>) are rejected.</li>
+        <li>The file is created inside whichever folder is currently selected in the workspace tree. If no folder is selected, it is created in the config root.</li>
+        <li>New files appear in the tree immediately with a <strong>staged</strong> indicator, but they do not exist on disk until you apply.</li>
+    </ul>
+
+    <h3>Creating Folders</h3>
+
+    <p>
+        Click the <strong>New Folder</strong> button and type a name in the inline input.
+        The same validation rules apply (no special characters). Folders are staged the same
+        way as files.
+    </p>
+
+    <h3>Moving Files</h3>
+
+    <p>
+        You can move a <code>.cfg</code> file to a different folder in two ways:
+    </p>
+
+    <ol>
+        <li><strong>Drag and drop</strong> &mdash; drag a file row in the workspace tree and
+            drop it onto a target folder. The folder highlights when you hover over it.
+            Hovering over a collapsed folder for 800 ms will auto-expand it.</li>
+        <li><strong>API-level move</strong> &mdash; the application sends a
+            <code>POST /api/files/move</code> request with the source path and target folder.
+            The move is staged, not immediate.</li>
+    </ol>
+
+    <p>
+        When a file is moved, all objects inside it retain their attributes &mdash; only the
+        file path changes. The move appears in the commit dialog so you can review it before
+        applying.
+    </p>
+
+    <h3>Moving Folders</h3>
+
+    <p>
+        Entire folders can be moved to a new parent folder via drag and drop in the workspace
+        tree. The same auto-expand behavior applies: hover over a collapsed target folder
+        while dragging to open it.
+    </p>
+
+    <ul>
+        <li>A folder cannot be moved into itself or into one of its own descendants.</li>
+        <li>All files and subfolders inside the moved folder come along. Object paths update
+            automatically.</li>
+    </ul>
+
+    <h3>Deleting Files</h3>
+
+    <p>
+        Click the delete icon next to a file in the workspace tree to stage it for deletion.
+        If the file contains objects, a confirmation dialog explains that all objects in the
+        file will be removed.
+    </p>
+
+    <ul>
+        <li>Staged file deletions appear with a strikethrough style in the workspace tree.</li>
+        <li>If you have staged moves that target the file being deleted, the application
+            warns you about the conflict.</li>
+        <li>New files that have not been applied yet can be removed immediately (they are
+            simply unstaged).</li>
+    </ul>
+
+    <h3>Deleting Folders</h3>
+
+    <p>
+        Click the delete icon on a folder row to stage it for deletion. The config root
+        directory cannot be deleted. As with file deletions, a confirmation prompt appears
+        if the folder contains files or objects.
+    </p>
+
+    <div class="docs-warning">
+        Deleting a folder also deletes every file and subfolder within it. Make sure you
+        have reviewed the contents before confirming.
+    </div>
+
+    <h3>Moving Objects Between Files</h3>
+
+    <p>
+        Beyond moving entire files, you can move individual Nagios objects from one file to
+        another. There are two ways to do this:
+    </p>
+
+    <ol>
+        <li><strong>Drag and drop</strong> &mdash; select one or more objects in the center
+            pane, then drag them onto a file in the workspace tree. A drop indicator shows
+            where the objects will land.</li>
+        <li><strong>Context menu</strong> &mdash; right-click selected objects in the center
+            pane and choose <strong>Move to file...</strong>. A dialog lets you pick the
+            target file from a dropdown.</li>
+    </ol>
+
+    <p>
+        When objects are moved between files, the staging system records the original file,
+        target file, and insertion position. The commit dialog shows the move as a removal
+        from the source file and an addition to the target file, making it easy to review.
+    </p>
+
+    <h3>Staged Indicators</h3>
+
+    <p>
+        The workspace tree uses visual indicators to show what has been staged:
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Indicator</th>
+                <th>Meaning</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Green highlight</strong></td>
+                <td>Newly created file or folder (staged, not yet on disk)</td>
+            </tr>
+            <tr>
+                <td><strong>Strikethrough</strong></td>
+                <td>File or folder staged for deletion</td>
+            </tr>
+            <tr>
+                <td><strong>Move arrow</strong></td>
+                <td>File or folder staged to move to a new location</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <hr>
+
+    <p>
+        All file and folder changes flow through the
+        <a href="#app/staging-system">Staging System</a> and appear in the commit dialog
+        alongside object-level changes, giving you a complete picture before writing
+        anything to disk.
+    </p>
+</div>

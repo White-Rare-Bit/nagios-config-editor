@@ -1,0 +1,210 @@
+<div class="docs-prose">
+    <h2>Git Integration</h2>
+
+    <p>
+        Nagios Bulk Editor includes built-in Git version control. Every set of changes you
+        apply can be committed to a local Git repository, giving you a full audit trail and
+        the ability to restore any previous configuration state.
+    </p>
+
+    <div class="docs-note">
+        Git operations require your configuration directory to be (or become) a Git
+        repository. If it is not already initialized, the editor will offer to run
+        <code>git init</code> automatically when you make your first commit.
+    </div>
+
+    <h3>The Git Page</h3>
+
+    <p>
+        Navigate to the <strong>Git</strong> page from the main navbar. The page has two tabs:
+    </p>
+
+    <ul>
+        <li><strong>Changes</strong> &mdash; shows uncommitted file changes and staged
+            (pending) editor changes.</li>
+        <li><strong>History</strong> &mdash; shows the commit log with date, author, message,
+            and a Restore button for each commit.</li>
+    </ul>
+
+    <p>
+        The sidebar displays the current <strong>branch name</strong> and a summary of how
+        many files have uncommitted changes. If the directory is not a Git repository, a
+        message explains how to initialize one.
+    </p>
+
+    <h3>Setting Up Your Identity</h3>
+
+    <p>
+        Before you can commit, Git needs to know your name and email. Nagios Bulk Editor
+        stores this in your browser's <code>localStorage</code>, so each user has their own
+        identity.
+    </p>
+
+    <ol>
+        <li>Go to <strong>Settings</strong> from the navbar.</li>
+        <li>Enter your <strong>Name</strong> and <strong>Email</strong> in the Git Identity
+            section.</li>
+        <li>Click <strong>Save</strong>. Your identity is stored locally and sent with every
+            commit.</li>
+    </ol>
+
+    <p>
+        If you try to commit without a configured identity, the commit dialog shows a warning
+        with a link to the Settings page.
+    </p>
+
+    <h3>Viewing Changes</h3>
+
+    <p>
+        The <strong>Changes</strong> tab shows two types of information:
+    </p>
+
+    <h4>Pending Staged Changes</h4>
+    <p>
+        If you have edits in the staging area that have not been applied yet, a
+        <strong>Pending Staged Changes</strong> panel appears at the top. It lists all staged
+        operations (edits, moves, creations, deletions, file operations) with a count. Click
+        <strong>Review &amp; Commit</strong> to open the commit dialog directly.
+    </p>
+
+    <h4>File Diffs</h4>
+    <p>
+        Below the staging preview, a two-panel layout shows the list of changed files on the
+        left and a diff viewer on the right. Click any file to see its diff.
+    </p>
+
+    <ul>
+        <li>Lines added are shown in <strong style="color: var(--nbe-success, #4caf50);">green</strong>.</li>
+        <li>Lines removed are shown in <strong style="color: var(--nbe-delete, #f44336);">red</strong>.</li>
+        <li>Each file has a status badge: <code>M</code> (modified), <code>A</code> (added),
+            <code>D</code> (deleted), <code>??</code> (untracked).</li>
+    </ul>
+
+    <h3>Committing Changes</h3>
+
+    <p>
+        The commit workflow brings together the staging system and Git:
+    </p>
+
+    <ol>
+        <li>Make your edits in the Object Explorer (they go into staging).</li>
+        <li>Click the <strong>Commit</strong> button in the navbar. This opens the
+            <strong>commit dialog</strong>.</li>
+        <li>Review the changes. The dialog shows a per-file diff of every object that will be
+            modified, created, moved, or deleted. Use the <strong>Context</strong> slider to
+            control how many surrounding lines appear in diffs.</li>
+        <li>Enter a <strong>commit message</strong> in the text area at the bottom.</li>
+        <li>Click <strong>Apply Changes</strong>. This does two things in sequence:
+            <ul>
+                <li>Writes all staged changes to disk (the "apply" step).</li>
+                <li>Runs <code>git add -A &amp;&amp; git commit</code> with your message and
+                    identity.</li>
+            </ul>
+        </li>
+        <li>A terminal-style <strong>result panel</strong> shows the exact Git command that
+            ran, whether it succeeded or failed, and the commit hash on success.</li>
+    </ol>
+
+    <div class="docs-note">
+        If the Git commit fails after the apply step, your staged changes are preserved and
+        the result panel offers a <strong>Retry Commit</strong> button. You can also choose
+        to <strong>Discard Staging</strong> if you want to abandon the commit (the files on
+        disk will still reflect the applied changes).
+    </div>
+
+    <h4>Git-Only Commits</h4>
+    <p>
+        If files were changed outside the editor (for example, by editing them manually on
+        the server), the commit dialog detects these <strong>external changes</strong> and
+        shows their diffs in a separate section. You can commit them the same way &mdash;
+        just enter a message and click Apply.
+    </p>
+
+    <h3>Discarding Changes</h3>
+
+    <p>
+        There are several ways to discard changes:
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Action</th>
+                <th>Where</th>
+                <th>What It Does</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Discard file</strong></td>
+                <td>Changes tab &mdash; click <code>Discard</code> next to a file</td>
+                <td>Runs <code>git checkout -- &lt;file&gt;</code> to restore that one file to its last committed state.</td>
+            </tr>
+            <tr>
+                <td><strong>Discard All</strong></td>
+                <td>Commit dialog &mdash; click <strong>Discard All</strong></td>
+                <td>If only staged changes exist, clears the staging area. If there are git changes, runs <code>git checkout -- .</code> and <code>git clean -fd</code> to restore the entire working directory.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="docs-warning">
+        Discarding file changes via Git is <strong>irreversible</strong>. The file is
+        restored to its last committed state and any uncommitted modifications are lost.
+    </div>
+
+    <h3>Commit History</h3>
+
+    <p>
+        The <strong>History</strong> tab shows a paginated table of past commits. Each row
+        displays:
+    </p>
+
+    <ul>
+        <li><strong>Date/Time</strong> &mdash; when the commit was made.</li>
+        <li><strong>Commit hash</strong> &mdash; the short SHA. The current commit is labeled
+            with a <code>Current</code> badge.</li>
+        <li><strong>Message</strong> &mdash; the commit message.</li>
+        <li><strong>Author</strong> &mdash; who made the commit.</li>
+        <li><strong>Actions</strong> &mdash; a <strong>Restore</strong> button (except for the
+            current commit).</li>
+    </ul>
+
+    <p>
+        Columns are sortable &mdash; click a column header to sort ascending or descending.
+        The page size defaults to 25 commits and can be changed with the pagination controls.
+    </p>
+
+    <h3>Restoring to a Previous Commit</h3>
+
+    <p>
+        Click the <strong>Restore</strong> button on any history row to roll the working
+        directory back to that commit's state. A confirmation dialog warns that current files
+        will be overwritten.
+    </p>
+
+    <ul>
+        <li>If there are uncommitted changes, they are automatically <strong>stashed</strong>
+            before the restore.</li>
+        <li>Files that exist in the current state but not in the target commit are
+            <strong>deleted</strong>.</li>
+        <li>After restoring, the configuration is reloaded so the Object Explorer reflects the
+            restored state.</li>
+        <li>The restored state shows up as uncommitted changes, which you can then commit with
+            a new message (e.g., "Restore to commit abc1234").</li>
+    </ul>
+
+    <h3>Wiping Git History</h3>
+
+    <p>
+        The History tab sidebar includes a <strong>Wipe Git Log</strong> button that removes
+        all commit history and reinitializes the repository with a single fresh "Initial
+        commit". This is useful if you want to start clean after importing a configuration.
+    </p>
+
+    <div class="docs-warning">
+        Wiping git history is <strong>irreversible</strong>. All previous commits are
+        permanently deleted. The current file contents are preserved as the new initial
+        commit.
+    </div>
+</div>
