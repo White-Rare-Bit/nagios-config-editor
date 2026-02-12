@@ -121,6 +121,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    overflow-y: auto;
     min-height: 0;
 }
 
@@ -336,26 +337,30 @@
 
 .docs-container .page-sidebar::-webkit-scrollbar,
 .docs-tree-container::-webkit-scrollbar,
-.docs-table-container::-webkit-scrollbar {
+.docs-table-container::-webkit-scrollbar,
+#docsContent::-webkit-scrollbar {
     width: 8px;
 }
 
 .docs-container .page-sidebar::-webkit-scrollbar-track,
 .docs-tree-container::-webkit-scrollbar-track,
-.docs-table-container::-webkit-scrollbar-track {
+.docs-table-container::-webkit-scrollbar-track,
+#docsContent::-webkit-scrollbar-track {
     background: var(--nbe-dark-bg-primary);
 }
 
 .docs-container .page-sidebar::-webkit-scrollbar-thumb,
 .docs-tree-container::-webkit-scrollbar-thumb,
-.docs-table-container::-webkit-scrollbar-thumb {
+.docs-table-container::-webkit-scrollbar-thumb,
+#docsContent::-webkit-scrollbar-thumb {
     background: var(--nbe-dark-border-primary);
     border-radius: var(--nbe-radius-md);
 }
 
 .docs-container .page-sidebar::-webkit-scrollbar-thumb:hover,
 .docs-tree-container::-webkit-scrollbar-thumb:hover,
-.docs-table-container::-webkit-scrollbar-thumb:hover {
+.docs-table-container::-webkit-scrollbar-thumb:hover,
+#docsContent::-webkit-scrollbar-thumb:hover {
     background: var(--nbe-dark-text-muted);
 }
 
@@ -475,9 +480,8 @@
 
 .docs-prose {
     padding: var(--nbe-space-xl) var(--nbe-space-xxl);
-    max-width: 800px;
-    overflow-y: auto;
-    flex: 1;
+    max-width: 900px;
+    margin: 0 auto;
 }
 
 .docs-prose h2 {
