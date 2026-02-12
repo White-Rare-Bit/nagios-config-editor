@@ -204,6 +204,9 @@ class TestTemplateInheritance:
                 continue
             if "partials" in str(template):
                 continue
+            # Skip docs/ partials (HTML fragments served via AJAX)
+            if "/docs/" in str(template):
+                continue
 
             content = template.read_text()
             if not extends_pattern.search(content):

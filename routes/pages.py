@@ -1,6 +1,6 @@
 """Page rendering routes (HTML templates)."""
 
-from flask import Blueprint, redirect, render_template, url_for
+from flask import Blueprint, abort, redirect, render_template, url_for
 
 from .helpers import get_backup_manager, get_config, get_config_path, get_service
 
@@ -43,6 +43,18 @@ def audit_log():
 def docs():
     """Nagios object reference documentation."""
     return render_template("docs.html")
+
+
+@bp.route("/api/docs/<page>")
+def docs_page(page):
+    """Serve an app documentation page as an HTML partial."""
+    import re
+    if not re.match(r'^[a-z0-9-]+$', page):
+        abort(404)
+    try:
+        return render_template(f"docs/{page}.html")
+    except Exception:
+        abort(404)
 
 
 @bp.route("/backups")
