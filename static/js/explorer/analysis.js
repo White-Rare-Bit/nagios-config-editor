@@ -858,7 +858,7 @@ function renderCleanupSuggestions() {
         // Build bulk action button if applicable
         let bulkActionBtn = '';
         if (config.bulkAction === 'deleteAll' && items.length > 1) {
-            bulkActionBtn = `<button class="cleanup-section-btn nbe-btn nbe-btn--danger nbe-btn--sm" onclick="event.stopPropagation(); Explorer.bulkDeleteCleanupGroup('${groupType}')">Delete All</button>`;
+            bulkActionBtn = `<button class="nbe-btn nbe-btn--dark nbe-btn--danger nbe-btn--sm" onclick="event.stopPropagation(); Explorer.bulkDeleteCleanupGroup('${groupType}')">Delete All</button>`;
         }
 
         html += `
@@ -895,16 +895,16 @@ function renderCleanupSuggestions() {
             // Determine which buttons to show
             let buttons = '';
             if (s.type === 'duplicate') {
-                buttons = `<button class="cleanup-action-btn cleanup-fix-btn" onclick="event.stopPropagation(); Explorer.fixDuplicate(${i})">Resolve</button>`;
+                buttons = `<button class="nbe-btn nbe-btn--dark nbe-btn--xs" onclick="event.stopPropagation(); Explorer.fixDuplicate(${i})">Resolve</button>`;
             } else if (s.type === 'long_host_list') {
-                buttons = `<button class="cleanup-action-btn cleanup-fix-btn" onclick="event.stopPropagation(); Explorer.fixLongHostList(${i})">Create Hostgroup</button>`;
+                buttons = `<button class="nbe-btn nbe-btn--dark nbe-btn--xs" onclick="event.stopPropagation(); Explorer.fixLongHostList(${i})">Create Hostgroup</button>`;
             } else if (s.issueData) {
                 const resolveInfo = Explorer.getIssueResolveInfo(s.issueData);
                 if (resolveInfo) {
-                    buttons = `<button class="cleanup-action-btn cleanup-fix-btn" onclick="event.stopPropagation(); Explorer.resolveCleanupIssue(${i})">Create ${resolveInfo.objectType}</button>`;
+                    buttons = `<button class="nbe-btn nbe-btn--dark nbe-btn--xs" onclick="event.stopPropagation(); Explorer.resolveCleanupIssue(${i})">Create ${resolveInfo.objectType}</button>`;
                 }
             } else if (s.action === 'delete') {
-                buttons = `<button class="cleanup-action-btn" onclick="event.stopPropagation(); Explorer.stageCleanupDelete(${i})">Delete</button>`;
+                buttons = `<button class="nbe-btn nbe-btn--dark nbe-btn--danger nbe-btn--xs" onclick="event.stopPropagation(); Explorer.stageCleanupDelete(${i})">Delete</button>`;
             }
 
             html += `
