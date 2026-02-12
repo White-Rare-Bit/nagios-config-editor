@@ -125,10 +125,9 @@
     min-height: 0;
 }
 
-/* When prose content is loaded, it becomes a block child so padding works naturally */
-#docsContent > .docs-prose {
+/* When showing prose, disable flex so padding renders naturally inside the scroll container */
+#docsContent:has(> .docs-prose) {
     display: block;
-    flex-shrink: 0;
 }
 
 /* Type header */
