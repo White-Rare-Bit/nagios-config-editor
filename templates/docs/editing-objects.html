@@ -1,0 +1,186 @@
+<div class="docs-prose">
+    <h2>Editing Objects</h2>
+
+    <p>
+        The attribute editor in the center pane lets you modify every directive on a Nagios
+        object. Changes are staged immediately as you type &mdash; nothing is written to disk
+        until you apply through the <a href="#app/staging-system">Staging System</a>.
+    </p>
+
+    <h3>Editor Layout</h3>
+
+    <p>
+        When you select an object, the center pane shows:
+    </p>
+
+    <ul>
+        <li>A <strong>header</strong> with the object type, name, and source file.</li>
+        <li>An <strong>issue badge</strong> if the object has validation problems (missing references, duplicates, etc.). Click the badge to jump to the issue in the Suggestions tab.</li>
+        <li>The <strong>attribute table</strong> &mdash; one row per directive, with the attribute name on the left and an editable value field on the right.</li>
+        <li>An <strong>Impact &amp; Relationships</strong> section (collapsed by default) showing inheritance chains, references, and dependents.</li>
+    </ul>
+
+    <h3>Editing Attribute Values</h3>
+
+    <p>
+        Click on any attribute value field to edit it. Changes are staged automatically when
+        you move focus away from the field (on blur) or press <kbd>Enter</kbd>. The staging
+        indicator in the navbar updates to reflect the pending change.
+    </p>
+
+    <p>
+        Short attribute values use a single-line text input. Long values &mdash; such as
+        <code>command_line</code>, <code>alias</code>, <code>notes</code>, and
+        <code>notes_url</code> &mdash; use a resizable textarea with syntax highlighting for
+        command syntax (macros like <code>$HOSTADDRESS$</code>, flags, paths, and pipe
+        operators are color-coded).
+    </p>
+
+    <h4>Reverting a Change</h4>
+
+    <p>
+        If you edit a value back to its original content, the pending edit for that object is
+        automatically removed from staging. You can also use <kbd>Ctrl</kbd>+<kbd>Z</kbd>
+        (<kbd>Cmd</kbd>+<kbd>Z</kbd> on Mac) to undo the last staging operation.
+    </p>
+
+    <h3>Required Fields</h3>
+
+    <p>
+        When you edit an object, the editor validates that required fields are present.
+        If a required field is missing and the object does not inherit from a template
+        (via the <code>use</code> directive), a warning toast appears. Objects that use
+        templates get a softer warning since the template may provide the missing fields
+        through inheritance.
+    </p>
+
+    <p>
+        Required fields vary by object type. For example, a host requires
+        <code>host_name</code>, while a service requires <code>service_description</code>
+        plus either <code>host_name</code> or <code>hostgroup_name</code>. Templates
+        (objects with <code>register 0</code>) always require the <code>name</code>
+        attribute.
+    </p>
+
+    <h3>Adding Attributes</h3>
+
+    <p>
+        To add a new directive to an object, click the <strong>Add Attribute</strong> button
+        below the attribute table. This opens a dialog with two fields:
+    </p>
+
+    <ol>
+        <li>
+            <strong>Name</strong> &mdash; an autocomplete dropdown showing all valid
+            directives for the current object type. Type to filter, or scroll through
+            the full list. Only directives not already present on the object are shown.
+        </li>
+        <li>
+            <strong>Value</strong> &mdash; enter the value for the directive. If the
+            attribute is a reference field (like <code>check_command</code> or
+            <code>use</code>), the value field also provides autocomplete with matching
+            objects.
+        </li>
+    </ol>
+
+    <h3>Removing Attributes</h3>
+
+    <p>
+        Each attribute row has a delete button (<strong>&times;</strong>) on the right side.
+        Click it to remove the directive from the object. The removal is staged immediately.
+    </p>
+
+    <p>
+        You can also copy an attribute's value to the clipboard using the copy button next
+        to the delete button.
+    </p>
+
+    <h3>Reference Fields and Autocomplete</h3>
+
+    <p>
+        Certain attributes reference other Nagios objects by name. When you edit one of these
+        fields, an autocomplete dropdown appears showing matching objects of the correct type.
+        Reference fields include:
+    </p>
+
+    <ul>
+        <li><code>use</code> &mdash; shows templates of the same object type (objects with <code>register 0</code>).</li>
+        <li><code>check_command</code>, <code>event_handler</code> &mdash; shows command objects.</li>
+        <li><code>host_name</code> (on services) &mdash; shows host objects.</li>
+        <li><code>hostgroup_name</code>, <code>servicegroup_name</code> &mdash; shows the corresponding group objects.</li>
+        <li><code>contacts</code>, <code>contact_groups</code> &mdash; shows contact and contactgroup objects.</li>
+        <li><code>check_period</code>, <code>notification_period</code> &mdash; shows timeperiod objects.</li>
+        <li><code>members</code> (on groups) &mdash; shows objects of the member type for that group.</li>
+    </ul>
+
+    <p>
+        For comma-separated reference fields (like <code>contacts</code> or
+        <code>host_notification_commands</code>), the autocomplete filters out values you
+        have already entered so you do not accidentally add duplicates.
+    </p>
+
+    <h4>Validation on Reference Fields</h4>
+
+    <p>
+        When you set a reference field to a value that does not match any existing object,
+        the editor shows an error toast and reverts the field to its previous value. This
+        prevents broken references from being staged. Command attributes support the Nagios
+        argument syntax (<code>command_name!arg1!arg2</code>) &mdash; only the command name
+        portion before the first <code>!</code> is validated.
+    </p>
+
+    <h4>Notification Options</h4>
+
+    <p>
+        Notification option fields (<code>notification_options</code>,
+        <code>host_notification_options</code>, <code>service_notification_options</code>,
+        <code>escalation_options</code>, etc.) show a dropdown with the valid short codes
+        and their descriptions (e.g. <code>d - Down</code>, <code>r - Recovery</code>).
+        The autocomplete inserts only the short code into the field.
+    </p>
+
+    <h3>Attribute Documentation Popover</h3>
+
+    <p>
+        Hover over any attribute name in the editor to see a documentation popover. The
+        popover shows the directive's format, whether it is required or optional, and a
+        brief description. Click the "View in docs" link in the popover to jump to the
+        full reference documentation.
+    </p>
+
+    <h3>Creating New Objects</h3>
+
+    <p>
+        Click the <strong>+</strong> button on a file header in the tree to create a new
+        object in that file. A new object form appears in the center pane with:
+    </p>
+
+    <ul>
+        <li>A <strong>type selector</strong> &mdash; dropdown to choose the object type (host, service, command, etc.).</li>
+        <li>A <strong>name input</strong> &mdash; enter the primary name for the object.</li>
+        <li><strong>Default attributes</strong> &mdash; pre-populated based on the selected type.</li>
+    </ul>
+
+    <p>
+        The new object is staged immediately and appears in the tree with a green "+" badge.
+        You can continue editing its attributes just like any existing object. Change the
+        object type at any time using the type dropdown &mdash; the name is preserved and
+        the default attributes update to match the new type.
+    </p>
+
+    <div class="docs-note">
+        The editor validates new object names for uniqueness. If you enter a name that
+        already exists (either on disk or in another staged creation of the same type),
+        an error toast appears and the change is rejected.
+    </div>
+
+    <h3>Inheritance Display</h3>
+
+    <p>
+        If an object uses template inheritance (via the <code>use</code> directive), the
+        Impact &amp; Relationships section shows the full inheritance chain as a breadcrumb
+        trail from the root template to the current object. Below the chain, a table lists
+        all inherited attributes with their values. Attributes that the current object
+        overrides are marked with an "Overridden" badge.
+    </p>
+</div>

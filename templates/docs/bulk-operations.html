@@ -1,0 +1,172 @@
+<div class="docs-prose">
+    <h2>Bulk Operations</h2>
+
+    <p>
+        Nagios Bulk Editor is designed for making changes across many objects at once. You
+        can multi-select objects in the tree and apply operations to the entire selection,
+        or use the Edit Attributes dialog to run find &amp; replace across your full
+        configuration.
+    </p>
+
+    <h3>Multi-Select</h3>
+
+    <p>
+        Select multiple objects in the tree using standard modifier keys:
+    </p>
+
+    <ul>
+        <li><kbd>Ctrl</kbd>+click (<kbd>Cmd</kbd>+click on Mac) &mdash; toggle individual objects in the selection.</li>
+        <li><kbd>Shift</kbd>+click &mdash; select a contiguous range from the last-selected object to the clicked one.</li>
+    </ul>
+
+    <p>
+        When multiple objects are selected, the center pane shows a count of the selection
+        and directs you to the Actions menu for bulk operations.
+    </p>
+
+    <h4>Selection Shortcuts</h4>
+
+    <p>
+        The <strong>Actions</strong> menu provides quick selection helpers:
+    </p>
+
+    <ul>
+        <li><strong>Select All Visible</strong> &mdash; selects every object currently shown in the tree (respects any active search filter or checkbox).</li>
+        <li><strong>Select by Type</strong> &mdash; opens a dialog listing all object types with counts. Click a type to select all objects of that type.</li>
+        <li><strong>Select by Pattern</strong> &mdash; opens a dialog for a regex pattern. All objects whose display name matches the pattern are selected.</li>
+    </ul>
+
+    <h3>Bulk Actions via Context Menu</h3>
+
+    <p>
+        Right-click with multiple objects selected to see bulk actions:
+    </p>
+
+    <ul>
+        <li>
+            <strong>Move to File</strong> &mdash; opens a dialog with a file dropdown. Select
+            the target file (or create a new one) to stage all selected objects for a move.
+        </li>
+        <li>
+            <strong>Clone</strong> &mdash; opens a dialog to enter a name suffix (default:
+            <code>-copy</code>). Each selected object is cloned with the suffix appended to
+            its name. The clones are staged as new objects in the same file as their source.
+        </li>
+        <li>
+            <strong>Add to Group</strong> &mdash; for hosts, services, or contacts. Opens
+            a dialog with group search. The selected objects get the group added to their
+            group membership attribute (e.g. <code>hostgroups</code> for hosts,
+            <code>servicegroups</code> for services, <code>contactgroups</code> for
+            contacts).
+        </li>
+        <li>
+            <strong>Delete</strong> &mdash; stages all selected objects for deletion. If any
+            of the selected objects are referenced by other objects, a dependency warning
+            dialog shows exactly which objects will be affected before you confirm.
+        </li>
+    </ul>
+
+    <h3>Edit Attributes Dialog</h3>
+
+    <p>
+        The <strong>Edit Attributes</strong> dialog (available from the Actions menu) is
+        the most powerful bulk editing tool. It supports three modes:
+    </p>
+
+    <h4>Find &amp; Replace</h4>
+
+    <p>
+        Search for a text string within attribute values and replace it with a new string.
+        You can scope the operation to a specific attribute or leave the attribute field
+        empty to search across all attributes on every selected object.
+    </p>
+
+    <ul>
+        <li><strong>Attribute</strong> &mdash; optional. An autocomplete dropdown shows all attributes present on the selected objects. Leave empty to search all fields.</li>
+        <li><strong>Find text</strong> &mdash; the exact text to search for within attribute values.</li>
+        <li><strong>Replace with</strong> &mdash; the replacement text. Can be empty to delete the found text.</li>
+    </ul>
+
+    <p>
+        If no objects are selected, find &amp; replace operates on <em>every</em> object in
+        the configuration.
+    </p>
+
+    <h4>Set Value</h4>
+
+    <p>
+        Set a specific attribute to a given value on all selected objects. Useful for
+        standardizing a directive across many objects at once &mdash; for example, setting
+        <code>check_interval</code> to <code>5</code> on every selected service.
+    </p>
+
+    <p>
+        Reference field values are validated against existing objects. If you try to set
+        <code>check_command</code> to a command that does not exist, the operation is
+        rejected with an error message.
+    </p>
+
+    <h4>Remove Attribute</h4>
+
+    <p>
+        Remove a specific attribute from all selected objects. The attribute is deleted
+        from each object that has it, and objects that do not have the attribute are
+        skipped.
+    </p>
+
+    <h3>Bulk Rename</h3>
+
+    <p>
+        The <strong>Bulk Rename</strong> option in the Actions menu opens a find-and-replace
+        dialog that operates specifically on object names. Enter the text to find and the
+        replacement text &mdash; each selected object whose name contains the search text
+        will have that portion replaced.
+    </p>
+
+    <p>
+        For example, selecting all hosts matching <code>web-</code> and replacing with
+        <code>app-</code> renames <code>web-server01</code> to <code>app-server01</code>,
+        <code>web-server02</code> to <code>app-server02</code>, and so on.
+    </p>
+
+    <h3>Drag-and-Drop Bulk Move</h3>
+
+    <p>
+        When you have multiple objects selected, dragging any one of them starts a bulk
+        drag of the entire selection. A badge on the drag cursor shows the count. Drop
+        onto a file in the right pane's Files tab to stage a move for all selected objects.
+    </p>
+
+    <div class="docs-note">
+        All bulk operations are staged, not applied immediately. After performing a bulk
+        operation, review the changes in the <a href="#app/staging-system">commit dialog</a>
+        before applying them to disk. You can undo individual changes or clear all staging
+        if the result is not what you intended.
+    </div>
+
+    <h3>Dependency Warnings</h3>
+
+    <p>
+        When you delete objects that are referenced by other objects, the app shows a
+        dependency warning dialog before proceeding. The dialog categorizes the impact:
+    </p>
+
+    <ul>
+        <li>
+            <strong>Orphaned services</strong> &mdash; services that will lose their
+            <code>host_name</code> or <code>hostgroup_name</code> reference, which means
+            Nagios will fail to load them.
+        </li>
+        <li>
+            <strong>Broken references</strong> &mdash; other objects that reference the
+            deleted object by name in fields like <code>use</code>,
+            <code>check_command</code>, <code>contacts</code>, etc.
+        </li>
+    </ul>
+
+    <p>
+        You can still proceed with the deletion, but the dialog makes sure you understand
+        the consequences. The commit dialog's reference analysis will also flag these
+        issues and can optionally update references automatically.
+    </p>
+</div>

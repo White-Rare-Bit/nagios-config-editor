@@ -1,0 +1,223 @@
+<div class="docs-prose">
+    <h2>Object Explorer</h2>
+
+    <p>
+        The Object Explorer is the main interface for browsing and editing your Nagios
+        configuration. It uses a three-pane layout: a tree of objects on the left, an
+        attribute editor in the center, and a workspace panel with file management, analysis,
+        and suggestions on the right.
+    </p>
+
+    <h3>Left Pane: Object Tree</h3>
+
+    <p>
+        The left pane shows every object in your configuration organized as a tree. You can
+        switch between two views using the tabs at the top of the pane:
+    </p>
+
+    <ul>
+        <li>
+            <strong>By File</strong> &mdash; objects grouped under their source
+            <code>.cfg</code> file. Expand a file to see the objects defined in it. Each
+            file header shows the object count.
+        </li>
+        <li>
+            <strong>By Type</strong> &mdash; objects grouped by Nagios type (host, service,
+            command, contact, etc.). Useful when you want to see all objects of one kind
+            regardless of which file they live in.
+        </li>
+    </ul>
+
+    <p>
+        Click a folder header to expand or collapse it. The tree remembers which folders
+        you have open across page refreshes.
+    </p>
+
+    <h4>Tree Search</h4>
+
+    <p>
+        The search box at the top of the tree filters objects by name, type, or attribute
+        values. Type a search term and the tree instantly narrows to show only matching objects.
+        Clear the search to restore the full tree.
+    </p>
+
+    <h4>Filter Checkboxes</h4>
+
+    <p>
+        Below the search box, two checkboxes let you focus on specific subsets:
+    </p>
+
+    <ul>
+        <li><strong>Orphans only</strong> &mdash; show only objects not referenced by any other object.</li>
+        <li><strong>Issues only</strong> &mdash; show only objects flagged with validation issues (missing references, duplicates, unused templates, etc.).</li>
+    </ul>
+
+    <h4>Visual Indicators in the Tree</h4>
+
+    <p>
+        Objects in the tree show several visual cues:
+    </p>
+
+    <ul>
+        <li>A <strong>type badge</strong> next to each object name (e.g. "host", "service template").</li>
+        <li>A <strong>staged move arrow</strong> (<code>&rarr;</code>) on objects that have been staged to move to another file.</li>
+        <li>A <strong>green plus badge</strong> (<code>+</code>) on newly created objects that have not yet been committed.</li>
+        <li>A <strong>deletion strikethrough</strong> with an Undo button on objects staged for deletion.</li>
+        <li><strong>Issue badges</strong> with icons indicating the type of problem (missing reference, duplicate, unused, etc.).</li>
+        <li>A <strong>drag handle</strong> on the left side for drag-and-drop moves between files.</li>
+    </ul>
+
+    <h3>Center Pane: Attribute Editor</h3>
+
+    <p>
+        When you select an object in the tree, the center pane shows its full attribute
+        editor. This is where you view and modify every directive on the object. See
+        <a href="#app/editing-objects">Editing Objects</a> for a detailed walkthrough of
+        the editor.
+    </p>
+
+    <p>
+        When no object is selected, the center pane shows an empty state prompt. When
+        multiple objects are selected, it shows a count and points you to the Actions menu
+        for bulk operations.
+    </p>
+
+    <h4>Tab Bar</h4>
+
+    <p>
+        The center pane has a tab bar at the top. Each object you open appears as a tab,
+        similar to a code editor. Click tabs to switch between objects. Middle-click or click
+        the close button on a tab to close it. Tabs persist within your browser session.
+    </p>
+
+    <h3>Right Pane: Workspace</h3>
+
+    <p>
+        The right pane is a tabbed workspace with several views:
+    </p>
+
+    <ul>
+        <li>
+            <strong>Files</strong> &mdash; a file/folder tree of your config directory.
+            Right-click for context menus to create, rename, move, or delete files and
+            folders. This is also the drop target when dragging objects to move them.
+        </li>
+        <li>
+            <strong>Suggestions</strong> &mdash; automated analysis of your configuration.
+            Shows template consolidation opportunities, hostgroup suggestions, and other
+            cleanup recommendations.
+        </li>
+        <li>
+            <strong>Errors</strong> &mdash; grouped validation errors from cross-referencing
+            your objects. Shows missing templates, undefined commands, broken references, and
+            similar issues.
+        </li>
+        <li>
+            <strong>Validation</strong> &mdash; run <code>nagios -v</code> against your
+            configuration and view the output inline.
+        </li>
+    </ul>
+
+    <h3>Selecting Objects</h3>
+
+    <p>
+        Click an object in the tree to select it and open it in the editor. You can also
+        multi-select for bulk operations:
+    </p>
+
+    <ul>
+        <li><strong>Single click</strong> &mdash; selects one object and clears the previous selection.</li>
+        <li><kbd>Ctrl</kbd>+click (or <kbd>Cmd</kbd>+click on Mac) &mdash; toggles an individual object in the selection without affecting others.</li>
+        <li><kbd>Shift</kbd>+click &mdash; selects a range from the last-selected object to the clicked one.</li>
+    </ul>
+
+    <h4>Selection Helpers</h4>
+
+    <p>
+        The <strong>Actions</strong> menu in the toolbar provides selection shortcuts:
+    </p>
+
+    <ul>
+        <li><strong>Select All Visible</strong> &mdash; selects every object currently visible in the tree (respects search filters).</li>
+        <li><strong>Select by Type</strong> &mdash; opens a dialog to pick an object type, then selects all objects of that type.</li>
+        <li><strong>Select by Pattern</strong> &mdash; opens a dialog for a regex pattern, then selects all objects whose name matches.</li>
+    </ul>
+
+    <h3>Drag and Drop</h3>
+
+    <p>
+        You can move objects between files by dragging them from the left-pane tree and
+        dropping them on a file in the right-pane workspace. When you start dragging, the
+        app automatically switches to the Files tab in the right pane and highlights valid
+        drop targets. A badge shows the count of objects being dragged.
+    </p>
+
+    <p>
+        Drag-and-drop moves are staged &mdash; they appear in the commit dialog and are
+        not written to disk until you click Apply.
+    </p>
+
+    <h3>Context Menus</h3>
+
+    <p>
+        Right-click an object in the tree to open a context menu with these actions:
+    </p>
+
+    <ul>
+        <li><strong>Rename</strong> &mdash; change the object's name field.</li>
+        <li><strong>Clone</strong> &mdash; create a copy of the object with a new name.</li>
+        <li><strong>Move to file</strong> &mdash; move selected objects to a different config file.</li>
+        <li><strong>Add to group</strong> &mdash; add selected hosts, services, or contacts to a group.</li>
+        <li><strong>View in Graph</strong> &mdash; open the object in the dependency graph view.</li>
+        <li><strong>Delete</strong> &mdash; stage selected objects for deletion.</li>
+    </ul>
+
+    <p>
+        When multiple objects are selected, the context menu actions apply to the entire
+        selection (bulk clone, bulk move, bulk delete, etc.).
+    </p>
+
+    <h3>Quick Preview</h3>
+
+    <p>
+        Press <kbd>Space</kbd> while hovering over an object in the tree to open a quick
+        preview modal. This shows the full Nagios <code>define { ... }</code> block as it
+        would appear in the config file, including any staged edits. Press <kbd>Escape</kbd>
+        to close the preview.
+    </p>
+
+    <h3>Keyboard Shortcuts</h3>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Shortcut</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Cmd</kbd>+<kbd>Z</kbd></td>
+                <td>Undo the last staging operation</td>
+            </tr>
+            <tr>
+                <td><kbd>?</kbd></td>
+                <td>Open the keyboard shortcuts help dialog</td>
+            </tr>
+            <tr>
+                <td><kbd>Space</kbd></td>
+                <td>Quick preview of the hovered or selected object</td>
+            </tr>
+            <tr>
+                <td><kbd>Escape</kbd></td>
+                <td>Close any open dialog, preview, or context menu</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="docs-note">
+        On macOS, <kbd>Cmd</kbd> is used in place of <kbd>Ctrl</kbd> for all modifier
+        shortcuts. The keyboard shortcuts help dialog (press <kbd>?</kbd>) automatically
+        shows the correct modifier for your platform.
+    </div>
+</div>

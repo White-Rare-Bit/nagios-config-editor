@@ -1,0 +1,218 @@
+<div class="docs-prose">
+    <h2>Staging System</h2>
+
+    <p>
+        The staging system is a core feature of Nagios Bulk Editor. <strong>No changes are
+        written to disk until you explicitly click Apply.</strong> Every edit, move, creation,
+        and deletion is held in a staging area where you can review, undo, and refine your
+        changes before committing them.
+    </p>
+
+    <h3>What Gets Staged</h3>
+
+    <p>
+        The staging system tracks ten distinct categories of changes:
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Category</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Object edits</strong></td>
+                <td>Attribute changes on existing objects. The original and edited values are both stored so you can see exactly what changed.</td>
+            </tr>
+            <tr>
+                <td><strong>Object moves</strong></td>
+                <td>Objects moved from one file to another (via drag-and-drop or the Move dialog).</td>
+            </tr>
+            <tr>
+                <td><strong>Object creations</strong></td>
+                <td>New objects added via the "+" button on file headers. Includes the object type, all attributes, and the target file.</td>
+            </tr>
+            <tr>
+                <td><strong>Object deletions</strong></td>
+                <td>Existing objects staged for removal. These appear with a strikethrough in the tree.</td>
+            </tr>
+            <tr>
+                <td><strong>File creations</strong></td>
+                <td>New <code>.cfg</code> files to be created on disk.</td>
+            </tr>
+            <tr>
+                <td><strong>File deletions</strong></td>
+                <td>Existing files to be removed.</td>
+            </tr>
+            <tr>
+                <td><strong>File moves</strong></td>
+                <td>Files to be renamed or relocated to a different folder.</td>
+            </tr>
+            <tr>
+                <td><strong>Folder creations</strong></td>
+                <td>New directories to be created in the config tree.</td>
+            </tr>
+            <tr>
+                <td><strong>Folder deletions</strong></td>
+                <td>Existing directories to be removed (along with their contents).</td>
+            </tr>
+            <tr>
+                <td><strong>Folder moves</strong></td>
+                <td>Directories to be renamed or relocated.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Staging Indicator</h3>
+
+    <p>
+        The <strong>Commit</strong> button in the navbar shows a count badge when there are
+        staged changes. The number reflects the total count across all categories. When there
+        are no staged changes, the button is grayed out.
+    </p>
+
+    <h3>Reviewing Changes</h3>
+
+    <p>
+        Click the <strong>Commit</strong> button to open the commit dialog. The dialog shows
+        a complete diff of every staged change, organized by file:
+    </p>
+
+    <ul>
+        <li><strong>Object edits</strong> show inline diffs with the old and new attribute values highlighted.</li>
+        <li><strong>Object moves</strong> show the source and target files.</li>
+        <li><strong>Object creations</strong> show the full definition of the new object.</li>
+        <li><strong>Object deletions</strong> show which objects will be removed and from which files.</li>
+        <li><strong>File and folder operations</strong> show the paths involved.</li>
+    </ul>
+
+    <p>
+        Click any change header in the commit dialog to expand or collapse its diff details.
+    </p>
+
+    <h4>Reference Analysis</h4>
+
+    <p>
+        When you open the commit dialog, the app also runs a reference analysis. If any of
+        your changes rename objects that are referenced by other objects, the dialog shows a
+        checkbox to <strong>Update references automatically</strong>. When enabled, the apply
+        step will update all references to renamed objects across your entire configuration.
+    </p>
+
+    <h3>Undo</h3>
+
+    <p>
+        Every staging operation is recorded on an undo stack. Click the <strong>Undo</strong>
+        button in the navbar (or press <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Cmd</kbd>+<kbd>Z</kbd>)
+        to undo the most recent operation. The undo button shows a tooltip with the count of
+        operations in the stack.
+    </p>
+
+    <p>
+        Undo works for all operation types: edits, moves, creations, deletions, and file/folder
+        operations. Each undo reverses exactly one operation.
+    </p>
+
+    <div class="docs-note">
+        Undo is disabled when you are editing a text field (so it does not interfere with
+        the browser's native text undo) and when a modal dialog is open.
+    </div>
+
+    <h3>Applying Changes</h3>
+
+    <p>
+        Click <strong>Apply</strong> in the commit dialog to write all staged changes to disk.
+        The apply process follows a specific order to avoid conflicts:
+    </p>
+
+    <ol>
+        <li>Folder creations (parent folders first)</li>
+        <li>File creations</li>
+        <li>Object deletions (in reverse line order per file to preserve line numbers)</li>
+        <li>Object moves</li>
+        <li>Object edits</li>
+        <li>Object creations (appended to target files)</li>
+        <li>File moves</li>
+        <li>Folder moves</li>
+        <li>File deletions</li>
+        <li>Folder deletions (child folders first)</li>
+    </ol>
+
+    <p>
+        Before writing any changes, the app creates an automatic backup of your configuration.
+        If something goes wrong, you can restore from the <a href="#app/backups">Backups</a>
+        page.
+    </p>
+
+    <h4>Conflict Detection</h4>
+
+    <p>
+        The staging system captures file checksums when you first edit an object in a file.
+        Before applying, it compares the current checksums against the captured ones. If a
+        file has been modified outside the app (by another user or tool), the apply is blocked
+        to prevent overwriting external changes.
+    </p>
+
+    <h4>Git Commit</h4>
+
+    <p>
+        If Git is configured for your Nagios config directory, the commit dialog also shows
+        fields for a commit message, author name, and email. After applying changes to disk,
+        you can commit them to Git in the same step. The result is shown in a terminal-style
+        output panel.
+    </p>
+
+    <h3>Lock System</h3>
+
+    <p>
+        The staging system uses a session-based lock to prevent concurrent editing conflicts.
+        When you make your first edit, the app automatically acquires the staging lock for
+        your session. While you hold the lock:
+    </p>
+
+    <ul>
+        <li>Other users see a lock banner at the top of the page indicating that editing is locked.</li>
+        <li>Other users can still browse the configuration but cannot make changes.</li>
+        <li>The lock is released when you apply or discard all staged changes.</li>
+    </ul>
+
+    <div class="docs-warning">
+        If a session holds the lock and the user is no longer active, an administrator can
+        break the lock using the "Break Lock" button in the lock banner. Breaking the lock
+        discards any staged changes from the other session.
+    </div>
+
+    <h3>Clearing Staging</h3>
+
+    <p>
+        To discard all staged changes, open the commit dialog and click
+        <strong>Discard All Changes</strong>. This clears every pending edit, move, creation,
+        deletion, and file/folder operation in a single action. The staging lock is also
+        released, allowing other users to edit.
+    </p>
+
+    <p>
+        You can also discard individual changes by using Undo repeatedly, or by reverting
+        specific attribute edits in the editor (edit the value back to its original content
+        to remove it from staging).
+    </p>
+
+    <h3>Multi-User Sync</h3>
+
+    <p>
+        The app periodically polls the server for staging changes. If another session applies
+        or clears staging, your view updates automatically. If the server staging state changes
+        while you are editing, the app reloads the current staging data to keep your view
+        in sync.
+    </p>
+
+    <hr>
+
+    <p>
+        For developer-level details on how the staging system works internally, including the
+        apply phase order and stable key resolution, see
+        <a href="#app/data-flow-staging">Data Flow &amp; Staging Internals</a>.
+    </p>
+</div>
