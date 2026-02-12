@@ -14,18 +14,18 @@
 }
 
 .page-sidebar.settings-sidebar .settings-section-title {
-    padding: var(--nbe-space-sm) 12px;
+    padding: var(--nbe-space-sm) var(--nbe-space-md);
     border-bottom: none;
     font-size: var(--nbe-font-size-xs-plus);
     color: var(--nbe-dark-text-secondary);
 }
 
 .page-sidebar.settings-sidebar .settings-section-content {
-    padding: var(--nbe-space-sm) 12px var(--nbe-space-md);
+    padding: var(--nbe-space-sm) var(--nbe-space-md) var(--nbe-space-md);
 }
 
 .page-sidebar.settings-sidebar .settings-section-footer {
-    padding: var(--nbe-space-sm) 12px var(--nbe-space-md);
+    padding: var(--nbe-space-sm) var(--nbe-space-md) var(--nbe-space-md);
     border-top: none;
 }
 
@@ -90,7 +90,7 @@
 }
 
 .settings-field {
-    margin-bottom: 20px;
+    margin-bottom: var(--nbe-space-lg-plus);
 }
 
 .settings-field:last-child {
@@ -102,7 +102,7 @@
     font-size: var(--nbe-font-size-base);
     font-weight: 500;
     color: var(--nbe-dark-text-primary);
-    margin-bottom: 6px;
+    margin-bottom: var(--nbe-space-xs-plus);
 }
 
 .settings-field .form-input {
@@ -161,7 +161,7 @@
 }
 
 .settings-status-table td {
-    padding: 6px 0;
+    padding: var(--nbe-space-xs-plus) 0;
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
     color: var(--nbe-dark-text-primary);
 }
@@ -201,7 +201,7 @@
 
 .settings-info-list code {
     background: var(--nbe-dark-bg-tertiary);
-    padding: 2px 6px;
+    padding: var(--nbe-space-2xs) var(--nbe-space-xs-plus);
     border-radius: var(--nbe-radius-sm);
     font-size: var(--nbe-font-size-xs);
     color: var(--nbe-dark-accent-primary);
@@ -211,7 +211,7 @@
 .settings-badge {
     font-size: var(--nbe-font-size-xs);
     font-weight: 500;
-    padding: 2px var(--nbe-space-sm);
+    padding: var(--nbe-space-2xs) var(--nbe-space-sm);
     border-radius: var(--nbe-radius-2xl);
     margin-left: var(--nbe-space-sm);
     text-transform: none;
@@ -349,7 +349,7 @@ body.editing-locked .settings-container #identityTab {
     background: var(--nbe-dark-validation-warning-bg);
     color: var(--nbe-warning);
     font-size: var(--nbe-font-size-xs);
-    padding: 2px 6px;
+    padding: var(--nbe-space-2xs) var(--nbe-space-xs-plus);
     border-radius: var(--nbe-radius-2xl);
     margin-left: var(--nbe-space-sm);
 }

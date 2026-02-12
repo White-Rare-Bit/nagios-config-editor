@@ -90,7 +90,7 @@
 }
 
 .form-check-input {
-    margin-top: 2px;
+    margin-top: var(--nbe-space-2xs);
 }
 
 .form-check-label {
@@ -164,7 +164,7 @@
 .empty-tips .tip {
     font-size: var(--nbe-font-size-base);
     color: var(--nbe-text-secondary);
-    padding: 6px 0;
+    padding: var(--nbe-space-xs-plus) 0;
     border-bottom: 1px solid var(--nbe-border-lighter);
 }
 
@@ -266,7 +266,7 @@
 
 .suggestion-type {
     font-size: var(--nbe-font-size-xs);
-    padding: 2px 6px;
+    padding: var(--nbe-space-2xs) var(--nbe-space-xs-plus);
     border-radius: var(--nbe-radius-sm);
     margin-right: var(--nbe-space-sm);
     background: var(--nbe-info-light);

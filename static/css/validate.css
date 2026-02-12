@@ -13,7 +13,7 @@
 
 .validate-container .sidebar-info-text code {
     background: var(--nbe-dark-bg-tertiary);
-    padding: 2px 6px;
+    padding: var(--nbe-space-2xs) var(--nbe-space-xs-plus);
     border-radius: var(--nbe-radius-sm);
     color: var(--nbe-dark-accent-primary);
 }
