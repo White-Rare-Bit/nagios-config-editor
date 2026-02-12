@@ -234,7 +234,7 @@
     top: 100%;
     left: 0;
     right: 0;
-    background: var(--nbe-bg-surface);
+    background: var(--nbe-surface-at-3);
     border: 1px solid var(--nbe-border);
     border-top: none;
     border-radius: 0 0 var(--nbe-radius-md) var(--nbe-radius-md);

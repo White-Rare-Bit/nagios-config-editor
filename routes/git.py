@@ -10,7 +10,6 @@ from staging_manager import StagingStatus
 
 from .helpers import (
     get_audit_user_identity,
-    get_backup_manager,
     get_config_path,
     get_git_service,
     get_op_logger,
@@ -78,18 +77,6 @@ def _validate_commit_files(files, config_path, op_log):
                                error=f"path_validation_failed: {safe_result.error}")
             return jsonify({"error": f"Invalid file path: {safe_result.error}"}), 400
     return None
-
-
-def _create_pre_commit_backup(git_svc, user_name, user_email, op_log):
-    """Create backup before commit if there are changes. Non-fatal on failure."""
-    try:
-        status_result = git_svc.get_status()
-        if status_result.success and status_result.data.has_changes:
-            bm = get_backup_manager()
-            bm.create_backup("pre-commit", user_name, user_email)
-    except Exception as backup_err:  # noqa: BLE001
-        if op_log:
-            op_log.warning("git", "commit", error=f"backup failed: {backup_err}")
 
 
 def _write_commit_audit_log(commit_hash, message, user_name, user_email, initialized):
@@ -331,7 +318,6 @@ def _execute_commit(data, message, session_id, op_log):
     auto_init = data.get("auto_init", False)
 
     git_svc = get_git_service()
-    _create_pre_commit_backup(git_svc, user_name, user_email, op_log)
 
     result = git_svc.commit(
         message=message, files=files or None,
