@@ -89,18 +89,10 @@
     color: var(--nbe-dark-bg-primary);
 }
 
-.backup-container .page-sidebar .nbe-btn--primary:hover {
-    background: var(--nbe-dark-accent-primary-hover);
-}
-
 .backup-container .page-sidebar .nbe-btn--danger {
     background: var(--nbe-dark-accent-danger);
     border: none;
     color: var(--nbe-text-inverse);
-}
-
-.backup-container .page-sidebar .nbe-btn--danger:hover {
-    background: var(--nbe-dark-accent-danger-hover);
 }
 
 /* ============================================================================

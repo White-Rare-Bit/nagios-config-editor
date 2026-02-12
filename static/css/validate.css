@@ -24,10 +24,6 @@
     color: var(--nbe-dark-bg-primary);
 }
 
-.validate-container .nbe-btn--primary:hover {
-    background: var(--nbe-dark-accent-primary-hover);
-}
-
 .validate-main {
     flex: 1;
     overflow-y: auto;

@@ -325,10 +325,6 @@
     color: var(--nbe-text-inverse);
 }
 
-.audit-container .page-sidebar .nbe-btn--danger:hover {
-    background: var(--nbe-dark-validation-error-text);
-}
-
 /* ============================================================================
    Archives List
    ============================================================================ */

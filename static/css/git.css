@@ -86,18 +86,10 @@
     color: var(--nbe-dark-bg-primary);
 }
 
-.git-container .page-sidebar .nbe-btn--primary:hover {
-    background: var(--nbe-dark-accent-primary-hover);
-}
-
 .git-container .page-sidebar .nbe-btn--danger {
     background: var(--nbe-dark-accent-danger);
     border: none;
     color: var(--nbe-text-inverse);
-}
-
-.git-container .page-sidebar .nbe-btn--danger:hover {
-    background: var(--nbe-dark-validation-error-text);
 }
 
 /* ============================================================================

@@ -339,20 +339,11 @@ body.editing-locked .settings-container #identityTab {
     color: var(--nbe-dark-bg-primary);
 }
 
-.settings-main .nbe-btn--primary:hover {
-    background: var(--nbe-dark-accent-primary-hover);
-}
-
 .page-sidebar.settings-sidebar .nbe-btn--secondary,
 .settings-sidebar .nbe-btn--secondary {
     background: var(--nbe-dark-bg-tertiary);
     border: 1px solid var(--nbe-dark-border-primary);
     color: var(--nbe-dark-text-primary);
-}
-
-.page-sidebar.settings-sidebar .nbe-btn--secondary:hover,
-.settings-sidebar .nbe-btn--secondary:hover {
-    background: var(--nbe-dark-bg-hover);
 }
 
 /* Tab badge override for dark theme */
