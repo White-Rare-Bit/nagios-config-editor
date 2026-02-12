@@ -125,6 +125,12 @@
     min-height: 0;
 }
 
+/* When prose content is loaded, it becomes a block child so padding works naturally */
+#docsContent > .docs-prose {
+    display: block;
+    flex-shrink: 0;
+}
+
 /* Type header */
 .docs-type-header {
     flex-shrink: 0;
