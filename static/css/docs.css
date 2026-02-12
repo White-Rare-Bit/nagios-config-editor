@@ -148,7 +148,7 @@
 }
 
 .docs-required-count {
-    background: rgba(239, 68, 68, 0.15);
+    background: var(--nbe-dark-badge-required-bg);
     color: var(--nbe-danger);
 }
 
@@ -284,7 +284,7 @@
 
 .docs-badge--required {
     background: var(--nbe-danger);
-    color: #fff;
+    color: var(--nbe-text-inverse);
 }
 
 .docs-badge--optional {
@@ -443,11 +443,11 @@
 
 @keyframes docsDirectiveHighlight {
     0% {
-        background-color: rgba(99, 179, 237, 0.25);
+        background-color: var(--nbe-dark-prose-highlight);
         box-shadow: inset 3px 0 0 var(--nbe-dark-accent-primary);
     }
     70% {
-        background-color: rgba(99, 179, 237, 0.1);
+        background-color: var(--nbe-dark-prose-highlight-fade);
         box-shadow: inset 3px 0 0 var(--nbe-dark-accent-primary);
     }
     100% {
@@ -491,7 +491,7 @@
 
 .docs-prose p {
     font-size: 15px;
-    color: #b0b0b0;
+    color: var(--nbe-dark-prose-text);
     line-height: 1.75;
     margin: 0 0 20px;
 }
@@ -500,7 +500,7 @@
 .docs-prose ol {
     margin: 0 0 20px;
     padding-left: 28px;
-    color: #b0b0b0;
+    color: var(--nbe-dark-prose-text);
     line-height: 1.75;
     font-size: 15px;
 }
@@ -553,7 +553,7 @@
 
 .docs-prose td {
     padding: 10px 16px;
-    color: #b0b0b0;
+    color: var(--nbe-dark-prose-text);
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
     vertical-align: top;
 }
@@ -565,10 +565,10 @@
 .docs-prose .docs-note {
     padding: 16px;
     margin: 0 0 20px;
-    background: rgba(99, 179, 237, 0.08);
-    border: 1px solid rgba(99, 179, 237, 0.25);
+    background: var(--nbe-dark-prose-note-bg);
+    border: 1px solid var(--nbe-dark-prose-note-border);
     border-radius: var(--nbe-radius-md);
-    color: #b0b0b0;
+    color: var(--nbe-dark-prose-text);
     font-size: 15px;
     line-height: 1.75;
 }
@@ -583,7 +583,7 @@
     background: var(--nbe-dark-validation-warning-bg);
     border: 1px solid var(--nbe-warning);
     border-radius: var(--nbe-radius-md);
-    color: #b0b0b0;
+    color: var(--nbe-dark-prose-text);
     font-size: 15px;
     line-height: 1.75;
 }
@@ -721,16 +721,16 @@
 .docs-prose .docs-tip {
     padding: 16px;
     margin: 0 0 20px;
-    background: rgba(76, 175, 80, 0.08);
-    border: 1px solid rgba(76, 175, 80, 0.25);
+    background: var(--nbe-dark-prose-tip-bg);
+    border: 1px solid var(--nbe-dark-prose-tip-border);
     border-radius: var(--nbe-radius-md);
-    color: #b0b0b0;
+    color: var(--nbe-dark-prose-text);
     font-size: 15px;
     line-height: 1.75;
 }
 
 .docs-prose .docs-tip strong {
-    color: #81c784;
+    color: var(--nbe-dark-validation-success-text);
 }
 
 /* =============================================================================
@@ -740,16 +740,16 @@
 .docs-prose .docs-danger {
     padding: 16px;
     margin: 0 0 20px;
-    background: rgba(244, 67, 54, 0.08);
-    border: 1px solid rgba(241, 76, 76, 0.25);
+    background: var(--nbe-dark-prose-danger-bg);
+    border: 1px solid var(--nbe-dark-prose-danger-border);
     border-radius: var(--nbe-radius-md);
-    color: #b0b0b0;
+    color: var(--nbe-dark-prose-text);
     font-size: 15px;
     line-height: 1.75;
 }
 
 .docs-prose .docs-danger strong {
-    color: #e57373;
+    color: var(--nbe-dark-validation-error-text);
 }
 
 /* =============================================================================
@@ -778,7 +778,7 @@
     margin: 0;
     padding-left: 20px;
     font-size: 14px;
-    color: #b0b0b0;
+    color: var(--nbe-dark-prose-text);
     line-height: 1.7;
 }
 

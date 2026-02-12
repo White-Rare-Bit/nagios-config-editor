@@ -467,6 +467,18 @@
     --nbe-dark-validation-warning-border: rgba(255, 193, 7, 0.3);
     --nbe-dark-validation-info-border: rgba(33, 150, 243, 0.3);
 
+    /* ---- Dark Theme Prose/Docs Colors ---- */
+    --nbe-dark-prose-text: #B0BEC5;
+    --nbe-dark-prose-note-bg: rgba(33, 150, 243, 0.08);
+    --nbe-dark-prose-note-border: rgba(33, 150, 243, 0.25);
+    --nbe-dark-prose-tip-bg: rgba(76, 175, 80, 0.08);
+    --nbe-dark-prose-tip-border: rgba(76, 175, 80, 0.25);
+    --nbe-dark-prose-danger-bg: rgba(244, 67, 54, 0.08);
+    --nbe-dark-prose-danger-border: rgba(244, 67, 54, 0.25);
+    --nbe-dark-prose-highlight: rgba(33, 150, 243, 0.25);
+    --nbe-dark-prose-highlight-fade: rgba(33, 150, 243, 0.1);
+    --nbe-dark-badge-required-bg: rgba(244, 67, 54, 0.15);
+
     /* ---- Dark Theme Object Type Badge Colors ---- */
     /* Infrastructure (green) - hosts, hostgroups */
     --nbe-dark-type-host-bg: rgba(76, 175, 80, 0.2);
