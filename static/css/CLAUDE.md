@@ -6,7 +6,8 @@ Design tokens in `tokens.css`, component styles, and page-specific CSS.
 
 | File | Contents |
 |------|----------|
-| `tokens.css` | Design tokens (light + dark), `.nbe-btn` system, `.nbe-tabs`, typography scale |
+| `tokens.css` | Material Design tokens (light + dark), `.nbe-btn` system, `.nbe-tabs`, typography scale |
+| `dark-page.css` | Shared Bootstrap dark overrides, activated by `.nbe-dark-page` body class |
 | `explorer.css` | Three-pane explorer layout, dark theme styling |
 | `forms.css` | Shared form styles (form-section, form-group) |
 | `git.css` | Git page: file list, diff viewer |
@@ -17,14 +18,21 @@ Design tokens in `tokens.css`, component styles, and page-specific CSS.
 | `settings.css` | Settings page forms |
 | `bulk-rename.css` | Bulk rename page |
 | `validate.css` | Validation output display |
+| `docs.css` | Docs page: prose, callouts, directive table |
+
+## Color System
+
+All colors are **Material Design** based. Tokens defined in `tokens.css`, no hardcoded colors in page CSS files.
 
 ## Dark Theme
 
-Token-based, explorer page only. All tokens in `tokens.css`, consumed in `explorer.css`.
+Token-based. Dark pages use `{% block body_class %} nbe-dark-page{% endblock %}` in their template to activate shared overrides in `dark-page.css`. Page-specific dark rules remain in each page's CSS file.
 
-**Naming**: `--nbe-dark-{category}-{variant}` — categories: `bg`, `text`, `border`, `accent`, `input`, `btn`, `tab`, `validation`.
+**Load order**: Bootstrap → FontAwesome → `tokens.css` → `forms.css` → `dark-page.css` → `style.css` → page CSS
 
-**Semantic colors** (`--nbe-success`, `--nbe-danger`, etc.) are NOT dark-converted — they already have sufficient contrast.
+**Naming**: `--nbe-dark-{category}-{variant}` — categories: `bg`, `text`, `border`, `accent`, `input`, `btn`, `tab`, `validation`, `prose`.
+
+**Dark pages**: Explorer, Git, Backups, Audit Log, Settings, Validate, Dependencies, Docs
 
 ## Button System
 
