@@ -1,0 +1,80 @@
+/* =============================================================================
+   DARK PAGE OVERRIDES
+   Shared Bootstrap dark overrides - eliminates Bootstrap !important fights.
+   Activated by adding .nbe-dark-page to <body> via {% block body_class %}
+   ============================================================================= */
+
+.nbe-dark-page {
+    background: var(--nbe-dark-bg-primary);
+}
+
+.nbe-dark-page .page-container {
+    background: var(--nbe-dark-bg-primary);
+}
+
+.nbe-dark-page .page-sidebar {
+    background: var(--nbe-dark-bg-primary);
+    border-right: 1px solid var(--nbe-dark-border-primary);
+}
+
+.nbe-dark-page .panel-header {
+    background: var(--nbe-dark-bg-secondary);
+    color: var(--nbe-dark-text-primary);
+    border-bottom: 1px solid var(--nbe-dark-border-primary);
+}
+
+.nbe-dark-page .sidebar-section {
+    border: none;
+    border-radius: 0;
+    border-bottom: 1px solid var(--nbe-dark-border-secondary);
+    margin-bottom: 0;
+    background: transparent;
+}
+
+.nbe-dark-page .sidebar-section-title {
+    padding: var(--nbe-space-sm) var(--nbe-space-md);
+    border-bottom: none;
+    font-size: var(--nbe-font-size-xs-plus);
+    color: var(--nbe-dark-text-secondary);
+}
+
+.nbe-dark-page .sidebar-section-content {
+    padding: var(--nbe-space-sm) var(--nbe-space-md) var(--nbe-space-md);
+}
+
+.nbe-dark-page .sidebar-info-text {
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-dark-text-secondary);
+    margin: 0 0 var(--nbe-space-sm) 0;
+    line-height: 1.5;
+}
+
+.nbe-dark-page .sidebar-info-text:last-child {
+    margin-bottom: 0;
+}
+
+/* Bootstrap form overrides */
+.nbe-dark-page .form-control,
+.nbe-dark-page .form-select {
+    background: var(--nbe-dark-bg-tertiary);
+    border: 1px solid var(--nbe-dark-border-primary);
+    color: var(--nbe-dark-text-primary);
+}
+
+.nbe-dark-page .form-control:focus,
+.nbe-dark-page .form-select:focus {
+    border-color: var(--nbe-dark-accent-primary);
+    background: var(--nbe-dark-bg-secondary);
+}
+
+.nbe-dark-page .form-control::placeholder {
+    color: var(--nbe-dark-text-muted);
+}
+
+.nbe-dark-page .form-label {
+    color: var(--nbe-dark-text-secondary);
+}
+
+.nbe-dark-page .form-check-label {
+    color: var(--nbe-dark-text-secondary);
+}
