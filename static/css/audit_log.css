@@ -161,7 +161,7 @@
     height: 14px;
     margin: 0;
     border: 2px solid var(--nbe-dark-border-primary);
-    border-radius: 3px;
+    border-radius: var(--nbe-radius-sm);
     background: var(--nbe-dark-bg-secondary);
     cursor: pointer;
     flex-shrink: 0;

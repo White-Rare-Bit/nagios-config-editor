@@ -1196,7 +1196,7 @@
     line-height: 1;
     padding: 0 2px;
     cursor: pointer;
-    border-radius: 3px;
+    border-radius: var(--nbe-radius-sm);
     flex-shrink: 0;
     display: flex;
     align-items: center;
@@ -1696,7 +1696,7 @@
     background: var(--nbe-dark-btn-bg);
     color: var(--nbe-dark-text-secondary);
     border: 1px solid var(--nbe-dark-btn-border);
-    border-radius: 2px;
+    border-radius: var(--nbe-radius-xs);
 }
 
 .workspace-toolbar-btn--icon:hover {
@@ -2852,7 +2852,7 @@
     background: var(--nbe-dark-text-secondary);
     color: var(--nbe-text-inverse);
     padding: 1px 6px;
-    border-radius: 2px;
+    border-radius: var(--nbe-radius-xs);
     font-size: var(--nbe-font-size-2xs);
     font-weight: 600;
 }
@@ -2875,7 +2875,7 @@
     padding: 2px 8px;
     font-size: var(--nbe-font-size-2xs);
     border: 1px solid var(--nbe-dark-btn-border);
-    border-radius: 2px;
+    border-radius: var(--nbe-radius-xs);
     background: var(--nbe-dark-btn-bg);
     color: var(--nbe-dark-text-secondary);
     cursor: pointer;
@@ -3078,7 +3078,7 @@
     border: 1px solid var(--nbe-dark-btn-border);
     background: var(--nbe-dark-btn-bg);
     color: var(--nbe-dark-btn-text);
-    border-radius: 2px;
+    border-radius: var(--nbe-radius-xs);
     cursor: pointer;
     flex-shrink: 0;
     font-weight: 500;
@@ -3241,7 +3241,7 @@
     background: var(--nbe-dark-btn-bg);
     color: var(--nbe-dark-btn-text);
     border: 1px solid var(--nbe-dark-btn-border);
-    border-radius: 2px;
+    border-radius: var(--nbe-radius-xs);
     cursor: pointer;
     transition: all 0.15s;
 }
@@ -3702,7 +3702,7 @@
     padding: 10px 12px;
     background: var(--nbe-dark-bg-secondary);
     border: 1px solid var(--nbe-dark-border-primary);
-    border-radius: 4px;
+    border-radius: var(--nbe-radius-md);
     margin-left: -20px;
     margin-right: -20px;
 }
@@ -3780,7 +3780,7 @@
     font-size: var(--nbe-typography-body-size);
     padding: 6px 10px;
     border: 1px solid var(--nbe-dark-border-primary);
-    border-radius: 4px;
+    border-radius: var(--nbe-radius-md);
     background: var(--nbe-dark-bg-secondary);
     color: var(--nbe-dark-text-primary);
     cursor: text;
@@ -3824,7 +3824,7 @@
     color: var(--nbe-dark-text-primary);
     pointer-events: none;
     border: 1px solid transparent;
-    border-radius: 4px;
+    border-radius: var(--nbe-radius-md);
     background: var(--nbe-dark-bg-secondary);
     overflow: hidden;
 }
@@ -3837,7 +3837,7 @@
     font-size: var(--nbe-typography-body-size);
     padding: 6px 10px;
     border: 1px solid var(--nbe-dark-border-primary);
-    border-radius: 4px;
+    border-radius: var(--nbe-radius-md);
     background: transparent;
     color: transparent;
     caret-color: var(--nbe-dark-text-primary);
@@ -3971,7 +3971,7 @@
     padding: var(--nbe-space-sm) var(--nbe-space-lg);
     border: 1px dashed var(--nbe-dark-border-primary);
     background: none;
-    border-radius: 4px;
+    border-radius: var(--nbe-radius-md);
     color: var(--nbe-dark-text-secondary);
     cursor: pointer;
     font-size: var(--nbe-typography-body-size);
@@ -4890,7 +4890,7 @@ body.dragging-objects .right-pane::after {
 .ref-type-group {
     margin-bottom: var(--nbe-space-lg);
     border: 1px solid var(--nbe-dark-border-primary);
-    border-radius: 4px;
+    border-radius: var(--nbe-radius-md);
     overflow: hidden;
 }
 
@@ -5693,7 +5693,7 @@ i.tree-icon--new {
 .attr-docs-popover .attr-docs-badge {
     font-size: 11px;
     padding: 1px 6px;
-    border-radius: 3px;
+    border-radius: var(--nbe-radius-sm);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.3px;
