@@ -176,9 +176,9 @@ async function buildGlobalCommitDialogHtml(data, refData = null, isGitConfigured
                 `}
             </div>
             <div class="commit-footer-right">
-                <button class="btn-discard-all" onclick="discardGlobalChanges()">Discard All</button>
-                <button class="btn-cancel" onclick="closeGlobalCommitDialog()">Cancel</button>
-                <button class="btn-apply-commit" id="globalApplyBtn" onclick="applyGlobalCommit()" ${isGitConfigured ? '' : 'disabled class="btn-disabled"'}>Apply Changes</button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--danger" onclick="discardGlobalChanges()">Discard All</button>
+                <button class="nbe-btn nbe-btn--dark" onclick="closeGlobalCommitDialog()">Cancel</button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--primary" id="globalApplyBtn" onclick="applyGlobalCommit()" ${isGitConfigured ? '' : 'disabled'}>Apply Changes</button>
             </div>
         </div>
     `;
@@ -289,9 +289,9 @@ async function buildGitOnlyCommitDialogHtml(gitChanges, configPath, isGitConfigu
                 `}
             </div>
             <div class="commit-footer-right">
-                <button class="btn-discard-all" onclick="discardGitChanges()">Discard All</button>
-                <button class="btn-cancel" onclick="closeGlobalCommitDialog()">Cancel</button>
-                <button class="btn-apply-commit" id="globalApplyBtn" onclick="applyGitCommit()" ${isGitConfigured ? '' : 'disabled class="btn-disabled"'}>Apply Changes</button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--danger" onclick="discardGitChanges()">Discard All</button>
+                <button class="nbe-btn nbe-btn--dark" onclick="closeGlobalCommitDialog()">Cancel</button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--primary" id="globalApplyBtn" onclick="applyGitCommit()" ${isGitConfigured ? '' : 'disabled'}>Apply Changes</button>
             </div>
         </div>
     `;
@@ -433,10 +433,10 @@ function showResultPanel({ command, success, title, outputHtml, needsReload = tr
     if (showRetryCommit) {
         retryButtonHtml = `
             <div class="git-retry-section">
-                <button class="btn-retry-commit" onclick="retryGitCommit()">
+                <button class="nbe-btn nbe-btn--dark nbe-btn--info" onclick="retryGitCommit()">
                     <i class="fa-solid fa-redo"></i> Retry Commit
                 </button>
-                <button class="btn-discard-staging" onclick="discardStagingAfterFailedCommit()">
+                <button class="nbe-btn nbe-btn--dark" onclick="discardStagingAfterFailedCommit()">
                     Discard Staging
                 </button>
             </div>

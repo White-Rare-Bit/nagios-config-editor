@@ -336,45 +336,6 @@
     gap: var(--nbe-space-sm);
 }
 
-.btn-discard-all {
-    background: var(--nbe-dark-validation-error-bg);
-    color: var(--color-delete);
-    border: 1px solid var(--nbe-danger-border);
-    padding: var(--nbe-space-sm) var(--nbe-space-lg);
-    border-radius: var(--nbe-radius-md);
-    cursor: pointer;
-    font-size: var(--nbe-font-size-base);
-}
-
-.btn-discard-all:hover {
-    background: var(--nbe-danger-border);
-}
-
-.btn-discard-all:focus-visible {
-    outline: none;
-    box-shadow: var(--nbe-focus-ring);
-}
-
-.btn-apply-commit {
-    background: var(--nbe-primary);
-    color: var(--nbe-text-inverse);
-    border: none;
-    padding: var(--nbe-space-sm) var(--nbe-space-lg-plus);
-    border-radius: var(--nbe-radius-md);
-    cursor: pointer;
-    font-size: var(--nbe-font-size-base);
-    font-weight: 500;
-}
-
-.btn-apply-commit:hover {
-    background: var(--nbe-primary-hover);
-}
-
-.btn-apply-commit:focus-visible {
-    outline: none;
-    box-shadow: var(--nbe-focus-ring);
-}
-
 .change-add {
     color: var(--color-create);
 }
@@ -456,23 +417,7 @@
 }
 
 .actions-btn {
-    padding: var(--nbe-space-xs) var(--nbe-space-sm-plus);
-    background: var(--nbe-dark-btn-bg);
-    border: 1px solid var(--nbe-dark-btn-border);
-    border-radius: var(--nbe-radius-md);
-    font-size: var(--nbe-font-size-base);
-    cursor: pointer;
     white-space: nowrap;
-    color: var(--nbe-dark-btn-text);
-}
-
-.actions-btn:hover {
-    background: var(--nbe-dark-btn-bg-hover);
-}
-
-.actions-btn:focus-visible {
-    outline: none;
-    box-shadow: var(--nbe-focus-ring);
 }
 
 .actions-caret {
@@ -1323,26 +1268,6 @@
     color: var(--nbe-dark-text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.3px;
-}
-
-.btn-refresh {
-    padding: var(--nbe-space-sm) var(--nbe-space-lg);
-    background: var(--nbe-primary);
-    border: none;
-    border-radius: var(--nbe-radius-md);
-    font-size: var(--nbe-font-size-sm);
-    font-weight: 500;
-    color: var(--nbe-text-inverse);
-    cursor: pointer;
-}
-
-.btn-refresh:hover {
-    background: var(--nbe-primary-hover);
-}
-
-.btn-refresh:focus-visible {
-    outline: none;
-    box-shadow: var(--nbe-focus-ring);
 }
 
 .tab-body {
