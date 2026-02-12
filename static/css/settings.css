@@ -329,7 +329,6 @@ body.editing-locked .settings-container #identityTab {
 }
 
 .settings-main .nbe-btn--secondary:hover {
-    background: var(--nbe-dark-bg-hover);
     border-color: var(--nbe-dark-border-hover);
 }
 

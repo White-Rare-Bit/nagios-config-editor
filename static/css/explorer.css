@@ -1384,7 +1384,6 @@
 }
 
 .right-pane-header .nbe-tab:hover {
-    background: var(--nbe-dark-tab-bg-hover);
     color: var(--nbe-dark-tab-text-hover);
 }
 

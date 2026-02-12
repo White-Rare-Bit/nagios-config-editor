@@ -629,7 +629,6 @@
 .dep-container .nbe-btn--secondary:hover,
 .dep-sidebar .nbe-btn--secondary:hover,
 .dep-container .page-sidebar .nbe-btn--secondary:hover {
-    background: var(--nbe-dark-bg-hover);
     border-color: var(--nbe-dark-border-hover);
 }
 
@@ -644,7 +643,6 @@
 .dep-container .nbe-btn--danger:hover,
 .dep-sidebar .nbe-btn--danger:hover,
 .dep-container .page-sidebar .nbe-btn--danger:hover {
-    background: var(--nbe-dark-accent-danger);
     color: var(--nbe-text-inverse);
 }
 

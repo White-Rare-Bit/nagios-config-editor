@@ -298,7 +298,6 @@
 }
 
 .backup-table .nbe-btn--secondary:hover {
-    background: var(--nbe-dark-bg-hover);
     border-color: var(--nbe-dark-border-hover);
 }
 
@@ -309,7 +308,6 @@
 }
 
 .backup-table .nbe-btn--danger:hover {
-    background: var(--nbe-dark-accent-danger);
     color: var(--nbe-text-inverse);
 }
 

@@ -713,7 +713,6 @@
 }
 
 .git-history-table .nbe-btn--secondary:hover {
-    background: var(--nbe-dark-bg-hover);
     border-color: var(--nbe-dark-border-hover);
 }
 
