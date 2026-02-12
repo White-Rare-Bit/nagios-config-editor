@@ -484,66 +484,66 @@
    ============================================================================= */
 
 .docs-prose {
-    padding: 48px var(--nbe-space-xxl);
-    max-width: 900px;
+    padding: 48px 40px;
+    max-width: 800px;
     margin: 0 auto;
 }
 
 .docs-prose h2 {
-    font-size: var(--nbe-typography-h1-size);
-    font-weight: 600;
+    font-size: 28px;
+    font-weight: 700;
     color: var(--nbe-dark-text-primary);
-    margin: 0 0 var(--nbe-space-lg);
-    padding-bottom: var(--nbe-space-sm);
+    margin: 0 0 20px;
+    padding-bottom: 12px;
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
 }
 
 .docs-prose h3 {
-    font-size: var(--nbe-typography-h2-size);
+    font-size: 21px;
     font-weight: 600;
     color: var(--nbe-dark-text-primary);
-    margin: var(--nbe-space-xl) 0 var(--nbe-space-md);
+    margin: 44px 0 16px;
 }
 
 .docs-prose h4 {
-    font-size: var(--nbe-typography-h3-size);
+    font-size: 17px;
     font-weight: 600;
     color: var(--nbe-dark-text-primary);
-    margin: var(--nbe-space-lg) 0 var(--nbe-space-sm);
+    margin: 28px 0 12px;
 }
 
 .docs-prose p {
-    font-size: var(--nbe-typography-body-size);
-    color: var(--nbe-dark-text-secondary);
-    line-height: var(--nbe-line-height-relaxed);
-    margin: 0 0 var(--nbe-space-md);
+    font-size: 15px;
+    color: #b0b0b0;
+    line-height: 1.75;
+    margin: 0 0 20px;
 }
 
 .docs-prose ul,
 .docs-prose ol {
-    margin: 0 0 var(--nbe-space-md);
-    padding-left: var(--nbe-space-xl);
-    color: var(--nbe-dark-text-secondary);
-    line-height: var(--nbe-line-height-relaxed);
-    font-size: var(--nbe-typography-body-size);
+    margin: 0 0 20px;
+    padding-left: 28px;
+    color: #b0b0b0;
+    line-height: 1.75;
+    font-size: 15px;
 }
 
 .docs-prose li {
-    margin-bottom: var(--nbe-space-xs);
+    margin-bottom: 6px;
 }
 
 .docs-prose code {
     font-family: var(--nbe-font-mono);
-    font-size: var(--nbe-typography-code-size);
+    font-size: 13px;
     color: var(--nbe-dark-accent-primary);
     background: var(--nbe-dark-bg-tertiary);
-    padding: 1px 5px;
+    padding: 2px 6px;
     border-radius: 3px;
 }
 
 .docs-prose pre {
-    margin: 0 0 var(--nbe-space-md);
-    padding: var(--nbe-space-md);
+    margin: 0 0 20px;
+    padding: 16px;
     background: var(--nbe-dark-bg-tertiary);
     border: 1px solid var(--nbe-dark-border-primary);
     border-radius: var(--nbe-radius-md);
@@ -553,21 +553,21 @@
 .docs-prose pre code {
     background: none;
     padding: 0;
-    font-size: var(--nbe-typography-code-size);
+    font-size: 13px;
     color: var(--nbe-dark-text-primary);
-    line-height: 1.6;
+    line-height: 1.7;
 }
 
 .docs-prose table {
     width: 100%;
     border-collapse: collapse;
-    margin: 0 0 var(--nbe-space-md);
-    font-size: var(--nbe-font-size-sm);
+    margin: 0 0 20px;
+    font-size: 14px;
 }
 
 .docs-prose th {
     text-align: left;
-    padding: var(--nbe-space-sm) var(--nbe-space-md);
+    padding: 10px 16px;
     background: var(--nbe-dark-bg-secondary);
     color: var(--nbe-dark-text-primary);
     font-weight: 600;
@@ -575,25 +575,25 @@
 }
 
 .docs-prose td {
-    padding: var(--nbe-space-sm) var(--nbe-space-md);
-    color: var(--nbe-dark-text-secondary);
+    padding: 10px 16px;
+    color: #b0b0b0;
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
     vertical-align: top;
 }
 
 .docs-prose td code {
-    font-size: var(--nbe-typography-code-size);
+    font-size: 12px;
 }
 
 .docs-prose .docs-note {
-    padding: var(--nbe-space-md);
-    margin: 0 0 var(--nbe-space-md);
+    padding: 16px;
+    margin: 0 0 20px;
     background: rgba(99, 179, 237, 0.08);
     border: 1px solid rgba(99, 179, 237, 0.25);
     border-radius: var(--nbe-radius-md);
-    color: var(--nbe-dark-text-secondary);
-    font-size: var(--nbe-typography-body-size);
-    line-height: var(--nbe-line-height-relaxed);
+    color: #b0b0b0;
+    font-size: 15px;
+    line-height: 1.75;
 }
 
 .docs-prose .docs-note strong {
@@ -601,14 +601,14 @@
 }
 
 .docs-prose .docs-warning {
-    padding: var(--nbe-space-md);
-    margin: 0 0 var(--nbe-space-md);
+    padding: 16px;
+    margin: 0 0 20px;
     background: var(--nbe-dark-validation-warning-bg);
     border: 1px solid var(--nbe-warning);
     border-radius: var(--nbe-radius-md);
-    color: var(--nbe-dark-text-secondary);
-    font-size: var(--nbe-typography-body-size);
-    line-height: var(--nbe-line-height-relaxed);
+    color: #b0b0b0;
+    font-size: 15px;
+    line-height: 1.75;
 }
 
 .docs-prose .docs-warning strong {
@@ -623,7 +623,7 @@
 .docs-prose hr {
     border: none;
     border-top: 1px solid var(--nbe-dark-border-secondary);
-    margin: var(--nbe-space-xl) 0;
+    margin: 40px 0;
 }
 
 .docs-prose a {
@@ -637,7 +637,7 @@
 
 /* Inline SVG diagrams — allowed to extend wider than prose max-width */
 .docs-diagram {
-    margin: var(--nbe-space-xl) -60px;
+    margin: 32px -40px;
     border: 1px solid var(--nbe-dark-border-secondary);
     border-radius: var(--nbe-radius-md);
     overflow: hidden;
@@ -727,12 +727,188 @@
 /* Key-cap style for keyboard shortcuts in docs */
 .docs-prose kbd {
     display: inline-block;
-    padding: 2px 6px;
+    padding: 3px 7px;
     font-family: var(--nbe-font-mono);
-    font-size: var(--nbe-font-size-xs-plus);
+    font-size: 13px;
     color: var(--nbe-dark-text-primary);
     background: var(--nbe-dark-bg-tertiary);
     border: 1px solid var(--nbe-dark-border-primary);
     border-radius: 3px;
     box-shadow: 0 1px 0 var(--nbe-dark-border-primary);
+}
+
+/* =============================================================================
+   Callout: Tip (green) — positive guidance, best practices
+   ============================================================================= */
+
+.docs-prose .docs-tip {
+    padding: 16px;
+    margin: 0 0 20px;
+    background: rgba(76, 175, 80, 0.08);
+    border: 1px solid rgba(76, 175, 80, 0.25);
+    border-radius: var(--nbe-radius-md);
+    color: #b0b0b0;
+    font-size: 15px;
+    line-height: 1.75;
+}
+
+.docs-prose .docs-tip strong {
+    color: #81c784;
+}
+
+/* =============================================================================
+   Callout: Danger (red) — destructive or irreversible actions
+   ============================================================================= */
+
+.docs-prose .docs-danger {
+    padding: 16px;
+    margin: 0 0 20px;
+    background: rgba(244, 67, 54, 0.08);
+    border: 1px solid rgba(241, 76, 76, 0.25);
+    border-radius: var(--nbe-radius-md);
+    color: #b0b0b0;
+    font-size: 15px;
+    line-height: 1.75;
+}
+
+.docs-prose .docs-danger strong {
+    color: #e57373;
+}
+
+/* =============================================================================
+   Page Summary — "On this page" box at top of longer pages
+   ============================================================================= */
+
+.docs-summary {
+    margin: 0 0 32px;
+    padding: 16px 20px;
+    background: var(--nbe-dark-bg-secondary);
+    border: 1px solid var(--nbe-dark-border-primary);
+    border-left: 3px solid var(--nbe-dark-accent-primary);
+    border-radius: var(--nbe-radius-md);
+}
+
+.docs-summary-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--nbe-dark-accent-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.docs-summary ul {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 14px;
+    color: #b0b0b0;
+    line-height: 1.7;
+}
+
+.docs-summary li {
+    margin-bottom: 2px;
+}
+
+/* =============================================================================
+   Collapsible Detail Sections — for optional depth
+   ============================================================================= */
+
+.docs-prose details.docs-details {
+    margin: 0 0 20px;
+    border: 1px solid var(--nbe-dark-border-primary);
+    border-radius: var(--nbe-radius-md);
+    overflow: hidden;
+}
+
+.docs-prose details.docs-details summary {
+    padding: 12px 16px;
+    background: var(--nbe-dark-bg-secondary);
+    color: var(--nbe-dark-text-primary);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+}
+
+.docs-prose details.docs-details summary::-webkit-details-marker {
+    display: none;
+}
+
+.docs-prose details.docs-details summary::before {
+    content: '\25B6';
+    display: inline-block;
+    margin-right: 8px;
+    font-size: 10px;
+    transition: transform 0.15s;
+    color: var(--nbe-dark-text-muted);
+}
+
+.docs-prose details.docs-details[open] summary::before {
+    transform: rotate(90deg);
+}
+
+.docs-prose details.docs-details[open] summary {
+    border-bottom: 1px solid var(--nbe-dark-border-primary);
+}
+
+.docs-prose details.docs-details > table {
+    margin: 0;
+    border-radius: 0;
+}
+
+.docs-prose details.docs-details > p,
+.docs-prose details.docs-details > ul,
+.docs-prose details.docs-details > ol,
+.docs-prose details.docs-details > pre {
+    margin-left: 16px;
+    margin-right: 16px;
+}
+
+.docs-prose details.docs-details > p:first-of-type {
+    margin-top: 16px;
+}
+
+/* =============================================================================
+   Step Indicators — for quick-start and how-to pages
+   ============================================================================= */
+
+.docs-step {
+    display: flex;
+    gap: 16px;
+    margin: 0 0 24px;
+    padding: 20px;
+    background: var(--nbe-dark-bg-secondary);
+    border: 1px solid var(--nbe-dark-border-primary);
+    border-radius: var(--nbe-radius-md);
+}
+
+.docs-step-number {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--nbe-dark-accent-primary);
+    color: var(--nbe-dark-bg-primary);
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.docs-step-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.docs-step-content h4 {
+    margin: 2px 0 8px;
+    font-size: 17px;
+}
+
+.docs-step-content p:last-child,
+.docs-step-content ul:last-child,
+.docs-step-content ol:last-child {
+    margin-bottom: 0;
 }

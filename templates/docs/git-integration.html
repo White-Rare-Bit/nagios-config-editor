@@ -1,6 +1,16 @@
 <div class="docs-prose">
     <h2>Git Integration</h2>
 
+    <div class="docs-summary">
+        <div class="docs-summary-title">On this page</div>
+        <ul>
+            <li>Git page layout: Changes and History tabs</li>
+            <li>Commit workflow with staging integration</li>
+            <li>Discarding changes and restoring commits</li>
+            <li>Wiping git history</li>
+        </ul>
+    </div>
+
     <p>
         Nagios Bulk Editor includes built-in Git version control. Every set of changes you
         apply can be committed to a local Git repository, giving you a full audit trail and
@@ -123,7 +133,7 @@
     </p>
 
     <ol>
-        <li>Go to <strong>Settings</strong> from the navbar.</li>
+        <li>Go to <a href="#app/settings"><strong>Settings</strong></a> from the navbar.</li>
         <li>Enter your <strong>Name</strong> and <strong>Email</strong> in the Git Identity
             section.</li>
         <li>Click <strong>Save</strong>. Your identity is stored locally and sent with every
@@ -165,7 +175,7 @@
     <h3>Committing Changes</h3>
 
     <p>
-        The commit workflow brings together the staging system and Git:
+        The commit workflow brings together the <a href="#app/staging-system">staging system</a> and Git:
     </p>
 
     <ol>
@@ -230,7 +240,7 @@
         </tbody>
     </table>
 
-    <div class="docs-warning">
+    <div class="docs-danger">
         Discarding file changes via Git is <strong>irreversible</strong>. The file is
         restored to its last committed state and any uncommitted modifications are lost.
     </div>
@@ -284,7 +294,7 @@
         commit". This is useful if you want to start clean after importing a configuration.
     </p>
 
-    <div class="docs-warning">
+    <div class="docs-danger">
         Wiping git history is <strong>irreversible</strong>. All previous commits are
         permanently deleted. The current file contents are preserved as the new initial
         commit.

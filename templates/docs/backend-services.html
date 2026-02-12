@@ -1,6 +1,16 @@
 <div class="docs-prose">
     <h2>Backend Services</h2>
 
+    <div class="docs-summary">
+        <div class="docs-summary-title">On this page</div>
+        <ul>
+            <li>Service architecture and overview table</li>
+            <li>NagiosService: query, mutation, and apply methods</li>
+            <li>StagingManager: state, locks, undo, and conflict detection</li>
+            <li>GitService, BackupManager, NagiosWriter, and path safety</li>
+        </ul>
+    </div>
+
     <p>
         The backend is organized into service classes, each responsible for a single domain.
         All services are instantiated during app creation and stored in <code>app.extensions</code>.
@@ -148,7 +158,8 @@
         acquire a <code>multiprocessing.Lock</code> to ensure thread safety.
     </p>
 
-    <h4>Query Methods</h4>
+    <details class="docs-details">
+        <summary>Query Methods (6 methods)</summary>
 
     <table>
         <thead>
@@ -191,8 +202,10 @@
             </tr>
         </tbody>
     </table>
+    </details>
 
-    <h4>Mutation Methods</h4>
+    <details class="docs-details">
+        <summary>Mutation Methods (6 methods)</summary>
 
     <table>
         <thead>
@@ -235,8 +248,10 @@
             </tr>
         </tbody>
     </table>
+    </details>
 
-    <h4>Apply Phase Methods</h4>
+    <details class="docs-details">
+        <summary>Apply Phase Methods (10 methods)</summary>
 
     <p>
         These methods execute the staged changes during the apply process. They are called
@@ -293,8 +308,10 @@
             </tr>
         </tbody>
     </table>
+    </details>
 
-    <h4>Other Methods</h4>
+    <details class="docs-details">
+        <summary>Other Methods (2 methods)</summary>
 
     <table>
         <thead>
@@ -317,6 +334,7 @@
             </tr>
         </tbody>
     </table>
+    </details>
 
     <h3>StagingManager</h3>
 
@@ -331,7 +349,8 @@
         <li><code>sm.file_ops</code> (FileOperationsStager) — file/folder staging operations</li>
     </ul>
 
-    <h4>Staging State</h4>
+    <details class="docs-details">
+        <summary>Staging State (8 methods)</summary>
 
     <table>
         <thead>
@@ -384,8 +403,10 @@
             </tr>
         </tbody>
     </table>
+    </details>
 
-    <h4>Lock Management</h4>
+    <details class="docs-details">
+        <summary>Lock Management (4 methods)</summary>
 
     <table>
         <thead>
@@ -418,8 +439,10 @@
             </tr>
         </tbody>
     </table>
+    </details>
 
-    <h4>Undo Stack</h4>
+    <details class="docs-details">
+        <summary>Undo Stack (5 methods)</summary>
 
     <table>
         <thead>
@@ -457,8 +480,10 @@
             </tr>
         </tbody>
     </table>
+    </details>
 
-    <h4>Conflict Detection</h4>
+    <details class="docs-details">
+        <summary>Conflict Detection (4 methods)</summary>
 
     <table>
         <thead>
@@ -491,8 +516,10 @@
             </tr>
         </tbody>
     </table>
+    </details>
 
-    <h4>File/Folder Staging</h4>
+    <details class="docs-details">
+        <summary>File/Folder Staging (7 methods)</summary>
 
     <table>
         <thead>
@@ -540,6 +567,7 @@
             </tr>
         </tbody>
     </table>
+    </details>
 
     <h3>GitService</h3>
 
@@ -549,7 +577,8 @@
         serialized via a <code>multiprocessing.Lock</code>.
     </p>
 
-    <h4>Methods</h4>
+    <details class="docs-details">
+        <summary>Methods (12 methods)</summary>
 
     <table>
         <thead>
@@ -627,6 +656,7 @@
             </tr>
         </tbody>
     </table>
+    </details>
 
     <h4>Retry Logic</h4>
 
@@ -758,8 +788,8 @@
         <li>Base directory containment (the final resolved path must be under the config directory)</li>
     </ul>
 
-    <div class="docs-warning">
-        Never bypass <code>is_safe_path()</code> when adding new file operations. It is the
-        primary defense against directory traversal attacks.
+    <div class="docs-danger">
+        <strong>Critical:</strong> Never bypass <code>is_safe_path()</code> when adding new
+        file operations. It is the primary defense against directory traversal attacks.
     </div>
 </div>

@@ -1,6 +1,17 @@
 <div class="docs-prose">
     <h2>Data Flow &amp; Staging Internals</h2>
 
+    <div class="docs-summary">
+        <div class="docs-summary-title">On this page</div>
+        <ul>
+            <li>How edits flow from UI to disk (7-step path)</li>
+            <li>Staging state machine (EMPTY, ACTIVE, RESTORE_PENDING)</li>
+            <li>Stable keys for object identity</li>
+            <li>The 10-phase apply process</li>
+            <li>Conflict detection and atomic file writes</li>
+        </ul>
+    </div>
+
     <p>
         This page describes the internal mechanics of the staging system: how edits flow from
         the UI to disk, how objects are identified, the structure of staged operations, lock
@@ -174,7 +185,8 @@
     <p>
         Transitions: EMPTY &rarr; (first edit) &rarr; ACTIVE &rarr; (apply or clear) &rarr; EMPTY.
         A backup restore creates the RESTORE_PENDING state, which transitions back to EMPTY
-        after the user applies or discards the restore.
+        after the user applies or discards the restore. See
+        <a href="#app/staging-system">Staging System</a> for the user-facing workflow.
     </p>
 
     <h3>Stable Keys</h3>
@@ -349,7 +361,7 @@ if not sm.can_modify(request.headers.get('X-Session-Id')):
     <div class="docs-note">
         Before the apply process begins, the backend creates an automatic backup via
         <code>BackupManager.create_backup("pre_apply")</code>. If anything goes wrong, you
-        can restore from the backup.
+        can restore from the <a href="#app/backups">Backups</a> page.
     </div>
 
     <h3>Conflict Detection</h3>

@@ -1,6 +1,16 @@
 <div class="docs-prose">
     <h2>Frontend Architecture</h2>
 
+    <div class="docs-summary">
+        <div class="docs-summary-title">On this page</div>
+        <ul>
+            <li>Core, page-specific, and Explorer module tiers</li>
+            <li>Event delegation and ApiClient patterns</li>
+            <li>State management and domain metadata</li>
+            <li>CSS architecture and design tokens</li>
+        </ul>
+    </div>
+
     <p>
         The frontend is vanilla JavaScript with no build system, no framework, and no bundler.
         All modules use the IIFE (Immediately Invoked Function Expression) pattern. Explorer
@@ -423,7 +433,9 @@ const actionHandlers = {
         All Nagios domain constants (type labels, name fields, required fields, reference
         fields, attributes) are defined in <code>nagios_model.py</code> on the backend and
         served via <code>GET /api/metadata</code>. The frontend fetches this once at startup
-        and stores it in <code>Explorer.constants</code>.
+        and stores it in <code>Explorer.constants</code>. See
+        <a href="#app/backend-services">Backend Services</a> for the full list of
+        service methods that power these API calls.
     </p>
 
     <div class="docs-warning">

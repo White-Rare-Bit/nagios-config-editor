@@ -1,6 +1,16 @@
 <div class="docs-prose">
     <h2>Architecture</h2>
 
+    <div class="docs-summary">
+        <div class="docs-summary-title">On this page</div>
+        <ul>
+            <li>App factory pattern and service layer</li>
+            <li>OperationResult pattern for uniform error handling</li>
+            <li>Thread safety with multiprocessing locks</li>
+            <li>Request lifecycle and route organization</li>
+        </ul>
+    </div>
+
     <p>
         Nagios Bulk Editor is a Flask application with a vanilla JavaScript frontend. The backend
         is organized around an app factory pattern with dedicated service classes for each domain
@@ -200,7 +210,7 @@ return jsonify({'success': True, 'data': result.data})</code></pre>
     </ol>
 
     <p>
-        For staging mutations, there is an additional lock check step: the route handler verifies
+        For staging mutations (see <a href="#app/data-flow-staging">Data Flow &amp; Staging</a>), there is an additional lock check step: the route handler verifies
         that the requesting session holds the staging lock before calling the service method:
     </p>
 

@@ -1,6 +1,16 @@
 <div class="docs-prose">
     <h2>Staging System</h2>
 
+    <div class="docs-summary">
+        <div class="docs-summary-title">On this page</div>
+        <ul>
+            <li>The 10 categories of staged changes</li>
+            <li>Reviewing diffs and reference analysis</li>
+            <li>Undo, apply, and conflict detection</li>
+            <li>Session-based lock system</li>
+        </ul>
+    </div>
+
     <p>
         The staging system is a core feature of Nagios Bulk Editor. <strong>No changes are
         written to disk until you explicitly click Apply.</strong> Every edit, move, creation,
@@ -113,7 +123,7 @@
     <h3>What Gets Staged</h3>
 
     <p>
-        The staging system tracks ten distinct categories of changes:
+        The <a href="#app/data-flow-staging">staging system</a> tracks ten distinct categories of changes:
     </p>
 
     <table>
@@ -217,6 +227,11 @@
         operations. Each undo reverses exactly one operation.
     </p>
 
+    <div class="docs-tip">
+        <strong>Tip:</strong> Use <kbd>Ctrl</kbd>+<kbd>Z</kbd> (or <kbd>Cmd</kbd>+<kbd>Z</kbd>
+        on Mac) for quick undo without clicking the button.
+    </div>
+
     <div class="docs-note">
         Undo is disabled when you are editing a text field (so it does not interfere with
         the browser's native text undo) and when a modal dialog is open.
@@ -244,8 +259,8 @@
 
     <p>
         Before writing any changes, the app creates an automatic backup of your configuration.
-        If something goes wrong, you can restore from the <strong>Backups</strong>
-        page (<code>/backups</code>).
+        If something goes wrong, you can restore from the
+        <a href="#app/backups">Backups</a> page.
     </p>
 
     <h4>Conflict Detection</h4>
