@@ -84,7 +84,7 @@
 
 .dep-filter-label {
     font-size: var(--nbe-font-size-xs);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     white-space: nowrap;
 }
 
@@ -211,7 +211,7 @@
 
 .custom-layout-row .dep-filter-label {
     font-size: var(--nbe-font-size-xs);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     white-space: nowrap;
 }
 

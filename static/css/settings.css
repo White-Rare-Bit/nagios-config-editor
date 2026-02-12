@@ -37,28 +37,27 @@
 }
 
 /* Settings page uses shared .nbe-tabs from tokens.css */
-/* Override tabs to use dark theme */
+/* Override tabs to use dark theme — underline only, no fill */
 .settings-main .nbe-tabs {
     margin-bottom: var(--nbe-space-lg);
-    background: var(--nbe-dark-bg-secondary);
-    border: 1px solid var(--nbe-dark-border-primary);
+    border-bottom: 1px solid var(--nbe-dark-border-primary);
 }
 
 .settings-main .nbe-tab {
     background: transparent;
     color: var(--nbe-dark-text-secondary);
     border: none;
+    border-bottom: 2px solid transparent;
 }
 
 .settings-main .nbe-tab:hover {
-    background: var(--nbe-dark-bg-hover);
     color: var(--nbe-dark-text-primary);
 }
 
 .settings-main .nbe-tab.active {
-    background: var(--nbe-dark-bg-tertiary);
     color: var(--nbe-dark-text-primary);
     border-bottom: 2px solid var(--nbe-dark-accent-primary);
+    background: transparent;
 }
 
 .settings-section {
@@ -101,7 +100,7 @@
     display: block;
     font-size: var(--nbe-font-size-base);
     font-weight: 500;
-    color: var(--nbe-dark-text-primary);
+    color: var(--nbe-dark-text-secondary);
     margin-bottom: var(--nbe-space-xs-plus);
 }
 

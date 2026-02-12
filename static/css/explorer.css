@@ -3069,7 +3069,7 @@
 
 .cleanup-desc {
     font-size: var(--nbe-typography-muted-size);
-    color: var(--nbe-dark-text-primary);
+    color: var(--nbe-dark-text-secondary);
 }
 
 .cleanup-action-btn {
@@ -4486,7 +4486,7 @@
 
 .dialog-kv-key {
     flex: 0 0 160px;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     padding-right: var(--nbe-space-md);
     word-break: break-all;
 }
@@ -4770,7 +4770,7 @@ body.dragging-objects .right-pane::after {
     font-size: var(--nbe-font-size-xs);
     font-weight: 600;
     text-transform: uppercase;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     padding: var(--nbe-space-sm) var(--nbe-space-md) var(--nbe-space-xs-plus);
     background: var(--nbe-dark-bg-tertiary);
     border-bottom: 1px solid var(--nbe-dark-border-secondary);

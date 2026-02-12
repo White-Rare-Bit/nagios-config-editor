@@ -93,6 +93,19 @@
     --nbe-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.15);
     --nbe-shadow-overlay: 0 8px 32px rgba(0, 0, 0, 0.25);
 
+    /* MD3 Tonal Elevation */
+    --nbe-surface-tint: var(--nbe-primary);
+    --nbe-surface-at-1: color-mix(in srgb, var(--nbe-surface-tint) 5%, var(--nbe-bg-surface));
+    --nbe-surface-at-2: color-mix(in srgb, var(--nbe-surface-tint) 8%, var(--nbe-bg-surface));
+    --nbe-surface-at-3: color-mix(in srgb, var(--nbe-surface-tint) 11%, var(--nbe-bg-surface));
+    --nbe-surface-at-5: color-mix(in srgb, var(--nbe-surface-tint) 14%, var(--nbe-bg-surface));
+
+    --nbe-dark-surface-tint: var(--nbe-dark-accent-primary);
+    --nbe-dark-surface-at-1: color-mix(in srgb, var(--nbe-dark-surface-tint) 5%, var(--nbe-dark-bg-primary));
+    --nbe-dark-surface-at-2: color-mix(in srgb, var(--nbe-dark-surface-tint) 8%, var(--nbe-dark-bg-primary));
+    --nbe-dark-surface-at-3: color-mix(in srgb, var(--nbe-dark-surface-tint) 11%, var(--nbe-dark-bg-primary));
+    --nbe-dark-surface-at-5: color-mix(in srgb, var(--nbe-dark-surface-tint) 14%, var(--nbe-dark-bg-primary));
+
     /* ---- Typography ---- */
     /* Inter bundled for cross-platform consistency; system fonts as fallback */
     --nbe-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -231,6 +244,11 @@
     --nbe-transition-normal: 0.15s ease;
     --nbe-transition-slow: 0.25s ease;
 
+    /* ---- MD3 State Layer Opacities ---- */
+    --nbe-state-hover-opacity: 0.08;
+    --nbe-state-focus-opacity: 0.1;
+    --nbe-state-pressed-opacity: 0.1;
+
     /* ---- Opacity/Alpha Overlays ---- */
     --nbe-overlay-dark: rgba(0, 0, 0, 0.5);
     --nbe-overlay-darker: rgba(0, 0, 0, 0.6);
@@ -315,7 +333,6 @@
 
     /* ---- Dark Theme Text (for code/diff panels) ---- */
     --nbe-dark-text: #c9d1d9;
-    --nbe-dark-text-muted: #8b949e;
     --nbe-dark-bg: #2d2d2d;
     --nbe-dark-border: #3d3d3d;
 
@@ -565,6 +582,16 @@
 }
 
 /* =============================================================================
+   MD3 TONAL ELEVATION UTILITIES
+   color-mix() blends primary into surface at increasing percentages.
+   ============================================================================= */
+
+.nbe-elevation-1 { background: var(--nbe-surface-at-1); box-shadow: var(--nbe-shadow-xs); }
+.nbe-elevation-2 { background: var(--nbe-surface-at-2); box-shadow: var(--nbe-shadow-sm); }
+.nbe-elevation-3 { background: var(--nbe-surface-at-3); box-shadow: var(--nbe-shadow-md); }
+.nbe-elevation-5 { background: var(--nbe-surface-at-5); box-shadow: var(--nbe-shadow-overlay); }
+
+/* =============================================================================
    SHARED TAB COMPONENT
    Reusable tab navigation pattern used across settings, explorer, etc.
    ============================================================================= */
@@ -592,11 +619,25 @@
     transition: all 0.15s ease;
     margin-bottom: -1px;
     white-space: nowrap;
+    position: relative;
+    overflow: hidden;
 }
+
+/* MD3 State Layer for tabs */
+.nbe-tab::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: currentColor;
+    opacity: 0;
+    transition: opacity var(--nbe-transition-fast);
+    pointer-events: none;
+}
+.nbe-tab:hover::before { opacity: var(--nbe-state-hover-opacity); }
+.nbe-tab:focus-visible::before { opacity: var(--nbe-state-focus-opacity); }
 
 .nbe-tab:hover {
     color: var(--nbe-text-primary);
-    background: var(--nbe-bg-subtle);
 }
 
 .nbe-tab.active {
@@ -678,11 +719,24 @@
     cursor: pointer;
     transition: all var(--nbe-transition-normal);
     white-space: nowrap;
+    position: relative;
+    overflow: hidden;
 }
 
-.nbe-btn:hover {
-    background: var(--nbe-bg-subtle);
+/* MD3 State Layer — ::before with currentColor adapts to each variant */
+.nbe-btn::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: currentColor;
+    opacity: 0;
+    transition: opacity var(--nbe-transition-fast);
+    pointer-events: none;
 }
+.nbe-btn:hover:not(:disabled)::before { opacity: var(--nbe-state-hover-opacity); }
+.nbe-btn:focus-visible::before { opacity: var(--nbe-state-focus-opacity); }
+.nbe-btn:active:not(:disabled)::before { opacity: var(--nbe-state-pressed-opacity); }
+.nbe-btn[data-loading="true"]::before { display: none; }
 
 .nbe-btn:focus-visible {
     outline: none;
@@ -710,10 +764,6 @@
     border: none;
 }
 
-.nbe-btn--primary:hover {
-    background: var(--nbe-btn-success-hover);
-}
-
 .nbe-btn--primary:focus-visible {
     box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.25);
 }
@@ -725,19 +775,11 @@
     border: 1px solid var(--nbe-border);
 }
 
-.nbe-btn--secondary:hover {
-    background: var(--nbe-bg-subtle);
-}
-
 /* Danger: Light red background for destructive actions */
 .nbe-btn--danger {
     background: var(--nbe-danger-light);
     color: var(--nbe-danger);
     border: 1px solid var(--nbe-danger-border);
-}
-
-.nbe-btn--danger:hover {
-    background: var(--nbe-danger-border);
 }
 
 .nbe-btn--danger:focus-visible {
@@ -751,10 +793,6 @@
     border: none;
 }
 
-.nbe-btn--info:hover {
-    background: var(--nbe-primary-hover);
-}
-
 /* Ghost: Transparent for low-emphasis actions */
 .nbe-btn--ghost {
     background: transparent;
@@ -763,7 +801,6 @@
 }
 
 .nbe-btn--ghost:hover {
-    background: var(--nbe-bg-subtle);
     color: var(--nbe-text-primary);
 }
 
@@ -829,7 +866,6 @@
 /* ---- Loading State ---- */
 
 .nbe-btn[data-loading="true"] {
-    position: relative;
     color: transparent;
     pointer-events: none;
 }
@@ -932,18 +968,10 @@
     border: 1px solid var(--nbe-dark-btn-border);
 }
 
-.nbe-btn--dark:hover {
-    background: var(--nbe-dark-btn-bg-hover);
-}
-
 .nbe-btn--dark.nbe-btn--primary {
     background: var(--nbe-dark-btn-primary-bg);
     color: var(--nbe-text-inverse);
     border: none;
-}
-
-.nbe-btn--dark.nbe-btn--primary:hover {
-    background: var(--nbe-dark-btn-primary-hover);
 }
 
 .nbe-btn--dark.nbe-btn--secondary {
@@ -952,18 +980,10 @@
     border: 1px solid var(--nbe-dark-border-primary);
 }
 
-.nbe-btn--dark.nbe-btn--secondary:hover {
-    background: var(--nbe-dark-bg-subtle);
-}
-
 .nbe-btn--dark.nbe-btn--danger {
     background: var(--nbe-dark-btn-danger-bg);
     color: var(--nbe-text-inverse);
     border: none;
-}
-
-.nbe-btn--dark.nbe-btn--danger:hover {
-    background: var(--nbe-dark-btn-danger-hover);
 }
 
 .nbe-btn--dark.nbe-btn--ghost {
@@ -973,7 +993,6 @@
 }
 
 .nbe-btn--dark.nbe-btn--ghost:hover {
-    background: var(--nbe-dark-bg-hover);
     color: var(--nbe-dark-text-primary);
 }
 
@@ -993,7 +1012,6 @@
 }
 
 .nbe-tab--dark:hover {
-    background: var(--nbe-dark-tab-bg-hover);
     color: var(--nbe-dark-tab-text-hover);
 }
 

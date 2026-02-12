@@ -13,7 +13,7 @@
     display: block;
     font-size: var(--nbe-font-size-sm);
     font-weight: 500;
-    color: var(--nbe-dark-text-primary);
+    color: var(--nbe-dark-text-secondary);
     margin-bottom: var(--nbe-space-xs);
 }
 

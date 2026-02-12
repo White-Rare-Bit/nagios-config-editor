@@ -478,7 +478,7 @@
 .staged-detail-label {
     min-width: 80px;
     font-weight: 500;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 .staged-detail-value {
