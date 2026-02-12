@@ -433,7 +433,7 @@ function showResultPanel({ command, success, title, outputHtml, needsReload = tr
     if (showRetryCommit) {
         retryButtonHtml = `
             <div class="git-retry-section">
-                <button class="nbe-btn nbe-btn--dark nbe-btn--info" onclick="retryGitCommit()">
+                <button class="nbe-btn nbe-btn--dark nbe-btn--tonal" onclick="retryGitCommit()">
                     <i class="fa-solid fa-redo"></i> Retry Commit
                 </button>
                 <button class="nbe-btn nbe-btn--dark" onclick="discardStagingAfterFailedCommit()">
