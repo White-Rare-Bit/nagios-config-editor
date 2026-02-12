@@ -38,10 +38,11 @@ Token-based. Dark pages use `{% block body_class %} nbe-dark-page{% endblock %}`
 
 Base class `.nbe-btn` with modifiers. All defined in `tokens.css`.
 
-**Variants**: `--primary`, `--secondary`, `--danger`, `--info`, `--ghost`
+**Emphasis (MD3 hierarchy, high → low)**: `--filled`, `--tonal`, `--outlined`, `--text`
+**Color role**: `--danger` (destructive actions, any emphasis level)
 **Sizes**: `--xs`, `--sm`, (default), `--lg`
 **Modifiers**: `--icon` (square), `--full` (width:100%), `.nbe-btn-group`
-**Dark theme**: Add `--dark` (e.g. `.nbe-btn--dark.nbe-btn--primary`)
+**Dark theme**: Add `--dark` (e.g. `.nbe-btn--dark.nbe-btn--filled`)
 **Loading state**: Set `data-loading="true"` in JS
 
 ## Spacing Tokens
