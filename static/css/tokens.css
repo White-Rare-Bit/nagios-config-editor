@@ -36,55 +36,55 @@
 
 :root {
     /* ---- Primary ---- */
-    --nbe-primary: #006fcc;
-    --nbe-primary-hover: #0056a3;
-    --nbe-primary-light: #eff6ff;
-    --nbe-primary-border: #90caf9;
+    --nbe-primary: #1976D2;
+    --nbe-primary-hover: #1565C0;
+    --nbe-primary-light: #E3F2FD;
+    --nbe-primary-border: #90CAF9;
 
     /* ---- Semantic Status Colors (WCAG AA: 4.5:1+ on light backgrounds) ---- */
-    --nbe-success: #1a6b1e;       /* WCAG AA: 5.4:1 on success-light (was #2e7d32 at 4.2:1) */
-    --nbe-success-light: #e8f5e9;
-    --nbe-success-border: #a5d6a7;
+    --nbe-success: #2E7D32;
+    --nbe-success-light: #E8F5E9;
+    --nbe-success-border: #A5D6A7;
 
-    --nbe-warning: #b45309;       /* WCAG AA: 4.7:1 on warning-light (was #ef6c00 at 3.2:1) */
-    --nbe-warning-light: #fff3e0;
-    --nbe-warning-border: #ffcc80;
+    --nbe-warning: #E65100;
+    --nbe-warning-light: #FFF3E0;
+    --nbe-warning-border: #FFCC80;
 
-    --nbe-danger: #991b1b;        /* WCAG AA: 5.5:1 on danger-light (was #c62828 at 4.1:1) */
-    --nbe-danger-light: #ffebee;
-    --nbe-danger-border: #ef9a9a;
+    --nbe-danger: #C62828;
+    --nbe-danger-light: #FFEBEE;
+    --nbe-danger-border: #EF9A9A;
 
-    --nbe-info: #0059a8;          /* WCAG AA: 5.0:1 on info-light (was #006fcc at 3.9:1) */
-    --nbe-info-light: #e3f2fd;
-    --nbe-info-border: #90caf9;
+    --nbe-info: #1565C0;
+    --nbe-info-light: #E3F2FD;
+    --nbe-info-border: #90CAF9;
 
     /* ---- Text ---- */
-    --nbe-text-primary: #1f2937;
-    --nbe-text-secondary: #5c6370;  /* WCAG AA: 5.5:1 on white, 5.0:1 on light grays */
-    --nbe-text-muted: #717171;      /* WCAG AA: 4.5:1 on white (was #999 at 2.8:1) */
-    --nbe-text-inverse: #fff;
+    --nbe-text-primary: #212121;
+    --nbe-text-secondary: #616161;
+    --nbe-text-muted: #757575;
+    --nbe-text-inverse: #FFFFFF;
 
     /* ---- Backgrounds ---- */
-    --nbe-bg-page: #f8f9fa;
-    --nbe-bg-surface: #fff;
-    --nbe-bg-subtle: #f3f4f6;
-    --nbe-bg-hover: #e8eaed;
-    --nbe-bg-selected: #eff6ff;
-    --nbe-bg-dark: #3a4d5c;
-    --nbe-bg-zebra: #f0f4f8;
-    --nbe-bg-hover-row: #dbeafe;
-    --nbe-bg-selected-row: #bfdbfe;
-    --nbe-bg-header: #e5e7eb;
+    --nbe-bg-page: #FAFAFA;
+    --nbe-bg-surface: #FFFFFF;
+    --nbe-bg-subtle: #F5F5F5;
+    --nbe-bg-hover: #EEEEEE;
+    --nbe-bg-selected: #E3F2FD;
+    --nbe-bg-dark: #455A64;
+    --nbe-bg-zebra: #F5F5F5;
+    --nbe-bg-hover-row: #BBDEFB;
+    --nbe-bg-selected-row: #90CAF9;
+    --nbe-bg-header: #E0E0E0;
 
     /* ---- Borders ---- */
-    --nbe-border: #d9dde3;
-    --nbe-border-light: #e5e7eb;
-    --nbe-border-lighter: #eaeaea;
-    --nbe-border-focus: #006fcc;
+    --nbe-border: #E0E0E0;
+    --nbe-border-light: #EEEEEE;
+    --nbe-border-lighter: #F5F5F5;
+    --nbe-border-focus: #1976D2;
 
     /* ---- Focus Ring ---- */
-    --nbe-focus-ring: 0 0 0 2px rgba(0, 111, 204, 0.25);
-    --nbe-focus-ring-inset: inset 0 0 0 2px rgba(0, 111, 204, 0.25);
+    --nbe-focus-ring: 0 0 0 2px rgba(25, 118, 210, 0.25);
+    --nbe-focus-ring-inset: inset 0 0 0 2px rgba(25, 118, 210, 0.25);
 
     /* ---- Shadows ---- */
     --nbe-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.06);
@@ -245,12 +245,12 @@
     --nbe-white-alpha-70: rgba(255, 255, 255, 0.7);
     --nbe-white-alpha-80: rgba(255, 255, 255, 0.8);
     --nbe-white-alpha-90: rgba(255, 255, 255, 0.9);
-    --nbe-primary-alpha-10: rgba(0, 111, 204, 0.1);
-    --nbe-primary-alpha-15: rgba(0, 111, 204, 0.15);
-    --nbe-primary-alpha-20: rgba(0, 111, 204, 0.2);
-    --nbe-primary-alpha-25: rgba(0, 111, 204, 0.25);
-    --nbe-primary-alpha-40: rgba(0, 111, 204, 0.4);
-    --nbe-primary-alpha-50: rgba(0, 111, 204, 0.5);
+    --nbe-primary-alpha-10: rgba(25, 118, 210, 0.1);
+    --nbe-primary-alpha-15: rgba(25, 118, 210, 0.15);
+    --nbe-primary-alpha-20: rgba(25, 118, 210, 0.2);
+    --nbe-primary-alpha-25: rgba(25, 118, 210, 0.25);
+    --nbe-primary-alpha-40: rgba(25, 118, 210, 0.4);
+    --nbe-primary-alpha-50: rgba(25, 118, 210, 0.5);
     --nbe-black-alpha-10: rgba(0, 0, 0, 0.1);
     --nbe-black-alpha-15: rgba(0, 0, 0, 0.15);
     --nbe-black-alpha-20: rgba(0, 0, 0, 0.2);
@@ -303,7 +303,7 @@
     --nbe-lock-banner-bg: linear-gradient(135deg, #ff9800, #f57c00);
 
     /* ---- Button Success Hover ---- */
-    --nbe-btn-success-hover: #145817;  /* Darker than --nbe-success (#1a6b1e) for hover state */
+    --nbe-btn-success-hover: #1B5E20;
 
     /* ---- Interactive Elements ---- */
     --nbe-hover-darken: #bdbdbd;
@@ -699,7 +699,7 @@
 }
 
 .nbe-btn--primary:focus-visible {
-    box-shadow: 0 0 0 2px rgba(26, 107, 30, 0.25);
+    box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.25);
 }
 
 /* Secondary: White with gray border for Cancel/Close */
@@ -725,7 +725,7 @@
 }
 
 .nbe-btn--danger:focus-visible {
-    box-shadow: 0 0 0 2px rgba(153, 27, 27, 0.25);
+    box-shadow: 0 0 0 2px rgba(198, 40, 40, 0.25);
 }
 
 /* Info: Blue for informational actions (View, Edit, Reload) */
