@@ -22,7 +22,7 @@
                            aria-describedby="backupDescHint">
                     <span class="form-hint visually-hidden" id="backupDescHint">Optional description for this backup</span>
                 </div>
-                <button class="nbe-btn nbe-btn--dark nbe-btn--primary nbe-btn--full" id="createBackupBtn" data-action="create-backup">
+                <button class="nbe-btn nbe-btn--dark nbe-btn--filled nbe-btn--full" id="createBackupBtn" data-action="create-backup">
                     Create Backup
                 </button>
             </div>
@@ -103,7 +103,7 @@
                             {% endif %}
                         </td>
                         <td class="backup-cell-actions">
-                            <button class="nbe-btn nbe-btn--dark nbe-btn--secondary nbe-btn--sm" data-action="restore-backup" data-name="{{ backup.name }}">
+                            <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--sm" data-action="restore-backup" data-name="{{ backup.name }}">
                                 Restore
                             </button>
                             <button class="nbe-btn nbe-btn--dark nbe-btn--danger nbe-btn--sm" data-action="delete-backup" data-name="{{ backup.name }}">

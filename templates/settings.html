@@ -56,7 +56,7 @@
                             <input type="text" class="form-input" id="nagiosConfigPath"
                                    value="{{ config.nagios_config_path }}"
                                    placeholder="./sample-config">
-                            <button class="nbe-btn nbe-btn--dark nbe-btn--secondary nbe-btn--sm" data-action="browseDir" data-target="nagiosConfigPath">Browse</button>
+                            <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--sm" data-action="browseDir" data-target="nagiosConfigPath">Browse</button>
                         </div>
                         <span class="form-hint">Directory containing your Nagios .cfg files</span>
                     </div>
@@ -67,7 +67,7 @@
                             <input type="text" class="form-input" id="backupPath"
                                    value="{{ config.backup_path or '' }}"
                                    placeholder="Leave empty for default (config_path/backups)">
-                            <button class="nbe-btn nbe-btn--dark nbe-btn--secondary nbe-btn--sm" data-action="browseDir" data-target="backupPath">Browse</button>
+                            <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--sm" data-action="browseDir" data-target="backupPath">Browse</button>
                         </div>
                         <span class="form-hint">Where to store configuration backups</span>
                     </div>
@@ -83,7 +83,7 @@
                             <input type="text" class="form-input" id="nagiosBin"
                                    value="{{ config.nagios_bin }}"
                                    placeholder="/usr/local/nagios/bin/nagios">
-                            <button class="nbe-btn nbe-btn--dark nbe-btn--secondary nbe-btn--sm" data-action="browseFile" data-target="nagiosBin">Browse</button>
+                            <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--sm" data-action="browseFile" data-target="nagiosBin">Browse</button>
                         </div>
                         <span class="form-hint">Path to the nagios executable (for validation)</span>
                     </div>
@@ -94,7 +94,7 @@
                             <input type="text" class="form-input" id="nagiosCfg"
                                    value="{{ config.nagios_cfg }}"
                                    placeholder="./sample-config/nagios.cfg">
-                            <button class="nbe-btn nbe-btn--dark nbe-btn--secondary nbe-btn--sm" data-action="browseFile" data-target="nagiosCfg">Browse</button>
+                            <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--sm" data-action="browseFile" data-target="nagiosCfg">Browse</button>
                         </div>
                         <span class="form-hint">Path to nagios.cfg (for validation)</span>
                     </div>
@@ -139,7 +139,7 @@
                         <label class="settings-label">Log File</label>
                         <div class="form-input-group">
                             <input type="text" class="form-input form-input-readonly" id="loggingFilePath" readonly>
-                            <button class="nbe-btn nbe-btn--dark nbe-btn--secondary nbe-btn--sm" data-action="downloadLog">Download</button>
+                            <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--sm" data-action="downloadLog">Download</button>
                         </div>
                         <span class="form-hint" id="loggingFileSize">File size: --</span>
                     </div>
@@ -147,8 +147,8 @@
             </div>
 
             <div class="settings-actions" id="serverSettingsActions">
-                <button class="nbe-btn nbe-btn--dark nbe-btn--primary" data-action="saveServerSettings">Save Server Settings</button>
-                <button class="nbe-btn nbe-btn--dark nbe-btn--secondary" data-action="resetToDefaults">Reset to Defaults</button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--filled" data-action="saveServerSettings">Save Server Settings</button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--outlined" data-action="resetToDefaults">Reset to Defaults</button>
             </div>
         </div>
 
@@ -175,7 +175,7 @@
                         <span class="form-hint" id="gitUserEmailHint">Your email address for git commits</span>
                     </div>
                     <div class="settings-actions">
-                        <button class="nbe-btn nbe-btn--dark nbe-btn--primary" data-action="saveIdentity">Save Identity</button>
+                        <button class="nbe-btn nbe-btn--dark nbe-btn--filled" data-action="saveIdentity">Save Identity</button>
                     </div>
                 </div>
             </div>
@@ -194,15 +194,15 @@
         <div class="browse-dialog-body">
             <div class="browse-path-bar">
                 <input type="text" class="form-input" id="browsePath" placeholder="/">
-                <button class="nbe-btn nbe-btn--dark nbe-btn--secondary nbe-btn--sm" type="button" data-action="navigateTo">Go</button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--sm" type="button" data-action="navigateTo">Go</button>
             </div>
             <div id="browseContent" class="browse-content-scroll">
                 <p class="browse-empty">Loading...</p>
             </div>
         </div>
         <div class="browse-dialog-footer">
-            <button type="button" class="nbe-btn nbe-btn--dark nbe-btn--secondary nbe-btn--sm" data-action="closeBrowse">Cancel</button>
-            <button type="button" class="nbe-btn nbe-btn--dark nbe-btn--primary nbe-btn--sm" data-action="selectPath">Select</button>
+            <button type="button" class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--sm" data-action="closeBrowse">Cancel</button>
+            <button type="button" class="nbe-btn nbe-btn--dark nbe-btn--filled nbe-btn--sm" data-action="selectPath">Select</button>
         </div>
     </div>
 </div>
