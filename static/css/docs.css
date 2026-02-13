@@ -987,9 +987,19 @@
 .docs-mockup-node-attrs {
     margin-left: 16px;
     margin-top: 2px;
-    font-size: 8px;
-    color: var(--nbe-dark-text-secondary);
-    line-height: 1.6;
+}
+
+.docs-mockup-node-attrs .docs-mockup-attr {
+    padding: 2px 0;
+}
+
+.docs-mockup-node-attrs .attr-name {
+    min-width: 64px;
+    width: 64px;
+}
+
+.docs-mockup-node-attrs .attr-val {
+    font-size: 7px;
 }
 
 /* Resolved attributes — flex-row table */
