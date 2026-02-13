@@ -927,7 +927,6 @@
 }
 
 .danger-zone-toggle:hover {
-    color: var(--nbe-danger);
     background: var(--nbe-danger-light);
 }
 
@@ -1131,7 +1130,8 @@
 }
 
 .nbe-pagination-btn:disabled {
-    opacity: 0.5;
+    background: var(--nbe-dark-bg-hover);
+    color: var(--nbe-dark-text-secondary);
     cursor: not-allowed;
 }
 
@@ -1142,7 +1142,7 @@
 }
 
 .nbe-pagination-ellipsis {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     padding: 0 var(--nbe-space-xs);
 }
 

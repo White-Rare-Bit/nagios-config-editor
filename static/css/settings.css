@@ -52,7 +52,7 @@
     font-size: var(--nbe-font-size-xs);
     font-weight: 600;
     text-transform: uppercase;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     padding: var(--nbe-space-md) var(--nbe-space-lg);
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
     display: flex;
@@ -100,8 +100,8 @@
 
 /* Checkbox styling */
 .settings-field input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
+    width: 12px;
+    height: 12px;
     accent-color: var(--nbe-dark-accent-primary);
     cursor: pointer;
 }
@@ -114,7 +114,7 @@
 
 .settings-empty {
     font-size: var(--nbe-font-size-sm);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 .settings-status-table {
@@ -231,7 +231,7 @@ body.editing-locked .settings-container #identityTab {
     display: block;
     margin-top: var(--nbe-space-xs);
     font-size: var(--nbe-font-size-xs);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 .form-hint-inline {
@@ -250,7 +250,7 @@ body.editing-locked .settings-container #identityTab {
 
 .form-input-readonly {
     background: var(--nbe-dark-bg-tertiary);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     cursor: not-allowed;
 }
 
@@ -310,7 +310,7 @@ body.editing-locked .settings-container #identityTab {
 .browse-dialog-close {
     background: none;
     border: none;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-size: var(--nbe-typography-h1-size);
     cursor: pointer;
     padding: 0;
@@ -386,7 +386,7 @@ body.editing-locked .settings-container #identityTab {
 }
 
 .browse-tree-icon--parent {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 /* Tree labels - matches .tree-label from explorer */
@@ -407,7 +407,7 @@ body.editing-locked .settings-container #identityTab {
 
 .browse-empty {
     padding: var(--nbe-space-lg);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-size: var(--nbe-typography-secondary-size);
 }
 

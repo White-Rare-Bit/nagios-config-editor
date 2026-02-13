@@ -62,7 +62,7 @@
 
 .backup-container .page-sidebar .danger-zone-warning {
     font-size: var(--nbe-font-size-xs);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     margin: 0 0 var(--nbe-space-sm);
 }
 
@@ -155,7 +155,7 @@
 }
 
 .backup-table th .sort-icon {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-size: var(--nbe-typography-muted-size);
     margin-left: var(--nbe-space-xs);
 }
@@ -215,7 +215,7 @@
 }
 
 .backup-desc-auto {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-style: italic;
     font-size: var(--nbe-font-size-xs-plus);
 }
@@ -245,13 +245,13 @@
 }
 
 .backup-user-email {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-size: var(--nbe-font-size-xs-plus);
     display: block;
 }
 
 .backup-user-unknown {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 .backup-cell-actions {

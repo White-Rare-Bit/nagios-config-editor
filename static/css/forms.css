@@ -202,7 +202,7 @@
 
 .empty-state--dark .empty-icon,
 .empty-state--dark .icon {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 .empty-state--dark h3 {

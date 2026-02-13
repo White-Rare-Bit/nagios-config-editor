@@ -191,7 +191,7 @@
 
 .commit-item-file {
     font-size: var(--nbe-font-size-xs);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 .commit-item-diff {
@@ -261,7 +261,7 @@
 }
 
 .file-op-arrow {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     margin: 0 var(--nbe-space-xs);
     font-size: var(--nbe-font-size-3xs);
 }
@@ -279,7 +279,7 @@
 }
 
 .diff-line.context {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 .diff-line.add {
@@ -293,7 +293,7 @@
 }
 
 .diff-line.ellipsis {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-style: italic;
     text-align: center;
     background: var(--nbe-dark-bg);
@@ -314,7 +314,7 @@
 .commit-empty {
     padding: 40px;
     text-align: center;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 .commit-footer {
@@ -521,9 +521,7 @@
 }
 
 .batch-btn:hover {
-    background: var(--nbe-dark-bg-secondary);
-    border-color: var(--nbe-primary);
-    color: var(--nbe-primary);
+    background: var(--nbe-dark-bg-hover);
 }
 
 .batch-btn:focus-visible {
@@ -532,8 +530,7 @@
 }
 
 .batch-btn-danger:hover {
-    border-color: var(--nbe-danger);
-    color: var(--nbe-danger);
+    background: var(--nbe-dark-bg-hover);
 }
 
 .batch-clear-btn {
@@ -542,7 +539,7 @@
     line-height: 1;
     border: none;
     background: none;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     cursor: pointer;
 }
 
@@ -562,8 +559,8 @@
 
 .tree-filter-option input {
     margin: 0;
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     accent-color: var(--nbe-primary);
 }
 
@@ -572,15 +569,12 @@
     outline-offset: 1px;
 }
 
-.tree-filter-option input:checked ~ i,
-.tree-filter-option input[type="checkbox"]:checked ~ i {
+.tree-filter-option input:checked ~ i {
     opacity: 1;
-    color: var(--nbe-primary);
 }
 
 .tree-filter-option input:checked ~ span {
     font-weight: 600;
-    color: var(--nbe-primary);
 }
 
 .filter-count {
@@ -612,7 +606,7 @@
     align-items: center;
     gap: var(--nbe-space-xs);
     font-size: var(--nbe-typography-muted-size);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     white-space: nowrap;
 }
 
@@ -631,7 +625,8 @@
     align-items: center;
     width: 100%;
     box-sizing: border-box;
-    padding: var(--nbe-space-sm) 0 var(--nbe-space-sm) var(--nbe-space-md);
+    padding: var(--nbe-space-sm) 0 var(--nbe-space-sm) var(--nbe-space-lg);
+    border-left: 3px solid transparent;
     cursor: pointer;
     color: var(--nbe-text-inverse);
     font-size: var(--nbe-font-size-xs);
@@ -698,7 +693,6 @@
 
 .tree-folder-add-btn:hover {
     background: var(--nbe-white-alpha-30);
-    color: var(--nbe-text-inverse);
 }
 
 .tree-folder-add-btn:focus-visible {
@@ -716,7 +710,7 @@
 
 /* Indent items inside folders */
 .tree-folder-children .tree-item {
-    padding-left: var(--nbe-space-xl);
+    padding-left: var(--nbe-space-lg);
 }
 
 .tree-item {
@@ -724,7 +718,7 @@
     align-items: center;
     width: 100%;
     box-sizing: border-box;
-    padding: var(--nbe-space-xs-plus) 0 var(--nbe-space-xs-plus) var(--nbe-space-md);
+    padding: var(--nbe-space-xs-plus) 0 var(--nbe-space-xs-plus) var(--nbe-space-lg);
     cursor: pointer;
     font-size: var(--nbe-font-size-base);
     border: none;
@@ -763,7 +757,6 @@
 }
 
 .tree-item.staged.selected {
-    opacity: 0.8;
     background: var(--nbe-dark-validation-warning-border);
 }
 
@@ -781,7 +774,7 @@
     cursor: grab;
     opacity: 0;
     transition: opacity 0.15s;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     margin-right: var(--nbe-space-xs);
 }
 
@@ -822,7 +815,7 @@
 /* Type badges - compact badges for object types */
 .tree-item-type {
     font-size: var(--nbe-font-size-xs);
-    padding: var(--nbe-space-2xs) var(--nbe-space-sm);
+    padding: var(--nbe-space-2xs) 0;
     border-radius: 0;
     margin-left: var(--nbe-space-sm);
     margin-right: var(--nbe-space-md);
@@ -830,6 +823,9 @@
     text-transform: uppercase;
     letter-spacing: 0.3px;
     pointer-events: none;
+    width: 66px;
+    text-align: center;
+    flex-shrink: 0;
 }
 
 /* Object type color coding - semantic categories using design tokens */
@@ -928,8 +924,7 @@
 }
 
 .tree-item-undo-btn:hover {
-    background: var(--color-delete);
-    color: var(--nbe-text-inverse);
+    background: var(--nbe-dark-bg-hover);
 }
 
 .staged-count {
@@ -1010,7 +1005,6 @@
 }
 
 .editor-tab:hover {
-    color: var(--nbe-white-alpha-70);
     background: var(--nbe-white-alpha-10);
 }
 
@@ -1062,7 +1056,6 @@
 }
 
 .editor-tab-close:hover {
-    color: var(--nbe-text-inverse);
     background: var(--nbe-white-alpha-15);
 }
 
@@ -1084,7 +1077,6 @@
 }
 
 .editor-tab-scroll-btn:hover {
-    color: var(--nbe-text-inverse);
     background: var(--nbe-white-alpha-10);
 }
 
@@ -1251,7 +1243,7 @@
 
 .tab-placeholder {
     text-align: center;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     padding: 40px var(--nbe-space-lg-plus);
     font-size: var(--nbe-typography-secondary-size);
 }
@@ -1329,7 +1321,6 @@
 
 .suggestion-item:hover {
     background: var(--nbe-dark-bg-hover);
-    border-left-color: var(--nbe-dark-accent-primary);
 }
 
 .suggestion-item:focus-visible {
@@ -1369,7 +1360,7 @@
 
 .suggestion-meta {
     font-size: var(--nbe-font-size-xs-plus);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     margin-bottom: var(--nbe-space-xs);
 }
 
@@ -1657,7 +1648,7 @@
 }
 
 .tree-count--empty {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     background: transparent;
 }
 
@@ -1696,12 +1687,10 @@
 
 .tree-action-btn:hover {
     background: var(--nbe-dark-bg-hover);
-    color: var(--nbe-dark-text-primary);
 }
 
 .tree-action-btn--danger:hover {
-    background: var(--nbe-dark-accent-danger);
-    color: var(--nbe-text-inverse);
+    background: var(--nbe-dark-bg-hover);
 }
 
 .tree-action-btn svg {
@@ -1803,7 +1792,7 @@
 /* Object type badge */
 .tree-object-type {
     flex-shrink: 0;
-    padding: var(--nbe-space-2xs) var(--nbe-space-xs-plus);
+    padding: var(--nbe-space-2xs) 0;
     margin-right: var(--nbe-space-sm);
     font-size: var(--nbe-font-size-2xs);
     font-weight: 600;
@@ -1811,6 +1800,8 @@
     letter-spacing: 0.3px;
     background: var(--nbe-type-neutral-bg);
     color: var(--nbe-type-neutral-text);
+    width: 66px;
+    text-align: center;
 }
 
 /* Type-specific colors - using design tokens */
@@ -1982,7 +1973,6 @@
 
 .summary-filter:hover {
     background: var(--nbe-dark-bg-hover);
-    color: var(--nbe-dark-text-primary);
 }
 
 .summary-filter.active {
@@ -2105,7 +2095,7 @@
     width: 100%;
     padding-left: var(--nbe-space-lg-plus);
     margin-top: -4px;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-size: var(--nbe-font-size-xs-plus);
     display: none;
 }
@@ -2130,7 +2120,6 @@
 
 .suggestion-action:hover {
     background: var(--nbe-dark-bg-hover);
-    border-color: var(--nbe-dark-accent-primary);
 }
 
 .suggestion-action.action-create {
@@ -2175,7 +2164,7 @@
 
 .batch-create-refs {
     font-size: var(--nbe-font-size-xs);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 /* Batch create type rows for bulk create dialog */
@@ -2214,7 +2203,7 @@
     background: var(--nbe-dark-bg-tertiary);
     font-size: var(--nbe-typography-muted-size);
     font-weight: 600;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
@@ -2334,7 +2323,7 @@
 
 .suggestion-section-header .section-toggle {
     font-size: var(--nbe-typography-muted-size);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     transition: transform 0.2s;
 }
 
@@ -2428,7 +2417,6 @@
 
 .template-suggestion:hover {
     background: var(--nbe-dark-bg-hover);
-    border-left-color: var(--nbe-dark-accent-primary);
 }
 
 .template-suggestion-icon {
@@ -2519,8 +2507,8 @@
 }
 
 .dialog-body label:has(input[type="checkbox"]) input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
+    width: 12px;
+    height: 12px;
     margin: 0;
     cursor: pointer;
     accent-color: var(--nbe-primary);
@@ -2624,7 +2612,7 @@
 
 .cleanup-section-toggle {
     font-size: var(--nbe-font-size-2xs);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     transition: transform 0.2s;
 }
 
@@ -2789,7 +2777,6 @@
 
 .cleanup-detail-item:hover {
     background: var(--nbe-dark-bg-hover);
-    border-color: var(--nbe-primary);
 }
 
 .cleanup-detail-file {
@@ -2800,7 +2787,7 @@
 
 .cleanup-detail-line {
     font-size: var(--nbe-font-size-xs-plus);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     margin-left: var(--nbe-space-sm);
 }
 
@@ -2898,7 +2885,7 @@
 
 .issue-file {
     font-size: var(--nbe-typography-muted-size);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-family: var(--nbe-font-mono);
 }
 
@@ -3087,7 +3074,6 @@
 
 .modal-close:hover {
     background: var(--nbe-white-alpha-25);
-    color: var(--nbe-text-inverse);
 }
 
 .object-detail-body {
@@ -3269,7 +3255,7 @@
 
 .object-type-dropdown-item.selected {
     background: var(--nbe-dark-validation-success-bg);
-    color: var(--color-create);
+    color: var(--nbe-success);
 }
 
 .new-object-badge {
@@ -3295,7 +3281,7 @@
 }
 
 .new-object-name-input::placeholder {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 .card-name {
@@ -3308,7 +3294,7 @@
     display: block;
     margin-top: var(--nbe-space-xs);
     font-size: var(--nbe-typography-secondary-size);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 .card-body {
@@ -3348,7 +3334,7 @@
 
 .section-toggle {
     font-size: var(--nbe-font-size-xs-plus);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     transition: transform 0.2s;
 }
 
@@ -3371,7 +3357,7 @@
 }
 
 .section-content .loading {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-size: var(--nbe-typography-body-size);
     padding: var(--nbe-space-sm) 0;
 }
@@ -3386,8 +3372,6 @@
 
 .attr-row:hover {
     background: var(--nbe-dark-bg-hover);
-    margin: 0 -12px;
-    padding: var(--nbe-space-sm) var(--nbe-space-md);
 }
 
 .attr-name {
@@ -3425,7 +3409,7 @@
 }
 
 .attr-value::placeholder {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 /* Long value attributes (command_line, etc.) use textarea with syntax highlighting */
@@ -3606,8 +3590,6 @@
 }
 
 .add-attr-btn:hover {
-    border-color: var(--nbe-dark-accent-primary);
-    color: var(--nbe-dark-accent-primary);
     background: var(--nbe-dark-accent-alpha-10);
 }
 
@@ -3667,7 +3649,7 @@
 .inherited-attrs-table .attr-key.inherited-attr {
     min-width: 180px;
     font-weight: 500;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 .inherited-attrs-table .attr-value.inherited-attr {
@@ -3699,7 +3681,7 @@
 }
 
 .empty-state-small {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-size: var(--nbe-font-size-sm);
     font-style: italic;
     padding: var(--nbe-space-sm) 0;
@@ -3791,7 +3773,7 @@
 }
 
 .menu-item.disabled {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     cursor: default;
     font-style: italic;
 }
@@ -3857,7 +3839,7 @@
 .preview-close {
     background: none;
     border: none;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-size: var(--nbe-font-size-xl);
     cursor: pointer;
     padding: 0;
@@ -3910,24 +3892,20 @@
 .dialog {
     background: var(--nbe-dark-bg-primary);
     border-radius: var(--nbe-radius-lg);
-    border: 1px solid var(--nbe-dark-input-border);
     width: 520px;
     max-width: 90%;
     box-shadow: var(--nbe-shadow-overlay);
 }
 
 .dialog-title {
-    padding: var(--nbe-space-md) var(--nbe-space-lg);
-    font-size: var(--nbe-font-size-md);
+    padding: var(--nbe-space-lg-plus) var(--nbe-space-lg-plus) var(--nbe-space-sm);
+    font-size: var(--nbe-typography-h1-size);
     font-weight: 600;
-    background: var(--nbe-dark-bg-secondary);
     color: var(--nbe-dark-text-primary);
-    border-bottom: none;
 }
 
 .dialog-body {
-    padding: var(--nbe-space-lg-plus);
-    background: var(--nbe-dark-bg-primary);
+    padding: var(--nbe-space-sm) var(--nbe-space-lg-plus) var(--nbe-space-lg-plus);
     color: var(--nbe-dark-text-primary);
 }
 
@@ -3935,9 +3913,9 @@
 .dialog-body .dialog-scrollable-list {
     max-height: 200px;
     overflow-y: auto;
-    background: var(--nbe-dark-bg-secondary) !important;
-    border: 1px solid var(--nbe-dark-border-primary) !important;
-    border-radius: var(--nbe-radius-md);
+    background: transparent;
+    border: none;
+    border-radius: 0;
     padding: var(--nbe-space-sm);
     display: flex;
     flex-wrap: wrap;
@@ -3948,8 +3926,8 @@
 
 .dialog-scrollable-list .suggestion-member {
     background: var(--nbe-dark-bg-tertiary);
-    border: 1px solid var(--nbe-dark-border-primary);
-    border-radius: var(--nbe-radius-sm);
+    border: none;
+    border-radius: var(--nbe-radius-2xl);
     padding: 3px var(--nbe-space-sm);
     font-size: var(--nbe-font-size-xs);
     color: var(--nbe-dark-text-primary);
@@ -4010,9 +3988,9 @@
 
 /* Inline code preview */
 .code-preview {
-    background: var(--nbe-dark-bg-tertiary);
-    padding: var(--nbe-space-sm);
-    border-radius: var(--nbe-radius-md);
+    background: transparent;
+    padding: var(--nbe-space-sm) 0;
+    border-radius: 0;
     font-family: var(--nbe-font-mono);
     font-size: var(--nbe-font-size-xs);
     color: var(--nbe-dark-text-primary);
@@ -4028,13 +4006,11 @@
 
 .dialog-alert--info {
     background: var(--nbe-dark-accent-alpha-10);
-    border: 1px solid var(--nbe-dark-accent-primary);
     color: var(--nbe-dark-text-primary);
 }
 
 .dialog-alert--warning {
     background: var(--nbe-dark-validation-warning-bg);
-    border: 1px solid var(--nbe-warning);
     color: var(--nbe-dark-text-primary);
 }
 
@@ -4051,7 +4027,6 @@
 
 .dialog-alert--danger {
     background: var(--nbe-dark-validation-error-bg);
-    border: 1px solid var(--nbe-danger);
     color: var(--nbe-dark-text-primary);
 }
 
@@ -4090,7 +4065,7 @@
 /* Dialog info text */
 .dialog-info-text {
     font-size: var(--nbe-font-size-sm);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     margin: var(--nbe-space-md) 0 0 0;
 }
 
@@ -4141,9 +4116,7 @@
     justify-content: space-between;
     align-items: center;
     padding: var(--nbe-space-sm) var(--nbe-space-md);
-    border: 1px solid var(--nbe-dark-border-secondary);
-    border-radius: var(--nbe-radius-sm);
-    margin-bottom: var(--nbe-space-xs);
+    border-bottom: 1px solid var(--nbe-dark-border-secondary);
     cursor: pointer;
     transition: all 0.15s;
     font-size: var(--nbe-font-size-sm);
@@ -4151,7 +4124,6 @@
 
 .dialog-entry-item:hover {
     background: var(--nbe-dark-bg-hover);
-    border-color: var(--nbe-primary);
 }
 
 .dialog-entry-item--vertical {
@@ -4170,7 +4142,6 @@
 
 .dialog-entry-item--vertical .dialog-kv-list {
     padding: 0 var(--nbe-space-md);
-    border-top: 1px solid var(--nbe-dark-border-secondary);
 }
 
 /* Clickable items within ref-item lists and dialog entries */
@@ -4196,7 +4167,7 @@
 }
 
 .dialog-detail-more {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-style: italic;
 }
 
@@ -4262,7 +4233,7 @@
 
 .dialog-type-item.selected {
     background: var(--nbe-dark-bg-elevated);
-    border-left: 3px solid var(--nbe-primary);
+    border-left: 3px solid var(--nbe-dark-accent-primary);
 }
 
 .dialog-type-name {
@@ -4282,7 +4253,7 @@
 
 .dialog-hint {
     font-size: var(--nbe-font-size-sm);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     margin-top: var(--nbe-space-xs);
 }
 
@@ -4328,9 +4299,7 @@
 }
 
 .dialog-footer {
-    padding: var(--nbe-space-md) var(--nbe-space-lg);
-    border-top: 1px solid var(--nbe-dark-border-secondary);
-    background: var(--nbe-dark-bg-secondary);
+    padding: var(--nbe-space-md) var(--nbe-space-lg-plus);
     display: flex;
     justify-content: flex-end;
     gap: var(--nbe-space-sm);
@@ -4387,7 +4356,7 @@ body.dragging-objects .right-pane::after {
 
 /* Empty message */
 .empty-message {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-size: var(--nbe-typography-body-size);
     padding: var(--nbe-space-sm) 0;
 }
@@ -4529,7 +4498,7 @@ body.dragging-objects .right-pane::after {
     font-size: var(--nbe-font-size-xs-plus);
     font-weight: 600;
     text-transform: uppercase;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     margin: var(--nbe-space-lg) 0 var(--nbe-space-sm);
 }
 
@@ -4565,7 +4534,7 @@ body.dragging-objects .right-pane::after {
 }
 
 .dep-tree-connector {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     margin-right: var(--nbe-space-xs-plus);
     font-size: var(--nbe-typography-secondary-size);
 }
@@ -4873,7 +4842,7 @@ body.dragging-objects .right-pane::after {
     font-family: var(--nbe-font-sans);
     font-size: var(--nbe-font-size-xs-plus);
     font-style: italic;
-    color: var(--nbe-dark-text-secondary);
+    color: var(--nbe-dark-text-muted);
     white-space: nowrap;
     padding-right: var(--nbe-space-md);
     max-width: 200px;
@@ -4968,7 +4937,7 @@ body.dragging-objects .right-pane::after {
 .impact-empty {
     padding: var(--nbe-space-lg);
     text-align: center;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-size: var(--nbe-font-size-sm);
 }
 
@@ -4989,7 +4958,7 @@ body.dragging-objects .right-pane::after {
 
 .dep-rule-detail i {
     font-size: var(--nbe-typography-muted-size);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 /* Ancestry chain rendering */
@@ -5016,7 +4985,6 @@ body.dragging-objects .right-pane::after {
 
 .ancestry-chain-item:hover {
     background: var(--nbe-dark-bg-hover);
-    border-color: var(--nbe-dark-border-hover);
 }
 
 .ancestry-chain-item.current {
@@ -5056,7 +5024,7 @@ body.dragging-objects .right-pane::after {
 .ancestry-chain-item .ref-type-badge.type-timeperiod { background: var(--nbe-type-neutral-bg); color: var(--nbe-type-neutral-text); }
 
 .ancestry-chain-separator {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-size: var(--nbe-typography-secondary-size);
 }
 
@@ -5136,7 +5104,7 @@ body.dragging-objects .right-pane::after {
 }
 
 .resolved-source-self {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 .resolved-source-inherited {

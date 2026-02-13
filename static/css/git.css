@@ -75,7 +75,7 @@
 
 .git-container .danger-zone-warning {
     font-size: var(--nbe-font-size-xs);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     margin: 0 0 var(--nbe-space-sm);
 }
 
@@ -136,7 +136,6 @@
 
 .git-container .page-tab:hover {
     background: var(--nbe-dark-bg-hover);
-    color: var(--nbe-dark-text-primary);
 }
 
 .git-container .page-tab.active {
@@ -256,7 +255,7 @@
 
 .git-status-badge.untracked {
     background: var(--nbe-dark-bg-tertiary);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 .git-status-badge.renamed {
@@ -297,12 +296,10 @@
 
 .git-file-action:hover {
     background: var(--nbe-dark-bg-hover);
-    color: var(--nbe-dark-text-primary);
 }
 
 .git-file-action.danger:hover {
     background: var(--nbe-dark-validation-error-badge);
-    color: var(--nbe-dark-accent-danger);
 }
 
 /* Section headers */
@@ -314,7 +311,7 @@
     font-size: var(--nbe-font-size-xs-plus);
     font-weight: 600;
     text-transform: uppercase;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     border-bottom: 1px solid var(--nbe-dark-border-primary);
     border-top: 1px solid var(--nbe-dark-border-primary);
 }
@@ -350,7 +347,7 @@
 
 .staged-item-arrow {
     margin: 0 var(--nbe-space-xs-plus);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 .staged-item-target {
@@ -359,7 +356,7 @@
 }
 
 .staged-item-from {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-style: italic;
     margin-left: var(--nbe-space-xs-plus);
 }
@@ -424,7 +421,7 @@
 }
 
 .git-diff-line.hunk {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     background: var(--nbe-dark-bg-tertiary);
 }
 
@@ -437,7 +434,7 @@
     align-items: center;
     justify-content: center;
     height: 100%;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-size: var(--nbe-font-size-base);
 }
 
@@ -451,7 +448,7 @@
     font-size: var(--nbe-font-size-sm);
     font-weight: 600;
     text-transform: uppercase;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     margin-bottom: var(--nbe-space-md);
     padding-bottom: var(--nbe-space-sm);
     border-bottom: 1px solid var(--nbe-dark-border-primary);
@@ -504,11 +501,11 @@
     justify-content: center;
     flex: 1;
     width: 100%;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 .git-loading-text {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 /* Not a repo state */
@@ -575,7 +572,7 @@
 }
 
 .git-history-table th .sort-icon {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-size: var(--nbe-typography-muted-size);
     margin-left: var(--nbe-space-xs);
 }
@@ -689,7 +686,7 @@
 
 .history-current-label {
     display: inline-block;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-size: var(--nbe-font-size-sm);
     font-style: italic;
 }

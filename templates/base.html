@@ -380,9 +380,6 @@
     }
     .identity-required-btn:hover {
         background: var(--nbe-primary-hover);
-        color: var(--nbe-text-inverse);
-        transform: translateY(-1px);
-        box-shadow: var(--nbe-shadow-md);
     }
 
     /* Pending Changes Indicator */
@@ -612,7 +609,7 @@
     .commit-section-subtitle {
         font-size: var(--nbe-font-size-xs-plus);
         font-weight: 400;
-        color: var(--nbe-dark-text-muted);
+        color: var(--nbe-dark-text-secondary);
         margin-left: 8px;
     }
     .commit-external-section {
@@ -625,7 +622,7 @@
     }
     .commit-item-file {
         font-size: var(--nbe-font-size-xs-plus);
-        color: var(--nbe-dark-text-muted);
+        color: var(--nbe-dark-text-secondary);
     }
     .commit-item-diff {
         display: none;
@@ -663,7 +660,7 @@
         color: var(--nbe-dark-text-primary);
     }
     .diff-line.ellipsis {
-        color: var(--nbe-dark-text-muted);
+        color: var(--nbe-dark-text-secondary);
         font-style: italic;
         text-align: center;
         background: var(--nbe-dark-bg-secondary);
@@ -687,7 +684,7 @@
     .commit-empty {
         padding: 40px;
         text-align: center;
-        color: var(--nbe-dark-text-muted);
+        color: var(--nbe-dark-text-secondary);
     }
     .commit-footer {
         display: flex;
@@ -1270,14 +1267,13 @@
     .page-sidebar .tree-filter-option input {
         display: block;
         margin: 0;
-        width: 14px;
-        height: 14px;
+        width: 12px;
+        height: 12px;
         accent-color: var(--nbe-primary);
     }
 
     .page-sidebar .filter-chip input:checked ~ span {
         font-weight: 600;
-        color: var(--nbe-primary);
     }
 
     /* Info text — compact */
@@ -1443,7 +1439,7 @@
     }
 
     .loading-state-text {
-        color: var(--nbe-dark-text-muted);
+        color: var(--nbe-dark-text-secondary);
     }
 
     @keyframes spin {
@@ -1636,7 +1632,7 @@
     .dialog-loading {
         text-align: center;
         padding: 40px;
-        color: var(--nbe-dark-text-muted);
+        color: var(--nbe-dark-text-secondary);
     }
 
     /* Lock banner */
@@ -1817,13 +1813,13 @@
         color: var(--nbe-dark-text-primary);
     }
     .keyboard-shortcuts-close {
-        color: var(--nbe-dark-text-muted);
+        color: var(--nbe-dark-text-secondary);
     }
     .keyboard-shortcuts-close:hover {
         color: var(--nbe-dark-text-primary);
     }
     .shortcuts-section-title {
-        color: var(--nbe-dark-text-muted);
+        color: var(--nbe-dark-text-secondary);
         border-bottom-color: var(--nbe-dark-border-secondary);
     }
     .shortcut-row {
@@ -1842,7 +1838,7 @@
         border-top-color: var(--nbe-dark-border-secondary);
     }
     .keyboard-shortcuts-hint {
-        color: var(--nbe-dark-text-muted);
+        color: var(--nbe-dark-text-secondary);
     }
     .keyboard-shortcuts-hint kbd {
         background: var(--nbe-dark-bg-tertiary);
@@ -1870,7 +1866,7 @@
         border-color: var(--nbe-dark-accent-primary);
     }
     .commit-message-textarea::placeholder {
-        color: var(--nbe-dark-text-muted);
+        color: var(--nbe-dark-text-secondary);
     }
     /* Git config warning banner */
     .git-config-warning {
@@ -1894,7 +1890,7 @@
         text-decoration: underline;
     }
     .dialog-info-text {
-        color: var(--nbe-dark-text-muted);
+        color: var(--nbe-dark-text-secondary);
         font-size: var(--nbe-font-size-sm);
     }
     /* Spacing utilities */
@@ -1905,9 +1901,10 @@
     .u-mb-md { margin-bottom: var(--nbe-space-md); }
     .u-mb-lg { margin-bottom: var(--nbe-space-lg); }
     .u-pl-lg { padding-left: var(--nbe-space-lg); }
-    /* Button disabled state */
+    /* Button disabled state — MD3: on-surface at 12%/38% */
     .btn-disabled {
-        opacity: 0.5;
+        background: var(--nbe-dark-bg-hover);
+        color: var(--nbe-dark-text-secondary);
         cursor: not-allowed;
     }
     /* Terminal output styling */

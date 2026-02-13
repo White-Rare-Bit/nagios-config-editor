@@ -239,7 +239,7 @@
 }
 
 .docs-badge--optional {
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-weight: 400;
 }
 
@@ -250,7 +250,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.3px;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     background: var(--nbe-dark-bg-secondary);
     border-top: 2px solid var(--nbe-dark-border-primary);
     border-bottom: 1px solid var(--nbe-dark-border-primary);
@@ -589,7 +589,7 @@
 .docs-palette-title {
     font-size: var(--nbe-font-size-xs-plus);
     font-weight: 600;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: var(--nbe-space-sm);
@@ -632,7 +632,7 @@
     display: block;
     font-family: var(--nbe-font-mono);
     font-size: var(--nbe-font-size-2xs);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     line-height: 1.4;
 }
 
@@ -769,7 +769,7 @@
     margin-right: var(--nbe-space-sm);
     font-size: 10px;
     transition: transform 0.15s;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 .docs-prose details.docs-details[open] summary::before {

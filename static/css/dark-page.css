@@ -84,7 +84,7 @@
     left: 10px;
     top: 50%;
     transform: translateY(-50%);
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
     font-size: var(--nbe-typography-h3-size);
     pointer-events: none;
     z-index: 1;

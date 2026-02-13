@@ -660,7 +660,7 @@
             if (item.type === 'existing') {
                 const displayName = Explorer.getStagedDisplayName(item.obj);
                 const isTemplate = Explorer.isObjectTemplate(item.obj);
-                const typeLabel = isTemplate ? `${item.obj.object_type} tmpl` : item.obj.object_type;
+                const typeLabel = Explorer.getTypeBadge(item.obj.object_type, isTemplate);
                 html += `
                 <div class="workspace-object-row" data-index="${item.obj.global_index}" data-position="${item.position}" data-file="${Explorer.escapeHtml(filePath)}"
                      draggable="true"
@@ -674,7 +674,7 @@
             } else if (item.type === 'pending') {
                 const pendingDisplayName = item.move.object.display_name || item.move.object.name;
                 const isTemplate = Explorer.isObjectTemplate(item.move.object);
-                const typeLabel = isTemplate ? `${item.move.object.object_type} tmpl` : item.move.object.object_type;
+                const typeLabel = Explorer.getTypeBadge(item.move.object.object_type, isTemplate);
                 const escapedKey = Explorer.escapeJs(item.idx);
                 html += `
                 <div class="workspace-object-row pending" data-index="${Explorer.escapeHtml(item.idx)}" data-position="${item.position}" data-file="${Explorer.escapeHtml(filePath)}"
@@ -693,7 +693,7 @@
                     (item.creation.object_type === 'host' && creationAttrs.name && !creationAttrs.host_name) ||
                     (item.creation.object_type === 'service' && creationAttrs.name && !creationAttrs.service_description) ||
                     (item.creation.object_type === 'contact' && creationAttrs.name && !creationAttrs.contact_name);
-                const typeLabel = isTemplate ? `${item.creation.object_type} tmpl` : item.creation.object_type;
+                const typeLabel = Explorer.getTypeBadge(item.creation.object_type, isTemplate);
                 const creationDisplayName = item.creation.displayName || '(unnamed)';
                 html += `
                 <div class="workspace-object-row staged-creation" data-staged-index="${item.idx}" data-position="${item.position}" data-file="${Explorer.escapeHtml(filePath)}"

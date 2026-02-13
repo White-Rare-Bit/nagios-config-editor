@@ -161,7 +161,7 @@
     font-size: var(--nbe-font-size-icon-xl);
     margin-bottom: var(--nbe-space-md);
     opacity: 0.5;
-    color: var(--nbe-dark-text-muted);
+    color: var(--nbe-dark-text-secondary);
 }
 
 .validate-empty p {

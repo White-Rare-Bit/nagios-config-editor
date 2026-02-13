@@ -24,6 +24,30 @@
         hostescalation: ['name']
     };
 
+    // Short badge abbreviations for tree view
+    const TYPE_BADGES = {
+        host: 'HOST',
+        hostgroup: 'HOSTGRP',
+        service: 'SVC',
+        servicegroup: 'SVCGRP',
+        contact: 'CONT',
+        contactgroup: 'CONTGRP',
+        command: 'CMD',
+        timeperiod: 'TP',
+        servicedependency: 'SVCDEP',
+        hostdependency: 'HOSTDEP',
+        serviceescalation: 'SVCESC',
+        hostescalation: 'HOSTESC'
+    };
+
+    const TEMPLATE_BADGES = {
+        host: 'HOSTTMPL',
+        service: 'SVCTMPL',
+        contact: 'CONTTMPL',
+        command: 'CMDTMPL',
+        timeperiod: 'TPTMPL'
+    };
+
     // Attributes that affect inheritance/reference sections (UI behavior)
     const INHERITANCE_ATTRS = ['use', 'parents'];
     const REFERENCE_TRIGGER_ATTRS = [
@@ -46,6 +70,8 @@
 
         // --- UI-only constants (not from backend) ---
         identityFields: IDENTITY_FIELDS,
+        typeBadges: TYPE_BADGES,
+        templateBadges: TEMPLATE_BADGES,
         inheritanceAttrs: INHERITANCE_ATTRS,
         referenceAttrs: REFERENCE_TRIGGER_ATTRS,
 
@@ -112,6 +138,20 @@
         if (obj.attributes.register === '0') return true;
         const nameField = Explorer.constants.nameFields[obj.object_type];
         return !!(obj.attributes.name && nameField && !obj.attributes[nameField]);
+    };
+
+    /**
+     * Get abbreviated badge text for an object type.
+     * @param {string} objectType - e.g. 'host', 'service'
+     * @param {boolean} [isTemplate=false] - whether this is a template
+     * @returns {string} abbreviated badge text e.g. 'HOST', 'SVCTMPL'
+     */
+    Explorer.getTypeBadge = function(objectType, isTemplate) {
+        const c = Explorer.constants;
+        if (isTemplate && c.templateBadges[objectType]) {
+            return c.templateBadges[objectType];
+        }
+        return c.typeBadges[objectType] || objectType;
     };
 
     /**
