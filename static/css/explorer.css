@@ -2781,6 +2781,7 @@
 
 .cleanup-detail-file {
     font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-font-size-sm);
     font-weight: 500;
     color: var(--nbe-dark-text-primary);
 }
@@ -4015,7 +4016,7 @@
 }
 
 .dialog-alert--warning strong {
-    color: var(--nbe-warning);
+    color: var(--nbe-dark-text-primary);
 }
 
 .dialog-alert--warning code {
@@ -4023,6 +4024,7 @@
     padding: 1px 5px;
     border-radius: var(--nbe-radius-sm);
     font-size: var(--nbe-typography-code-size);
+    color: var(--nbe-dark-text-primary);
 }
 
 .dialog-alert--danger {
@@ -4039,7 +4041,7 @@
 }
 
 .dialog-alert strong {
-    color: var(--nbe-dark-accent-primary);
+    color: var(--nbe-dark-text-primary);
 }
 
 .dialog-alert ol,
@@ -4103,6 +4105,22 @@
 .dialog-duplicate-list {
     max-height: 300px;
     overflow-y: auto;
+}
+
+.dialog-duplicate-entry {
+    background: var(--nbe-dark-bg-tertiary);
+    border-radius: var(--nbe-radius-md);
+    margin-bottom: var(--nbe-space-sm);
+    overflow: hidden;
+}
+
+.dialog-duplicate-entry:last-child {
+    margin-bottom: 0;
+}
+
+.dialog-duplicate-entry .code-preview {
+    padding: var(--nbe-space-sm) var(--nbe-space-md);
+    border-top: 1px solid var(--nbe-dark-border-secondary);
 }
 
 .dialog-entry-list {

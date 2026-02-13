@@ -1103,13 +1103,13 @@ function fixDuplicate(idx) {
         }
 
         return {
-            html: `<div class="u-mb-md">
+            html: `<div class="dialog-duplicate-entry">
                 <div class="dialog-entry-header">
                     <div class="ref-item-clickable" onclick="Explorer.navigateToObjectByIndex(${o.global_index}); Explorer.closeDialog();">
                         <span class="cleanup-detail-file">${Explorer.escapeHtml(file)}</span>
                         <span class="cleanup-detail-line">Line ${o.line_number || '?'}</span>
                     </div>
-                    <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--sm" onclick="Explorer.keepDuplicateAndDeleteOthers(${idx}, ${i})">Keep This</button>
+                    <button class="nbe-btn nbe-btn--dark nbe-btn--tonal nbe-btn--sm" onclick="Explorer.keepDuplicateAndDeleteOthers(${idx}, ${i})">Keep This</button>
                 </div>
                 ${diffHtml ? `<div class="code-preview">${diffHtml}</div>` : ''}
             </div>`

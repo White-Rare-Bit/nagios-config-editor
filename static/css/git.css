@@ -139,8 +139,8 @@
 }
 
 .git-container .page-tab.active {
-    background: var(--nbe-dark-accent-primary);
-    color: var(--nbe-dark-bg-primary);
+    background: var(--nbe-dark-accent-alpha-20);
+    color: var(--nbe-dark-accent-primary);
 }
 
 .git-container .page-tab-badge {
@@ -155,8 +155,8 @@
 }
 
 .git-container .page-tab.active .page-tab-badge {
-    background: var(--nbe-dark-bg-primary);
-    color: var(--nbe-dark-accent-primary);
+    background: var(--nbe-dark-accent-primary);
+    color: var(--nbe-dark-bg-primary);
 }
 
 /* Content area */
@@ -776,8 +776,8 @@
 
 .git-staging-preview-commit {
     padding: var(--nbe-space-xs-plus) var(--nbe-space-md);
-    background: var(--nbe-dark-accent-primary);
-    color: var(--nbe-dark-bg-primary);
+    background: var(--nbe-dark-accent-alpha-20);
+    color: var(--nbe-dark-accent-primary);
     border: none;
     border-radius: var(--nbe-radius-md);
     font-size: var(--nbe-font-size-sm);
@@ -787,7 +787,7 @@
 }
 
 .git-staging-preview-commit:hover {
-    background: var(--nbe-dark-accent-primary-hover);
+    background: var(--nbe-dark-accent-alpha-30);
 }
 
 /* ============================================================================

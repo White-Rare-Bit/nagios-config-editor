@@ -117,7 +117,7 @@ function showConfirmDialog(options = {}) {
         cancelBtn.classList.toggle('u-hidden', !showCancel);
 
         icon.className = 'confirm-dialog-icon ' + type;
-        confirmBtn.className = 'nbe-btn nbe-btn--dark nbe-btn--sm ' + (type === 'danger' ? 'nbe-btn--danger' : 'nbe-btn--filled');
+        confirmBtn.className = 'nbe-btn nbe-btn--dark nbe-btn--sm ' + (type === 'danger' ? 'nbe-btn--danger' : 'nbe-btn--tonal');
 
         if (type === 'info') {
             icon.innerHTML = '<i class="fa-solid fa-circle-info"></i>';
