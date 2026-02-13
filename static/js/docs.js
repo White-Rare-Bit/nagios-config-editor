@@ -68,6 +68,18 @@
     var selectedType = null;     // Nagios type name or null
     var selectedAppDoc = null;   // App doc slug or null
     var expandedSections = {};   // keyed by 'app', 'app-<index>', 'nagios', 'nagios-<catIndex>'
+    var STORAGE_KEY = 'nbe-docs-expanded';
+
+    function saveExpandedSections() {
+        try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(expandedSections)); } catch (e) {}
+    }
+
+    function loadExpandedSections() {
+        try {
+            var stored = sessionStorage.getItem(STORAGE_KEY);
+            if (stored) expandedSections = JSON.parse(stored);
+        } catch (e) {}
+    }
     var focusedIndex = -1;
     var allSelectableNodes = []; // flat list for keyboard nav
     var treeSearchQuery = '';
@@ -106,7 +118,7 @@
 
         if (!hasVisibleItems && searchLower) return '';
 
-        var isExpanded = expandedSections['app'] !== false;
+        var isExpanded = expandedSections['app'] === true;
 
         var html = '<div class="workspace-tree-row' + (isExpanded ? ' expanded' : '') + '" data-depth="0" data-folder="app" onclick="DocsPage.toggleFolder(\'app\')">';
         html += '<button class="tree-expand-btn' + (isExpanded ? ' expanded' : '') + '">' + ICONS.chevron + '</button>';
@@ -131,7 +143,7 @@
         if (visibleItems.length === 0) return '';
 
         var key = 'app-' + sectionIndex;
-        var isExpanded = expandedSections[key] !== false;
+        var isExpanded = expandedSections[key] === true;
 
         var html = '<div class="workspace-tree-row' + (isExpanded ? ' expanded' : '') + '" data-depth="1" data-folder="' + key + '" onclick="DocsPage.toggleFolder(\'' + key + '\')">';
         html += '<button class="tree-expand-btn' + (isExpanded ? ' expanded' : '') + '">' + ICONS.chevron + '</button>';
@@ -204,7 +216,7 @@
         if (visibleTypes.length === 0) return '';
 
         var key = 'nagios-' + catIndex;
-        var isExpanded = expandedSections[key] !== false;
+        var isExpanded = expandedSections[key] === true;
         var totalDirectives = 0;
         for (var i = 0; i < visibleTypes.length; i++) {
             totalDirectives += REF[visibleTypes[i]].directives.length;
@@ -276,11 +288,8 @@
     // =========================================================================
 
     function toggleFolder(key) {
-        if (key === 'nagios') {
-            expandedSections[key] = expandedSections[key] !== true;
-        } else {
-            expandedSections[key] = expandedSections[key] === false;
-        }
+        expandedSections[key] = expandedSections[key] !== true;
+        saveExpandedSections();
         renderTree();
     }
 
@@ -298,6 +307,7 @@
                 }
             }
         }
+        saveExpandedSections();
 
         renderTree();
         loadAppDocContent(slug);
@@ -311,6 +321,7 @@
         // Ensure Nagios folder is expanded
         expandedSections['nagios'] = true;
         if (typeName === SPECIAL_INHERITANCE) {
+            saveExpandedSections();
             renderTree();
             renderInheritanceContent();
             updateHash();
@@ -323,6 +334,7 @@
                 break;
             }
         }
+        saveExpandedSections();
         renderTree();
         renderNagiosContent(typeName);
         updateHash();
@@ -539,11 +551,18 @@
     // URL hash navigation
     // =========================================================================
 
+    var PAGE_STORAGE_KEY = 'nbe-docs-page';
+
     function updateHash() {
+        var hash;
         if (selectedAppDoc) {
-            history.replaceState(null, '', '#app/' + selectedAppDoc);
+            hash = 'app/' + selectedAppDoc;
         } else if (selectedType) {
-            history.replaceState(null, '', '#' + selectedType);
+            hash = selectedType;
+        }
+        if (hash) {
+            history.replaceState(null, '', '#' + hash);
+            try { sessionStorage.setItem(PAGE_STORAGE_KEY, hash); } catch (e) {}
         }
     }
 
@@ -694,19 +713,23 @@
     // =========================================================================
 
     document.addEventListener('DOMContentLoaded', function() {
-        // App docs expanded by default, Nagios reference collapsed
-        expandedSections['app'] = true;
-        for (var i = 0; i < APP_DOCS_TREE.length; i++) {
-            expandedSections['app-' + i] = true;
-        }
-        expandedSections['nagios'] = false;
+        // Restore expanded state from session, or start collapsed
+        loadExpandedSections();
 
         renderTree();
         loadFromHash();
 
-        // If nothing was selected from hash, show overview by default
+        // Restore last viewed page from session, or show overview
         if (!selectedAppDoc && !selectedType) {
-            selectAppDoc('overview');
+            var savedPage;
+            try { savedPage = sessionStorage.getItem(PAGE_STORAGE_KEY); } catch (e) {}
+            if (savedPage) {
+                window.location.hash = savedPage;
+                loadFromHash();
+            }
+            if (!selectedAppDoc && !selectedType) {
+                selectAppDoc('overview');
+            }
         }
 
         document.addEventListener('keydown', handleKeydown);
