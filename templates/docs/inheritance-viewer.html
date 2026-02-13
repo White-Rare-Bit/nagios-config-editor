@@ -8,88 +8,82 @@
         after all inheritance is applied.
     </p>
 
-    <div class="docs-diagram">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 300">
-            <defs>
-                <marker id="inh-arrow" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
-                    <path d="M 0 0 L 10 3.5 L 0 7 z" fill="#4ec9b0"/>
-                </marker>
-            </defs>
+    <div class="docs-mockup">
+        <div class="docs-mockup-title">Template Inheritance Chain</div>
+        <div class="docs-mockup-inheritance">
 
-            <rect width="1020" height="300" fill="#1e1e1e" rx="6"/>
+            <!-- Left: Inheritance chain -->
+            <div class="docs-mockup-chain">
+                <div class="docs-mockup-card docs-mockup-card--primary">
+                    <div class="docs-mockup-card-name">
+                        web-server01 <span class="docs-mockup-badge docs-mockup-badge--teal">host</span>
+                    </div>
+                    <div class="docs-mockup-card-attrs">
+                        address=<span class="val">192.168.1.10</span>&nbsp;&nbsp;use=<span class="ref">linux-server</span>
+                    </div>
+                </div>
 
-            <text x="300" y="28" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="14" font-weight="600">Template Inheritance Chain</text>
+                <div class="docs-mockup-arrow">inherits from</div>
 
-            <!-- Node 1: web-server01 (host) -->
-            <rect x="80" y="44" width="440" height="66" rx="5" fill="#2d2d2d" stroke="#4ec9b0" stroke-width="2"/>
-            <text x="100" y="68" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="13" font-weight="600">web-server01</text>
-            <rect x="220" y="56" width="36" height="16" rx="3" fill="rgba(78, 201, 176, 0.15)" stroke="rgba(78, 201, 176, 0.3)"/>
-            <text x="238" y="68" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="9">host</text>
-            <text x="100" y="96" fill="#888" font-family="Inter, sans-serif" font-size="10">address=<tspan fill="#d4d4d4" font-family="JetBrains Mono, monospace">192.168.1.10</tspan>  use=<tspan fill="#4ec9b0" font-family="JetBrains Mono, monospace">linux-server</tspan></text>
+                <div class="docs-mockup-card docs-mockup-card--secondary">
+                    <div class="docs-mockup-card-name">
+                        linux-server <span class="docs-mockup-badge docs-mockup-badge--orange">template</span>
+                    </div>
+                    <div class="docs-mockup-card-attrs">
+                        check_command=<span class="val">check-host-alive</span>&nbsp;&nbsp;use=<span class="ref">generic-host</span>
+                    </div>
+                </div>
 
-            <!-- Arrow down -->
-            <line x1="300" y1="110" x2="300" y2="130" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#inh-arrow)"/>
-            <text x="316" y="124" fill="#888" font-family="Inter, sans-serif" font-size="10">inherits from</text>
+                <div class="docs-mockup-arrow">inherits from</div>
 
-            <!-- Node 2: linux-server (template) -->
-            <rect x="80" y="132" width="440" height="66" rx="5" fill="#2d2d2d" stroke="#404040"/>
-            <text x="100" y="156" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="13" font-weight="600">linux-server</text>
-            <rect x="200" y="144" width="58" height="16" rx="3" fill="rgba(255, 183, 77, 0.15)" stroke="rgba(255, 183, 77, 0.3)"/>
-            <text x="229" y="156" text-anchor="middle" fill="#ffb74d" font-family="Inter, sans-serif" font-size="9">template</text>
-            <text x="100" y="184" fill="#888" font-family="Inter, sans-serif" font-size="10">check_command=<tspan fill="#d4d4d4" font-family="JetBrains Mono, monospace">check-host-alive</tspan>  use=<tspan fill="#4ec9b0" font-family="JetBrains Mono, monospace">generic-host</tspan></text>
+                <div class="docs-mockup-card docs-mockup-card--secondary">
+                    <div class="docs-mockup-card-name">
+                        generic-host <span class="docs-mockup-badge docs-mockup-badge--orange">template</span>
+                    </div>
+                    <div class="docs-mockup-card-attrs">
+                        max_check_attempts=<span class="val">3</span>&nbsp;&nbsp;notification_period=<span class="val">24x7</span>
+                    </div>
+                </div>
+            </div>
 
-            <!-- Arrow down -->
-            <line x1="300" y1="198" x2="300" y2="218" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#inh-arrow)"/>
-            <text x="316" y="212" fill="#888" font-family="Inter, sans-serif" font-size="10">inherits from</text>
+            <!-- Right: Resolved attributes table -->
+            <div class="docs-mockup-resolved">
+                <div class="docs-mockup-resolved-title">Resolved Attributes</div>
+                <div class="docs-mockup-resolved-subtitle">"First match wins" — child values override parents</div>
+                <table class="docs-mockup-table">
+                    <thead>
+                        <tr><th>Attribute</th><th>Value</th><th>Source</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>address</td>
+                            <td>192.168.1.10</td>
+                            <td><span class="docs-mockup-badge docs-mockup-badge--teal">self</span></td>
+                        </tr>
+                        <tr>
+                            <td>check_command</td>
+                            <td>check-host-alive</td>
+                            <td class="source">linux-server</td>
+                        </tr>
+                        <tr>
+                            <td>max_check_attempts</td>
+                            <td>3</td>
+                            <td class="source">generic-host</td>
+                        </tr>
+                        <tr>
+                            <td>notification_period</td>
+                            <td>24x7</td>
+                            <td class="source">generic-host</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="docs-mockup-table-note">
+                    If both child and parent define the same attribute, the child's value wins.
+                    The viewer shows which level provides each value.
+                </div>
+            </div>
 
-            <!-- Node 3: generic-host (template) -->
-            <rect x="80" y="220" width="440" height="66" rx="5" fill="#2d2d2d" stroke="#404040"/>
-            <text x="100" y="244" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="13" font-weight="600">generic-host</text>
-            <rect x="210" y="232" width="58" height="16" rx="3" fill="rgba(255, 183, 77, 0.15)" stroke="rgba(255, 183, 77, 0.3)"/>
-            <text x="239" y="244" text-anchor="middle" fill="#ffb74d" font-family="Inter, sans-serif" font-size="9">template</text>
-            <text x="100" y="272" fill="#888" font-family="Inter, sans-serif" font-size="10">max_check_attempts=<tspan fill="#d4d4d4" font-family="JetBrains Mono, monospace">3</tspan>  notification_period=<tspan fill="#d4d4d4" font-family="JetBrains Mono, monospace">24x7</tspan></text>
-
-            <!-- Right side: Resolved attributes annotation -->
-            <rect x="570" y="44" width="420" height="242" rx="5" fill="#252525" stroke="#404040"/>
-            <text x="780" y="68" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="12" font-weight="600">Resolved Attributes</text>
-            <text x="780" y="86" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">"First match wins" — child values override parents</text>
-
-            <!-- Attribute table header -->
-            <line x1="586" y1="96" x2="974" y2="96" stroke="#404040"/>
-            <text x="596" y="112" fill="#888" font-family="Inter, sans-serif" font-size="10" font-weight="600">Attribute</text>
-            <text x="740" y="112" fill="#888" font-family="Inter, sans-serif" font-size="10" font-weight="600">Value</text>
-            <text x="900" y="112" fill="#888" font-family="Inter, sans-serif" font-size="10" font-weight="600">Source</text>
-            <line x1="586" y1="118" x2="974" y2="118" stroke="#404040"/>
-
-            <!-- Row 1: address (self) -->
-            <text x="596" y="136" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">address</text>
-            <text x="740" y="136" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">192.168.1.10</text>
-            <rect x="892" y="124" width="32" height="16" rx="3" fill="rgba(78, 201, 176, 0.15)" stroke="rgba(78, 201, 176, 0.3)"/>
-            <text x="908" y="136" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="9">self</text>
-
-            <!-- Row 2: check_command (from linux-server) -->
-            <text x="596" y="160" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">check_command</text>
-            <text x="740" y="160" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">check-host-alive</text>
-            <text x="900" y="160" fill="#888" font-family="Inter, sans-serif" font-size="10">linux-server</text>
-
-            <!-- Row 3: max_check_attempts (from generic-host) -->
-            <text x="596" y="184" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">max_check_attempts</text>
-            <text x="740" y="184" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">3</text>
-            <text x="900" y="184" fill="#888" font-family="Inter, sans-serif" font-size="10">generic-host</text>
-
-            <!-- Row 4: notification_period (from generic-host) -->
-            <text x="596" y="208" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">notification_period</text>
-            <text x="740" y="208" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">24x7</text>
-            <text x="900" y="208" fill="#888" font-family="Inter, sans-serif" font-size="10">generic-host</text>
-
-            <!-- Separator -->
-            <line x1="586" y1="218" x2="974" y2="218" stroke="#404040"/>
-
-            <!-- Note -->
-            <text x="596" y="242" fill="#888" font-family="Inter, sans-serif" font-size="10">If both child and parent define the same</text>
-            <text x="596" y="258" fill="#888" font-family="Inter, sans-serif" font-size="10">attribute, the child's value wins.</text>
-            <text x="596" y="274" fill="#888" font-family="Inter, sans-serif" font-size="10">The viewer shows which level provides each value.</text>
-        </svg>
+        </div>
     </div>
 
     <h3>Selecting an Object</h3>
