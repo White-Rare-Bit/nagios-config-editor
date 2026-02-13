@@ -854,195 +854,194 @@
     margin-left: auto;
 }
 
-/* ── Inheritance viewer — two-column layout ── */
+/* ── Inheritance viewer — Configuration Ancestry accordion ── */
 
-.docs-mockup-inheritance {
-    display: flex;
-    gap: 10px;
-    min-height: 280px;
-}
-
-/* Left: object list sidebar */
-.docs-mockup-obj-list {
-    flex: 0 0 28%;
-    background: var(--nbe-dark-bg-secondary);
-    border: 1px solid var(--nbe-dark-border-primary);
-    border-radius: var(--nbe-radius-md);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-.docs-mockup-obj-list-header {
-    padding: 5px 8px;
-    font-size: 9px;
-    font-weight: 600;
-    background: var(--nbe-dark-bg-elevated);
-    border-bottom: 1px solid var(--nbe-dark-border-primary);
-}
-
-.docs-mockup-obj-list-item {
-    padding: 4px 8px;
-    font-size: 9px;
-    border-bottom: 1px solid var(--nbe-dark-border-secondary);
-    border-left: 2px solid transparent;
-}
-
-.docs-mockup-obj-list-item:nth-child(even) {
+.docs-mockup-ancestry {
     background: var(--nbe-dark-bg-tertiary);
-}
-
-.docs-mockup-obj-list-item--active {
-    background: var(--nbe-dark-bg-elevated);
-    border-left-color: var(--nbe-dark-accent-primary);
-}
-
-.docs-mockup-obj-list-item .uses {
-    display: block;
-    font-size: 8px;
-    color: var(--nbe-dark-text-muted);
-    font-style: italic;
-    margin-top: 1px;
-}
-
-/* Right: chain + resolved attrs stacked */
-.docs-mockup-inh-main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    min-width: 0;
-}
-
-/* Card container for chain and resolved sections */
-.docs-mockup-inh-card {
-    background: var(--nbe-dark-bg-secondary);
-    border: 1px solid var(--nbe-dark-border-primary);
-    border-radius: var(--nbe-radius-md);
+    border: 1px solid var(--nbe-dark-border-secondary);
+    border-radius: var(--nbe-radius-sm);
     overflow: hidden;
 }
 
-.docs-mockup-inh-card-header {
-    padding: 4px 8px;
-    font-size: 9px;
-    font-weight: 600;
-    background: var(--nbe-dark-bg-elevated);
-    border-bottom: 1px solid var(--nbe-dark-border-primary);
+/* Collapsible header */
+.docs-mockup-ancestry-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 8px;
+    background: var(--nbe-dark-bg-subtle);
+    border-bottom: 1px solid var(--nbe-dark-border-secondary);
 }
 
-/* Inheritance chain — nested tree (matches real inheritance.css) */
-.docs-mockup-inh-tree {
-    font-family: var(--nbe-font-mono);
+.docs-mockup-ancestry-title {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 500;
+    font-size: 9px;
+    color: var(--nbe-dark-text-primary);
+}
+
+.docs-mockup-ancestry-title i {
     font-size: 8px;
+    color: var(--nbe-dark-text-secondary);
+}
+
+.docs-mockup-ancestry-toggle {
+    color: var(--nbe-dark-text-secondary);
+    font-size: 7px;
+}
+
+/* Content area */
+.docs-mockup-ancestry-content {
     padding: 6px 8px;
 }
 
-.docs-mockup-tree-node {
-    position: relative;
-    margin-left: 12px;
-    border-left: 1px solid var(--nbe-dark-border-secondary);
-    padding-left: 8px;
-    margin-bottom: 2px;
+/* Section labels (TEMPLATES, NETWORK PARENTS, RESOLVED ATTRIBUTES) */
+.docs-mockup-ancestry-label {
+    font-size: 7px;
+    font-weight: 500;
+    color: var(--nbe-dark-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 3px;
+    margin-top: 6px;
 }
 
-.docs-mockup-tree-node:last-child {
-    border-left-color: transparent;
+.docs-mockup-ancestry-label:first-child {
+    margin-top: 0;
 }
 
-.docs-mockup-tree-node::before {
-    content: '';
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-bottom: 1px solid var(--nbe-dark-border-secondary);
-    position: absolute;
-    margin-left: -8px;
-    margin-top: 2px;
+/* Horizontal chain (template pills with arrows) */
+.docs-mockup-ancestry-chain {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 0;
 }
 
-.docs-mockup-tree-root {
-    margin-left: 0;
-    border-left: none;
-    padding-left: 0;
-}
-
-.docs-mockup-tree-root::before {
-    display: none;
-}
-
-.docs-mockup-node-hdr {
-    display: inline-block;
-    padding: 2px 5px;
+.docs-mockup-chain-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 5px;
+    background: var(--nbe-dark-bg-secondary);
+    border: 1px solid var(--nbe-dark-border-secondary);
     border-radius: var(--nbe-radius-sm);
-    background: var(--nbe-dark-bg-primary);
     font-size: 8px;
-    margin-bottom: 1px;
 }
 
-.docs-mockup-node-hdr--template {
-    background: var(--nbe-dark-accent-alpha-10);
-    border: 1px solid var(--nbe-dark-accent-alpha-30);
+.docs-mockup-chain-item.current {
+    background: var(--nbe-dark-accent-alpha-15);
+    border-color: var(--nbe-dark-accent-primary);
+    color: var(--nbe-dark-accent-primary);
 }
 
-.docs-mockup-template-badge {
+.docs-mockup-chain-item.missing {
+    background: var(--nbe-dark-validation-error-bg);
+    border-color: var(--nbe-dark-accent-danger);
+    color: var(--nbe-dark-accent-danger);
+}
+
+.docs-mockup-chain-item .fa-xmark {
+    font-size: 7px;
+    color: var(--nbe-dark-accent-danger);
+    margin-left: 1px;
+}
+
+/* Type badge inside chain item */
+.docs-mockup-type-badge {
     display: inline-block;
-    font-size: 6px;
+    font-size: 5px;
     font-weight: 600;
     padding: 0 3px;
     border-radius: var(--nbe-radius-sm);
-    background: var(--nbe-warning);
-    color: #000;
-    margin-right: 2px;
     text-transform: uppercase;
-}
-
-.docs-mockup-node-count {
-    font-size: 7px;
-    color: var(--nbe-dark-text-muted);
-    margin-left: 3px;
-}
-
-.docs-mockup-node-attrs {
-    font-size: 7px;
+    flex-shrink: 0;
+    background: var(--nbe-dark-bg-hover);
     color: var(--nbe-dark-text-secondary);
-    margin-left: 8px;
-    line-height: 1.5;
-    margin-bottom: 2px;
 }
 
-/* Resolved attributes — flex-row table */
-.docs-mockup-resolved-row {
-    display: flex;
-    padding: 3px 8px;
+.docs-mockup-type-badge.host {
+    background: var(--nbe-type-infra-bg);
+    color: var(--nbe-type-infra-text);
+}
+
+.docs-mockup-type-badge.host-template {
+    background: var(--nbe-type-infra-bg);
+    color: var(--nbe-type-infra-text);
+}
+
+/* Arrow separator between chain items */
+.docs-mockup-chain-sep {
+    color: var(--nbe-dark-text-secondary);
+    font-size: 7px;
+}
+
+/* Resolved attributes — 3-column grid table */
+.docs-mockup-resolved-grid {
+    display: grid;
+    grid-template-columns: minmax(80px, 1fr) minmax(80px, 2fr) minmax(60px, 1fr);
     font-size: 8px;
-    font-family: var(--nbe-font-mono);
+    border: 1px solid var(--nbe-dark-border-secondary);
+    border-radius: var(--nbe-radius-sm);
+    overflow: hidden;
+    margin-top: 3px;
+}
+
+.docs-mockup-resolved-hdr {
+    display: contents;
+}
+
+.docs-mockup-resolved-hdr > span {
+    padding: 3px 6px;
+    font-weight: 600;
+    font-size: 7px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--nbe-dark-text-secondary);
+    background: var(--nbe-dark-bg-subtle);
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
 }
 
-.docs-mockup-resolved-row:nth-child(even) {
-    background: var(--nbe-dark-bg-tertiary);
+.docs-mockup-resolved-row {
+    display: contents;
 }
 
-.docs-mockup-resolved-row--header {
-    font-family: var(--nbe-font-sans);
-    font-weight: 600;
+.docs-mockup-resolved-row > span {
+    padding: 3px 6px;
+    border-bottom: 1px solid var(--nbe-dark-border-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.docs-mockup-resolved-row:last-child > span {
+    border-bottom: none;
+}
+
+.docs-mockup-resolved-row:hover > span {
+    background: var(--nbe-dark-bg-hover);
+}
+
+.docs-mockup-resolved-row .col-attr {
+    color: var(--nbe-dark-text-primary);
+    font-family: var(--nbe-font-mono);
+    font-weight: 500;
+}
+
+.docs-mockup-resolved-row .col-val {
+    color: var(--nbe-dark-text-primary);
+}
+
+.docs-mockup-resolved-row .col-src {
     color: var(--nbe-dark-text-secondary);
-    background: var(--nbe-dark-bg-elevated);
-    border-bottom: 1px solid var(--nbe-dark-border-primary);
+    font-size: 7px;
 }
 
-.docs-mockup-resolved-row .col-name   { width: 100px; flex-shrink: 0; font-weight: 500; }
-.docs-mockup-resolved-row .col-value  { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.docs-mockup-resolved-row .col-source { width: 65px; flex-shrink: 0; text-align: right; }
-
-.docs-mockup-resolved-row .source-self {
+.docs-mockup-resolved-row .col-src.src-inherited {
     color: var(--nbe-dark-accent-primary);
-    font-weight: 600;
-}
-
-.docs-mockup-resolved-row .source-inherited {
-    color: var(--nbe-dark-text-secondary);
-    font-style: italic;
 }
 
 /* Color palette swatches */

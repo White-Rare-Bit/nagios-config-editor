@@ -14,24 +14,6 @@ def index():
 
 
 
-@bp.route("/bulk-rename")
-def bulk_rename():
-    """Bulk rename interface."""
-    p = get_service().parser
-    types = p.get_object_types()
-    return render_template("bulk_rename.html", object_types=types)
-
-
-@bp.route("/reorganize")
-def reorganize():
-    """Reorganize objects interface."""
-    p = get_service().parser
-    types = p.get_object_types()
-    files = p.get_files()
-    return render_template("reorganize.html",
-                           object_types=types,
-                           files=files)
-
 
 @bp.route("/audit-log")
 def audit_log():
@@ -65,11 +47,6 @@ def backups():
     return render_template("backups.html", backups=backup_list)
 
 
-@bp.route("/validate")
-def validate():
-    """Configuration validation interface."""
-    return render_template("validate.html")
-
 
 @bp.route("/dependencies")
 def dependencies():
@@ -89,13 +66,6 @@ def settings():
     config = get_config()
     return render_template("settings.html", config=config)
 
-
-@bp.route("/inheritance")
-def inheritance():
-    """Inheritance viewer page."""
-    p = get_service().parser
-    types = p.get_object_types()
-    return render_template("inheritance.html", object_types=types)
 
 
 

@@ -12,10 +12,7 @@ base.html
   ├─ backups.html
   ├─ git.html
   ├─ settings.html
-  ├─ bulk_rename.html
-  ├─ reorganize.html
-  ├─ inheritance.html
-  └─ validate.html
+  └─ docs.html
 ```
 
 ## Load Order

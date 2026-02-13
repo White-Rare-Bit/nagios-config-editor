@@ -9,102 +9,146 @@
     </p>
 
     <div class="docs-mockup">
-        <div class="docs-mockup-inheritance">
+        <div class="docs-mockup-ancestry">
 
-            <!-- Left: Object list sidebar -->
-            <div class="docs-mockup-obj-list">
-                <div class="docs-mockup-obj-list-header">Select Object</div>
-                <div class="docs-mockup-obj-list-item docs-mockup-obj-list-item--active">
-                    web-server01
-                    <span class="uses">uses: linux-server</span>
+            <!-- Collapsible header -->
+            <div class="docs-mockup-ancestry-header">
+                <div class="docs-mockup-ancestry-title">
+                    <i class="fa-solid fa-sitemap"></i>
+                    <span>Configuration Ancestry</span>
                 </div>
-                <div class="docs-mockup-obj-list-item">
-                    web-server02
-                    <span class="uses">uses: linux-server</span>
-                </div>
-                <div class="docs-mockup-obj-list-item">
-                    dbserver01
-                    <span class="uses">uses: linux-server</span>
-                </div>
-                <div class="docs-mockup-obj-list-item">
-                    linux-server
-                    <span class="uses">uses: generic-host</span>
-                </div>
-                <div class="docs-mockup-obj-list-item">
-                    generic-host
-                </div>
+                <span class="docs-mockup-ancestry-toggle"><i class="fa-solid fa-chevron-down"></i></span>
             </div>
 
-            <!-- Right: Chain + Resolved stacked -->
-            <div class="docs-mockup-inh-main">
+            <!-- Content area -->
+            <div class="docs-mockup-ancestry-content">
 
-                <!-- Inheritance chain card -->
-                <div class="docs-mockup-inh-card">
-                    <div class="docs-mockup-inh-card-header">Inheritance Chain: web-server01</div>
-                    <div class="docs-mockup-inh-tree">
-                        <div class="docs-mockup-tree-node docs-mockup-tree-root">
-                            <div class="docs-mockup-node-hdr">
-                                <strong>web-server01</strong>
-                                <span class="docs-mockup-node-count">(5 attrs)</span>
-                            </div>
-                            <div class="docs-mockup-node-attrs">address: 192.168.1.10<br>use: linux-server</div>
-                            <div class="docs-mockup-tree-node">
-                                <div class="docs-mockup-node-hdr docs-mockup-node-hdr--template">
-                                    <span class="docs-mockup-template-badge">template</span>
-                                    <strong>linux-server</strong>
-                                    <span class="docs-mockup-node-count">(4 attrs)</span>
-                                </div>
-                                <div class="docs-mockup-node-attrs">check_command: check-host-alive<br>use: generic-host</div>
-                                <div class="docs-mockup-tree-node">
-                                    <div class="docs-mockup-node-hdr docs-mockup-node-hdr--template">
-                                        <span class="docs-mockup-template-badge">template</span>
-                                        <strong>generic-host</strong>
-                                        <span class="docs-mockup-node-count">(3 attrs)</span>
-                                    </div>
-                                    <div class="docs-mockup-node-attrs">max_check_attempts: 3<br>notification_period: 24x7<br>check_interval: 5</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <!-- Templates chain -->
+                <div class="docs-mockup-ancestry-label">Templates</div>
+                <div class="docs-mockup-ancestry-chain">
+                    <span class="docs-mockup-chain-item">
+                        <span class="docs-mockup-type-badge host-template">host template</span>
+                        <span>generic-host</span>
+                    </span>
+                    <span class="docs-mockup-chain-sep"><i class="fa-solid fa-arrow-right"></i></span>
+                    <span class="docs-mockup-chain-item">
+                        <span class="docs-mockup-type-badge host-template">host template</span>
+                        <span>linux-server</span>
+                    </span>
+                    <span class="docs-mockup-chain-sep"><i class="fa-solid fa-arrow-right"></i></span>
+                    <span class="docs-mockup-chain-item current">
+                        <span class="docs-mockup-type-badge host">host</span>
+                        <span>app-prod-03</span>
+                    </span>
                 </div>
 
-                <!-- Resolved attributes card -->
-                <div class="docs-mockup-inh-card">
-                    <div class="docs-mockup-inh-card-header">Resolved Attributes</div>
-                    <div class="docs-mockup-resolved-row docs-mockup-resolved-row--header">
-                        <span class="col-name">Attribute</span>
-                        <span class="col-value">Value</span>
-                        <span class="col-source">Source</span>
+                <!-- Network parents chain -->
+                <div class="docs-mockup-ancestry-label">Network Parents</div>
+                <div class="docs-mockup-ancestry-chain">
+                    <span class="docs-mockup-chain-item missing">
+                        <span class="docs-mockup-type-badge host">host</span>
+                        <span>core-switch-01</span>
+                        <i class="fa-solid fa-xmark"></i>
+                    </span>
+                    <span class="docs-mockup-chain-sep"><i class="fa-solid fa-arrow-right"></i></span>
+                    <span class="docs-mockup-chain-item current">
+                        <span class="docs-mockup-type-badge host">host</span>
+                        <span>app-prod-03</span>
+                    </span>
+                </div>
+
+                <!-- Resolved attributes table -->
+                <div class="docs-mockup-ancestry-label">Resolved Attributes</div>
+                <div class="docs-mockup-resolved-grid">
+                    <div class="docs-mockup-resolved-hdr">
+                        <span class="col-attr">Attribute</span>
+                        <span class="col-val">Value</span>
+                        <span class="col-src">Source</span>
                     </div>
                     <div class="docs-mockup-resolved-row">
-                        <span class="col-name">host_name</span>
-                        <span class="col-value">web-server01</span>
-                        <span class="col-source source-self">self</span>
+                        <span class="col-attr">address</span>
+                        <span class="col-val">192.168.1.32</span>
+                        <span class="col-src">app-prod-03</span>
                     </div>
                     <div class="docs-mockup-resolved-row">
-                        <span class="col-name">address</span>
-                        <span class="col-value">192.168.1.10</span>
-                        <span class="col-source source-self">self</span>
+                        <span class="col-attr">alias</span>
+                        <span class="col-val">Production App Server 3</span>
+                        <span class="col-src">app-prod-03</span>
                     </div>
                     <div class="docs-mockup-resolved-row">
-                        <span class="col-name">check_command</span>
-                        <span class="col-value">check-host-alive</span>
-                        <span class="col-source source-inherited">linux-server</span>
+                        <span class="col-attr">check_command</span>
+                        <span class="col-val">check-host-alive</span>
+                        <span class="col-src src-inherited">linux-server</span>
                     </div>
                     <div class="docs-mockup-resolved-row">
-                        <span class="col-name">max_check_attempts</span>
-                        <span class="col-value">3</span>
-                        <span class="col-source source-inherited">generic-host</span>
+                        <span class="col-attr">check_interval</span>
+                        <span class="col-val">5</span>
+                        <span class="col-src src-inherited">linux-server</span>
                     </div>
                     <div class="docs-mockup-resolved-row">
-                        <span class="col-name">notification_period</span>
-                        <span class="col-value">24x7</span>
-                        <span class="col-source source-inherited">generic-host</span>
+                        <span class="col-attr">check_period</span>
+                        <span class="col-val">24x7</span>
+                        <span class="col-src src-inherited">linux-server</span>
                     </div>
                     <div class="docs-mockup-resolved-row">
-                        <span class="col-name">check_interval</span>
-                        <span class="col-value">5</span>
-                        <span class="col-source source-inherited">generic-host</span>
+                        <span class="col-attr">contact_groups</span>
+                        <span class="col-val">admins,linux-admins</span>
+                        <span class="col-src src-inherited">linux-server</span>
+                    </div>
+                    <div class="docs-mockup-resolved-row">
+                        <span class="col-attr">event_handler_enabled</span>
+                        <span class="col-val">1</span>
+                        <span class="col-src src-inherited">generic-host</span>
+                    </div>
+                    <div class="docs-mockup-resolved-row">
+                        <span class="col-attr">flap_detection_enabled</span>
+                        <span class="col-val">1</span>
+                        <span class="col-src src-inherited">generic-host</span>
+                    </div>
+                    <div class="docs-mockup-resolved-row">
+                        <span class="col-attr">host_name</span>
+                        <span class="col-val">app-prod-03</span>
+                        <span class="col-src">app-prod-03</span>
+                    </div>
+                    <div class="docs-mockup-resolved-row">
+                        <span class="col-attr">hostgroups</span>
+                        <span class="col-val">app-servers,production,linux-hosts</span>
+                        <span class="col-src">app-prod-03</span>
+                    </div>
+                    <div class="docs-mockup-resolved-row">
+                        <span class="col-attr">max_check_attempts</span>
+                        <span class="col-val">10</span>
+                        <span class="col-src src-inherited">linux-server</span>
+                    </div>
+                    <div class="docs-mockup-resolved-row">
+                        <span class="col-attr">notification_interval</span>
+                        <span class="col-val">120</span>
+                        <span class="col-src src-inherited">linux-server</span>
+                    </div>
+                    <div class="docs-mockup-resolved-row">
+                        <span class="col-attr">notification_options</span>
+                        <span class="col-val">d,u,r</span>
+                        <span class="col-src src-inherited">linux-server</span>
+                    </div>
+                    <div class="docs-mockup-resolved-row">
+                        <span class="col-attr">notification_period</span>
+                        <span class="col-val">workhours</span>
+                        <span class="col-src src-inherited">linux-server</span>
+                    </div>
+                    <div class="docs-mockup-resolved-row">
+                        <span class="col-attr">notifications_enabled</span>
+                        <span class="col-val">1</span>
+                        <span class="col-src src-inherited">generic-host</span>
+                    </div>
+                    <div class="docs-mockup-resolved-row">
+                        <span class="col-attr">parents</span>
+                        <span class="col-val">core-switch-01</span>
+                        <span class="col-src">app-prod-03</span>
+                    </div>
+                    <div class="docs-mockup-resolved-row">
+                        <span class="col-attr">process_perf_data</span>
+                        <span class="col-val">1</span>
+                        <span class="col-src src-inherited">generic-host</span>
                     </div>
                 </div>
 
@@ -113,55 +157,43 @@
         </div>
     </div>
 
-    <h3>Selecting an Object</h3>
+    <h3>Configuration Ancestry</h3>
 
     <p>
-        The left panel provides two controls for finding objects:
+        The Configuration Ancestry section appears as a collapsible accordion in the
+        object editor. Click the header to expand or collapse it. It contains three
+        subsections:
     </p>
 
-    <ul>
-        <li><strong>Object type dropdown</strong> &mdash; select the Nagios object type
-            (host, service, contact, etc.) to populate the object list.</li>
-        <li><strong>Search box</strong> &mdash; filters the object list by name as you
-            type.</li>
-    </ul>
+    <h3>Templates</h3>
 
     <p>
-        The object list sorts templates first (marked with a yellow "template" badge),
-        then regular objects alphabetically. Each list item shows the object name and,
-        if it uses templates, a "uses:" label with the template names.
-    </p>
-
-    <h3>Inheritance Chain</h3>
-
-    <p>
-        When you click an object, the right panel shows its inheritance chain as a
-        vertical tree. The selected object appears at the top, followed by its parent
-        templates, their parents, and so on up to the root template.
+        Shows the template inheritance chain as a horizontal flow, reading left to
+        right from the root template to the selected object. Each item in the chain
+        displays a <strong>type badge</strong> (e.g. "HOST TEMPLATE" or "HOST") followed
+        by the object name. Arrows connect the chain items.
     </p>
 
     <p>
-        Each node in the chain shows:
+        Clicking any item in the chain navigates to that object. If a template
+        referenced in the <code>use</code> directive does not exist, the chain shows
+        that item with an error indicator (<i class="fa-solid fa-xmark"></i>).
     </p>
 
-    <ul>
-        <li>The object or template name (bold).</li>
-        <li>A <strong>template badge</strong> for objects with <code>register 0</code>.</li>
-        <li>Up to <strong>5 sample attributes</strong> with their values, plus a count
-            of additional attributes if there are more.</li>
-    </ul>
+    <h3>Network Parents</h3>
 
     <p>
-        If a template referenced in the <code>use</code> directive does not exist, the
-        chain shows an error indicator at that point.
+        For host objects, shows the network parent hierarchy using the same horizontal
+        pill layout. Missing parents are highlighted with a danger border and an
+        <i class="fa-solid fa-xmark"></i> icon.
     </p>
 
     <h3>Resolved Attributes</h3>
 
     <p>
-        Below the chain, a table shows the <strong>final resolved attribute set</strong>
+        A three-column table showing the <strong>final resolved attribute set</strong>
         after all inheritance is applied. This is what Nagios will actually use at
-        runtime. The table has three columns:
+        runtime:
     </p>
 
     <table>
@@ -183,8 +215,8 @@
             <tr>
                 <td><strong>Source</strong></td>
                 <td>Which object or template provides this value. Attributes defined
-                    directly on the object show "self" (highlighted); inherited values
-                    show the template name.</td>
+                    directly on the object show the object name; inherited values
+                    show the template name (highlighted in the accent color).</td>
             </tr>
         </tbody>
     </table>
