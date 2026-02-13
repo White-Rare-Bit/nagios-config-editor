@@ -930,76 +930,60 @@
     border-bottom: 1px solid var(--nbe-dark-border-primary);
 }
 
-/* Inheritance chain — nested tree with bracket connectors */
+/* Inheritance chain — horizontal left-to-right flow */
 .docs-mockup-chain {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
     padding: 8px 10px;
-    font-family: var(--nbe-font-mono);
     font-size: 9px;
+    overflow-x: auto;
 }
 
-.docs-mockup-tree-node {
-    margin-left: 16px;
-    border-left: 1.5px solid var(--nbe-dark-border-primary);
-    padding-left: 12px;
-    margin-top: 6px;
+/* Individual chain node */
+.docs-mockup-chain-node {
+    display: flex;
+    align-items: flex-start;
+    flex-shrink: 0;
 }
 
-.docs-mockup-tree-node:last-child {
-    border-left-color: transparent;
+/* Arrow between nodes */
+.docs-mockup-chain-node + .docs-mockup-chain-node::before {
+    content: '→';
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    color: var(--nbe-dark-text-muted);
+    font-size: 10px;
+    margin-top: 3px;
 }
 
-.docs-mockup-tree-node::before {
-    content: '';
-    display: inline-block;
-    width: 12px;
-    height: 10px;
-    border-bottom: 1.5px solid var(--nbe-dark-border-primary);
-    border-left: 1.5px solid var(--nbe-dark-border-primary);
-    border-radius: 0 0 0 4px;
-    vertical-align: middle;
-    margin-left: -12px;
-    margin-right: 4px;
-}
-
-.docs-mockup-tree-root {
-    margin-left: 0;
-    border-left: none;
-    padding-left: 0;
-}
-
-.docs-mockup-tree-root::before { display: none; }
-
-/* Node header — inline pill with name + badge */
-.docs-mockup-node-header {
-    display: inline-block;
-    padding: 2px 8px;
+/* Node card */
+.docs-mockup-node-card {
+    padding: 4px 8px;
     border-radius: var(--nbe-radius-sm);
     background: var(--nbe-dark-bg-primary);
+    border: 1px solid var(--nbe-dark-border-primary);
+    min-width: 0;
+}
+
+.docs-mockup-node-card--template {
+    background: var(--nbe-dark-accent-alpha-10);
+    border-color: var(--nbe-dark-accent-alpha-30);
+}
+
+.docs-mockup-node-card .node-name {
     font-weight: 600;
     font-size: 9px;
+    white-space: nowrap;
 }
 
-.docs-mockup-node-header--template {
-    background: var(--nbe-dark-accent-alpha-10);
-    border: 1px solid var(--nbe-dark-accent-alpha-30);
-}
-
-.docs-mockup-node-attrs {
-    margin-left: 16px;
+.docs-mockup-node-card .node-attrs {
     margin-top: 2px;
-}
-
-.docs-mockup-node-attrs .docs-mockup-attr {
-    padding: 2px 0;
-}
-
-.docs-mockup-node-attrs .attr-name {
-    min-width: 64px;
-    width: 64px;
-}
-
-.docs-mockup-node-attrs .attr-val {
     font-size: 7px;
+    font-family: var(--nbe-font-mono);
+    color: var(--nbe-dark-text-secondary);
+    line-height: 1.5;
 }
 
 /* Resolved attributes — flex-row table */

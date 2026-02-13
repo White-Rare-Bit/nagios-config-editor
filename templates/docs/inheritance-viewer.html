@@ -42,28 +42,22 @@
                 <div class="docs-mockup-inh-card">
                     <div class="docs-mockup-inh-card-header">Inheritance Chain: web-server01</div>
                     <div class="docs-mockup-chain">
-                        <div class="docs-mockup-tree-root">
-                            <span class="docs-mockup-node-header"><strong>web-server01</strong> <span class="docs-mockup-type docs-mockup-type--host">host</span></span>
-                            <div class="docs-mockup-node-attrs">
-                                <div class="docs-mockup-attr"><span class="attr-name">address</span><span class="attr-val">192.168.1.10</span></div>
-                                <div class="docs-mockup-attr"><span class="attr-name">use</span><span class="attr-val">linux-server</span></div>
+                        <div class="docs-mockup-chain-node">
+                            <div class="docs-mockup-node-card">
+                                <div class="node-name">web-server01 <span class="docs-mockup-type docs-mockup-type--host">host</span></div>
+                                <div class="node-attrs">address: 192.168.1.10<br>use: linux-server</div>
                             </div>
-
-                            <div class="docs-mockup-tree-node">
-                                <span class="docs-mockup-node-header docs-mockup-node-header--template"><strong>linux-server</strong> <span class="docs-mockup-type docs-mockup-type--host">host</span></span>
-                                <div class="docs-mockup-node-attrs">
-                                    <div class="docs-mockup-attr"><span class="attr-name">check_command</span><span class="attr-val">check-host-alive</span></div>
-                                    <div class="docs-mockup-attr"><span class="attr-name">use</span><span class="attr-val">generic-host</span></div>
-                                </div>
-
-                                <div class="docs-mockup-tree-node">
-                                    <span class="docs-mockup-node-header docs-mockup-node-header--template"><strong>generic-host</strong> <span class="docs-mockup-type docs-mockup-type--host">host</span></span>
-                                    <div class="docs-mockup-node-attrs">
-                                        <div class="docs-mockup-attr"><span class="attr-name">max_check_attempts</span><span class="attr-val">3</span></div>
-                                        <div class="docs-mockup-attr"><span class="attr-name">notification_period</span><span class="attr-val">24x7</span></div>
-                                        <div class="docs-mockup-attr"><span class="attr-name">check_interval</span><span class="attr-val">5</span></div>
-                                    </div>
-                                </div>
+                        </div>
+                        <div class="docs-mockup-chain-node">
+                            <div class="docs-mockup-node-card docs-mockup-node-card--template">
+                                <div class="node-name">linux-server <span class="docs-mockup-type docs-mockup-type--host">host</span></div>
+                                <div class="node-attrs">check_command: check-host-alive<br>use: generic-host</div>
+                            </div>
+                        </div>
+                        <div class="docs-mockup-chain-node">
+                            <div class="docs-mockup-node-card docs-mockup-node-card--template">
+                                <div class="node-name">generic-host <span class="docs-mockup-type docs-mockup-type--host">host</span></div>
+                                <div class="node-attrs">max_check_attempts: 3<br>notification_period: 24x7<br>check_interval: 5</div>
                             </div>
                         </div>
                     </div>
