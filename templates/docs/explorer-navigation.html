@@ -22,10 +22,15 @@
                     <div class="docs-mockup-search"><span class="icon"><i class="fa fa-search"></i></span> Search objects…</div>
                     <div class="docs-mockup-tree-item"><span class="name">webserver01</span><span class="docs-mockup-type docs-mockup-type--host">host</span></div>
                     <div class="docs-mockup-tree-item docs-mockup-tree-item--selected"><span class="name">webserver02</span><span class="docs-mockup-type docs-mockup-type--host">host</span></div>
+                    <div class="docs-mockup-tree-item"><span class="name">dbserver01</span><span class="docs-mockup-type docs-mockup-type--host">host</span></div>
                     <div class="docs-mockup-tree-item"><span class="name">HTTP</span><span class="docs-mockup-type docs-mockup-type--service">service</span></div>
                     <div class="docs-mockup-tree-item"><span class="name">SSH</span><span class="docs-mockup-type docs-mockup-type--service">service</span></div>
+                    <div class="docs-mockup-tree-item"><span class="name">Disk Usage</span><span class="docs-mockup-type docs-mockup-type--service">service</span></div>
                     <div class="docs-mockup-tree-item"><span class="name">admin</span><span class="docs-mockup-type docs-mockup-type--contact">contact</span></div>
+                    <div class="docs-mockup-tree-item"><span class="name">oncall</span><span class="docs-mockup-type docs-mockup-type--contact">contact</span></div>
                     <div class="docs-mockup-tree-item"><span class="name">check-host-alive</span><span class="docs-mockup-type docs-mockup-type--command">command</span></div>
+                    <div class="docs-mockup-tree-item"><span class="name">check_http</span><span class="docs-mockup-type docs-mockup-type--command">command</span></div>
+                    <div class="docs-mockup-tree-item"><span class="name">24x7</span><span class="docs-mockup-type docs-mockup-type--timeperiod">timeperiod</span></div>
                 </div>
             </div>
 
@@ -43,7 +48,9 @@
                     <div class="docs-mockup-attr"><span class="attr-name">alias</span><span class="attr-val">Web Server 02</span></div>
                     <div class="docs-mockup-attr"><span class="attr-name">address</span><span class="attr-val">192.168.1.11</span></div>
                     <div class="docs-mockup-attr"><span class="attr-name">check_command</span><span class="attr-val">check-host-alive</span></div>
+                    <div class="docs-mockup-attr"><span class="attr-name">max_check_attempts</span><span class="attr-val">3</span></div>
                     <div class="docs-mockup-attr"><span class="attr-name">contact_groups</span><span class="attr-val">admins</span></div>
+                    <div class="docs-mockup-attr"><span class="attr-name">notification_period</span><span class="attr-val">24x7</span></div>
                     <div class="docs-mockup-attr"><span class="attr-name">use</span><span class="attr-val">linux-server</span></div>
                 </div>
             </div>
@@ -75,6 +82,24 @@
                         <span class="expand">▸</span>
                         <span class="icon icon--folder"><i class="fa fa-folder"></i></span>
                         <span class="label label--folder">services</span>
+                        <span class="count">3</span>
+                    </div>
+                    <div class="docs-mockup-file-row">
+                        <span class="expand">▸</span>
+                        <span class="icon icon--folder"><i class="fa fa-folder"></i></span>
+                        <span class="label label--folder">contacts</span>
+                        <span class="count">1</span>
+                    </div>
+                    <div class="docs-mockup-file-row">
+                        <span class="expand">▸</span>
+                        <span class="icon icon--folder"><i class="fa fa-folder"></i></span>
+                        <span class="label label--folder">commands</span>
+                        <span class="count">1</span>
+                    </div>
+                    <div class="docs-mockup-file-row">
+                        <span class="expand">▸</span>
+                        <span class="icon icon--folder"><i class="fa fa-folder"></i></span>
+                        <span class="label label--folder">timeperiods</span>
                         <span class="count">1</span>
                     </div>
                 </div>

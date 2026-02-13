@@ -598,7 +598,7 @@
     border: 1px solid var(--nbe-dark-border-primary);
     border-radius: var(--nbe-radius-md);
     overflow: hidden;
-    min-height: 200px;
+    min-height: 320px;
 }
 
 /* Panels — mimic real .tree-panel / .center-pane / .right-pane */
@@ -730,7 +730,7 @@
     padding: 0 8px;
     height: 24px;
     background: var(--nbe-dark-bg-secondary);
-    font-size: 10px;
+    font-size: 9px;
 }
 
 .docs-mockup-breadcrumb .file {
@@ -749,44 +749,51 @@
 
 /* Section title — mimic real .section-title */
 .docs-mockup-section-title {
-    font-size: 8px;
+    font-size: 7px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--nbe-dark-text-secondary);
     background: var(--nbe-dark-bg-secondary);
     border: 1px solid var(--nbe-dark-border-primary);
-    border-radius: var(--nbe-radius-md);
-    padding: 4px 8px;
-    margin: 0 -8px 6px;
+    border-radius: var(--nbe-radius-sm);
+    padding: 3px 6px;
+    margin: 0 -8px 4px;
 }
 
 /* Attribute row — mimic real .attr-row */
 .docs-mockup-attr {
     display: flex;
     align-items: center;
-    padding: 4px 0;
+    padding: 3px 0;
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
     font-family: var(--nbe-font-mono);
-    font-size: 9px;
+    font-size: 8px;
 }
 
 .docs-mockup-attr .attr-name {
-    min-width: 80px;
-    width: 80px;
+    min-width: 72px;
+    width: 72px;
     flex-shrink: 0;
     color: var(--nbe-dark-accent-primary);
-    padding-right: 6px;
+    padding-right: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .docs-mockup-attr .attr-val {
     flex: 1;
-    padding: 2px 6px;
+    padding: 1px 5px;
     border: 1px solid var(--nbe-dark-border-primary);
-    border-radius: var(--nbe-radius-md);
+    border-radius: var(--nbe-radius-sm);
     background: var(--nbe-dark-bg-secondary);
     color: var(--nbe-dark-text-primary);
     min-width: 0;
+    font-size: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* ── Workspace file tree — mimic real .workspace-tree-row ── */
