@@ -9,39 +9,38 @@
     </p>
 
     <div class="docs-mockup">
-        <div class="docs-mockup-title">Template Inheritance Chain</div>
         <div class="docs-mockup-inheritance">
 
             <!-- Left: Inheritance chain -->
             <div class="docs-mockup-chain">
-                <div class="docs-mockup-card docs-mockup-card--primary">
+                <div class="docs-mockup-card docs-mockup-card--selected">
                     <div class="docs-mockup-card-name">
-                        web-server01 <span class="docs-mockup-badge docs-mockup-badge--teal">host</span>
+                        web-server01 <span class="docs-mockup-type docs-mockup-type--host">host</span>
                     </div>
                     <div class="docs-mockup-card-attrs">
-                        address=<span class="val">192.168.1.10</span>&nbsp;&nbsp;use=<span class="ref">linux-server</span>
+                        <span class="attr-name">address</span>=<span class="val">192.168.1.10</span>&nbsp;&nbsp;<span class="attr-name">use</span>=<span class="ref">linux-server</span>
                     </div>
                 </div>
 
                 <div class="docs-mockup-arrow">inherits from</div>
 
-                <div class="docs-mockup-card docs-mockup-card--secondary">
+                <div class="docs-mockup-card">
                     <div class="docs-mockup-card-name">
-                        linux-server <span class="docs-mockup-badge docs-mockup-badge--orange">template</span>
+                        linux-server <span class="docs-mockup-type docs-mockup-type--host">host</span>
                     </div>
                     <div class="docs-mockup-card-attrs">
-                        check_command=<span class="val">check-host-alive</span>&nbsp;&nbsp;use=<span class="ref">generic-host</span>
+                        <span class="attr-name">check_command</span>=<span class="val">check-host-alive</span>&nbsp;&nbsp;<span class="attr-name">use</span>=<span class="ref">generic-host</span>
                     </div>
                 </div>
 
                 <div class="docs-mockup-arrow">inherits from</div>
 
-                <div class="docs-mockup-card docs-mockup-card--secondary">
+                <div class="docs-mockup-card">
                     <div class="docs-mockup-card-name">
-                        generic-host <span class="docs-mockup-badge docs-mockup-badge--orange">template</span>
+                        generic-host <span class="docs-mockup-type docs-mockup-type--host">host</span>
                     </div>
                     <div class="docs-mockup-card-attrs">
-                        max_check_attempts=<span class="val">3</span>&nbsp;&nbsp;notification_period=<span class="val">24x7</span>
+                        <span class="attr-name">max_check_attempts</span>=<span class="val">3</span>&nbsp;&nbsp;<span class="attr-name">notification_period</span>=<span class="val">24x7</span>
                     </div>
                 </div>
             </div>
@@ -58,7 +57,7 @@
                         <tr>
                             <td>address</td>
                             <td>192.168.1.10</td>
-                            <td><span class="docs-mockup-badge docs-mockup-badge--teal">self</span></td>
+                            <td><span class="docs-mockup-type docs-mockup-type--host" style="font-size:7px;width:auto;padding:1px 4px">self</span></td>
                         </tr>
                         <tr>
                             <td>check_command</td>

@@ -9,63 +9,74 @@
     </p>
 
     <div class="docs-mockup">
-        <div class="docs-mockup-title">Object Explorer: Three-Pane Layout</div>
-        <div class="docs-mockup-panes">
+        <div class="docs-mockup-explorer">
 
-            <!-- Left Pane: Object Tree -->
+            <!-- Left: Object Tree -->
             <div class="docs-mockup-panel docs-mockup-panel--tree">
-                <div class="docs-mockup-panel-header">Object Tree</div>
+                <div class="docs-mockup-panel-header">Objects</div>
+                <div class="docs-mockup-tabs">
+                    <span class="docs-mockup-tab docs-mockup-tab--active"><i class="fa fa-folder"></i> By File</span>
+                    <span class="docs-mockup-tab"><i class="fa fa-layer-group"></i> By Type</span>
+                </div>
                 <div class="docs-mockup-panel-body">
-                    <div class="docs-mockup-tabs">
-                        <span class="docs-mockup-tab docs-mockup-tab--active-teal">By File</span>
-                        <span class="docs-mockup-tab">By Type</span>
-                    </div>
-                    <div class="docs-mockup-search">Search objects...</div>
-                    <div class="docs-mockup-tree-file">hosts.cfg</div>
-                    <div class="docs-mockup-tree-obj">webserver01 <span class="docs-mockup-badge docs-mockup-badge--teal">host</span></div>
-                    <div class="docs-mockup-tree-obj">webserver02 <span class="docs-mockup-badge docs-mockup-badge--teal">host</span></div>
-                    <div class="docs-mockup-tree-file">services.cfg</div>
+                    <div class="docs-mockup-search"><span class="icon"><i class="fa fa-search"></i></span> Search objects…</div>
+                    <div class="docs-mockup-tree-item"><span class="name">webserver01</span><span class="docs-mockup-type docs-mockup-type--host">host</span></div>
+                    <div class="docs-mockup-tree-item docs-mockup-tree-item--selected"><span class="name">webserver02</span><span class="docs-mockup-type docs-mockup-type--host">host</span></div>
+                    <div class="docs-mockup-tree-item"><span class="name">HTTP</span><span class="docs-mockup-type docs-mockup-type--service">service</span></div>
+                    <div class="docs-mockup-tree-item"><span class="name">SSH</span><span class="docs-mockup-type docs-mockup-type--service">service</span></div>
+                    <div class="docs-mockup-tree-item"><span class="name">admin</span><span class="docs-mockup-type docs-mockup-type--contact">contact</span></div>
+                    <div class="docs-mockup-tree-item"><span class="name">check-host-alive</span><span class="docs-mockup-type docs-mockup-type--command">command</span></div>
                 </div>
             </div>
 
-            <!-- Center Pane: Attribute Editor -->
+            <!-- Center: Attribute Editor -->
             <div class="docs-mockup-panel docs-mockup-panel--editor">
-                <div class="docs-mockup-panel-header">Attribute Editor</div>
+                <div class="docs-mockup-breadcrumb">
+                    <span class="file">hosts.cfg</span>
+                    <span class="sep">›</span>
+                    <span class="obj">webserver02</span>
+                    <span class="docs-mockup-type docs-mockup-type--host" style="margin-left:4px">host</span>
+                </div>
                 <div class="docs-mockup-panel-body">
-                    <div class="docs-mockup-tabs">
-                        <span class="docs-mockup-tab docs-mockup-tab--active-blue">webserver01</span>
-                        <span class="docs-mockup-tab">webserver02</span>
-                    </div>
-                    <div class="docs-mockup-attr">
-                        <span class="docs-mockup-attr-label">host_name</span>
-                        <span class="docs-mockup-attr-value">webserver01</span>
-                    </div>
-                    <div class="docs-mockup-attr">
-                        <span class="docs-mockup-attr-label">address</span>
-                        <span class="docs-mockup-attr-value">192.168.1.10</span>
-                    </div>
-                    <div class="docs-mockup-attr">
-                        <span class="docs-mockup-attr-label">check_command</span>
-                        <span class="docs-mockup-attr-value docs-mockup-attr-value--ref">check-host-alive</span>
-                    </div>
+                    <div class="docs-mockup-section-title">Attributes</div>
+                    <div class="docs-mockup-attr"><span class="attr-name">host_name</span><span class="attr-val">webserver02</span></div>
+                    <div class="docs-mockup-attr"><span class="attr-name">alias</span><span class="attr-val">Web Server 02</span></div>
+                    <div class="docs-mockup-attr"><span class="attr-name">address</span><span class="attr-val">192.168.1.11</span></div>
+                    <div class="docs-mockup-attr"><span class="attr-name">check_command</span><span class="attr-val">check-host-alive</span></div>
+                    <div class="docs-mockup-attr"><span class="attr-name">contact_groups</span><span class="attr-val">admins</span></div>
+                    <div class="docs-mockup-attr"><span class="attr-name">use</span><span class="attr-val">linux-server</span></div>
                 </div>
             </div>
 
-            <!-- Right Pane: Workspace -->
+            <!-- Right: Workspace -->
             <div class="docs-mockup-panel docs-mockup-panel--workspace">
                 <div class="docs-mockup-panel-header">Workspace</div>
+                <div class="docs-mockup-tabs">
+                    <span class="docs-mockup-tab docs-mockup-tab--active"><i class="fa fa-folder"></i> Files</span>
+                    <span class="docs-mockup-tab"><i class="fa fa-lightbulb"></i> Suggestions</span>
+                    <span class="docs-mockup-tab"><i class="fa fa-check-circle"></i> Validation</span>
+                </div>
                 <div class="docs-mockup-panel-body">
-                    <div class="docs-mockup-tabs">
-                        <span class="docs-mockup-tab docs-mockup-tab--active-orange">Files</span>
-                        <span class="docs-mockup-tab">Suggestions</span>
-                        <span class="docs-mockup-tab">Errors</span>
-                        <span class="docs-mockup-tab">Validation</span>
+                    <div class="docs-mockup-file-row">
+                        <span class="expand">▾</span>
+                        <span class="icon icon--folder"><i class="fa fa-folder-open"></i></span>
+                        <span class="label label--folder">hosts</span>
+                        <span class="count">2</span>
                     </div>
-                    <div class="docs-mockup-tree-file">hosts/</div>
-                    <div class="docs-mockup-tree-obj">hosts.cfg</div>
-                    <div class="docs-mockup-tree-obj">templates.cfg</div>
-                    <div class="docs-mockup-tree-file">services/</div>
-                    <div class="docs-mockup-tree-obj">services.cfg</div>
+                    <div class="docs-mockup-file-row docs-mockup-file-row--child">
+                        <span class="icon"><i class="fa fa-file"></i></span>
+                        <span class="label">hosts.cfg</span>
+                    </div>
+                    <div class="docs-mockup-file-row docs-mockup-file-row--child">
+                        <span class="icon"><i class="fa fa-file"></i></span>
+                        <span class="label">templates.cfg</span>
+                    </div>
+                    <div class="docs-mockup-file-row">
+                        <span class="expand">▸</span>
+                        <span class="icon icon--folder"><i class="fa fa-folder"></i></span>
+                        <span class="label label--folder">services</span>
+                        <span class="count">1</span>
+                    </div>
                 </div>
             </div>
 
