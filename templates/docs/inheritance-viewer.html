@@ -11,75 +11,94 @@
     <div class="docs-mockup">
         <div class="docs-mockup-inheritance">
 
-            <!-- Left: Inheritance chain -->
-            <div class="docs-mockup-chain">
-                <div class="docs-mockup-card docs-mockup-card--selected">
-                    <div class="docs-mockup-card-name">
-                        web-server01 <span class="docs-mockup-type docs-mockup-type--host">host</span>
-                    </div>
-                    <div class="docs-mockup-card-attrs">
-                        <span class="attr-name">address</span>=<span class="val">192.168.1.10</span>&nbsp;&nbsp;<span class="attr-name">use</span>=<span class="ref">linux-server</span>
-                    </div>
+            <!-- Left: Object list sidebar -->
+            <div class="docs-mockup-obj-list">
+                <div class="docs-mockup-obj-list-header">Select Object</div>
+                <div class="docs-mockup-obj-list-item docs-mockup-obj-list-item--active">
+                    web-server01
+                    <span class="uses">uses: linux-server</span>
                 </div>
-
-                <div class="docs-mockup-arrow">inherits from</div>
-
-                <div class="docs-mockup-card">
-                    <div class="docs-mockup-card-name">
-                        linux-server <span class="docs-mockup-type docs-mockup-type--host">host</span>
-                    </div>
-                    <div class="docs-mockup-card-attrs">
-                        <span class="attr-name">check_command</span>=<span class="val">check-host-alive</span>&nbsp;&nbsp;<span class="attr-name">use</span>=<span class="ref">generic-host</span>
-                    </div>
+                <div class="docs-mockup-obj-list-item">
+                    web-server02
+                    <span class="uses">uses: linux-server</span>
                 </div>
-
-                <div class="docs-mockup-arrow">inherits from</div>
-
-                <div class="docs-mockup-card">
-                    <div class="docs-mockup-card-name">
-                        generic-host <span class="docs-mockup-type docs-mockup-type--host">host</span>
-                    </div>
-                    <div class="docs-mockup-card-attrs">
-                        <span class="attr-name">max_check_attempts</span>=<span class="val">3</span>&nbsp;&nbsp;<span class="attr-name">notification_period</span>=<span class="val">24x7</span>
-                    </div>
+                <div class="docs-mockup-obj-list-item">
+                    dbserver01
+                    <span class="uses">uses: linux-server</span>
+                </div>
+                <div class="docs-mockup-obj-list-item">
+                    linux-server
+                    <span class="uses">uses: generic-host</span>
+                </div>
+                <div class="docs-mockup-obj-list-item">
+                    generic-host
                 </div>
             </div>
 
-            <!-- Right: Resolved attributes table -->
-            <div class="docs-mockup-resolved">
-                <div class="docs-mockup-resolved-title">Resolved Attributes</div>
-                <div class="docs-mockup-resolved-subtitle">"First match wins" — child values override parents</div>
-                <table class="docs-mockup-table">
-                    <thead>
-                        <tr><th>Attribute</th><th>Value</th><th>Source</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>address</td>
-                            <td>192.168.1.10</td>
-                            <td><span class="docs-mockup-type docs-mockup-type--host" style="font-size:7px;width:auto;padding:1px 4px">self</span></td>
-                        </tr>
-                        <tr>
-                            <td>check_command</td>
-                            <td>check-host-alive</td>
-                            <td class="source">linux-server</td>
-                        </tr>
-                        <tr>
-                            <td>max_check_attempts</td>
-                            <td>3</td>
-                            <td class="source">generic-host</td>
-                        </tr>
-                        <tr>
-                            <td>notification_period</td>
-                            <td>24x7</td>
-                            <td class="source">generic-host</td>
-                        </tr>
-                    </tbody>
-                </table>
-                <div class="docs-mockup-table-note">
-                    If both child and parent define the same attribute, the child's value wins.
-                    The viewer shows which level provides each value.
+            <!-- Right: Chain + Resolved stacked -->
+            <div class="docs-mockup-inh-main">
+
+                <!-- Inheritance chain card -->
+                <div class="docs-mockup-inh-card">
+                    <div class="docs-mockup-inh-card-header">Inheritance Chain: web-server01</div>
+                    <div class="docs-mockup-chain">
+                        <div class="docs-mockup-tree-root">
+                            <span class="docs-mockup-node-header"><strong>web-server01</strong> <span class="docs-mockup-type docs-mockup-type--host">host</span></span>
+                            <div class="docs-mockup-node-attrs">address: 192.168.1.10<br>use: linux-server</div>
+
+                            <div class="docs-mockup-tree-node">
+                                <span class="docs-mockup-node-header docs-mockup-node-header--template"><strong>linux-server</strong> <span class="docs-mockup-type docs-mockup-type--host">host</span></span>
+                                <div class="docs-mockup-node-attrs">check_command: check-host-alive<br>use: generic-host</div>
+
+                                <div class="docs-mockup-tree-node">
+                                    <span class="docs-mockup-node-header docs-mockup-node-header--template"><strong>generic-host</strong> <span class="docs-mockup-type docs-mockup-type--host">host</span></span>
+                                    <div class="docs-mockup-node-attrs">max_check_attempts: 3<br>notification_period: 24x7<br>check_interval: 5</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+
+                <!-- Resolved attributes card -->
+                <div class="docs-mockup-inh-card">
+                    <div class="docs-mockup-inh-card-header">Resolved Attributes</div>
+                    <div class="docs-mockup-resolved-row docs-mockup-resolved-row--header">
+                        <span class="col-name">Attribute</span>
+                        <span class="col-value">Value</span>
+                        <span class="col-source">Source</span>
+                    </div>
+                    <div class="docs-mockup-resolved-row">
+                        <span class="col-name">host_name</span>
+                        <span class="col-value">web-server01</span>
+                        <span class="col-source source-self">self</span>
+                    </div>
+                    <div class="docs-mockup-resolved-row">
+                        <span class="col-name">address</span>
+                        <span class="col-value">192.168.1.10</span>
+                        <span class="col-source source-self">self</span>
+                    </div>
+                    <div class="docs-mockup-resolved-row">
+                        <span class="col-name">check_command</span>
+                        <span class="col-value">check-host-alive</span>
+                        <span class="col-source source-inherited">linux-server</span>
+                    </div>
+                    <div class="docs-mockup-resolved-row">
+                        <span class="col-name">max_check_attempts</span>
+                        <span class="col-value">3</span>
+                        <span class="col-source source-inherited">generic-host</span>
+                    </div>
+                    <div class="docs-mockup-resolved-row">
+                        <span class="col-name">notification_period</span>
+                        <span class="col-value">24x7</span>
+                        <span class="col-source source-inherited">generic-host</span>
+                    </div>
+                    <div class="docs-mockup-resolved-row">
+                        <span class="col-name">check_interval</span>
+                        <span class="col-value">5</span>
+                        <span class="col-source source-inherited">generic-host</span>
+                    </div>
+                </div>
+
             </div>
 
         </div>
