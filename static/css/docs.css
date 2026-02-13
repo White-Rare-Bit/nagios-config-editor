@@ -930,60 +930,84 @@
     border-bottom: 1px solid var(--nbe-dark-border-primary);
 }
 
-/* Inheritance chain — horizontal left-to-right flow */
-.docs-mockup-chain {
-    display: flex;
-    align-items: flex-start;
-    gap: 0;
-    padding: 8px 10px;
-    font-size: 9px;
-    overflow-x: auto;
+/* Inheritance chain — nested tree (matches real inheritance.css) */
+.docs-mockup-inh-tree {
+    font-family: var(--nbe-font-mono);
+    font-size: 8px;
+    padding: 6px 8px;
 }
 
-/* Individual chain node */
-.docs-mockup-chain-node {
-    display: flex;
-    align-items: flex-start;
-    flex-shrink: 0;
+.docs-mockup-tree-node {
+    position: relative;
+    margin-left: 12px;
+    border-left: 1px solid var(--nbe-dark-border-secondary);
+    padding-left: 8px;
+    margin-bottom: 2px;
 }
 
-/* Arrow between nodes */
-.docs-mockup-chain-node + .docs-mockup-chain-node::before {
-    content: '→';
-    display: flex;
-    align-items: center;
-    padding: 0 6px;
-    color: var(--nbe-dark-text-muted);
-    font-size: 10px;
-    margin-top: 3px;
+.docs-mockup-tree-node:last-child {
+    border-left-color: transparent;
 }
 
-/* Node card */
-.docs-mockup-node-card {
-    padding: 4px 8px;
+.docs-mockup-tree-node::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-bottom: 1px solid var(--nbe-dark-border-secondary);
+    position: absolute;
+    margin-left: -8px;
+    margin-top: 2px;
+}
+
+.docs-mockup-tree-root {
+    margin-left: 0;
+    border-left: none;
+    padding-left: 0;
+}
+
+.docs-mockup-tree-root::before {
+    display: none;
+}
+
+.docs-mockup-node-hdr {
+    display: inline-block;
+    padding: 2px 5px;
     border-radius: var(--nbe-radius-sm);
     background: var(--nbe-dark-bg-primary);
-    border: 1px solid var(--nbe-dark-border-primary);
-    min-width: 0;
+    font-size: 8px;
+    margin-bottom: 1px;
 }
 
-.docs-mockup-node-card--template {
+.docs-mockup-node-hdr--template {
     background: var(--nbe-dark-accent-alpha-10);
-    border-color: var(--nbe-dark-accent-alpha-30);
+    border: 1px solid var(--nbe-dark-accent-alpha-30);
 }
 
-.docs-mockup-node-card .node-name {
+.docs-mockup-template-badge {
+    display: inline-block;
+    font-size: 6px;
     font-weight: 600;
-    font-size: 9px;
-    white-space: nowrap;
+    padding: 0 3px;
+    border-radius: var(--nbe-radius-sm);
+    background: var(--nbe-warning);
+    color: #000;
+    margin-right: 2px;
+    text-transform: uppercase;
 }
 
-.docs-mockup-node-card .node-attrs {
-    margin-top: 2px;
+.docs-mockup-node-count {
     font-size: 7px;
-    font-family: var(--nbe-font-mono);
+    color: var(--nbe-dark-text-muted);
+    margin-left: 3px;
+}
+
+.docs-mockup-node-attrs {
+    font-size: 7px;
     color: var(--nbe-dark-text-secondary);
+    margin-left: 8px;
     line-height: 1.5;
+    margin-bottom: 2px;
 }
 
 /* Resolved attributes — flex-row table */

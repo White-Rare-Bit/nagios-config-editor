@@ -41,23 +41,28 @@
                 <!-- Inheritance chain card -->
                 <div class="docs-mockup-inh-card">
                     <div class="docs-mockup-inh-card-header">Inheritance Chain: web-server01</div>
-                    <div class="docs-mockup-chain">
-                        <div class="docs-mockup-chain-node">
-                            <div class="docs-mockup-node-card">
-                                <div class="node-name">web-server01 <span class="docs-mockup-type docs-mockup-type--host">host</span></div>
-                                <div class="node-attrs">address: 192.168.1.10<br>use: linux-server</div>
+                    <div class="docs-mockup-inh-tree">
+                        <div class="docs-mockup-tree-node docs-mockup-tree-root">
+                            <div class="docs-mockup-node-hdr">
+                                <strong>web-server01</strong>
+                                <span class="docs-mockup-node-count">(5 attrs)</span>
                             </div>
-                        </div>
-                        <div class="docs-mockup-chain-node">
-                            <div class="docs-mockup-node-card docs-mockup-node-card--template">
-                                <div class="node-name">linux-server <span class="docs-mockup-type docs-mockup-type--host">host</span></div>
-                                <div class="node-attrs">check_command: check-host-alive<br>use: generic-host</div>
-                            </div>
-                        </div>
-                        <div class="docs-mockup-chain-node">
-                            <div class="docs-mockup-node-card docs-mockup-node-card--template">
-                                <div class="node-name">generic-host <span class="docs-mockup-type docs-mockup-type--host">host</span></div>
-                                <div class="node-attrs">max_check_attempts: 3<br>notification_period: 24x7<br>check_interval: 5</div>
+                            <div class="docs-mockup-node-attrs">address: 192.168.1.10<br>use: linux-server</div>
+                            <div class="docs-mockup-tree-node">
+                                <div class="docs-mockup-node-hdr docs-mockup-node-hdr--template">
+                                    <span class="docs-mockup-template-badge">template</span>
+                                    <strong>linux-server</strong>
+                                    <span class="docs-mockup-node-count">(4 attrs)</span>
+                                </div>
+                                <div class="docs-mockup-node-attrs">check_command: check-host-alive<br>use: generic-host</div>
+                                <div class="docs-mockup-tree-node">
+                                    <div class="docs-mockup-node-hdr docs-mockup-node-hdr--template">
+                                        <span class="docs-mockup-template-badge">template</span>
+                                        <strong>generic-host</strong>
+                                        <span class="docs-mockup-node-count">(3 attrs)</span>
+                                    </div>
+                                    <div class="docs-mockup-node-attrs">max_check_attempts: 3<br>notification_period: 24x7<br>check_interval: 5</div>
+                                </div>
                             </div>
                         </div>
                     </div>
