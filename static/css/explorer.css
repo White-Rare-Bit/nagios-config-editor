@@ -857,11 +857,11 @@
 }
 
 .tree-item.staged-creation:hover {
-    background: var(--nbe-success-border);
+    background: var(--nbe-dark-validation-success-badge);
 }
 
 .tree-item.staged-creation.selected {
-    background: var(--nbe-success-border);
+    background: var(--nbe-dark-validation-success-badge);
 }
 
 .tree-item-staged-badge {
