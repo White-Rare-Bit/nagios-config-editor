@@ -20,11 +20,12 @@
     padding-left: var(--nbe-space-md);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-y: auto;
 }
 
 .dep-container .dep-section,
 .dep-section {
+    flex-shrink: 0;
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
     background: transparent;
 }
@@ -396,7 +397,8 @@
 
 .dep-container .dep-section-grow,
 .dep-section-grow {
-    flex: 1;
+    flex-shrink: 0;
+    min-height: 150px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -788,26 +790,26 @@ body.editing-locked .dep-container {
    Scrollbar - Dark Theme
    ============================================================================ */
 
-.dep-sidebar::-webkit-scrollbar,
+.dep-container .dep-sidebar::-webkit-scrollbar,
 .dep-node-list::-webkit-scrollbar,
 .dep-search-dropdown::-webkit-scrollbar {
     width: 8px;
 }
 
-.dep-sidebar::-webkit-scrollbar-track,
+.dep-container .dep-sidebar::-webkit-scrollbar-track,
 .dep-node-list::-webkit-scrollbar-track,
 .dep-search-dropdown::-webkit-scrollbar-track {
     background: var(--nbe-dark-bg-primary);
 }
 
-.dep-sidebar::-webkit-scrollbar-thumb,
+.dep-container .dep-sidebar::-webkit-scrollbar-thumb,
 .dep-node-list::-webkit-scrollbar-thumb,
 .dep-search-dropdown::-webkit-scrollbar-thumb {
     background: var(--nbe-dark-border-primary);
     border-radius: var(--nbe-radius-md);
 }
 
-.dep-sidebar::-webkit-scrollbar-thumb:hover,
+.dep-container .dep-sidebar::-webkit-scrollbar-thumb:hover,
 .dep-node-list::-webkit-scrollbar-thumb:hover,
 .dep-search-dropdown::-webkit-scrollbar-thumb:hover {
     background: var(--nbe-dark-text-muted);
