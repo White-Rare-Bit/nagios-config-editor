@@ -1,6 +1,7 @@
 """Tests for audit_service — key=value log line formatting."""
 
 import logging
+import logging.handlers
 
 from audit_service import format_audit_line, log_audit
 
@@ -82,22 +83,34 @@ class TestFormatAuditLine:
 class TestLogAudit:
     """Test that log_audit writes to the audit logger."""
 
-    def test_log_audit_writes_to_logger(self, caplog):
-        with caplog.at_level(logging.INFO, logger="audit"):
+    def test_log_audit_writes_to_logger(self):
+        audit = logging.getLogger("audit")
+        handler = logging.handlers.MemoryHandler(capacity=100)
+        handler.setLevel(logging.INFO)
+        audit.addHandler(handler)
+        try:
             log_audit(
                 action="apply", user="admin@example.com", txn="abc123",
                 type="host", name="web01", op="modify",
             )
-        assert len(caplog.records) == 1
-        assert "AUDIT" in caplog.records[0].message
-        assert "txn=abc123" in caplog.records[0].message
+            assert len(handler.buffer) == 1
+            assert "AUDIT" in handler.buffer[0].message
+            assert "txn=abc123" in handler.buffer[0].message
+        finally:
+            audit.removeHandler(handler)
 
-    def test_log_audit_generates_txn_if_none(self, caplog):
-        with caplog.at_level(logging.INFO, logger="audit"):
+    def test_log_audit_generates_txn_if_none(self):
+        audit = logging.getLogger("audit")
+        handler = logging.handlers.MemoryHandler(capacity=100)
+        handler.setLevel(logging.INFO)
+        audit.addHandler(handler)
+        try:
             log_audit(action="backup_created", user="admin@example.com")
-        assert "txn=" in caplog.records[0].message
-        # Should be a non-empty txn value
-        msg = caplog.records[0].message
-        txn_start = msg.index("txn=") + 4
-        txn_end = msg.index(" ", txn_start)
-        assert len(msg[txn_start:txn_end]) > 0
+            assert len(handler.buffer) == 1
+            msg = handler.buffer[0].message
+            assert "txn=" in msg
+            txn_start = msg.index("txn=") + 4
+            txn_end = msg.index(" ", txn_start)
+            assert len(msg[txn_start:txn_end]) > 0
+        finally:
+            audit.removeHandler(handler)
