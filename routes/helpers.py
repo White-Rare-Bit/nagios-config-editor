@@ -91,10 +91,6 @@ def get_git_service():
     return current_app.extensions["git"]
 
 
-def get_op_logger():
-    """Get the operation logger."""
-    return current_app.extensions.get("op_logger")
-
 
 def get_audit_user_identity():
     """Get user identity for audit log entries.

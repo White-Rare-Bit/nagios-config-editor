@@ -13,7 +13,6 @@ from staging_manager import generate_stable_key_for_object
 
 from .helpers import (
     get_config_path,
-    get_op_logger,
     get_service,
     get_staging_manager,
 )
@@ -225,13 +224,11 @@ def api_preview_rename():
 @bp.route("/api/apply-rename", methods=["POST"])
 def api_apply_rename():
     """Stage bulk rename operation (changes applied via staging Apply)."""
-    op_log = get_op_logger()
     sm = get_staging_manager()
     data = request.get_json() or {}
 
     object_type = data.get("type")
-    if op_log:
-        op_log.info("app", "apply_rename", params={"object_type": object_type})
+    logger.info("Apply rename: object_type=%s", object_type)
     find_pattern = data.get("find", "")
     replace_with = data.get("replace", "")
     use_regex = data.get("regex", False)
@@ -328,15 +325,11 @@ def api_apply_rename():
 @bp.route("/api/move-objects", methods=["POST"])
 def api_move_objects():
     """Stage bulk move operation (changes applied via staging Apply)."""
-    op_log = get_op_logger()
     sm = get_staging_manager()
     data = request.get_json() or {}
 
-    if op_log:
-        op_log.info("app", "move_objects", params={
-            "object_count": len(data.get("objects", [])),
-            "target_file": data.get("target_file", ""),
-        })
+    logger.info("Move objects: count=%d, target=%s",
+                len(data.get("objects", [])), data.get("target_file", ""))
 
     session_id = request.headers.get("X-Session-Id")
     if not session_id:

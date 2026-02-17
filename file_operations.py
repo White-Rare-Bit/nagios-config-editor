@@ -6,20 +6,14 @@ Nagios configuration objects directly in files (no shadow copies).
 
 import contextlib
 import difflib
+import logging
 import os
 import re
 from pathlib import Path
 
 from nagios_model import OperationResult, format_object_block
 
-# Module-level operation logger (set via set_logger)
-_op_logger = None
-
-
-def set_logger(logger):
-    """Set the module-level operation logger."""
-    global _op_logger
-    _op_logger = logger
+logger = logging.getLogger(__name__)
 
 
 def _compute_checksum(content: str) -> str:
@@ -231,8 +225,7 @@ def edit_object_in_file(file_path: str, line_number: int, new_attrs: dict[str, s
         OperationResult with success=True on success, or error details on failure
 
     """
-    if _op_logger:
-        _op_logger.debug("file_op", "edit_object_in_file", params={"file_path": file_path, "line_number": line_number, "obj_type": obj_type})  # noqa: PLE1205
+    logger.debug("file_op edit_object_in_file file_path=%s line_number=%s obj_type=%s", file_path, line_number, obj_type)
 
     read_result = _read_file_content(file_path, expected_checksum)
     if not read_result.success:
@@ -271,8 +264,7 @@ def delete_object_from_file(file_path: str, line_number: int,
         OperationResult with success=True on success, or error details on failure
 
     """
-    if _op_logger:
-        _op_logger.debug("file_op", "delete_object_from_file", params={"file_path": file_path, "line_number": line_number})  # noqa: PLE1205
+    logger.debug("file_op delete_object_from_file file_path=%s line_number=%s", file_path, line_number)
 
     read_result = _read_file_content(file_path, expected_checksum)
     if not read_result.success:
@@ -315,8 +307,7 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: dict[str, str],
         OperationResult with success=True on success, or error details on failure
 
     """
-    if _op_logger:
-        _op_logger.debug("file_op", "add_object_to_file", params={"file_path": file_path, "obj_type": obj_type})  # noqa: PLE1205
+    logger.debug("file_op add_object_to_file file_path=%s obj_type=%s", file_path, obj_type)
     path = Path(file_path)
     new_block = raw_block or format_object_block(obj_type, attrs)
 
@@ -424,14 +415,10 @@ def _rollback_target_add(target_file: str, raw_block: str, del_error: str) -> Op
             rollback_content = target_content.replace(raw_block, "", 1)
             rollback_content = re.sub(r"\n{3,}", "\n\n", rollback_content)
             _atomic_write(target_file, rollback_content)
-        if _op_logger:
-            _op_logger.info("file_op", "move_rollback",  # noqa: PLE1205
-                           params={"target": target_file}, result="success")
+        logger.info("file_op move_rollback target=%s result=success", target_file)
         return OperationResult(False, f"Failed to delete from source after add: {del_error}")
     except OSError as e:
-        if _op_logger:
-            _op_logger.exception("file_op", "move_rollback",  # noqa: PLE1205
-                            params={"target": target_file}, error=str(e))
+        logger.exception("file_op move_rollback target=%s error=%s", target_file, e)
         return OperationResult(False,
             f"Failed to delete from source: {del_error}. "
             f"CRITICAL: Rollback failed, object may be duplicated in both files: {e}")
@@ -457,9 +444,7 @@ def move_object_between_files(source_file: str, source_line: int,
         OperationResult with success=True on success, or error details on failure
 
     """
-    if _op_logger:
-        _op_logger.debug("file_op", "move_object_between_files",  # noqa: PLE1205
-                        params={"source_file": source_file, "target_file": target_file, "obj_type": obj_type})
+    logger.debug("file_op move_object_between_files source_file=%s target_file=%s obj_type=%s", source_file, target_file, obj_type)
 
     try:
         source_content = Path(source_file).read_text()

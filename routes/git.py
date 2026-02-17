@@ -1,5 +1,6 @@
 """Git integration routes."""
 
+import logging
 from datetime import datetime
 
 from flask import Blueprint, jsonify, request
@@ -12,15 +13,15 @@ from .helpers import (
     get_audit_user_identity,
     get_config_path,
     get_git_service,
-    get_op_logger,
     get_service,
     get_staging_manager,
 )
 
 bp = Blueprint("git", __name__)
+logger = logging.getLogger(__name__)
 
 
-def _check_staging_lock(session_id, op_log=None, operation="git"):
+def _check_staging_lock(session_id, operation="git"):
     """Check if staging is locked by another session.
 
     Returns:
@@ -32,8 +33,8 @@ def _check_staging_lock(session_id, op_log=None, operation="git"):
     staging_mgr = get_staging_manager()
     lock_owner = staging_mgr.get_lock_owner()
     if lock_owner and lock_owner != session_id:
-        if op_log:
-            op_log.warning("git", operation, session_id=session_id, result="lock_conflict")
+        logger.warning("Lock conflict on %s: session_id=%s, lock_owner=%s",
+                       operation, session_id, lock_owner)
         return jsonify({
             "error": "Another user has pending changes. Wait for them to commit or discard.",
             "locked": True,
@@ -62,7 +63,7 @@ def _resolve_user_identity(data):
     return user_name, user_email
 
 
-def _validate_commit_files(files, config_path, op_log):
+def _validate_commit_files(files, config_path):
     """Validate file paths for a commit.
 
     Returns:
@@ -72,9 +73,8 @@ def _validate_commit_files(files, config_path, op_log):
     for filepath in files:
         safe_result = is_safe_path(filepath, config_path)
         if not safe_result.success:
-            if op_log:
-                op_log.warning("git", "commit", params={"file": filepath},
-                               error=f"path_validation_failed: {safe_result.error}")
+            logger.warning("Commit path validation failed: file=%s, error=%s",
+                           filepath, safe_result.error)
             return jsonify({"error": f"Invalid file path: {safe_result.error}"}), 400
     return None
 
@@ -260,33 +260,30 @@ def api_git_diff():
 @bp.route("/api/git/commit", methods=["POST"])
 def api_git_commit():
     """Commit changes to git."""
-    op_log = get_op_logger()
     data = request.get_json() or {}
-    if op_log:
-        op_log.info("git", "commit", params={"message": data.get("message", "")[:100]})
+    logger.info("Git commit: message=%s", data.get("message", "")[:100])
 
     message = data.get("message", "").strip()
     if not message:
         return jsonify({"error": "Commit message is required"}), 400
 
     session_id = request.headers.get("X-Session-Id")
-    lock_error = _check_staging_lock(session_id, op_log, "commit")
+    lock_error = _check_staging_lock(session_id, "commit")
     if lock_error:
         return lock_error
 
-    precondition_error = _validate_commit_preconditions(data, op_log)
+    precondition_error = _validate_commit_preconditions(data)
     if precondition_error:
         return precondition_error
 
     try:
-        return _execute_commit(data, message, session_id, op_log)
+        return _execute_commit(data, message, session_id)
     except Exception as e:  # noqa: BLE001
-        if op_log:
-            op_log.error("git", "commit", error=str(e))
+        logger.error("Git commit failed: %s", e)
         return jsonify({"error": f"Failed to commit: {e!s}"}), 500
 
 
-def _validate_commit_preconditions(data, op_log):
+def _validate_commit_preconditions(data):
     """Validate identity and file paths for a commit.
 
     Returns:
@@ -302,11 +299,11 @@ def _validate_commit_preconditions(data, op_log):
 
     files = data.get("files", [])
     if files:
-        return _validate_commit_files(files, get_config_path(), op_log)
+        return _validate_commit_files(files, get_config_path())
     return None
 
 
-def _execute_commit(data, message, session_id, op_log):
+def _execute_commit(data, message, session_id):
     """Execute the git commit after preconditions are validated.
 
     Returns:
@@ -358,27 +355,24 @@ def _handle_commit_failure(result):
 @bp.route("/api/git/discard", methods=["POST"])
 def api_git_discard():
     """Discard changes to a file."""
-    op_log = get_op_logger()
     config_path = get_config_path()
     data = request.get_json() or {}
 
     filepath = data.get("file")
-    if op_log:
-        op_log.info("git", "discard_file", params={"file": filepath})
+    logger.info("Git discard file: %s", filepath)
 
     if not filepath:
         return jsonify({"error": "File path is required"}), 400
 
     session_id = request.headers.get("X-Session-Id")
-    lock_error = _check_staging_lock(session_id, op_log, "discard_file")
+    lock_error = _check_staging_lock(session_id, "discard_file")
     if lock_error:
         return lock_error
 
     safe_result = is_safe_path(filepath, config_path)
     if not safe_result.success:
-        if op_log:
-            op_log.warning("git", "discard_file", params={"file": filepath},
-                           error=f"path_validation_failed: {safe_result.error}")
+        logger.warning("Discard file path validation failed: file=%s, error=%s",
+                       filepath, safe_result.error)
         return jsonify({"error": safe_result.error}), 400
 
     try:
@@ -393,20 +387,17 @@ def api_git_discard():
         return jsonify({"success": True, "action": result.data["action"]})
 
     except Exception as e:  # noqa: BLE001
-        if op_log:
-            op_log.error("git", "discard_file", params={"file": filepath}, error=str(e))
+        logger.error("Git discard file failed: file=%s, error=%s", filepath, e)
         return jsonify({"error": f"Failed to discard changes: {e!s}"}), 500
 
 
 @bp.route("/api/git/discard-all", methods=["POST"])
 def api_git_discard_all():
     """Discard all uncommitted changes."""
-    op_log = get_op_logger()
-    if op_log:
-        op_log.info("git", "discard_all")
+    logger.info("Git discard all")
 
     session_id = request.headers.get("X-Session-Id")
-    lock_error = _check_staging_lock(session_id, op_log, "discard_all")
+    lock_error = _check_staging_lock(session_id, "discard_all")
     if lock_error:
         return lock_error
 
@@ -437,20 +428,17 @@ def api_git_discard_all():
         })
 
     except Exception as e:  # noqa: BLE001
-        if op_log:
-            op_log.error("git", "discard_all", error=str(e))
+        logger.error("Git discard all failed: %s", e)
         return jsonify({"error": f"Failed to discard changes: {e!s}"}), 500
 
 
 @bp.route("/api/git/clear-history", methods=["POST"])
 def api_git_clear_history():
     """Clear all git history and reinitialize with a fresh commit."""
-    op_log = get_op_logger()
-    if op_log:
-        op_log.warning("git", "clear_history")
+    logger.warning("Git clear history requested")
 
     session_id = request.headers.get("X-Session-Id")
-    lock_error = _check_staging_lock(session_id, op_log, "clear_history")
+    lock_error = _check_staging_lock(session_id, "clear_history")
     if lock_error:
         return lock_error
 
@@ -484,8 +472,7 @@ def api_git_clear_history():
         return jsonify({"success": True, "message": result.data["message"]})
 
     except Exception as e:  # noqa: BLE001
-        if op_log:
-            op_log.error("git", "clear_history", error=str(e))
+        logger.error("Git clear history failed: %s", e)
         return jsonify({"error": f"Failed to clear history: {e!s}"}), 500
 
 

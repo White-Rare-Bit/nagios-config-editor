@@ -1,5 +1,6 @@
 """Backup management routes."""
 
+import logging
 import os
 from datetime import datetime
 
@@ -11,12 +12,12 @@ from staging_manager import StagingStatus
 from .helpers import (
     get_audit_user_identity,
     get_backup_manager,
-    get_op_logger,
     get_service,
     get_staging_manager,
 )
 
 bp = Blueprint("backups", __name__)
+logger = logging.getLogger(__name__)
 
 
 @bp.route("/api/backups", methods=["GET"])
@@ -29,12 +30,10 @@ def api_list_backups():
 @bp.route("/api/backups", methods=["POST"])
 def api_create_backup():
     """Create a new backup."""
-    op_log = get_op_logger()
     bm = get_backup_manager()
     data = request.get_json() or {}
     description = data.get("description", "Manual backup")
-    if op_log:
-        op_log.info("app", "create_backup", params={"description": description})
+    logger.info("Create backup: description=%s", description)
 
     # Get user identity from request
     identity = get_audit_user_identity()
@@ -58,9 +57,7 @@ def api_create_backup():
 @bp.route("/api/backups/<backup_name>/restore", methods=["POST"])
 def api_restore_backup(backup_name):
     """Restore from a backup."""
-    op_log = get_op_logger()
-    if op_log:
-        op_log.info("app", "restore_backup", params={"backup_name": backup_name})
+    logger.info("Restore backup: backup_name=%s", backup_name)
     # Check staging lock - restore requires lock ownership or no lock
     session_id = request.headers.get("X-Session-Id")
     data = request.get_json() or {}
@@ -136,9 +133,7 @@ def api_delete_all_backups():
 @bp.route("/api/backups/<backup_name>", methods=["DELETE"])
 def api_delete_backup(backup_name):
     """Delete a backup."""
-    op_log = get_op_logger()
-    if op_log:
-        op_log.info("app", "delete_backup", params={"backup_name": backup_name})
+    logger.info("Delete backup: backup_name=%s", backup_name)
     bm = get_backup_manager()
     if bm.delete_backup(backup_name):
         # Write audit log entry

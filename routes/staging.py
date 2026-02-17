@@ -19,7 +19,6 @@ from .helpers import (
     get_config,
     get_config_path,
     get_git_service,
-    get_op_logger,
     get_service,
     get_staging_manager,
 )
@@ -618,16 +617,12 @@ def api_break_lock():
     """
     sm = get_staging_manager()
     git_svc = get_git_service()
-    op_log = get_op_logger()
 
     session_id = request.headers.get("X-Session-Id")
 
     # Log the break attempt
-    if op_log:
-        owner = sm.get_lock_owner()
-        op_log.warning("staging", "break_lock",
-                      params={"owner": owner, "breaker": session_id},
-                      result="attempted")
+    owner = sm.get_lock_owner()
+    logger.warning("Break lock attempted: owner=%s, breaker=%s", owner, session_id)
 
     # Check if there are uncommitted git changes to discard
     git_discarded = False
@@ -641,10 +636,7 @@ def api_break_lock():
     # Clear staging
     sm.clear_staging()
 
-    if op_log:
-        op_log.info("staging", "break_lock",
-                   params={"git_discarded": git_discarded},
-                   result="success")
+    logger.info("Break lock succeeded: git_discarded=%s", git_discarded)
 
     return jsonify({
         "success": True,
@@ -736,13 +728,12 @@ def api_save_staging():
     return jsonify({"error": save_result.error or "Failed to save staging"}), 500
 
 
-def _validate_apply_preconditions(sm, session_id, op_log):
+def _validate_apply_preconditions(sm, session_id):
     """Validate preconditions for staging apply.
 
     Args:
         sm: StagingManager instance
         session_id: Session ID from request
-        op_log: Operation logger
 
     Returns:
         Tuple of (error_response, staging_data) - error_response is None if valid
@@ -752,8 +743,7 @@ def _validate_apply_preconditions(sm, session_id, op_log):
         return (jsonify({"error": "X-Session-Id header required"}), 400), None
 
     if not sm.can_modify(session_id):
-        if op_log:
-            op_log.warning("app", "staging_apply", session_id=session_id, result="lock_conflict")
+        logger.warning("Staging apply lock conflict: session_id=%s", session_id)
         return (jsonify({"error": "Staging is locked by another user", "locked": True}), 423), None
 
     staging_data = sm.get_staging()
@@ -762,8 +752,7 @@ def _validate_apply_preconditions(sm, session_id, op_log):
 
     conflicts = sm.detect_conflicts()
     if conflicts:
-        if op_log:
-            op_log.warning("app", "staging_apply", session_id=session_id, result="conflicts_detected")
+        logger.warning("Staging apply conflicts detected: session_id=%s", session_id)
         return (jsonify({
             "error": "Conflicts detected - files have been modified externally",
             "conflicts": conflicts, "requiresResolution": True,
@@ -1002,7 +991,7 @@ def _handle_apply_failure(service, failed_phase, apply_ctx):
     Args:
         service: NagiosService instance
         failed_phase: Name of the phase that failed
-        apply_ctx: Dict with 'applied_summary', 'errors', 'session_id', 'op_log', 'log'
+        apply_ctx: Dict with 'applied_summary', 'errors', 'session_id', 'log'
 
     Returns:
         Flask response tuple (jsonify, status_code)
@@ -1010,13 +999,10 @@ def _handle_apply_failure(service, failed_phase, apply_ctx):
     """
     errors = apply_ctx["errors"]
     session_id = apply_ctx["session_id"]
-    op_log = apply_ctx["op_log"]
     log = apply_ctx["log"]
 
-    log.error("Staging apply failed at phase '%s': %s", failed_phase, errors)
-    if op_log:
-        op_log.error("app", "staging_apply", session_id=session_id,
-                     error=f"Failed at phase {failed_phase}: {errors}")
+    log.error("Staging apply failed at phase '%s': session_id=%s, errors=%s",
+              failed_phase, session_id, errors)
 
     # Still reload parser to reflect partial changes
     service.reload()
@@ -1173,7 +1159,6 @@ def api_apply_staging():
     log = logging.getLogger("nagios_bulk_editor.staging")
     sm = get_staging_manager()
     session_id = request.headers.get("X-Session-Id")
-    op_log = get_op_logger()
 
     # C-06: Read updateReferences flag from request body (use silent=True to handle missing body)
     # C-10: Read deferClear flag - if true, don't clear staging on success (for atomic apply+commit)
@@ -1183,19 +1168,16 @@ def api_apply_staging():
     validate_after = request_data.get("validate", False)
 
     # Validate preconditions
-    error_response, staging_data = _validate_apply_preconditions(sm, session_id, op_log)
+    error_response, staging_data = _validate_apply_preconditions(sm, session_id)
     if error_response:
         return error_response
 
     # C-06: Extract name changes BEFORE applying phases (needed for reference updates)
     name_changes = _extract_name_changes(staging_data) if update_references_flag else []
 
-    if op_log:
-        op_log.info("app", "staging_apply", session_id=session_id,
-                    user_name=staging_data.get("userName", ""),
-                    user_email=staging_data.get("userEmail", ""),
-                    update_references=update_references_flag,
-                    name_changes_count=len(name_changes))
+    log.info("Staging apply: session_id=%s, user=%s, update_references=%s, name_changes=%d",
+             session_id, staging_data.get("userName", ""),
+             update_references_flag, len(name_changes))
 
     service = get_service()
     _create_pre_apply_backup(staging_data, log)
@@ -1208,7 +1190,7 @@ def api_apply_staging():
         if failed_phase:
             apply_ctx = {
                 "applied_summary": applied_summary, "errors": errors,
-                "session_id": session_id, "op_log": op_log, "log": log,
+                "session_id": session_id, "log": log,
             }
             return _handle_apply_failure(service, failed_phase, apply_ctx)
 
@@ -1236,8 +1218,6 @@ def api_apply_staging():
     except Exception as e:  # noqa: BLE001
         # Unexpected exception - do NOT clear staging
         log.exception("Error applying staging: %s", e)
-        if op_log:
-            op_log.error("app", "staging_apply", session_id=session_id, error=str(e))
         return jsonify({
             "error": f"Failed to apply staging: {e}",
             "stagingPreserved": True,

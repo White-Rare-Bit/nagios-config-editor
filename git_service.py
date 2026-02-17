@@ -128,9 +128,8 @@ class GitService:
     are serialized via an internal multiprocessing.Lock.
     """
 
-    def __init__(self, config_path: str, op_logger=None):
+    def __init__(self, config_path: str):
         self._config_path = config_path
-        self._op_logger = op_logger
         self._lock = multiprocessing.Lock()
 
     @property
@@ -203,9 +202,7 @@ class GitService:
         combined = result.stderr + result.stdout
         if any(pat in combined for pat in _TRANSIENT_PATTERNS):
             delay = (0.1 * (2 ** attempt)) + random.uniform(0, 0.05)
-            if self._op_logger:
-                self._op_logger.warning("git", "retry",  # noqa: PLE1205
-                                        params={"cmd": " ".join(args), "attempt": attempt + 1})
+            logger.warning("git retry: cmd=%s attempt=%d", " ".join(args), attempt + 1)
             time.sleep(delay)
             return True
         return False
@@ -213,12 +210,9 @@ class GitService:
     def _build_run_result(self, result, run_result: GitRunResult,
                           args: list[str]) -> OperationResult:
         """Build OperationResult from a completed subprocess result."""
-        if self._op_logger and result.returncode != 0:
-            self._op_logger.warning("git", "run",  # noqa: PLE1205
-                                    params={"cmd": " ".join(args)},
-                                    error=result.stderr.strip()[:200])
-
         if result.returncode != 0:
+            logger.warning("git run failed: cmd=%s error=%s", " ".join(args), result.stderr.strip()[:200])
+
             error_msg = result.stderr.strip() or result.stdout.strip() or f"Git command failed with returncode {result.returncode}"
             return OperationResult(success=False, error=error_msg, data=run_result)
 
@@ -229,17 +223,13 @@ class GitService:
         """Handle exceptions from git subprocess execution."""
         if isinstance(exc, subprocess.TimeoutExpired):
             error_msg = f'Git command timed out after {timeout}s: git {" ".join(args)}'
-            if self._op_logger:
-                self._op_logger.error("git", "timeout", params={"cmd": " ".join(args)})  # noqa: PLE1205
+            logger.error("git timeout: cmd=%s", " ".join(args))
         elif isinstance(exc, FileNotFoundError):
             error_msg = "Git is not installed or not in PATH"
-            if self._op_logger:
-                self._op_logger.error("git", "not_found")  # noqa: PLE1205
+            logger.error("git not found")
         else:
             error_msg = f"Git command failed: {exc!s}"
-            if self._op_logger:
-                self._op_logger.error("git", "exception",  # noqa: PLE1205
-                                      params={"cmd": " ".join(args)}, error=str(exc))
+            logger.error("git exception: cmd=%s error=%s", " ".join(args), str(exc))
         return OperationResult(success=False, error=error_msg)
 
     # =========================================================================

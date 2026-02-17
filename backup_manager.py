@@ -4,6 +4,7 @@ Creates timestamped zip backups before any changes and provides restore function
 """
 
 import contextlib
+import logging
 import os
 import shutil
 import tempfile
@@ -12,14 +13,15 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 
 class BackupManager:
     """Manages backups of Nagios configuration files as zip archives."""
 
-    def __init__(self, config_path: str, backup_path: str | None = None, op_logger=None):
+    def __init__(self, config_path: str, backup_path: str | None = None):
         self.config_path = Path(config_path)
         self.backup_path = Path(backup_path) if backup_path else self.config_path / "backups"
-        self._op_logger = op_logger
 
         # C-03: Validate backup_path != config_path to prevent empty backups
         if self.backup_path.resolve() == self.config_path.resolve():
@@ -62,8 +64,7 @@ class BackupManager:
 
     def create_backup(self, description: str = "", user_name: str = "", user_email: str = "") -> str:
         """Create a timestamped zip backup of all configuration files."""
-        if self._op_logger:
-            self._op_logger.info("backup", "create_backup", params={"description": description}, user_name=user_name, user_email=user_email)  # noqa: PLE1205
+        logger.info("create_backup: description=%s user=%s", description, user_name)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         # C-02: Add UUID suffix to prevent filename collision on concurrent creates
         unique_id = uuid.uuid4().hex[:8]
@@ -86,10 +87,7 @@ class BackupManager:
             for cfg_file, rel_path, is_symlink in self._collect_config_files():
                 if is_symlink:
                     skipped_symlinks += 1
-                    if self._op_logger:
-                        self._op_logger.warning("backup", "create_backup",  # noqa: PLE1205
-                            params={"skipped_symlink": str(cfg_file)},
-                            error="Symlink skipped for security")
+                    logger.warning("create_backup: symlink skipped for security: %s", cfg_file)
                     continue
                 zf.write(cfg_file, str(rel_path))
                 copied_files += 1
@@ -274,8 +272,7 @@ class BackupManager:
         2. Restore from safety backup: POST /api/backups/{safety_backup_name}/restore
         Or manually extract the safety backup zip to config directory.
         """
-        if self._op_logger:
-            self._op_logger.info("backup", "restore_backup", params={"backup_name": backup_name}, user_name=user_name, user_email=user_email)  # noqa: PLE1205
+        logger.info("restore_backup: backup_name=%s user=%s", backup_name, user_name)
 
         backup_path = self._validate_backup_request(backup_name)
 
@@ -318,8 +315,7 @@ class BackupManager:
 
     def delete_backup(self, backup_name: str) -> bool:
         """Delete a specific zip backup."""
-        if self._op_logger:
-            self._op_logger.info("backup", "delete_backup", params={"backup_name": backup_name})  # noqa: PLE1205
+        logger.info("delete_backup: backup_name=%s", backup_name)
         # Validate backup_name to prevent path traversal
         if ".." in backup_name or backup_name.startswith("/"):
             raise ValueError(f"Invalid backup name: {backup_name}")
@@ -339,8 +335,7 @@ class BackupManager:
 
     def cleanup_old_backups(self, keep_count: int = 10) -> int:
         """Remove old backups, keeping only the most recent ones."""
-        if self._op_logger:
-            self._op_logger.info("backup", "cleanup_old_backups", params={"keep_count": keep_count})  # noqa: PLE1205
+        logger.info("cleanup_old_backups: keep_count=%d", keep_count)
         backups = self.list_backups()
         deleted = 0
 

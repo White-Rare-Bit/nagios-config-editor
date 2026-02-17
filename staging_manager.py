@@ -31,7 +31,7 @@ from nagios_model import OperationResult
 STAGING_SCHEMA_VERSION = 3
 
 # Set up structured logging
-logger = logging.getLogger("nagios_bulk_editor.staging")
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -549,8 +549,7 @@ class FileOperationsStager:
             OperationResult with op_id in data field on success
 
         """
-        if self._sm._op_logger:
-            self._sm._op_logger.info("staging", op_type, params=entry_data)  # noqa: PLE1205
+        logger.info("Staging %s: %s", op_type, entry_data)
 
         staging = self._sm.get_staging()
         if not staging:
@@ -740,18 +739,16 @@ class StagingManager:
     backward compatibility.
     """
 
-    def __init__(self, config_path: str, op_logger=None):
+    def __init__(self, config_path: str):
         """Initialize the staging manager.
 
         Args:
             config_path: Path to the Nagios configuration directory
-            op_logger: Optional OperationLogger instance
 
         """
         self.config_path = Path(config_path)
         self.staging_dir = self.config_path / ".staging"
         self.staging_file = self.staging_dir / "staging.json"
-        self._op_logger = op_logger
 
         # Initialize composed managers
         self.checksums = ChecksumManager(self)
@@ -813,8 +810,7 @@ class StagingManager:
 
     def save_staging(self, data: dict) -> OperationResult:
         """Save staging data with metadata."""
-        if self._op_logger:
-            self._op_logger.debug("staging", "save_staging", session_id=data.get("sessionId"))  # noqa: PLE1205
+        logger.debug("Saving staging for session %s", data.get("sessionId"))
         self._ensure_staging_dir()
 
         # Add metadata
@@ -889,8 +885,7 @@ class StagingManager:
 
     def clear_staging(self) -> OperationResult:
         """Clear all staging data."""
-        if self._op_logger:
-            self._op_logger.info("staging", "clear_staging")  # noqa: PLE1205
+        logger.info("Clearing staging")
         if not self.staging_file.exists():
             return OperationResult(True)
 
@@ -1210,11 +1205,7 @@ class StagingManager:
             OperationResult with data=count of staged edits on success
 
         """
-        if self._op_logger:
-            self._op_logger.info(  # noqa: PLE1205
-                "staging", "stage_bulk_rename",
-                params={"count": len(renames)},
-            )
+        logger.info("Staging bulk rename: %d object(s)", len(renames))
 
         staging = self.get_staging()
         if not staging:
@@ -1271,11 +1262,7 @@ class StagingManager:
             OperationResult with data=count of staged moves on success
 
         """
-        if self._op_logger:
-            self._op_logger.info(  # noqa: PLE1205
-                "staging", "stage_bulk_move",
-                params={"count": len(moves)},
-            )
+        logger.info("Staging bulk move: %d object(s)", len(moves))
 
         staging = self.get_staging()
         if not staging:

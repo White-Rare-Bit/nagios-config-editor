@@ -122,12 +122,12 @@ def create_app(config_path: str | None = None, log_dir_override: str | None = No
     _setup_logging(_server_config, log_dir_override)
 
     # Initialize service instances
-    staging_manager = StagingManager(nagios_config_path, op_logger=None)
-    service = NagiosService(nagios_config_path, staging_manager, op_logger=None)
-    backup_manager = BackupManager(nagios_config_path, backup_path, op_logger=None)
+    staging_manager = StagingManager(nagios_config_path)
+    service = NagiosService(nagios_config_path, staging_manager)
+    backup_manager = BackupManager(nagios_config_path, backup_path)
 
     # Initialize git service
-    git_service = GitService(nagios_config_path, op_logger=None)
+    git_service = GitService(nagios_config_path)
 
     # Store in app.extensions for access via current_app
     app.extensions["service"] = service
@@ -166,10 +166,6 @@ def get_staging_manager() -> StagingManager:
     """Get the staging manager."""
     return current_app.extensions["staging"]
 
-
-def get_op_logger():
-    """Legacy shim — returns None. Removed in logging overhaul."""
-    return None
 
 
 # Initialize app services with default config
