@@ -282,7 +282,14 @@
                 }
             }
 
-            const nodeClass = isCurrent ? 'current' : (node.missing ? 'missing' : (node.circular ? 'missing' : ''));
+            let nodeClass;
+            if (isCurrent) {
+                nodeClass = 'current';
+            } else if (node.missing || node.circular) {
+                nodeClass = 'missing';
+            } else {
+                nodeClass = '';
+            }
             const clickable = !node.missing && !node.circular && node.obj;
             const currentDepth = html ? depth + 1 : depth;
             const connector = currentDepth > 0 ? '<span class="dep-tree-connector">↳</span>' : '';
@@ -394,9 +401,16 @@
             const parents = [];
             const groupType = groupObj.object_type;
             const groupName = getEffectiveName(groupObj);
-            const membersAttr = groupType === 'hostgroup' ? 'hostgroup_members' :
-                               groupType === 'servicegroup' ? 'servicegroup_members' :
-                               groupType === 'contactgroup' ? 'contactgroup_members' : null;
+            let membersAttr;
+            if (groupType === 'hostgroup') {
+                membersAttr = 'hostgroup_members';
+            } else if (groupType === 'servicegroup') {
+                membersAttr = 'servicegroup_members';
+            } else if (groupType === 'contactgroup') {
+                membersAttr = 'contactgroup_members';
+            } else {
+                membersAttr = null;
+            }
 
             if (!membersAttr) {return [];}
 
@@ -562,22 +576,24 @@
                     html += '</div>';
                 } else {
                     html += `<div class="ref-type-list">
-                        ${refs.map(ref => `
+                        ${refs.map(ref => {
+                            let badgeHtml = '';
+                            let fieldHtml = '';
+                            if (ref.isDependencyRule) {
+                                badgeHtml = '<span class="dep-rule-badge">rule</span>';
+                                fieldHtml = `<span class="ref-field">${formatFailureCriteria(ref.object)}</span>`;
+                            } else if (ref.isEscalationRule) {
+                                badgeHtml = '<span class="dep-rule-badge esc-badge">esc</span>';
+                                fieldHtml = `<span class="ref-field">${formatEscalationInfo(ref.object)}</span>`;
+                            }
+                            return `
                             <div class="ref-item ${ref.isDependencyRule || ref.isEscalationRule ? 'dep-rule-item' : ''}" onclick="Explorer.navigateToObjectByIndex(${ref.object.global_index})">
-                                ${ref.isDependencyRule ?
-                                    '<span class="dep-rule-badge">rule</span>' :
-                                    ref.isEscalationRule ?
-                                    '<span class="dep-rule-badge esc-badge">esc</span>' : ''
-                                }
+                                ${badgeHtml}
                                 <span class="ref-type-badge type-${ref.object.object_type}">${ref.object.object_type}</span>
                                 <span class="ref-name" title="${Explorer.escapeHtml(getStagedDisplayName(ref.object))}">${Explorer.escapeHtml(getStagedDisplayName(ref.object))}</span>
-                                ${ref.isDependencyRule ?
-                                    `<span class="ref-field">${formatFailureCriteria(ref.object)}</span>` :
-                                    ref.isEscalationRule ?
-                                    `<span class="ref-field">${formatEscalationInfo(ref.object)}</span>` : ''
-                                }
-                            </div>
-                        `).join('')}
+                                ${fieldHtml}
+                            </div>`;
+                        }).join('')}
                     </div>`;
                 }
 

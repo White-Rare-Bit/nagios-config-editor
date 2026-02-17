@@ -323,13 +323,16 @@ async function buildChangesFilesHtml(gitChanges, contextLines, options = {}) {
         const statusLabel = statusLabels[change.status] || change.status;
         // For 'modified': use 'external' if external style, otherwise empty
         // For others: 'create' for added/untracked, 'delete' for deleted, 'move' for renamed
-        const typeClass = statusClass === 'modified'
-            ? (useExternalStyle ? 'external' : '')
-            : statusClass === 'added' || statusClass === 'untracked'
-                ? 'create'
-                : statusClass === 'deleted'
-                    ? 'delete'
-                    : 'move';
+        let typeClass;
+        if (statusClass === 'modified') {
+            typeClass = useExternalStyle ? 'external' : '';
+        } else if (statusClass === 'added' || statusClass === 'untracked') {
+            typeClass = 'create';
+        } else if (statusClass === 'deleted') {
+            typeClass = 'delete';
+        } else {
+            typeClass = 'move';
+        }
 
         let diffContent = '';
         const useFullFile = contextLines > 9;
@@ -341,9 +344,16 @@ async function buildChangesFilesHtml(gitChanges, contextLines, options = {}) {
 
         if (diffResult.success && diffResult.data?.diff) {
             diffContent = diffResult.data.diff.split('\n').map(line => {
-                const lineClass = line.startsWith('+') && !line.startsWith('+++') ? 'add' :
-                                 line.startsWith('-') && !line.startsWith('---') ? 'remove' :
-                                 line.startsWith('@@') ? 'hunk' : 'context';
+                let lineClass;
+                if (line.startsWith('+') && !line.startsWith('+++')) {
+                    lineClass = 'add';
+                } else if (line.startsWith('-') && !line.startsWith('---')) {
+                    lineClass = 'remove';
+                } else if (line.startsWith('@@')) {
+                    lineClass = 'hunk';
+                } else {
+                    lineClass = 'context';
+                }
                 return `<div class="diff-line ${lineClass}">${escapeHtml(line)}</div>`;
             }).join('');
         } else {
@@ -1119,7 +1129,14 @@ function renderGlobalFileDiff(filePath, fileData, allObjects, configPath) {
 }
 
 function renderGlobalObject(objType, attrs, prefix) {
-    const cssClass = prefix === '-' ? 'remove' : (prefix === '+' ? 'add' : 'context');
+    let cssClass;
+    if (prefix === '-') {
+        cssClass = 'remove';
+    } else if (prefix === '+') {
+        cssClass = 'add';
+    } else {
+        cssClass = 'context';
+    }
     let html = `<div class="diff-line ${cssClass}">${prefix} define ${escapeHtml(objType)} {</div>`;
     const keys = Object.keys(attrs).sort();
     for (const key of keys) {

@@ -579,7 +579,14 @@ function renderUnifiedSuggestionsList() {
         // Add divider when severity changes (only if showing all)
         if (currentSuggestionFilter === 'all' && s.severity !== currentSeverity) {
             currentSeverity = s.severity;
-            const dividerLabel = s.severity === 'error' ? 'Errors' : s.severity === 'warning' ? 'Warnings' : 'Suggestions';
+            let dividerLabel;
+            if (s.severity === 'error') {
+                dividerLabel = 'Errors';
+            } else if (s.severity === 'warning') {
+                dividerLabel = 'Warnings';
+            } else {
+                dividerLabel = 'Suggestions';
+            }
             html += `<div class="suggestion-divider">${dividerLabel}</div>`;
         }
 
@@ -590,8 +597,14 @@ function renderUnifiedSuggestionsList() {
 }
 
 function renderSuggestionRow(s) {
-    const actionClass = s.actionType === 'delete' ? 'action-delete' :
-                        s.actionType.startsWith('create') ? 'action-create' : '';
+    let actionClass;
+    if (s.actionType === 'delete') {
+        actionClass = 'action-delete';
+    } else if (s.actionType.startsWith('create')) {
+        actionClass = 'action-create';
+    } else {
+        actionClass = '';
+    }
 
     return `
         <div class="suggestion-row" data-id="${s.id}" onclick="Explorer.handleSuggestionClick('${s.id}', event)">
@@ -879,8 +892,14 @@ function renderCleanupSuggestions() {
 
         // Render items within this group
         for (const { suggestion: s, index: i } of items) {
-            const severityClass = s.severity === 'error' ? 'cleanup-error' :
-                                  s.severity === 'warning' ? 'cleanup-warning' : 'cleanup-info';
+            let severityClass;
+            if (s.severity === 'error') {
+                severityClass = 'cleanup-error';
+            } else if (s.severity === 'warning') {
+                severityClass = 'cleanup-warning';
+            } else {
+                severityClass = 'cleanup-info';
+            }
 
             // Simplify description for grouped items
             let displayTitle = s.title;

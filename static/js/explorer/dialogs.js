@@ -951,7 +951,14 @@
             }
 
             if (updatedCount > 0) {
-                const actionText = action === 'findreplace' ? 'Updated' : (action === 'set' ? 'Set attribute in' : 'Removed attribute from');
+                let actionText;
+                if (action === 'findreplace') {
+                    actionText = 'Updated';
+                } else if (action === 'set') {
+                    actionText = 'Set attribute in';
+                } else {
+                    actionText = 'Removed attribute from';
+                }
                 showToast(`${actionText} ${updatedCount} object(s). Commit to apply.`, 'info');
             } else {
                 showToast('No changes made', 'warning');
