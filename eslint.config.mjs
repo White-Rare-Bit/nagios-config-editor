@@ -148,6 +148,9 @@ export default defineConfig([
       "no-script-url": "error",
       "no-alert": "error",
 
+      // --- Complexity ---
+      "complexity": ["error", 20],
+
       // --- Code quality ---
       "no-throw-literal": "error",
       "no-sequences": "error",
