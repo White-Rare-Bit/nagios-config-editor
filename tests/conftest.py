@@ -35,3 +35,26 @@ def service(app):
     """NagiosService instance from the app."""
     with app.app_context():
         yield app.extensions["service"]
+
+
+@pytest.fixture
+def make_app(tmp_path):
+    """Factory fixture: write config files to tmp_path, return (app, client).
+
+    Usage:
+        def test_something(make_app):
+            app, client = make_app({
+                "hosts.cfg": "define host { host_name web-01 ... }",
+                "commands.cfg": "define command { ... }",
+            })
+            resp = client.get("/api/health-check")
+    """
+    def _make(config_files: dict):
+        for name, content in config_files.items():
+            filepath = tmp_path / name
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            filepath.write_text(content)
+        application = create_app(config_path=str(tmp_path))
+        application.config["TESTING"] = True
+        return application, application.test_client()
+    return _make
