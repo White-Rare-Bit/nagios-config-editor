@@ -35,8 +35,8 @@
      * Map parent hosts tree from API response to local objects
      */
     function mapParentHostsTree(node, objectsByIndex) {
-        if (node.circular) return { name: node.name, circular: true };
-        if (node.missing) return { name: node.name, missing: true };
+        if (node.circular) {return { name: node.name, circular: true };}
+        if (node.missing) {return { name: node.name, missing: true };}
         return {
             name: node.name,
             file: node.file ? node.file.split('/').pop() : '',
@@ -58,7 +58,7 @@
         const container = document.getElementById('impactContent');
         const section = document.getElementById('impactSection');
 
-        if (!container || !section) return;
+        if (!container || !section) {return;}
 
         section.style.display = 'block';
         container.innerHTML = '<div class="loading">Loading relationships...</div>';
@@ -282,12 +282,12 @@
         let html = '<div class="ancestry-chain">';
         flat.forEach((node, idx) => {
             const isCurrent = idx === flat.length - 1;
-            const isMissing = !!node.error;
+            const isMissing = Boolean(node.error);
             const displayName = node.name;
 
             let itemClass = 'ancestry-chain-item';
-            if (isCurrent) itemClass += ' current';
-            if (isMissing) itemClass += ' missing';
+            if (isCurrent) {itemClass += ' current';}
+            if (isMissing) {itemClass += ' missing';}
 
             const clickHandler = isMissing ? '' : `onclick="Explorer.selectObjectByName('${Explorer.escapeJs(node.name)}')"`;
 
@@ -295,7 +295,7 @@
             html += `<span class="${itemClass}" ${clickHandler} title="${Explorer.escapeHtml(displayName)}">`;
             html += `<span class="ref-type-badge type-${objectType}">${badgeLabel}</span>`;
             html += `<span>${Explorer.escapeHtml(displayName)}</span>`;
-            if (isMissing) html += `<i class="fa-solid fa-xmark" style="color: var(--nbe-dark-accent-danger); margin-left: 4px;"></i>`;
+            if (isMissing) {html += `<i class="fa-solid fa-xmark" style="color: var(--nbe-dark-accent-danger); margin-left: 4px;"></i>`;}
             html += '</span>';
 
             if (idx < flat.length - 1) {
@@ -327,8 +327,8 @@
             const isCircular = node.circular;
 
             let itemClass = 'ancestry-chain-item';
-            if (isCurrent) itemClass += ' current';
-            if (isMissing || isCircular) itemClass += ' missing';
+            if (isCurrent) {itemClass += ' current';}
+            if (isMissing || isCircular) {itemClass += ' missing';}
 
             const clickHandler = (isMissing || isCircular || !node.obj)
                 ? ''
@@ -337,8 +337,8 @@
             html += `<span class="${itemClass}" ${clickHandler} title="${Explorer.escapeHtml(node.name)}">`;
             html += '<span class="ref-type-badge type-host">host</span>';
             html += `<span>${Explorer.escapeHtml(node.name)}</span>`;
-            if (isMissing) html += '<i class="fa-solid fa-xmark" style="color: var(--nbe-dark-accent-danger); margin-left: 4px;"></i>';
-            if (isCircular) html += '<i class="fa-solid fa-rotate" style="color: var(--nbe-dark-accent-warning); margin-left: 4px;" title="Circular reference"></i>';
+            if (isMissing) {html += '<i class="fa-solid fa-xmark" style="color: var(--nbe-dark-accent-danger); margin-left: 4px;"></i>';}
+            if (isCircular) {html += '<i class="fa-solid fa-rotate" style="color: var(--nbe-dark-accent-warning); margin-left: 4px;" title="Circular reference"></i>';}
             html += '</span>';
 
             if (idx < flat.length - 1) {
@@ -354,13 +354,13 @@
      */
     function getImpactReason(ref) {
         if (ref.severity === 'error') {
-            if (ref.isServiceBinding) return 'Will be orphaned';
-            if (ref.isDependencyRule) return 'Dependency breaks';
+            if (ref.isServiceBinding) {return 'Will be orphaned';}
+            if (ref.isDependencyRule) {return 'Dependency breaks';}
             return 'Broken reference';
         }
-        if (ref.isDependencyRule) return 'Dependency rule';
-        if (ref.isEscalationRule) return 'Escalation rule';
-        if (ref.field) return 'via ' + ref.field;
+        if (ref.isDependencyRule) {return 'Dependency rule';}
+        if (ref.isEscalationRule) {return 'Escalation rule';}
+        if (ref.field) {return 'via ' + ref.field;}
         return 'Needs update';
     }
 
@@ -556,7 +556,7 @@
             .filter(([key]) => !['use', 'name', 'register'].includes(key))
             .sort(([a], [b]) => a.localeCompare(b));
 
-        if (entries.length === 0) return '';
+        if (entries.length === 0) {return '';}
 
         let html = '<div class="ancestry-label">Resolved Attributes</div>';
         html += '<div class="resolved-attrs-compact">';

@@ -51,7 +51,7 @@ function setUserIdentity(name, email) {
  */
 function hasUserIdentity() {
     const identity = getUserIdentity();
-    return !!(identity.userName && identity.userEmail);
+    return Boolean(identity.userName && identity.userEmail);
 }
 
 /**

@@ -67,7 +67,7 @@
         }
 
         // Validate open tabs against refreshed objects
-        if (Explorer.validateTabs) Explorer.validateTabs();
+        if (Explorer.validateTabs) {Explorer.validateTabs();}
     };
 
     // =============================================================================
@@ -248,11 +248,11 @@
      * Start polling for staging changes
      */
     Explorer.startStagingPoll = function() {
-        if (stagingPollInterval) return;
+        if (stagingPollInterval) {return;}
 
         stagingPollInterval = setInterval(async () => {
             // C-02: Prevent concurrent polling - skip if another poll or save is in progress
-            if (isSavingStaging || isPollingInProgress) return;
+            if (isSavingStaging || isPollingInProgress) {return;}
 
             isPollingInProgress = true;
             try {
@@ -361,11 +361,11 @@
 
             Explorer.showToast('Changes applied successfully', 'success');
             return { success: true, results: result.data };
-        } else {
+        } 
             const errorMsg = result.data?.error || result.error || 'Failed to apply changes';
             Explorer.showToast(errorMsg, 'error');
             return { success: false, message: errorMsg };
-        }
+        
     };
 
     /**
@@ -393,11 +393,11 @@
         } else if (result.status === 404) {
             Explorer.showToast('Nothing to undo', 'info');
             return { success: false, message: 'Nothing to undo' };
-        } else {
+        } 
             const errorMsg = result.data?.error || result.error || 'Failed to undo';
             Explorer.showToast(errorMsg, 'error');
             return { success: false, message: errorMsg };
-        }
+        
     };
 
     /**

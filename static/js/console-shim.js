@@ -45,10 +45,10 @@
      * Handles circular references and complex objects.
      */
     function safeSerialize(value) {
-        if (value === undefined) return 'undefined';
-        if (value === null) return null;
-        if (typeof value === 'string') return value;
-        if (typeof value === 'number' || typeof value === 'boolean') return value;
+        if (value === undefined) {return 'undefined';}
+        if (value === null) {return null;}
+        if (typeof value === 'string') {return value;}
+        if (typeof value === 'number' || typeof value === 'boolean') {return value;}
         if (value instanceof Error) {
             return {
                 __type: 'Error',
@@ -84,9 +84,9 @@
                 }
                 // Try to get a useful string representation
                 var str = JSON.stringify(value, function(key, val) {
-                    if (typeof val === 'function') return '[Function]';
-                    if (val instanceof Error) return val.toString();
-                    if (val && val.nodeType) return '[DOMElement]';
+                    if (typeof val === 'function') {return '[Function]';}
+                    if (val instanceof Error) {return val.toString();}
+                    if (val && val.nodeType) {return '[DOMElement]';}
                     return val;
                 });
                 if (str && str.length > 1000) {
@@ -104,7 +104,7 @@
      * Queue a console message for sending to backend.
      */
     function queueMessage(level, args) {
-        if (shimActive) return;  // Prevent recursion
+        if (shimActive) {return;}  // Prevent recursion
 
         var messages = [];
         for (var i = 0; i < args.length; i++) {

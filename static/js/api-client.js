@@ -89,7 +89,7 @@ const ApiClient = (function() {
         } catch (e) {
             return handleError(e, options);
         } finally {
-            if (timeoutId) clearTimeout(timeoutId);
+            if (timeoutId) {clearTimeout(timeoutId);}
         }
     }
 

@@ -232,13 +232,13 @@
      * @returns {Object|null} Matching object from allObjects, or null if not found
      */
     Explorer.findObjectByAttributes = function(objMeta) {
-        if (!objMeta || !objMeta.source_file || !objMeta.attributes) return null;
+        if (!objMeta || !objMeta.source_file || !objMeta.attributes) {return null;}
 
         const attrsMatch = (a, b) => {
-            if (!a || !b) return false;
+            if (!a || !b) {return false;}
             const keysA = Object.keys(a);
             const keysB = Object.keys(b);
-            if (keysA.length !== keysB.length) return false;
+            if (keysA.length !== keysB.length) {return false;}
             return keysA.every(key => a[key] === b[key]);
         };
 
@@ -249,7 +249,7 @@
             attrsMatch(o.attributes, objMeta.attributes)
         );
 
-        if (found) return found;
+        if (found) {return found;}
 
         // Fallback: match by source_file + object_type + name
         if (objMeta.name) {

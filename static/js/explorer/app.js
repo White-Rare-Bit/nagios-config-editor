@@ -67,8 +67,8 @@ function hideAutocompleteDropdown(selector, resetCallback) {
         const dropdown = selector.startsWith('#')
             ? document.getElementById(selector.slice(1))
             : document.querySelector(selector);
-        if (dropdown) dropdown.remove();
-        if (resetCallback) resetCallback();
+        if (dropdown) {dropdown.remove();}
+        if (resetCallback) {resetCallback();}
     }, 150);
 }
 
@@ -77,10 +77,10 @@ function handleAutocompleteKeyNav(event, config) {
     const dropdown = config.selector.startsWith('#')
         ? document.getElementById(config.selector.slice(1))
         : document.querySelector(config.selector);
-    if (!dropdown) return false;
+    if (!dropdown) {return false;}
 
     const items = dropdown.querySelectorAll('.attr-autocomplete-item');
-    if (items.length === 0) return false;
+    if (items.length === 0) {return false;}
 
     const currentIndex = config.getIndex();
 
@@ -89,14 +89,14 @@ function handleAutocompleteKeyNav(event, config) {
         const newIndex = Math.min(currentIndex + 1, items.length - 1);
         config.setIndex(newIndex);
         items.forEach((item, i) => item.classList.toggle('highlighted', i === newIndex));
-        if (items[newIndex]) items[newIndex].scrollIntoView({ block: 'nearest' });
+        if (items[newIndex]) {items[newIndex].scrollIntoView({ block: 'nearest' });}
         return true;
     } else if (event.key === 'ArrowUp') {
         event.preventDefault();
         const newIndex = Math.max(currentIndex - 1, 0);
         config.setIndex(newIndex);
         items.forEach((item, i) => item.classList.toggle('highlighted', i === newIndex));
-        if (items[newIndex]) items[newIndex].scrollIntoView({ block: 'nearest' });
+        if (items[newIndex]) {items[newIndex].scrollIntoView({ block: 'nearest' });}
         return true;
     } else if (event.key === 'Enter' && currentIndex >= 0) {
         event.preventDefault();
@@ -106,7 +106,7 @@ function handleAutocompleteKeyNav(event, config) {
     } else if (event.key === 'Escape' || event.key === 'Tab') {
         dropdown.remove();
         config.setIndex(-1);
-        if (config.onClose) config.onClose();
+        if (config.onClose) {config.onClose();}
         return true;
     }
     return false;
@@ -114,7 +114,7 @@ function handleAutocompleteKeyNav(event, config) {
 
 // Utility: Render a grouped info section
 function renderGroupedInfoSection(title, items, renderItem, options = {}) {
-    if (items.length === 0) return '';
+    if (items.length === 0) {return '';}
     const { showCount = false, showAttr = true } = options;
     const grouped = Explorer.groupByType(items);
 
@@ -161,7 +161,7 @@ function canEdit() {
 // Check if staging has changed (for multi-user sync)
 async function checkStagingChanges() {
     // Skip check while we're in the middle of saving
-    if (isSavingStaging) return;
+    if (isSavingStaging) {return;}
 
     try {
         // Check lock status from base.html (updates banner)
@@ -174,7 +174,7 @@ async function checkStagingChanges() {
             // Check if staging was modified
             if (info.lastModified && info.lastModified !== lastStagingTimestamp) {
                 // Double-check we're not saving (race condition guard)
-                if (isSavingStaging) return;
+                if (isSavingStaging) {return;}
 
                 // Reload staging from server (don't update lock state during polling)
                 await Explorer.loadStagedChanges(false);
@@ -467,7 +467,7 @@ function buildFileTree(container, objects) {
     const byFile = {};
     objects.forEach(obj => {
         const file = obj.source_file.split('/').pop();
-        if (!byFile[file]) byFile[file] = [];
+        if (!byFile[file]) {byFile[file] = [];}
         byFile[file].push(obj);
     });
 
@@ -475,7 +475,7 @@ function buildFileTree(container, objects) {
     const stagedByFile = {};
     state.stagedCreations.forEach((creation, idx) => {
         const file = creation.targetFile.split('/').pop();
-        if (!stagedByFile[file]) stagedByFile[file] = [];
+        if (!stagedByFile[file]) {stagedByFile[file] = [];}
         stagedByFile[file].push({ creation, idx });
     });
 
@@ -506,9 +506,9 @@ function buildFileTree(container, objects) {
             const itemsHtml = allItems.map(item => {
                 if (item.type === 'existing') {
                     return renderTreeItem(item.obj);
-                } else {
+                } 
                     return renderStagedCreationTreeItem(item.creation, item.idx);
-                }
+                
             }).join('');
 
             return `
@@ -602,7 +602,7 @@ function updateStagedSelection() {
 function selectStagedCreationForEdit(idx) {
     // Get the staged creation
     const creation = state.stagedCreations[idx];
-    if (!creation) return;
+    if (!creation) {return;}
 
     // Create an object representation for editing
     const obj = {
@@ -681,14 +681,14 @@ function handleStagedDragStart(event, idx) {
     // Add dragging class to selected items
     state.selectedStagedIndices.forEach(i => {
         const el = document.querySelector(`[data-staged-index="${i}"]`);
-        if (el) el.classList.add('dragging');
+        if (el) {el.classList.add('dragging');}
     });
 }
 
 function buildTypeTree(container, objects) {
     const byType = {};
     objects.forEach(obj => {
-        if (!byType[obj.object_type]) byType[obj.object_type] = [];
+        if (!byType[obj.object_type]) {byType[obj.object_type] = [];}
         byType[obj.object_type].push(obj);
     });
 
@@ -785,10 +785,10 @@ function getHostListInfo(obj) {
     }
 
     const hostName = obj.attributes.host_name;
-    if (!hostName) return { shouldGroup: false, count: 0 };
+    if (!hostName) {return { shouldGroup: false, count: 0 };}
 
     // If already using hostgroup_name, no need to suggest
-    if (obj.attributes.hostgroup_name) return { shouldGroup: false, count: 0 };
+    if (obj.attributes.hostgroup_name) {return { shouldGroup: false, count: 0 };}
 
     // Count hosts (excluding wildcards)
     const hosts = hostName.split(',').map(h => h.trim()).filter(h => h && h !== '*');
@@ -923,24 +923,24 @@ function selectObjectByIndex(index) {
  * @param {string} stableKey - "source_file|object_type|name" format
  */
 function selectObjectByStableKey(stableKey) {
-    if (!stableKey) return;
+    if (!stableKey) {return;}
 
     // Parse stable key: "source_file|object_type|name"
     // Name part may contain '|' so rejoin remaining parts
     const parts = stableKey.split('|');
-    if (parts.length < 3) return;
+    if (parts.length < 3) {return;}
 
     const [sourceFile, objType, ...nameParts] = parts;
     const objName = nameParts.join('|');
 
     // Find the object - check multiple name sources for flexibility
     const obj = state.allObjects.find(o => {
-        if (o.source_file !== sourceFile || o.object_type !== objType) return false;
+        if (o.source_file !== sourceFile || o.object_type !== objType) {return false;}
         // Match against the same name resolution used by getObjectKey
         const objKeyName = o.name ?? o.display_name ?? `idx:${o.global_index}`;
-        if (objKeyName === objName) return true;
+        if (objKeyName === objName) {return true;}
         // Also check display_name and attributes.name for backward compatibility
-        if (o.display_name === objName || o.attributes?.name === objName) return true;
+        if (o.display_name === objName || o.attributes?.name === objName) {return true;}
         return false;
     });
 
@@ -1025,7 +1025,7 @@ function getIssueShortLabel(issue) {
     }
 
     // Return mapped label or convert underscores to spaces with title case
-    if (labels[issue.type]) return labels[issue.type];
+    if (labels[issue.type]) {return labels[issue.type];}
     return issue.type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
@@ -1072,16 +1072,16 @@ function getIssueIcon(issue) {
         'missing_timeperiod': '<i class="fa-solid fa-clock"></i>'
     };
 
-    if (typeIcons[issue.type]) return typeIcons[issue.type];
+    if (typeIcons[issue.type]) {return typeIcons[issue.type];}
 
     // Fall back to severity-based icons for other issues
-    if (issue.severity === 'error') return '<i class="fa-solid fa-circle-xmark"></i>';
-    if (issue.severity === 'warning') return '<i class="fa-solid fa-triangle-exclamation"></i>';
+    if (issue.severity === 'error') {return '<i class="fa-solid fa-circle-xmark"></i>';}
+    if (issue.severity === 'warning') {return '<i class="fa-solid fa-triangle-exclamation"></i>';}
     return '<i class="fa-solid fa-circle-info"></i>';
 }
 
 async function navigateToObjectIssue() {
-    if (!state.currentCenterObject) return;
+    if (!state.currentCenterObject) {return;}
 
     const obj = state.currentCenterObject;
     const issue = state.currentCenterIssue;
@@ -1137,7 +1137,7 @@ async function navigateToObjectIssue() {
 
 function highlightSuggestionRow(id) {
     const container = document.getElementById('suggestionsList');
-    if (!container) return;
+    if (!container) {return;}
 
     const row = container.querySelector(`.suggestion-row[data-id="${CSS.escape(id)}"]`);
     if (row) {
@@ -1155,7 +1155,7 @@ function highlightSuggestionRow(id) {
 
 // Open current object in Graph View with all connections expanded
 function openInGraphView() {
-    if (!state.currentCenterObject) return;
+    if (!state.currentCenterObject) {return;}
 
     const attrs = state.currentCenterObject.attributes || {};
     const objName = state.currentCenterObject.name || state.currentCenterObject.display_name;
@@ -1214,7 +1214,7 @@ function highlightAnalysisItem(tab, objectType, objectName) {
     // Errors are grouped by the missing object, so we need to search through state.groupedErrors
     setTimeout(() => {
         const container = document.getElementById('issuesContent');
-        if (!container) return;
+        if (!container) {return;}
 
         // Find which grouped error contains an issue for this object
         let targetIdx = -1;
@@ -1245,10 +1245,10 @@ function highlightCleanupItem(globalIndex, suggestionType, checkObjectsArray = f
     // Find the matching cleanup item using data-index attribute
     setTimeout(() => {
         const idx = state.allCleanupSuggestions.findIndex(s => {
-            if (s.type !== suggestionType) return false;
-            if (s.object?.global_index === globalIndex) return true;
+            if (s.type !== suggestionType) {return false;}
+            if (s.object?.global_index === globalIndex) {return true;}
             // Optionally check objects array (for duplicates)
-            if (checkObjectsArray && s.objects?.some(o => o.global_index === globalIndex)) return true;
+            if (checkObjectsArray && s.objects?.some(o => o.global_index === globalIndex)) {return true;}
             return false;
         });
         if (idx >= 0) {
@@ -1354,13 +1354,13 @@ function closeActionsMenu() {
  */
 function toggleSuggestionSection(sectionName) {
     const section = document.querySelector(`.suggestion-section[data-section="${sectionName}"]`);
-    if (!section) return;
+    if (!section) {return;}
 
     const body = document.getElementById(sectionName + 'SectionBody');
     const toggle = section.querySelector('.section-toggle');
 
     section.classList.toggle('collapsed');
-    if (body) body.classList.toggle('collapsed');
+    if (body) {body.classList.toggle('collapsed');}
 
     // Save expanded state to localStorage
     saveSuggestionSectionState();
@@ -1388,7 +1388,7 @@ function saveSuggestionSectionState() {
 function restoreSuggestionSectionState() {
     try {
         const saved = localStorage.getItem('suggestionSectionState');
-        if (!saved) return;
+        if (!saved) {return;}
         const state = JSON.parse(saved);
         for (const [name, expanded] of Object.entries(state)) {
             const section = document.querySelector(`.suggestion-section[data-section="${name}"]`);

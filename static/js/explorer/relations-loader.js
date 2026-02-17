@@ -106,7 +106,7 @@
         if (state.isNewObject) {
             const useAttr = obj.attributes.use;
             if (!useAttr) {
-                if (section) section.style.display = 'none';
+                if (section) {section.style.display = 'none';}
                 container.innerHTML = '';
                 return;
             }
@@ -208,20 +208,20 @@
         }
 
         function renderNestedTree(flatArray, idx = 0) {
-            if (idx >= flatArray.length) return '';
+            if (idx >= flatArray.length) {return '';}
 
             const node = flatArray[idx];
             const isCurrent = idx === flatArray.length - 1;
             const isTemplate = node.is_template;
-            const isMissing = !!node.error;
+            const isMissing = Boolean(node.error);
             const displayName = getStagedNodeName(node.name, obj.object_type);
             const hasChildren = idx < flatArray.length - 1;
             const connector = idx > 0 ? '<span class="dep-tree-connector">↳</span>' : '';
 
             let nodeClass = '';
-            if (isCurrent) nodeClass = 'current';
-            else if (isMissing) nodeClass = 'missing';
-            else if (isTemplate) nodeClass = 'template';
+            if (isCurrent) {nodeClass = 'current';}
+            else if (isMissing) {nodeClass = 'missing';}
+            else if (isTemplate) {nodeClass = 'template';}
 
             let html = `
                 <div class="ref-item ${nodeClass} ${isMissing ? '' : 'ref-item-clickable'}" ${isMissing ? '' : `onclick="Explorer.selectObjectByName('${Explorer.escapeJs(node.name)}')"`}>
@@ -323,7 +323,7 @@
             const hasParents = parentsAttr.trim().length > 0;
 
             if (hasParents) {
-                if (html) html += '<div class="u-mt-md"></div>';
+                if (html) {html += '<div class="u-mt-md"></div>';}
                 html += '<div class="inheritance-section-label">Parent Hosts</div>';
                 const tree = buildParentHostsTree(obj);
                 html += `<div class="inheritance-tree">${renderParentsTopDown(tree, true)}</div>`;
@@ -332,10 +332,10 @@
 
         const section = document.getElementById('inheritanceSection');
         if (!html) {
-            if (section) section.style.display = 'none';
+            if (section) {section.style.display = 'none';}
             container.innerHTML = '';
         } else {
-            if (section) section.style.display = 'block';
+            if (section) {section.style.display = 'block';}
             container.innerHTML = html;
         }
     }
@@ -388,7 +388,7 @@
         const { outgoing = [], incoming = [] } = refs;
 
         function getParentGroups(groupObj, visited = new Set()) {
-            if (visited.has(groupObj.global_index)) return [];
+            if (visited.has(groupObj.global_index)) {return [];}
             visited.add(groupObj.global_index);
 
             const parents = [];
@@ -398,7 +398,7 @@
                                groupType === 'servicegroup' ? 'servicegroup_members' :
                                groupType === 'contactgroup' ? 'contactgroup_members' : null;
 
-            if (!membersAttr) return [];
+            if (!membersAttr) {return [];}
 
             state.allObjects.filter(o => o.object_type === groupType).forEach(parentGroup => {
                 const attrs = getEffectiveAttrs(parentGroup);
@@ -426,7 +426,7 @@
         }
 
         function getContactGroupMembers(contactGroup, visited = new Set()) {
-            if (visited.has(contactGroup.global_index)) return [];
+            if (visited.has(contactGroup.global_index)) {return [];}
             visited.add(contactGroup.global_index);
 
             const members = [];
@@ -435,19 +435,19 @@
             if (attrs.members) {
                 const memberNames = attrs.members.split(',').map(m => m.trim().replace(/^\+/, ''));
                 for (const name of memberNames) {
-                    if (!name || name.startsWith('!')) continue;
+                    if (!name || name.startsWith('!')) {continue;}
                     const contact = state.allObjects.find(o =>
                         o.object_type === 'contact' &&
                         o.attributes.contact_name === name
                     );
-                    if (contact) members.push(contact);
+                    if (contact) {members.push(contact);}
                 }
             }
 
             if (attrs.contactgroup_members) {
                 const groupNames = attrs.contactgroup_members.split(',').map(m => Explorer.stripPrefix(m));
                 for (const groupName of groupNames) {
-                    if (!groupName || groupName.startsWith('!')) continue;
+                    if (!groupName || groupName.startsWith('!')) {continue;}
                     const nestedGroup = state.allObjects.find(o =>
                         o.object_type === 'contactgroup' &&
                         (getEffectiveName(o) === groupName || Explorer.getEffectiveAttributes(o).name === groupName)
@@ -533,7 +533,7 @@
         }
 
         function renderGroupedItems(items) {
-            if (items.length === 0) return '';
+            if (items.length === 0) {return '';}
 
             const groups = Explorer.groupByType(items);
             let html = '';
@@ -589,20 +589,20 @@
         // Render dependencies section
         const dependenciesSection = document.getElementById('dependenciesSection');
         if (outgoing.length === 0) {
-            if (dependenciesSection) dependenciesSection.style.display = 'none';
+            if (dependenciesSection) {dependenciesSection.style.display = 'none';}
             dependenciesContainer.innerHTML = '';
         } else {
-            if (dependenciesSection) dependenciesSection.style.display = 'block';
+            if (dependenciesSection) {dependenciesSection.style.display = 'block';}
             dependenciesContainer.innerHTML = renderGroupedItems(outgoing);
         }
 
         // Render dependents section
         const dependentsSection = document.getElementById('dependentsSection');
         if (incoming.length === 0) {
-            if (dependentsSection) dependentsSection.style.display = 'none';
+            if (dependentsSection) {dependentsSection.style.display = 'none';}
             dependentsContainer.innerHTML = '';
         } else {
-            if (dependentsSection) dependentsSection.style.display = 'block';
+            if (dependentsSection) {dependentsSection.style.display = 'block';}
             dependentsContainer.innerHTML = renderGroupedItems(incoming);
         }
     }
@@ -646,17 +646,17 @@
         const section = document.getElementById('membersSection');
 
         if (members.length === 0) {
-            if (section) section.style.display = 'none';
+            if (section) {section.style.display = 'none';}
             container.innerHTML = '';
             return;
         }
 
-        if (section) section.style.display = 'block';
+        if (section) {section.style.display = 'block';}
 
         const grouped = {};
         members.forEach(m => {
             const type = m.object.object_type;
-            if (!grouped[type]) grouped[type] = [];
+            if (!grouped[type]) {grouped[type] = [];}
             grouped[type].push(m);
         });
 

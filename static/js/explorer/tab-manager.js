@@ -36,9 +36,9 @@
     function restoreTabs() {
         try {
             const saved = sessionStorage.getItem('explorerTabs');
-            if (!saved) return;
+            if (!saved) {return;}
             const { openTabs, activeTabKey } = JSON.parse(saved);
-            if (!Array.isArray(openTabs)) return;
+            if (!Array.isArray(openTabs)) {return;}
 
             state.openTabs = [];
             for (const tab of openTabs) {
@@ -68,7 +68,7 @@
     // =========================================================================
 
     function openTab(obj) {
-        if (!obj) return;
+        if (!obj) {return;}
 
         const key = Explorer.getObjectKey(obj);
 
@@ -100,7 +100,7 @@
 
     function closeTab(key) {
         const idx = state.openTabs.findIndex(t => t.key === key);
-        if (idx < 0) return;
+        if (idx < 0) {return;}
 
         if (state.activeTabKey === key && state.editedObject) {
             Explorer.checkForChanges();
@@ -132,7 +132,7 @@
     }
 
     function activateTab(key) {
-        if (state.activeTabKey === key) return;
+        if (state.activeTabKey === key) {return;}
 
         if (state.editedObject) {
             Explorer.checkForChanges();
@@ -140,7 +140,7 @@
 
         state.activeTabKey = key;
         const tab = state.openTabs.find(t => t.key === key);
-        if (!tab) return;
+        if (!tab) {return;}
 
         const obj = Explorer.findObjectByKey(key);
         if (obj) {
@@ -222,7 +222,7 @@
         let tabBar = document.getElementById('editorTabBar');
 
         if (state.openTabs.length === 0) {
-            if (tabBar) tabBar.style.display = 'none';
+            if (tabBar) {tabBar.style.display = 'none';}
             return;
         }
 
@@ -276,27 +276,27 @@
                 e.preventDefault();
                 e.stopPropagation();
                 const tab = closeBtn.closest('.editor-tab');
-                if (tab) closeTab(tab.dataset.tabKey);
+                if (tab) {closeTab(tab.dataset.tabKey);}
                 return;
             }
 
             if (e.button === 1) {
                 e.preventDefault();
                 const tab = e.target.closest('.editor-tab');
-                if (tab) closeTab(tab.dataset.tabKey);
+                if (tab) {closeTab(tab.dataset.tabKey);}
                 return;
             }
 
             if (e.button === 0) {
                 const tab = e.target.closest('.editor-tab');
-                if (tab) activateTab(tab.dataset.tabKey);
+                if (tab) {activateTab(tab.dataset.tabKey);}
             }
         });
 
         // Scroll button clicks use event delegation too
         tabBar.addEventListener('click', function(e) {
             const scrollContainer = tabBar.querySelector('.editor-tab-scroll');
-            if (!scrollContainer) return;
+            if (!scrollContainer) {return;}
             if (e.target.closest('.editor-tab-scroll-left')) {
                 scrollContainer.scrollBy({ left: -150, behavior: 'smooth' });
             } else if (e.target.closest('.editor-tab-scroll-right')) {
@@ -315,7 +315,7 @@
         const leftBtn = tabBar.querySelector('.editor-tab-scroll-left');
         const rightBtn = tabBar.querySelector('.editor-tab-scroll-right');
 
-        if (!scrollContainer || !leftBtn || !rightBtn) return;
+        if (!scrollContainer || !leftBtn || !rightBtn) {return;}
 
         const hasOverflow = scrollContainer.scrollWidth > scrollContainer.clientWidth;
         const atStart = scrollContainer.scrollLeft <= 0;
@@ -326,7 +326,7 @@
     }
 
     function scrollActiveTabIntoView(tabBar) {
-        if (!state.activeTabKey) return;
+        if (!state.activeTabKey) {return;}
         const activeEl = tabBar.querySelector('.editor-tab.active');
         if (activeEl) {
             activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });

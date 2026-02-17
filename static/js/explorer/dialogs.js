@@ -87,7 +87,7 @@
     function buildScrollableList(sections, maxItems = 5) {
         let html = '';
         for (const section of sections) {
-            if (!section.items || section.items.length === 0) continue;
+            if (!section.items || section.items.length === 0) {continue;}
             html += `<div class="dialog-detail-item"><strong>${Explorer.escapeHtml(section.title)}</strong><ul>`;
             const displayItems = section.items.slice(0, maxItems);
             for (const item of displayItems) {
@@ -177,8 +177,8 @@
         const emptyState = document.getElementById('centerEmptyState');
         const content = document.getElementById('centerContent');
         DebugLogger.debug('centerEmptyState and centerContent elements', {
-            emptyStateFound: !!emptyState,
-            contentFound: !!content
+            emptyStateFound: Boolean(emptyState),
+            contentFound: Boolean(content)
         });
 
         if (emptyState) {
@@ -191,7 +191,7 @@
         }
 
         const typeEl = document.getElementById('centerCardType');
-        DebugLogger.debug('centerCardType element', { found: !!typeEl });
+        DebugLogger.debug('centerCardType element', { found: Boolean(typeEl) });
 
         if (!typeEl) {
             DebugLogger.error('centerCardType not found - DOM may not be ready');
@@ -206,7 +206,7 @@
 
         // Hide issue button for new objects
         const issueBtn = document.getElementById('centerCardIssue');
-        if (issueBtn) issueBtn.style.display = 'none';
+        if (issueBtn) {issueBtn.style.display = 'none';}
 
         // Get the current name from the object
         const nameField = getNewObjectNameField(obj.object_type);
@@ -221,7 +221,7 @@
         }
 
         const fileEl = document.getElementById('centerCardFile');
-        if (fileEl) fileEl.textContent = fileName;
+        if (fileEl) {fileEl.textContent = fileName;}
 
         Explorer.renderCenterAttributes();
 
@@ -232,7 +232,7 @@
         setTimeout(() => {
             const titleEl = document.querySelector('#impactSection .section-title');
             const contentEl = document.getElementById('impactContent');
-            if (titleEl) titleEl.classList.add('collapsed');
+            if (titleEl) {titleEl.classList.add('collapsed');}
             if (contentEl) {
                 contentEl.classList.add('collapsed');
                 contentEl.style.display = 'none';
@@ -244,7 +244,7 @@
     }
 
     function discardNewObject() {
-        if (!state.isNewObject) return;
+        if (!state.isNewObject) {return;}
 
         // Remove from staged creations if it was staged
         if (state.newObjectStagedIndex !== null && state.newObjectStagedIndex < state.stagedCreations.length) {
@@ -277,7 +277,7 @@
 
     function toggleObjectTypeDropdown() {
         const dropdown = document.getElementById('newObjectTypeDropdown');
-        if (!dropdown) return;
+        if (!dropdown) {return;}
 
         const isOpen = !dropdown.classList.contains('u-hidden') && dropdown.style.display !== 'none';
 
@@ -321,7 +321,7 @@
 
         // Update the button text
         const valueEl = document.getElementById('newObjectTypeValue');
-        if (valueEl) valueEl.textContent = newType;
+        if (valueEl) {valueEl.textContent = newType;}
 
         // Update the object
         updateNewObjectType(newType);
@@ -378,7 +378,7 @@
     }
 
     function stageNewObjectChanges() {
-        if (!state.isNewObject) return;
+        if (!state.isNewObject) {return;}
 
         // C-05: Validate required fields for new objects
         const validation = Explorer.validateRequiredFields(
@@ -401,7 +401,7 @@
         if (name) {
             // Check against existing objects (use attributes directly since frontend objects don't have get_name())
             const existingObj = state.allObjects.find(obj => {
-                if (obj.object_type !== state.editedObject.object_type) return false;
+                if (obj.object_type !== state.editedObject.object_type) {return false;}
                 const objName = obj.attributes?.[nameField] || obj.attributes?.name || '';
                 return objName === name;
             });
@@ -457,7 +457,7 @@
                     if (parent.classList && parent.classList.contains('tree-children') && parent.style.display === 'none') {
                         parent.style.display = 'block';
                         const toggle = parent.previousElementSibling?.querySelector('.tree-toggle');
-                        if (toggle) toggle.textContent = '▼';
+                        if (toggle) {toggle.textContent = '▼';}
                     }
                     parent = parent.parentElement;
                 }
@@ -482,7 +482,7 @@
         for (const obj of state.allObjects) {
             let foundInFields = [];
             for (const [key, value] of Object.entries(obj.attributes)) {
-                if (!value || typeof value !== 'string') continue;
+                if (!value || typeof value !== 'string') {continue;}
 
                 // Check each comma-separated value, stripping prefixes
                 const values = value.split(',').map(Explorer.stripPrefix).filter(v => v);
@@ -580,7 +580,7 @@
                   (d.fields?.includes('host_name') || d.fields?.includes('hostgroup_name')))
             );
 
-            if (nonOrphanDeps.length === 0) continue;
+            if (nonOrphanDeps.length === 0) {continue;}
 
             nonOrphanHtml += `
                 <div class="dialog-detail-item">
@@ -682,7 +682,7 @@
         // Close tabs for deleted objects
         for (const index of Explorer.getSelectedIndices()) {
             const obj = state.allObjects.find(o => o.global_index === index);
-            if (obj) Explorer.closeTab(Explorer.getObjectKey(obj));
+            if (obj) {Explorer.closeTab(Explorer.getObjectKey(obj));}
         }
 
         // Clear selection
@@ -739,7 +739,7 @@
 
             for (const idx of Explorer.getSelectedIndices()) {
                 const obj = state.allObjects.find(o => o.global_index === idx);
-                if (!obj) continue;
+                if (!obj) {continue;}
 
                 const nameField = Explorer.getNameFieldForObject(obj);
                 // Use pending edit's current name if available
@@ -782,7 +782,7 @@
             // Refresh center pane if displayed object was renamed
             if (centerPaneNeedsRefresh && state.editedObject) {
                 const obj = state.allObjects.find(o => o.global_index === state.editedObject.global_index);
-                if (obj) Explorer.showCenterPaneObject(obj);
+                if (obj) {Explorer.showCenterPaneObject(obj);}
             } else if (state.editedObject && renamedCount > 0) {
                 // Refresh Impact & Relationships since renames might affect this object
                 Explorer.loadImpactAndRelationships(state.editedObject);
@@ -805,7 +805,7 @@
         const availableFields = new Set();
         for (const idx of scope) {
             const obj = state.allObjects.find(o => o.global_index === idx);
-            if (!obj) continue;
+            if (!obj) {continue;}
             const pendingEdit = state.pendingEdits.get(idx);
             const attrs = pendingEdit ? pendingEdit.edited : obj.attributes;
             Object.keys(attrs).forEach(k => availableFields.add(k));
@@ -891,7 +891,7 @@
 
             for (const idx of scope) {
                 const obj = state.allObjects.find(o => o.global_index === idx);
-                if (!obj) continue;
+                if (!obj) {continue;}
 
                 const existingEdit = state.pendingEdits.get(idx);
                 const originalAttrs = existingEdit ? existingEdit.original : {...obj.attributes};
@@ -902,7 +902,7 @@
                 if (action === 'findreplace') {
                     const fieldsToCheck = field ? [field] : Object.keys(editedAttrs);
                     for (const f of fieldsToCheck) {
-                        if (!(f in editedAttrs)) continue;
+                        if (!(f in editedAttrs)) {continue;}
                         const currentValue = editedAttrs[f] || '';
                         const newValue = currentValue.split(findText).join(valueText);
                         if (newValue !== currentValue) {
@@ -1035,7 +1035,7 @@
         const items = document.querySelectorAll('.tree-item:not([style*="display: none"])');
         items.forEach(item => {
             const idx = parseInt(item.dataset.index);
-            if (!isNaN(idx)) Explorer.selectObjectByIndex(idx);
+            if (!isNaN(idx)) {Explorer.selectObjectByIndex(idx);}
         });
         Explorer.updateSelection();
         showToast(`Selected ${state.selectedKeys.size} objects`, 'info');
@@ -1071,7 +1071,7 @@
         // Select first item by default
         setTimeout(() => {
             const firstItem = document.querySelector('.dialog-type-item');
-            if (firstItem) firstItem.classList.add('selected');
+            if (firstItem) {firstItem.classList.add('selected');}
         }, 0);
     }
 
@@ -1089,7 +1089,7 @@
             <input type="text" id="selectPattern" placeholder="e.g., ^web-.*">
         `, () => {
             const pattern = document.getElementById('selectPattern').value;
-            if (!pattern) return;
+            if (!pattern) {return;}
 
             try {
                 const regex = new RegExp(pattern, 'i');

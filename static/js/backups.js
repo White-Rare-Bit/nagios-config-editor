@@ -27,7 +27,7 @@ let allBackupRows = [];
  * @param {string} originalText - Text to restore when done
  */
 function setBackupButtonState(btn, loading, loadingText = 'Loading...', originalText = null) {
-    if (!btn) return;
+    if (!btn) {return;}
     if (loading) {
         btn.disabled = true;
         btn.dataset.originalText = btn.textContent;
@@ -75,10 +75,10 @@ async function restoreBackup(name, btn = null) {
         type: 'warning'
     });
 
-    if (!confirmed) return;
+    if (!confirmed) {return;}
 
     // Show restoring state
-    if (backupRow) backupRow.classList.add('restoring');
+    if (backupRow) {backupRow.classList.add('restoring');}
     setBackupButtonState(btn, true, 'Restoring...');
 
     const identity = getUserIdentity();
@@ -88,15 +88,15 @@ async function restoreBackup(name, btn = null) {
     }, { silent: true });
 
     if (result.success) {
-        if (btn) btn.textContent = 'Restored!';
+        if (btn) {btn.textContent = 'Restored!';}
         showToast(`Restored ${result.data.files_restored} files. Safety backup created.`, 'success');
         setTimeout(() => location.reload(), 1000);
     } else if (result.data?.locked) {
-        if (backupRow) backupRow.classList.remove('restoring');
+        if (backupRow) {backupRow.classList.remove('restoring');}
         setBackupButtonState(btn, false, null, 'Restore');
         showToast('Another user has pending changes. Wait for them to commit or discard.', 'error');
     } else {
-        if (backupRow) backupRow.classList.remove('restoring');
+        if (backupRow) {backupRow.classList.remove('restoring');}
         setBackupButtonState(btn, false, null, 'Restore');
         showToast('Error: ' + (result.error || 'Unknown error'), 'error');
     }
@@ -112,10 +112,10 @@ async function deleteBackup(name, btn = null) {
         type: 'danger'
     });
 
-    if (!confirmed) return;
+    if (!confirmed) {return;}
 
     // Immediately show deleting state
-    if (backupRow) backupRow.classList.add('deleting');
+    if (backupRow) {backupRow.classList.add('deleting');}
 
     const result = await ApiClient.del(`/api/backups/${name}`, { silent: true });
 
@@ -124,7 +124,7 @@ async function deleteBackup(name, btn = null) {
         removeBackupFromList(name);
         showToast('Backup deleted', 'success');
     } else {
-        if (backupRow) backupRow.classList.remove('deleting');
+        if (backupRow) {backupRow.classList.remove('deleting');}
         showToast('Error: ' + (result.error || 'Unknown error'), 'error');
     }
 }
@@ -145,7 +145,7 @@ async function deleteAllBackups() {
         type: 'danger'
     });
 
-    if (!confirmed) return;
+    if (!confirmed) {return;}
 
     const result = await ApiClient.del('/api/backups/all', { silent: true });
 
@@ -153,7 +153,7 @@ async function deleteAllBackups() {
         // Clear all backups from array and DOM
         allBackupRows = [];
         const tbody = document.getElementById('backupTableBody');
-        if (tbody) tbody.innerHTML = '';
+        if (tbody) {tbody.innerHTML = '';}
         updateBackupCount();
         showToast(`Deleted ${result.data.deleted_count} backup${result.data.deleted_count !== 1 ? 's' : ''}`, 'success');
     } else {
@@ -162,7 +162,7 @@ async function deleteAllBackups() {
 }
 
 function sortBackups(column) {
-    if (allBackupRows.length === 0) return;
+    if (allBackupRows.length === 0) {return;}
 
     // Toggle direction if same column, otherwise default to desc for date, asc for others
     if (column === currentSortColumn) {
@@ -204,7 +204,7 @@ function sortBackups(column) {
 
 function renderBackupPage() {
     const tbody = document.getElementById('backupTableBody');
-    if (!tbody) return;
+    if (!tbody) {return;}
 
     const totalItems = allBackupRows.length;
     const totalPages = Math.ceil(totalItems / backupPageSize);
@@ -224,7 +224,7 @@ function renderBackupPage() {
 
 function renderBackupPagination(totalItems) {
     const container = document.querySelector('.backup-table-container');
-    if (!container) return;
+    if (!container) {return;}
 
     // Remove existing pagination
     const existingPagination = container.querySelector('.nbe-pagination');
@@ -260,7 +260,7 @@ function updateSortIndicators() {
     document.querySelectorAll('.backup-table th.sortable').forEach(th => {
         th.classList.remove('sort-active', 'sort-asc', 'sort-desc');
         const icon = th.querySelector('.sort-icon');
-        if (icon) icon.textContent = '';
+        if (icon) {icon.textContent = '';}
     });
 
     // Add to current sort column
@@ -339,7 +339,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const action = actionEl.dataset.action;
             if (action === 'backup-page-size') {
                 const size = parseInt(actionEl.value);
-                if (size) setBackupPageSize(size);
+                if (size) {setBackupPageSize(size);}
             }
         }
     });
@@ -347,7 +347,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event delegation for data-action elements
     document.addEventListener('click', function(e) {
         const actionEl = e.target.closest('[data-action]');
-        if (!actionEl) return;
+        if (!actionEl) {return;}
 
         const action = actionEl.dataset.action;
         const name = actionEl.dataset.name;
@@ -357,21 +357,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 createBackup();
                 break;
             case 'restore-backup':
-                if (name) restoreBackup(name, actionEl);
+                if (name) {restoreBackup(name, actionEl);}
                 break;
             case 'delete-backup':
-                if (name) deleteBackup(name, actionEl);
+                if (name) {deleteBackup(name, actionEl);}
                 break;
             case 'delete-all-backups':
                 deleteAllBackups();
                 break;
             case 'sort-backups':
                 const column = actionEl.dataset.sort;
-                if (column) sortBackups(column);
+                if (column) {sortBackups(column);}
                 break;
             case 'backup-page':
                 const page = parseInt(actionEl.dataset.page);
-                if (page) setBackupPage(page);
+                if (page) {setBackupPage(page);}
                 break;
         }
     });

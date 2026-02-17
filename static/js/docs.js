@@ -77,7 +77,7 @@
     function loadExpandedSections() {
         try {
             var stored = sessionStorage.getItem(STORAGE_KEY);
-            if (stored) expandedSections = JSON.parse(stored);
+            if (stored) {expandedSections = JSON.parse(stored);}
         } catch (e) {}
     }
     var focusedIndex = -1;
@@ -116,9 +116,9 @@
             }
         }
 
-        if (!hasVisibleItems && searchLower) return '';
+        if (!hasVisibleItems && searchLower) {return '';}
 
-        var isExpanded = expandedSections['app'] === true;
+        var isExpanded = expandedSections.app === true;
 
         var html = '<div class="workspace-tree-row' + (isExpanded ? ' expanded' : '') + '" data-depth="0" data-folder="app" onclick="DocsPage.toggleFolder(\'app\')">';
         html += '<button class="tree-expand-btn' + (isExpanded ? ' expanded' : '') + '">' + ICONS.chevron + '</button>';
@@ -140,7 +140,7 @@
                 visibleItems.push(item);
             }
         }
-        if (visibleItems.length === 0) return '';
+        if (visibleItems.length === 0) {return '';}
 
         var key = 'app-' + sectionIndex;
         var isExpanded = expandedSections[key] === true;
@@ -188,9 +188,9 @@
             categoriesHtml += renderInheritanceRow();
         }
 
-        if (!hasVisibleItems && searchLower) return '';
+        if (!hasVisibleItems && searchLower) {return '';}
 
-        var isExpanded = expandedSections['nagios'] === true; // collapsed by default
+        var isExpanded = expandedSections.nagios === true; // collapsed by default
 
         var html = '<div class="workspace-tree-row' + (isExpanded ? ' expanded' : '') + '" data-depth="0" data-folder="nagios" onclick="DocsPage.toggleFolder(\'nagios\')">';
         html += '<button class="tree-expand-btn' + (isExpanded ? ' expanded' : '') + '">' + ICONS.chevron + '</button>';
@@ -213,7 +213,7 @@
                 visibleTypes.push(typeName);
             }
         }
-        if (visibleTypes.length === 0) return '';
+        if (visibleTypes.length === 0) {return '';}
 
         var key = 'nagios-' + catIndex;
         var isExpanded = expandedSections[key] === true;
@@ -238,12 +238,12 @@
     }
 
     function matchesNagiosSearch(typeName, typeData, lower) {
-        if (typeName.indexOf(lower) !== -1) return true;
+        if (typeName.indexOf(lower) !== -1) {return true;}
         var label = (typeData.label || '').toLowerCase();
-        if (label.indexOf(lower) !== -1) return true;
-        if (typeData.description.toLowerCase().indexOf(lower) !== -1) return true;
+        if (label.indexOf(lower) !== -1) {return true;}
+        if (typeData.description.toLowerCase().indexOf(lower) !== -1) {return true;}
         for (var i = 0; i < typeData.directives.length; i++) {
-            if (typeData.directives[i].name.toLowerCase().indexOf(lower) !== -1) return true;
+            if (typeData.directives[i].name.toLowerCase().indexOf(lower) !== -1) {return true;}
         }
         return false;
     }
@@ -298,7 +298,7 @@
         selectedType = null;
 
         // Ensure parent sections are expanded
-        expandedSections['app'] = true;
+        expandedSections.app = true;
         for (var i = 0; i < APP_DOCS_TREE.length; i++) {
             for (var j = 0; j < APP_DOCS_TREE[i].items.length; j++) {
                 if (APP_DOCS_TREE[i].items[j].slug === slug) {
@@ -319,7 +319,7 @@
         selectedAppDoc = null;
 
         // Ensure Nagios folder is expanded
-        expandedSections['nagios'] = true;
+        expandedSections.nagios = true;
         if (typeName === SPECIAL_INHERITANCE) {
             saveExpandedSections();
             renderTree();
@@ -356,7 +356,7 @@
 
         fetch('/api/docs/' + encodeURIComponent(slug))
             .then(function(resp) {
-                if (!resp.ok) throw new Error('Not found');
+                if (!resp.ok) {throw new Error('Not found');}
                 return resp.text();
             })
             .then(function(html) {
@@ -381,8 +381,8 @@
         treeSearchQuery = value;
         if (value) {
             // Expand everything to show results
-            expandedSections['app'] = true;
-            expandedSections['nagios'] = true;
+            expandedSections.app = true;
+            expandedSections.nagios = true;
             for (var i = 0; i < APP_DOCS_TREE.length; i++) {
                 expandedSections['app-' + i] = true;
             }
@@ -569,7 +569,7 @@
     function scrollToDirective(directiveName) {
         setTimeout(function() {
             var row = document.getElementById('directive-' + directiveName);
-            if (!row) return;
+            if (!row) {return;}
             var container = document.querySelector('.docs-table-container');
             if (container) {
                 var rowTop = row.offsetTop - container.offsetTop;
@@ -585,7 +585,7 @@
 
     function loadFromHash() {
         var hash = window.location.hash.replace('#', '');
-        if (!hash) return;
+        if (!hash) {return;}
 
         var parts = hash.split('/');
 
@@ -648,22 +648,22 @@
                     var node = allSelectableNodes[focusedIndex];
                     var appDoc = node.getAttribute('data-app-doc');
                     var typeName = node.getAttribute('data-type');
-                    if (appDoc) selectAppDoc(appDoc);
-                    else if (typeName) selectType(typeName);
+                    if (appDoc) {selectAppDoc(appDoc);}
+                    else if (typeName) {selectType(typeName);}
                 }
                 break;
             case '/':
                 if (!e.ctrlKey && !e.metaKey) {
                     e.preventDefault();
                     var search = document.getElementById('docsTreeSearch');
-                    if (search) search.focus();
+                    if (search) {search.focus();}
                 }
                 break;
         }
     }
 
     function navigateNodes(direction) {
-        if (allSelectableNodes.length === 0) return;
+        if (allSelectableNodes.length === 0) {return;}
 
         if (focusedIndex < 0) {
             // Try to find currently selected node
@@ -678,14 +678,14 @@
         }
 
         focusedIndex += direction;
-        if (focusedIndex < 0) focusedIndex = 0;
-        if (focusedIndex >= allSelectableNodes.length) focusedIndex = allSelectableNodes.length - 1;
+        if (focusedIndex < 0) {focusedIndex = 0;}
+        if (focusedIndex >= allSelectableNodes.length) {focusedIndex = allSelectableNodes.length - 1;}
 
         var node = allSelectableNodes[focusedIndex];
         var appDoc = node.getAttribute('data-app-doc');
         var typeName = node.getAttribute('data-type');
-        if (appDoc) selectAppDoc(appDoc);
-        else if (typeName) selectType(typeName);
+        if (appDoc) {selectAppDoc(appDoc);}
+        else if (typeName) {selectType(typeName);}
     }
 
     // =========================================================================
@@ -693,7 +693,7 @@
     // =========================================================================
 
     function escapeHtml(str) {
-        if (!str) return '';
+        if (!str) {return '';}
         return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 

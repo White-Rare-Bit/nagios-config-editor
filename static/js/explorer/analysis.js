@@ -30,7 +30,7 @@ function updateValidationSummary() {
     const summary = document.getElementById('validationSummary');
     const summaryText = document.getElementById('validationSummaryText');
 
-    if (!summary) return;
+    if (!summary) {return;}
 
     const errorCount = state.groupedErrors ? state.groupedErrors.length : 0;
 
@@ -113,7 +113,7 @@ function mapHealthCheckToState(data) {
         const obj = issue.global_index != null ? objectsByIndex.get(issue.global_index) : null;
 
         // Skip issues for objects staged for deletion
-        if (obj && state.stagedObjectDeletions.has(obj.global_index)) continue;
+        if (obj && state.stagedObjectDeletions.has(obj.global_index)) {continue;}
 
         switch (issue.type) {
             case 'duplicate': {
@@ -286,10 +286,10 @@ function collectAllSuggestions() {
     if (state.groupedErrors) {
         for (const group of state.groupedErrors) {
             // Skip ungrouped errors that can't be resolved by creating something
-            if (!group.objectType) continue;
+            if (!group.objectType) {continue;}
 
             // Skip missing commands - these are typically external check plugins, not config objects
-            if (group.objectType === 'command') continue;
+            if (group.objectType === 'command') {continue;}
 
             // Build detail showing actual referencing object names
             let detail = '';
@@ -328,7 +328,7 @@ function collectAllSuggestions() {
         const warnings = state.allIssues.filter(i => i.severity === 'warning' && !cleanupTypes.has(i.type));
         for (const issue of warnings) {
             // Skip warnings for objects staged for deletion
-            if (issue.global_index != null && state.stagedObjectDeletions.has(issue.global_index)) continue;
+            if (issue.global_index != null && state.stagedObjectDeletions.has(issue.global_index)) {continue;}
             suggestions.push({
                 id: `health-warning-${issue.type}-${issue.object}`,
                 severity: 'warning',
@@ -468,9 +468,9 @@ function collectAllSuggestions() {
     suggestions.sort((a, b) => {
         const aSev = SEVERITY_ORDER[a.severity] ?? 3;
         const bSev = SEVERITY_ORDER[b.severity] ?? 3;
-        if (aSev !== bSev) return aSev - bSev;
+        if (aSev !== bSev) {return aSev - bSev;}
         // Within same severity, sort by label then name
-        if (a.label !== b.label) return a.label.localeCompare(b.label);
+        if (a.label !== b.label) {return a.label.localeCompare(b.label);}
         return (a.name || '').localeCompare(b.name || '');
     });
 
@@ -516,7 +516,7 @@ function getCleanupTypeLabel(type) {
  */
 function renderUnifiedSuggestionsList() {
     const container = document.getElementById('suggestionsList');
-    if (!container) return;
+    if (!container) {return;}
 
     const allSuggestions = collectAllSuggestions();
 
@@ -613,10 +613,10 @@ function renderSuggestionRow(s) {
  */
 function handleSuggestionClick(id, event) {
     // Don't trigger if clicking the action button
-    if (event.target.closest('.suggestion-action')) return;
+    if (event.target.closest('.suggestion-action')) {return;}
 
     const s = findSuggestionById(id);
-    if (!s) return;
+    if (!s) {return;}
 
     // Navigate to the object if possible
     if (s.data?.object) {
@@ -643,7 +643,7 @@ function handleSuggestionAction(id, event) {
     event.stopPropagation();
 
     const s = findSuggestionById(id);
-    if (!s) return;
+    if (!s) {return;}
 
     switch (s.actionType) {
         case 'create':
@@ -711,7 +711,7 @@ function findSuggestionById(id) {
  */
 function filterSuggestions(event) {
     const filter = event.target.closest('[data-filter]')?.dataset.filter;
-    if (!filter) return;
+    if (!filter) {return;}
 
     currentSuggestionFilter = filter;
 
@@ -728,7 +728,7 @@ function filterSuggestions(event) {
  */
 function stageCleanupDeletion(idx) {
     const s = state.allCleanupSuggestions[idx];
-    if (!s || !s.object) return;
+    if (!s || !s.object) {return;}
 
     const obj = s.object;
 
@@ -789,7 +789,7 @@ async function loadCleanupSuggestions(forceRefresh = false) {
         if (container) {
             container.innerHTML = '<div class="empty-state empty-state-success"><span class="empty-icon"><i class="fa-solid fa-circle-check"></i></span><div class="empty-title">No cleanup needed</div><div class="empty-desc">Your configuration is clean!</div></div>';
         }
-        if (badge) badge.style.display = 'none';
+        if (badge) {badge.style.display = 'none';}
         return;
     }
 
@@ -807,7 +807,7 @@ async function loadCleanupSuggestions(forceRefresh = false) {
 
 function renderCleanupSuggestions() {
     const container = document.getElementById('cleanupContent');
-    if (!container) return;
+    if (!container) {return;}
 
     if (state.allCleanupSuggestions.length === 0) {
         container.innerHTML = '<div class="tab-placeholder">No cleanup opportunities found.</div>';
@@ -841,7 +841,7 @@ function renderCleanupSuggestions() {
     // Group suggestions
     for (let i = 0; i < state.allCleanupSuggestions.length; i++) {
         const s = state.allCleanupSuggestions[i];
-        if (!groups[s.type]) groups[s.type] = [];
+        if (!groups[s.type]) {groups[s.type] = [];}
         groups[s.type].push({ suggestion: s, index: i });
     }
 
@@ -849,7 +849,7 @@ function renderCleanupSuggestions() {
 
     // Render each group in order
     for (const groupType of groupOrder) {
-        if (!groups[groupType] || groups[groupType].length === 0) continue;
+        if (!groups[groupType] || groups[groupType].length === 0) {continue;}
 
         const config = groupConfig[groupType] || { icon: '❓', label: groupType, severity: 'info', bulkAction: null };
         const items = groups[groupType];
@@ -1038,7 +1038,7 @@ function stageCleanupDelete(idx) {
     const s = state.allCleanupSuggestions[idx];
     const obj = s.object;
 
-    if (!obj) return;
+    if (!obj) {return;}
 
     // Stage the deletion
     state.stagedObjectDeletions.add(obj.global_index);
@@ -1067,11 +1067,11 @@ function stageCleanupDelete(idx) {
 
 function resolveCleanupIssue(idx) {
     const s = state.allCleanupSuggestions[idx];
-    if (!s.issueData) return;
+    if (!s.issueData) {return;}
 
     const issue = s.issueData;
     const resolveInfo = Explorer.getIssueResolveInfo(issue);
-    if (!resolveInfo) return;
+    if (!resolveInfo) {return;}
 
     // Find the source file of the object that has the issue
     const sourceObj = s.object;
@@ -1083,7 +1083,7 @@ function resolveCleanupIssue(idx) {
 
 function fixDuplicate(idx) {
     const s = state.allCleanupSuggestions[idx];
-    if (!s || s.type !== 'duplicate' || !s.duplicateGroup) return;
+    if (!s || s.type !== 'duplicate' || !s.duplicateGroup) {return;}
 
     // Find differences between duplicates
     const differences = findDuplicateDifferences(s.duplicateGroup);
@@ -1132,7 +1132,7 @@ function fixDuplicate(idx) {
 }
 
 function findDuplicateDifferences(objects) {
-    if (objects.length < 2) return [];
+    if (objects.length < 2) {return [];}
 
     // Collect all attribute keys across all objects
     const allKeys = new Set();
@@ -1156,7 +1156,7 @@ function findDuplicateDifferences(objects) {
 
 function keepDuplicateAndDeleteOthers(suggestionIdx, keepIdx) {
     const s = state.allCleanupSuggestions[suggestionIdx];
-    if (!s || !s.duplicateGroup) return;
+    if (!s || !s.duplicateGroup) {return;}
 
     // Stage deletion of all except the one to keep
     let deletedCount = 0;
@@ -1186,7 +1186,7 @@ function keepDuplicateAndDeleteOthers(suggestionIdx, keepIdx) {
 
 function fixLongHostList(idx) {
     const s = state.allCleanupSuggestions[idx];
-    if (!s || s.type !== 'long_host_list' || !s.object) return;
+    if (!s || s.type !== 'long_host_list' || !s.object) {return;}
 
     const obj = s.object;
     const hostList = obj.attributes.host_name || '';
@@ -1296,7 +1296,7 @@ function handleHostgroupServiceLink() {
     }
 
     const hostgroupName = state.editedObject.attributes.hostgroup_name;
-    if (!hostgroupName) return;
+    if (!hostgroupName) {return;}
 
     const serviceGlobalIndex = state.pendingHostgroupServiceLink.serviceGlobalIndex;
     const suggestionIdx = state.pendingHostgroupServiceLink.suggestionIdx;
@@ -1375,7 +1375,7 @@ async function loadNotificationSuggestions(forceRefresh = false) {
         if (container) {
             container.innerHTML = '<div class="empty-state empty-state-success"><span class="empty-icon"><i class="fa-solid fa-circle-check"></i></span><div class="empty-title">All covered</div><div class="empty-desc">All contacts have notification commands and periods configured!</div></div>';
         }
-        if (badge) badge.style.display = 'none';
+        if (badge) {badge.style.display = 'none';}
         return;
     }
 
@@ -1389,7 +1389,7 @@ async function loadNotificationSuggestions(forceRefresh = false) {
 
 function renderNotificationSuggestions() {
     const container = document.getElementById('notificationsContent');
-    if (!container) return;
+    if (!container) {return;}
 
     if (state.allNotificationSuggestions.length === 0) {
         container.innerHTML = '<div class="tab-placeholder">No notification gaps found.</div>';
@@ -1399,7 +1399,7 @@ function renderNotificationSuggestions() {
     // Group by type
     const byType = {};
     for (const s of state.allNotificationSuggestions) {
-        if (!byType[s.type]) byType[s.type] = [];
+        if (!byType[s.type]) {byType[s.type] = [];}
         byType[s.type].push(s);
     }
 

@@ -143,7 +143,7 @@ Explorer.getSelectedIndices = function() {
     const indices = new Set();
     for (const key of Explorer.state.selectedKeys) {
         const obj = Explorer.findObjectByKey(key);
-        if (obj) indices.add(obj.global_index);
+        if (obj) {indices.add(obj.global_index);}
     }
     return indices;
 };
@@ -163,7 +163,7 @@ Explorer.groupByType = function(items) {
     const groups = {};
     items.forEach(item => {
         const type = item.object ? item.object.object_type : item.object_type;
-        if (!groups[type]) groups[type] = [];
+        if (!groups[type]) {groups[type] = [];}
         groups[type].push(item);
     });
     return groups;
@@ -173,7 +173,7 @@ Explorer.groupByType = function(items) {
  * Parse comma-separated values
  */
 Explorer.parseCommaValues = function(str) {
-    if (!str) return [];
+    if (!str) {return [];}
     return str.split(',').map(s => s.trim()).filter(s => s);
 };
 
@@ -287,7 +287,7 @@ Explorer.initEventDelegation = function() {
 
         // Find element with data-action
         const actionEl = e.target.closest('[data-action]');
-        if (!actionEl) return;
+        if (!actionEl) {return;}
 
         const action = actionEl.dataset.action;
         const handler = actionHandlers[action];
@@ -301,7 +301,7 @@ Explorer.initEventDelegation = function() {
     // Handle change events for filters (via data-action)
     document.addEventListener('change', function(e) {
         const actionEl = e.target.closest('[data-action]');
-        if (!actionEl) return;
+        if (!actionEl) {return;}
 
         const action = actionEl.dataset.action;
         const handler = actionHandlers[action];
@@ -313,7 +313,7 @@ Explorer.initEventDelegation = function() {
     // Handle input events for search/sliders (via data-action)
     document.addEventListener('input', function(e) {
         const actionEl = e.target.closest('[data-action]');
-        if (!actionEl) return;
+        if (!actionEl) {return;}
 
         const action = actionEl.dataset.action;
         const handler = actionHandlers[action];

@@ -91,7 +91,7 @@
             // Sort by object type, then by name
             if (a.objectType && b.objectType) {
                 const typeCompare = a.objectType.localeCompare(b.objectType);
-                if (typeCompare !== 0) return typeCompare;
+                if (typeCompare !== 0) {return typeCompare;}
                 return a.missingName.localeCompare(b.missingName);
             }
             return 0;
@@ -139,14 +139,14 @@
         // Categorize grouped errors
         state.groupedErrors.forEach((group, idx) => {
             const groupType = group.objectType || 'other';
-            if (!errorGroups[groupType]) errorGroups[groupType] = [];
+            if (!errorGroups[groupType]) {errorGroups[groupType] = [];}
             errorGroups[groupType].push({ group, idx });
         });
 
         // Render grouped errors with section headers
         let html = '';
         for (const groupType of groupOrder) {
-            if (!errorGroups[groupType] || errorGroups[groupType].length === 0) continue;
+            if (!errorGroups[groupType] || errorGroups[groupType].length === 0) {continue;}
 
             const config = groupConfig[groupType] || { icon: '<i class="fa-solid fa-circle-xmark"></i>', label: groupType };
             const items = errorGroups[groupType];
@@ -221,7 +221,7 @@
 
     function showGroupedErrorDetail(idx) {
         const group = state.groupedErrors[idx];
-        if (!group) return;
+        if (!group) {return;}
 
         // If only one affected object, navigate directly to it
         if (group.issues.length === 1) {
@@ -247,7 +247,7 @@
 
     function resolveGroupedError(idx) {
         const group = state.groupedErrors[idx];
-        if (!group || !group.objectType) return;
+        if (!group || !group.objectType) {return;}
 
         // Use the first issue to determine the target file
         const firstIssue = group.firstIssue;
@@ -276,11 +276,11 @@
         };
 
         const info = resolveMap[issue.type];
-        if (!info) return null;
+        if (!info) {return null;}
 
         // Extract the missing object name from the message
         const match = issue.message.match(info.pattern);
-        if (!match) return null;
+        if (!match) {return null;}
 
         return {
             objectType: info.objectType,

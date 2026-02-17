@@ -135,9 +135,9 @@
      * Shared implementation — do not duplicate in other modules.
      */
     Explorer.isObjectTemplate = function(obj) {
-        if (obj.attributes.register === '0') return true;
+        if (obj.attributes.register === '0') {return true;}
         const nameField = Explorer.constants.nameFields[obj.object_type];
-        return !!(obj.attributes.name && nameField && !obj.attributes[nameField]);
+        return Boolean(obj.attributes.name && nameField && !obj.attributes[nameField]);
     };
 
     /**
@@ -161,7 +161,7 @@
     Explorer.getFieldsForType = function(targetType) {
         const fields = [];
         for (const [field, type] of Object.entries(Explorer.constants.referenceFields)) {
-            if (type === targetType) fields.push(field);
+            if (type === targetType) {fields.push(field);}
         }
         return fields;
     };

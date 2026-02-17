@@ -169,7 +169,7 @@
             ? state.hoveredIndex
             : Array.from(Explorer.getSelectedIndices())[0];
         const obj = state.allObjects.find(o => o.global_index === targetIndex);
-        if (!obj) return;
+        if (!obj) {return;}
 
         // Use pending edit attributes if available
         const pendingEdit = state.pendingEdits.get(obj.global_index);
@@ -262,12 +262,12 @@
         dialog.style.maxWidth = '';
         // Show default footer
         const footer = dialog.querySelector('.dialog-footer');
-        if (footer) footer.style.display = '';
+        if (footer) {footer.style.display = '';}
         // Reset button states
         const confirmBtn = document.getElementById('dialogConfirm');
-        if (confirmBtn) confirmBtn.style.display = '';
+        if (confirmBtn) {confirmBtn.style.display = '';}
         const cancelBtn = dialog.querySelector('.dialog-footer button:first-child');
-        if (cancelBtn) cancelBtn.textContent = 'Cancel';
+        if (cancelBtn) {cancelBtn.textContent = 'Cancel';}
     }
 
     // Bulk Actions
@@ -438,7 +438,7 @@
         let clonedCount = 0;
         for (const idx of Explorer.getSelectedIndices()) {
             const obj = state.allObjects.find(o => o.global_index === idx);
-            if (!obj) continue;
+            if (!obj) {continue;}
 
             const nameField = Explorer.getNameFieldForObject(obj);
             // Use pending edit attributes if available (clone includes staged changes)
@@ -498,7 +498,7 @@
 
         for (const idx of Explorer.getSelectedIndices()) {
             const obj = state.allObjects.find(o => o.global_index === idx);
-            if (!obj) continue;
+            if (!obj) {continue;}
 
             const { original: originalAttrs, edited: editedAttrs } = getOrCreatePendingEdit(obj);
             let madeChange = false;
@@ -549,7 +549,7 @@
     function applyAddToGroup() {
         // C-02: Delegate to consolidated addToGroup implementation
         const groupName = document.getElementById('groupName').value.trim();
-        if (!groupName) return;
+        if (!groupName) {return;}
         Explorer.closeDialog();
         addToGroup(groupName);
     }
@@ -570,9 +570,9 @@
         );
 
         const groupTypes = [];
-        if (selectedTypes.has('host')) groupTypes.push('hostgroup');
-        if (selectedTypes.has('service')) groupTypes.push('servicegroup');
-        if (selectedTypes.has('contact')) groupTypes.push('contactgroup');
+        if (selectedTypes.has('host')) {groupTypes.push('hostgroup');}
+        if (selectedTypes.has('service')) {groupTypes.push('servicegroup');}
+        if (selectedTypes.has('contact')) {groupTypes.push('contactgroup');}
 
         const groups = state.allObjects
             .filter(o => groupTypes.includes(o.object_type))
@@ -774,7 +774,7 @@
         // The key (source_file|object_type|name) never changes, so this is always correct
         const dragObjects = Array.from(state.selectedKeys).map(key => {
             const obj = Explorer.findObjectByKey(key);
-            if (!obj) return null;
+            if (!obj) {return null;}
             return {
                 source_file: obj.source_file,
                 object_type: obj.object_type,
@@ -858,7 +858,7 @@
         Explorer.cleanupDragState();
 
         const dataStr = event.dataTransfer.getData('text/plain');
-        if (!dataStr) return;
+        if (!dataStr) {return;}
 
         let data;
         try {
@@ -891,7 +891,7 @@
         if (data.type === 'objects' && data.objects && data.objects.length > 0) {
             // Use stable object info directly from drag data
             data.objects.forEach(objData => {
-                if (!objData || !objData.source_file) return;
+                if (!objData || !objData.source_file) {return;}
 
                 if (objData.source_file !== targetFile) {
                     // Use same fallback logic as getObjectKey for null-safe key generation

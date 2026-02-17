@@ -81,7 +81,7 @@ async function breakLock() {
         type: 'danger'
     });
 
-    if (!confirmed) return;
+    if (!confirmed) {return;}
 
     const result = await ApiClient.post('/api/staging/lock/break', {}, { silent: true });
 

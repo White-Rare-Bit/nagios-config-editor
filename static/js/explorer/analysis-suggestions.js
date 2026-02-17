@@ -40,7 +40,7 @@
      * @param {boolean} forceRefresh - Skip cache if true
      */
     async function loadTemplateIssues(forceRefresh = false) {
-        if (!state.templateIssues) state.templateIssues = {};
+        if (!state.templateIssues) {state.templateIssues = {};}
 
         // Skip if already loaded and not forcing refresh
         if (!forceRefresh && Object.keys(state.templateIssues).length > 0) {
@@ -67,7 +67,7 @@
     function renderTemplateIssues(issues) {
         const container = document.getElementById('templateIssuesContent');
         const badge = document.getElementById('templateIssuesSectionBadge');
-        if (!container) return;
+        if (!container) {return;}
 
         const totalCount = (issues.invalid_use?.length || 0) +
                            (issues.circular_dependencies?.length || 0) +
@@ -160,7 +160,7 @@
             if (container) {
                 container.innerHTML = '<div class="empty-state empty-state-success"><span class="empty-icon"><i class="fa-solid fa-circle-check"></i></span><div class="empty-title">No opportunities found</div><div class="empty-desc">Your objects are well-templated!</div></div>';
             }
-            if (badge) badge.style.display = 'none';
+            if (badge) {badge.style.display = 'none';}
             return;
         }
 
@@ -177,10 +177,10 @@
         const slider = document.getElementById('minTemplateObjects');
         const sliderValue = document.getElementById('minTemplateObjectsValue');
 
-        if (!container || !slider) return;
+        if (!container || !slider) {return;}
 
         const minObjects = parseInt(slider.value);
-        if (sliderValue) sliderValue.textContent = minObjects;
+        if (sliderValue) {sliderValue.textContent = minObjects;}
 
         const filtered = state.allTemplateSuggestions.filter(s => s.count >= minObjects);
 
@@ -246,7 +246,7 @@
             if (container) {
                 container.innerHTML = '<div class="empty-state empty-state-success"><span class="empty-icon"><i class="fa-solid fa-circle-check"></i></span><div class="empty-title">No suggestions</div><div class="empty-desc">Your hosts are well organized!</div></div>';
             }
-            if (badge) badge.style.display = 'none';
+            if (badge) {badge.style.display = 'none';}
             return;
         }
 
@@ -263,10 +263,10 @@
         const slider = document.getElementById('minMembersSlider');
         const sliderValue = document.getElementById('minMembersValue');
 
-        if (!container || !slider) return;
+        if (!container || !slider) {return;}
 
         const minMembers = parseInt(slider.value);
-        if (sliderValue) sliderValue.textContent = minMembers;
+        if (sliderValue) {sliderValue.textContent = minMembers;}
 
         const filtered = state.allGroupingSuggestions.filter(s => s.count >= minMembers);
 
@@ -295,8 +295,8 @@
     }
 
     function getConfidenceClass(confidence) {
-        if (confidence >= 10) return 'confidence-high';
-        if (confidence >= 5) return 'confidence-medium';
+        if (confidence >= 10) {return 'confidence-high';}
+        if (confidence >= 5) {return 'confidence-medium';}
         return 'confidence-low';
     }
 

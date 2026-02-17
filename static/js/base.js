@@ -29,7 +29,7 @@ const DebugLogger = (function() {
     const FLUSH_INTERVAL = 2000; // 2 seconds
 
     function log(level, message, context = {}) {
-        if (!ENABLED) return;
+        if (!ENABLED) {return;}
 
         logBuffer.push({ level, message, context, timestamp: new Date().toISOString() });
 
@@ -41,7 +41,7 @@ const DebugLogger = (function() {
 
     async function flush() {
         flushTimeout = null;
-        if (logBuffer.length === 0) return;
+        if (logBuffer.length === 0) {return;}
 
         const logsToSend = logBuffer;
         logBuffer = [];
@@ -89,7 +89,7 @@ const DebugLogger = (function() {
 // escapeRegex() is defined in app.js (loaded first) - use that global function
 
 function escapeJs(text) {
-    if (text === null || text === undefined) return '';
+    if (text === null || text === undefined) {return '';}
     return String(text)
         .replace(/\\/g, '\\\\')
         .replace(/'/g, "\\'")
@@ -126,7 +126,7 @@ function showLoadingState(containerOrSelector, message = 'Loading...') {
         ? document.querySelector(containerOrSelector)
         : containerOrSelector;
 
-    if (!container) return;
+    if (!container) {return;}
 
     container.innerHTML = `
         <div class="loading-state">
@@ -187,7 +187,7 @@ function updateNavCommitButton(changeCount) {
 
 function updateUndoButton(undoCount) {
     const btn = document.getElementById('navUndoBtn');
-    if (!btn) return;
+    if (!btn) {return;}
 
     if (undoCount > 0) {
         btn.classList.remove('disabled');
@@ -217,7 +217,7 @@ async function handleUndoClick() {
             showToast(`Undone: ${description}`, 'info');
             checkPendingChanges();
             // Reload page to reflect changes
-            if (typeof buildTree === 'function') buildTree();
+            if (typeof buildTree === 'function') {buildTree();}
         } else if (result.status === 404) {
             showToast('Nothing to undo', 'info');
         } else {
@@ -242,7 +242,7 @@ function showKeyboardShortcuts() {
 
 function closeKeyboardShortcuts() {
     const overlay = document.getElementById('keyboardShortcutsOverlay');
-    if (overlay) overlay.classList.remove('visible');
+    if (overlay) {overlay.classList.remove('visible');}
 }
 
 async function checkPendingChanges() {
@@ -298,7 +298,7 @@ function checkIdentityRequired() {
 // =============================================================================
 
 function startLockPoll() {
-    if (baseState.lockPollInterval) return;
+    if (baseState.lockPollInterval) {return;}
     baseState.lockPollInterval = setInterval(async () => {
         await checkLockStatus();
         await checkPendingChanges();

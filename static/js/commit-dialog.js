@@ -101,8 +101,8 @@ async function buildGlobalCommitDialogHtml(data, refData = null, isGitConfigured
 
     let newCount = 0, deletedCount = 0, movedCount = 0, modifyCount = 0;
     fileChanges.forEach(fc => {
-        fc.additions.forEach(a => { if (a.isNew) newCount++; else movedCount++; });
-        fc.removals.forEach(r => { if (r.isDeletion) deletedCount++; });
+        fc.additions.forEach(a => { if (a.isNew) {newCount++;} else {movedCount++;} });
+        fc.removals.forEach(r => { if (r.isDeletion) {deletedCount++;} });
         modifyCount += fc.modifications.filter(m => !m.isReferenceUpdate).length;
     });
     let refCount = 0;
@@ -203,12 +203,12 @@ function buildReferenceChangesSection(refData) {
  * Each reference becomes a modification entry showing old_value -> new_value for the affected field.
  */
 function injectReferenceChanges(fileChanges, refData, configPath) {
-    if (!refData || !refData.nameChanges) return;
+    if (!refData || !refData.nameChanges) {return;}
 
     for (const change of refData.nameChanges) {
         for (const ref of change.references) {
             const filePath = ref.sourceFile;
-            if (!filePath) continue;
+            if (!filePath) {continue;}
 
             const file = ensureFileChange(fileChanges, filePath, configPath);
 
@@ -249,9 +249,9 @@ async function buildGitOnlyCommitDialogHtml(gitChanges, configPath, isGitConfigu
     // Count by status
     let modifiedCount = 0, addedCount = 0, deletedCount = 0;
     for (const change of gitChanges) {
-        if (change.status === 'modified') modifiedCount++;
-        else if (change.status === 'added' || change.status === 'untracked') addedCount++;
-        else if (change.status === 'deleted') deletedCount++;
+        if (change.status === 'modified') {modifiedCount++;}
+        else if (change.status === 'added' || change.status === 'untracked') {addedCount++;}
+        else if (change.status === 'deleted') {deletedCount++;}
     }
 
     return `
@@ -373,10 +373,10 @@ async function updateGitOnlyContextLines(value) {
     baseState.gitOnlyContextLines = intValue === 10 ? 9999 : intValue;
     document.getElementById('gitOnlyContextLinesValue').textContent = intValue === 10 ? 'All' : value;
 
-    if (!baseState.gitOnlyChanges) return;
+    if (!baseState.gitOnlyChanges) {return;}
 
     const changesList = document.getElementById('globalCommitChangesList');
-    if (!changesList) return;
+    if (!changesList) {return;}
 
     const filesHtml = await buildChangesFilesHtml(baseState.gitOnlyChanges, baseState.gitOnlyContextLines, { expandedByDefault: true });
     changesList.innerHTML = `
@@ -564,7 +564,7 @@ async function applyGitCommit() {
  * @returns {Object|null} - {source_file, object_type, name} or null if not a valid stable key
  */
 function decodeStableKey(key) {
-    if (typeof key !== 'string') return null;
+    if (typeof key !== 'string') {return null;}
 
     // First check if it's already a decoded format (has pipes)
     if (key.includes('|')) {
@@ -664,7 +664,7 @@ function processStagedMove(moveEntry, allObjects, editsMap, fileChanges, configP
             name: move.object.name || move.object.display_name
         };
     }
-    if (!obj) return;
+    if (!obj) {return;}
 
     // Use the actual global_index for proper matching in diff rendering
     const globalIndex = obj.global_index;
@@ -700,7 +700,7 @@ function processStagedMove(moveEntry, allObjects, editsMap, fileChanges, configP
 function processPendingEdit(editEntry, allObjects, movedIndices, fileChanges, configPath) {
     const [editIdx, edit] = editEntry;
 
-    if (movedIndices.has(editIdx)) return;
+    if (movedIndices.has(editIdx)) {return;}
 
     // Find object by stable key (Base64-encoded or plain) or by global_index
     let obj = findObjectByKey(editIdx, allObjects);
@@ -716,7 +716,7 @@ function processPendingEdit(editEntry, allObjects, movedIndices, fileChanges, co
             name: edit.object.name || edit.object.display_name
         };
     }
-    if (!obj) return;
+    if (!obj) {return;}
 
     const file = ensureFileChange(fileChanges, obj.source_file, configPath);
     file.modifications.push({
@@ -747,7 +747,7 @@ function processStagedCreation(creation, fileChanges, configPath) {
  */
 function processStagedDeletion(globalIndex, allObjects, fileChanges, configPath) {
     const obj = allObjects.find(o => o.global_index === globalIndex);
-    if (!obj) return;
+    if (!obj) {return;}
 
     const file = ensureFileChange(fileChanges, obj.source_file, configPath);
     file.removals.push({
@@ -961,9 +961,9 @@ function renderGlobalFileDiff(filePath, fileData, allObjects, configPath) {
     const { fileName, relativePath, removals, additions, modifications } = fileData;
 
     let summaryParts = [];
-    if (additions.length > 0) summaryParts.push(`+${additions.length}`);
-    if (removals.length > 0) summaryParts.push(`-${removals.length}`);
-    if (modifications.length > 0) summaryParts.push(`~${modifications.length}`);
+    if (additions.length > 0) {summaryParts.push(`+${additions.length}`);}
+    if (removals.length > 0) {summaryParts.push(`-${removals.length}`);}
+    if (modifications.length > 0) {summaryParts.push(`~${modifications.length}`);}
 
     let existingObjects = allObjects
         .filter(obj => obj.source_file === filePath)
@@ -1019,10 +1019,10 @@ function renderGlobalFileDiff(filePath, fileData, allObjects, configPath) {
     // appear before existing objects at line 1, 2, etc.
     unifiedItems.sort((a, b) => {
         const diff = a.sortKey - b.sortKey;
-        if (Math.abs(diff) > 0.001) return diff;
+        if (Math.abs(diff) > 0.001) {return diff;}
         // When sortKeys are equal, additions come before existing objects
-        if (a.type === 'addition' && b.type !== 'addition') return -1;
-        if (a.type !== 'addition' && b.type === 'addition') return 1;
+        if (a.type === 'addition' && b.type !== 'addition') {return -1;}
+        if (a.type !== 'addition' && b.type === 'addition') {return 1;}
         return 0;
     });
 
@@ -1256,7 +1256,7 @@ async function discardGlobalChanges() {
         ];
 
         counts.forEach(([count, label]) => {
-            if (count > 0) changeSummary.push(pluralize(count, label));
+            if (count > 0) {changeSummary.push(pluralize(count, label));}
         });
         changeCount = counts.reduce((sum, [count]) => sum + count, 0);
     }
@@ -1281,8 +1281,8 @@ async function discardGlobalChanges() {
         }
 
         // Rebuild UI
-        if (typeof buildTree === 'function') buildTree();
-        if (typeof renderTargetPane === 'function') renderTargetPane();
+        if (typeof buildTree === 'function') {buildTree();}
+        if (typeof renderTargetPane === 'function') {renderTargetPane();}
     }
     const data = result.data || {};
     showStagingDiscardResultPanel(result.success && data.success, changeCount, changeSummary, data.error || result.error, data.gitDiscarded);
@@ -1388,7 +1388,7 @@ function showStagingResultPanel(success, message) {
 }
 
 async function autoGitCommitGlobal(message, clearStagingOnSuccess = false) {
-    if (!message) return;
+    if (!message) {return;}
 
     const identity = getUserIdentity();
 

@@ -119,16 +119,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event delegation for data-action elements
     document.addEventListener('click', function(e) {
         const actionEl = e.target.closest('[data-action]');
-        if (!actionEl) return;
+        if (!actionEl) {return;}
 
         e.preventDefault();
         const action = actionEl.dataset.action;
         if (action === 'browseDir') {
             const target = actionEl.dataset.target;
-            if (target) browseDir(target);
+            if (target) {browseDir(target);}
         } else if (action === 'browseFile') {
             const target = actionEl.dataset.target;
-            if (target) browseFile(target);
+            if (target) {browseFile(target);}
         } else if (action === 'downloadLog') {
             downloadLog();
         } else if (action === 'saveIdentity') {
@@ -147,13 +147,13 @@ document.addEventListener('DOMContentLoaded', () => {
             closeBrowse();
         } else if (action === 'switchTab') {
             const tab = actionEl.dataset.tab;
-            if (tab) switchTab(tab);
+            if (tab) {switchTab(tab);}
         } else if (action === 'loadDirectory') {
             const path = actionEl.dataset.path;
-            if (path) loadDirectory(path);
+            if (path) {loadDirectory(path);}
         } else if (action === 'selectFile') {
             const path = actionEl.dataset.path;
-            if (path) selectFile(path);
+            if (path) {selectFile(path);}
         }
     });
 });
@@ -222,8 +222,8 @@ async function saveIdentity() {
 
     if (!userName || !userEmail) {
         showToast('Please enter your name and email', 'error');
-        if (!userName) document.getElementById('gitUserName').focus();
-        else document.getElementById('gitUserEmail').focus();
+        if (!userName) {document.getElementById('gitUserName').focus();}
+        else {document.getElementById('gitUserEmail').focus();}
         return;
     }
 
@@ -344,7 +344,7 @@ function closeBrowse() {
 
 // Close browse dialog on backdrop click
 document.getElementById('browseOverlay').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) closeBrowse();
+    if (e.target === e.currentTarget) {closeBrowse();}
 });
 
 const BROWSE_ICONS = {

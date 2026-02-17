@@ -225,7 +225,7 @@ console.log('dependencies.js loaded');
         // Event delegation for data-action attributes
         document.addEventListener('input', function(e) {
             const actionEl = e.target.closest('[data-action]');
-            if (!actionEl) return;
+            if (!actionEl) {return;}
 
             const action = actionEl.dataset.action;
             if (action === 'onNodeSearchInput') {
@@ -235,7 +235,7 @@ console.log('dependencies.js loaded');
 
         document.addEventListener('change', function(e) {
             const actionEl = e.target.closest('[data-action]');
-            if (!actionEl) return;
+            if (!actionEl) {return;}
 
             const action = actionEl.dataset.action;
             switch (action) {
@@ -257,7 +257,7 @@ console.log('dependencies.js loaded');
         // Click handler for buttons and context menu
         document.addEventListener('click', function(e) {
             const actionEl = e.target.closest('[data-action]');
-            if (!actionEl) return;
+            if (!actionEl) {return;}
 
             const action = actionEl.dataset.action;
             switch (action) {
@@ -304,7 +304,7 @@ console.log('dependencies.js loaded');
     // This is directional: for a host, show services/commands/contacts that apply TO it,
     // but don't show other hosts using the same template or command.
     function addAllConnectedRecursively(startNodeId, visited = new Set()) {
-        if (visited.has(startNodeId)) return;
+        if (visited.has(startNodeId)) {return;}
         visited.add(startNodeId);
 
         const maxNodes = MAX_NODES;
@@ -312,7 +312,7 @@ console.log('dependencies.js loaded');
 
         // Helper to add a node if not at max
         function addNode(nodeId) {
-            if (addedNodeIds.size >= maxNodes || addedNodeIds.has(nodeId)) return false;
+            if (addedNodeIds.size >= maxNodes || addedNodeIds.has(nodeId)) {return false;}
             addedNodeIds.add(nodeId);
             return true;
         }
@@ -668,7 +668,7 @@ console.log('dependencies.js loaded');
     // Service IDs may have format "service:target:name" for disambiguation
     function parseNodeId(nodeId) {
         const colonIndex = nodeId.indexOf(':');
-        if (colonIndex === -1) return [nodeId, ''];
+        if (colonIndex === -1) {return [nodeId, ''];}
         const type = nodeId.substring(0, colonIndex);
         const rest = nodeId.substring(colonIndex + 1);
         // For services with target prefix, get the actual service name (last part)
@@ -686,7 +686,7 @@ console.log('dependencies.js loaded');
     // Calculate positions using a proper tree structure where children are positioned under their parent
     function calculateOrganizedPositions(nodes, edges, centerNodeId, layoutType = 'static') {
         const positions = {};
-        if (!centerNodeId || nodes.length === 0) return positions;
+        if (!centerNodeId || nodes.length === 0) {return positions;}
 
         // Build node lookup and adjacency
         const nodeMap = {};
@@ -699,8 +699,8 @@ console.log('dependencies.js loaded');
             adjacency[node.id] = new Set();
         }
         for (const edge of edges) {
-            if (adjacency[edge.from]) adjacency[edge.from].add(edge.to);
-            if (adjacency[edge.to]) adjacency[edge.to].add(edge.from);
+            if (adjacency[edge.from]) {adjacency[edge.from].add(edge.to);}
+            if (adjacency[edge.to]) {adjacency[edge.to].add(edge.from);}
         }
 
         // Build tree structure using BFS - each node gets exactly one parent
@@ -730,10 +730,10 @@ console.log('dependencies.js loaded');
                 neighbors.sort((a, b) => {
                     const nodeA = nodeMap[a];
                     const nodeB = nodeMap[b];
-                    if (!nodeA || !nodeB) return 0;
+                    if (!nodeA || !nodeB) {return 0;}
                     const orderA = typeOrder.indexOf(nodeA.type);
                     const orderB = typeOrder.indexOf(nodeB.type);
-                    if (orderA !== orderB) return orderA - orderB;
+                    if (orderA !== orderB) {return orderA - orderB;}
                     return (nodeA.label || '').localeCompare(nodeB.label || '');
                 });
 
@@ -792,7 +792,7 @@ console.log('dependencies.js loaded');
                 positions[nodeId] = { x: xCenter, y: y };
 
                 const childIds = children[nodeId];
-                if (childIds.length === 0) return;
+                if (childIds.length === 0) {return;}
 
                 // Calculate total width of children
                 let totalChildWidth = 0;
@@ -834,7 +834,7 @@ console.log('dependencies.js loaded');
                 positions[nodeId] = { x: x, y: yCenter };
 
                 const childIds = children[nodeId];
-                if (childIds.length === 0) return;
+                if (childIds.length === 0) {return;}
 
                 // Calculate total height of children
                 let totalChildHeight = 0;
@@ -935,12 +935,12 @@ console.log('dependencies.js loaded');
             for (const clusterName in clusterDefs) {
                 clusters[clusterName] = [];
             }
-            clusters['other'] = [];
+            clusters.other = [];
 
             for (const nodeId of visited) {
-                if (nodeId === centerNodeId) continue;
+                if (nodeId === centerNodeId) {continue;}
                 const node = nodeMap[nodeId];
-                if (!node) continue;
+                if (!node) {continue;}
 
                 // Find cluster by type
                 let assigned = false;
@@ -953,13 +953,13 @@ console.log('dependencies.js loaded');
                 }
 
                 if (!assigned) {
-                    clusters['other'].push(nodeId);
+                    clusters.other.push(nodeId);
                 }
             }
 
             // Add 'other' cluster definition if needed
-            if (clusters['other'].length > 0) {
-                clusterDefs['other'] = {
+            if (clusters.other.length > 0) {
+                clusterDefs.other = {
                     types: [],
                     angle: Math.PI * 2/3,
                     color: '#9E9E9E'
@@ -1022,13 +1022,13 @@ console.log('dependencies.js loaded');
             // e.g., contactgroups -> contacts -> services -> commands
             function getOrbitChainRoot(clusterName) {
                 const def = clusterDefs[clusterName];
-                if (!def || !def.orbitsAround) return clusterName;
+                if (!def || !def.orbitsAround) {return clusterName;}
                 return getOrbitChainRoot(def.orbitsAround);
             }
 
             function getOrbitDepth(clusterName) {
                 const def = clusterDefs[clusterName];
-                if (!def || !def.orbitsAround) return 0;
+                if (!def || !def.orbitsAround) {return 0;}
                 return 1 + getOrbitDepth(def.orbitsAround);
             }
 
@@ -1040,7 +1040,7 @@ console.log('dependencies.js loaded');
             for (const clusterName of clusterOrder) {
                 const nodeList = clusters[clusterName];
                 const def = clusterDefs[clusterName];
-                if (!def) continue;
+                if (!def) {continue;}
 
                 if (!def.orbitsAround) {
                     // Root cluster - position at its angle from center
@@ -1213,7 +1213,7 @@ console.log('dependencies.js loaded');
 
     function loadGraphState() {
         const saved = sessionStorage.getItem('graphViewState');
-        if (!saved) return;
+        if (!saved) {return;}
 
         try {
             const state = JSON.parse(saved);
@@ -1288,7 +1288,7 @@ console.log('dependencies.js loaded');
 
     function onNodeSearchInput() {
         const search = document.getElementById('nodeSearchAdd').value.toLowerCase();
-        if (searchTimeout) clearTimeout(searchTimeout);
+        if (searchTimeout) {clearTimeout(searchTimeout);}
 
         if (search.length < 2) {
             document.getElementById('nodeSearchResults').style.display = 'none';
@@ -1304,7 +1304,7 @@ console.log('dependencies.js loaded');
         for (const node of allNodes) {
             if (node.label.toLowerCase().includes(search)) {
                 results.push(node);
-                if (results.length >= 30) break;
+                if (results.length >= 30) {break;}
             }
         }
 
@@ -1345,7 +1345,7 @@ console.log('dependencies.js loaded');
     });
 
     function addNode(nodeId) {
-        if (addedNodeIds.has(nodeId)) return;
+        if (addedNodeIds.has(nodeId)) {return;}
 
         const maxNodes = MAX_NODES;
         if (addedNodeIds.size >= maxNodes) {
@@ -1378,7 +1378,7 @@ console.log('dependencies.js loaded');
     }
 
     function addConnected() {
-        if (!cy) return;
+        if (!cy) {return;}
 
         const selected = cy.$(':selected').map(n => n.id());
         if (selected.length === 0) {
@@ -1438,11 +1438,11 @@ console.log('dependencies.js loaded');
         const nodes = [];
         for (const id of addedNodeIds) {
             const node = allNodes.find(n => n.id === id);
-            if (node) nodes.push(node);
+            if (node) {nodes.push(node);}
         }
 
         nodes.sort((a, b) => {
-            if (a.type !== b.type) return a.type.localeCompare(b.type);
+            if (a.type !== b.type) {return a.type.localeCompare(b.type);}
             return a.label.localeCompare(b.label);
         });
 
@@ -1648,27 +1648,27 @@ console.log('dependencies.js loaded');
      * @private
      */
     function _expandWithRulesImpl(startNodeId, preset, nodes, edges, resultSet, exemptRootFromStopAt) {
-        if (!edges || !nodes) return;
+        if (!edges || !nodes) {return;}
 
         const startNode = nodes.find(n => n.id === startNodeId);
-        if (!startNode) return;
+        if (!startNode) {return;}
 
         const nodeType = startNode.type;
         const rules = expansionRules[nodeType]?.[preset];
 
         // No rules defined -> show nothing (prevents unpredictable expansion)
-        if (!rules) return;
+        if (!rules) {return;}
 
         const visited = new Set();
         const toVisit = [startNodeId];
 
         while (toVisit.length > 0) {
             const nodeId = toVisit.pop();
-            if (visited.has(nodeId)) continue;
+            if (visited.has(nodeId)) {continue;}
             visited.add(nodeId);
 
             const currentNode = nodes.find(n => n.id === nodeId);
-            if (!currentNode) continue;
+            if (!currentNode) {continue;}
 
             const currentType = currentNode.type;
 
@@ -1727,7 +1727,7 @@ console.log('dependencies.js loaded');
      */
     function expandWithRules(startNodeId, preset) {
         // Guard against uninitialized graph state
-        if (!allEdges || !allNodes) return;
+        if (!allEdges || !allNodes) {return;}
         // exemptRootFromStopAt=true: root node bypasses stopAt to allow expansion from it
         // (applyQuickView pre-adds root, stopAt prevents sibling expansion not root expansion)
         _expandWithRulesImpl(startNodeId, preset, allNodes, allEdges, addedNodeIds, true);
@@ -1758,7 +1758,7 @@ console.log('dependencies.js loaded');
     // Get the type of the current focus/root node
     function getCurrentNodeType() {
         const rootNode = focusNodeId || (addedNodeIds.size > 0 ? [...addedNodeIds][0] : null);
-        if (!rootNode) return null;
+        if (!rootNode) {return null;}
         const node = allNodes.find(n => n.id === rootNode);
         return node ? node.type : null;
     }
@@ -1766,7 +1766,7 @@ console.log('dependencies.js loaded');
     // Render quick view buttons based on the current node type
     function renderQuickViewButtons() {
         const container = document.getElementById('quickViewContainer');
-        if (!container) return;
+        if (!container) {return;}
 
         const nodeType = getCurrentNodeType();
         const presets = presetsByType[nodeType] || presetsByType.default;
@@ -1774,7 +1774,7 @@ console.log('dependencies.js loaded');
         // Build button HTML
         const buttonsHtml = presets.map(presetId => {
             const preset = quickViewPresets[presetId];
-            if (!preset) return '';
+            if (!preset) {return '';}
             const isActive = presetId === activeQuickView ? 'active' : '';
             return `
                 <button class="quick-view-btn ${isActive}"
@@ -1847,13 +1847,13 @@ console.log('dependencies.js loaded');
         // Filter nodes: show if they have visible connections OR are focus/selected
         // This provides focused views while keeping the user's primary node visible
         const displayNodes = allNodes.filter(n => {
-            if (!typeFilteredNodeIds.has(n.id)) return false;
+            if (!typeFilteredNodeIds.has(n.id)) {return false;}
             // Always show focus node (layout center) if its type is enabled
-            if (n.id === focusNodeId) return true;
+            if (n.id === focusNodeId) {return true;}
             // Always show selected node in Cytoscape
-            if (cy && cy.$id(n.id).selected()) return true;
+            if (cy && cy.$id(n.id).selected()) {return true;}
             // Always show if only one node added
-            if (typeFilteredNodeIds.size === 1) return true;
+            if (typeFilteredNodeIds.size === 1) {return true;}
             // Otherwise, must have visible edges
             return connectedNodeIds.has(n.id);
         });
@@ -1976,9 +1976,9 @@ console.log('dependencies.js loaded');
                 cy = null;
             }
             return;
-        } else {
+        } 
             emptyState.style.display = 'none';
-        }
+        
 
         const layoutType = document.getElementById('layoutType').value;
 
@@ -2003,8 +2003,8 @@ console.log('dependencies.js loaded');
             // Build tooltip - for services, show context from node ID
             const displayLabel = getNodeDisplayLabel(n.id, n.type, n.label);
             let tooltip = isTemplate ? `${n.type} template: ${displayLabel}` : `${n.type}: ${displayLabel}`;
-            if (!exists) tooltip += ' (NOT DEFINED - orphan reference)';
-            if (isFocusNode) tooltip += ' (layout center)';
+            if (!exists) {tooltip += ' (NOT DEFINED - orphan reference)';}
+            if (isFocusNode) {tooltip += ' (layout center)';}
 
             const nodeData = {
                 group: 'nodes',
@@ -2041,9 +2041,9 @@ console.log('dependencies.js loaded');
         const typeCentroids = {};
         const typeNodes = {};
         nodes.forEach(n => {
-            if (!typeNodes[n.type]) typeNodes[n.type] = [];
+            if (!typeNodes[n.type]) {typeNodes[n.type] = [];}
             const pos = organizedPositions[n.id] || nodePositions[n.id];
-            if (pos) typeNodes[n.type].push(pos);
+            if (pos) {typeNodes[n.type].push(pos);}
         });
         for (const type in typeNodes) {
             const positions = typeNodes[type];
@@ -2060,7 +2060,7 @@ console.log('dependencies.js loaded');
             const dx = x2 - x1;
             const dy = y2 - y1;
             const len = Math.sqrt(dx * dx + dy * dy);
-            if (len === 0) return 0;
+            if (len === 0) {return 0;}
 
             // Perpendicular distance (signed - positive = left of line)
             return ((py - y1) * dx - (px - x1) * dy) / len;
@@ -2192,7 +2192,7 @@ console.log('dependencies.js loaded');
         // For preset layout (organized positions), fit immediately
         if (hasOrganizedLayout || nodes.length > 0) {
             setTimeout(() => {
-                if (cy) cy.fit(50);
+                if (cy) {cy.fit(50);}
             }, 100);
         }
     }
@@ -2260,11 +2260,11 @@ console.log('dependencies.js loaded');
         saveGraphState();
     }
     function fitGraph() {
-        if (cy) cy.fit(50);
+        if (cy) {cy.fit(50);}
     }
 
     function escapeAttr(text) {
-        if (text === null || text === undefined) return '';
+        if (text === null || text === undefined) {return '';}
         return String(text)
             .replace(/\\/g, '\\\\')
             .replace(/'/g, "\\'")
@@ -2342,8 +2342,8 @@ console.log('dependencies.js loaded');
         // Adjust if too close to edge
         const menuWidth = 200;
         const menuHeight = 250;
-        if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 10;
-        if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 10;
+        if (x + menuWidth > window.innerWidth) {x = window.innerWidth - menuWidth - 10;}
+        if (y + menuHeight > window.innerHeight) {y = window.innerHeight - menuHeight - 10;}
 
         menu.style.left = x + 'px';
         menu.style.top = y + 'px';
@@ -2357,7 +2357,7 @@ console.log('dependencies.js loaded');
 
     function contextExpandConnections() {
         hideContextMenu();
-        if (contextMenuSelectedNodes.length === 0) return;
+        if (contextMenuSelectedNodes.length === 0) {return;}
 
         const beforeCount = addedNodeIds.size;
 
@@ -2383,7 +2383,7 @@ console.log('dependencies.js loaded');
 
     function contextShowOnlyConnections() {
         hideContextMenu();
-        if (contextMenuSelectedNodes.length === 0) return;
+        if (contextMenuSelectedNodes.length === 0) {return;}
 
         // Start with all selected nodes
         const connectedIds = new Set(contextMenuSelectedNodes);
@@ -2391,15 +2391,15 @@ console.log('dependencies.js loaded');
         // Add all nodes connected to any selected node
         for (const nodeId of contextMenuSelectedNodes) {
             for (const edge of allEdges) {
-                if (edge.from === nodeId) connectedIds.add(edge.to);
-                if (edge.to === nodeId) connectedIds.add(edge.from);
+                if (edge.from === nodeId) {connectedIds.add(edge.to);}
+                if (edge.to === nodeId) {connectedIds.add(edge.from);}
             }
         }
 
         // Update addedNodeIds to only include connected nodes
         const newAddedIds = new Set();
         for (const id of addedNodeIds) {
-            if (connectedIds.has(id)) newAddedIds.add(id);
+            if (connectedIds.has(id)) {newAddedIds.add(id);}
         }
 
         addedNodeIds = newAddedIds;
@@ -2411,7 +2411,7 @@ console.log('dependencies.js loaded');
 
     function contextCenterOnNode() {
         hideContextMenu();
-        if (!selectedNodeId || !cy) return;
+        if (!selectedNodeId || !cy) {return;}
 
         const node = cy.$id(selectedNodeId);
         if (node.length) {
@@ -2425,7 +2425,7 @@ console.log('dependencies.js loaded');
 
     function contextSetAsFocus() {
         hideContextMenu();
-        if (!selectedNodeId) return;
+        if (!selectedNodeId) {return;}
 
         // Set this node as the focus/center for organized layout
         focusNodeId = selectedNodeId;
@@ -2476,7 +2476,7 @@ console.log('dependencies.js loaded');
     }
 
     function removeSelectedNodes() {
-        if (!cy) return;
+        if (!cy) {return;}
 
         // Get all selected nodes from Cytoscape
         const selected = cy.$(':selected').filter('node').map(n => n.id());
@@ -2489,7 +2489,7 @@ console.log('dependencies.js loaded');
             return;
         }
 
-        if (selected.length === 0) return;
+        if (selected.length === 0) {return;}
 
         // Remove all selected nodes
         for (const nodeId of selected) {
@@ -2514,7 +2514,7 @@ console.log('dependencies.js loaded');
         const initialCount = addedNodeIds.size;
         const newAddedIds = new Set();
         for (const id of addedNodeIds) {
-            if (connectedNodes.has(id)) newAddedIds.add(id);
+            if (connectedNodes.has(id)) {newAddedIds.add(id);}
         }
 
         const removed = initialCount - newAddedIds.size;
@@ -2531,7 +2531,7 @@ console.log('dependencies.js loaded');
 
     function contextOpenInExplorer() {
         hideContextMenu();
-        if (!selectedNodeId) return;
+        if (!selectedNodeId) {return;}
 
         // Parse the node ID to get type and name
         // Service IDs may have format "service:target:name"

@@ -99,7 +99,7 @@
         const renames = new Map(); // "type:originalName" -> newName
         for (const [idx, edit] of state.pendingEdits) {
             const obj = state.allObjects.find(o => o.global_index === idx);
-            if (!obj) continue;
+            if (!obj) {continue;}
 
             const nameField = Explorer.getNameFieldForObject(obj);
             const originalName = edit.original[nameField] || obj.name || obj.display_name;
@@ -121,12 +121,12 @@
         // Check all objects for references to renamed objects
         state.allObjects.forEach(o => {
             // Skip deleted objects
-            if (state.stagedObjectDeletions.has(o.global_index)) return;
+            if (state.stagedObjectDeletions.has(o.global_index)) {return;}
 
             const attrs = Explorer.getEffectiveAttributes(o);
 
             for (const [field, refType] of Object.entries(referenceFields)) {
-                if (!attrs[field]) continue;
+                if (!attrs[field]) {continue;}
 
                 // Determine the actual type being referenced
                 let targetType = refType;
@@ -134,18 +134,18 @@
                     targetType = o.object_type; // Templates are same type
                 } else if (field === 'members') {
                     // Members type depends on group type
-                    if (o.object_type === 'hostgroup') targetType = 'host';
-                    else if (o.object_type === 'contactgroup') targetType = 'contact';
-                    else if (o.object_type === 'servicegroup') targetType = 'service';
-                    else continue;
+                    if (o.object_type === 'hostgroup') {targetType = 'host';}
+                    else if (o.object_type === 'contactgroup') {targetType = 'contact';}
+                    else if (o.object_type === 'servicegroup') {targetType = 'service';}
+                    else {continue;}
                 }
 
-                if (!targetType) continue;
+                if (!targetType) {continue;}
 
                 // Check each referenced value
                 const values = attrs[field].split(',').map(v => v.trim().split('!')[0]); // Remove command args
                 values.forEach(val => {
-                    if (!val || val === '*') return;
+                    if (!val || val === '*') {return;}
 
                     const renameKey = `${targetType}:${val}`;
                     const rename = renames.get(renameKey);

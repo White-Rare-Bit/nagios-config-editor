@@ -219,7 +219,7 @@ async function showGitDiff(filepath) {
     const diffContent = document.getElementById('diffContent');
     const diffFileName = document.getElementById('diffFileName');
 
-    if (!diffContent) return;
+    if (!diffContent) {return;}
 
     diffFileName.textContent = filepath;
     diffContent.innerHTML = '<div class="git-diff-empty">Loading...</div>';
@@ -264,7 +264,7 @@ async function discardGitFile(filepath) {
         type: 'danger'
     });
 
-    if (!confirmed) return;
+    if (!confirmed) {return;}
 
     // Show running panel immediately
     showGitRunningPanel('Discard File', `git checkout -- "${filepath}"`);
@@ -300,7 +300,7 @@ async function clearGitHistory() {
         type: 'danger'
     });
 
-    if (!confirmed) return;
+    if (!confirmed) {return;}
 
     // Get identity from localStorage
     const identity = getUserIdentity();
@@ -373,7 +373,7 @@ function refreshCurrentTab() {
 // History functions
 async function loadGitHistory(forceRefresh = false) {
     const container = document.querySelector('.git-history-table-container');
-    if (!container) return;
+    if (!container) {return;}
 
     if (!forceRefresh && gitHistory !== null) {
         return;
@@ -408,7 +408,7 @@ async function loadGitHistory(forceRefresh = false) {
 
 function renderGitHistory() {
     const container = document.querySelector('.git-history-table-container');
-    if (!container) return;
+    if (!container) {return;}
 
     if (!gitHistory || gitHistory.length === 0) {
         container.innerHTML = `
@@ -518,7 +518,7 @@ function setHistoryPageSize(size) {
 }
 
 function sortHistory(column) {
-    if (!gitHistory || gitHistory.length === 0) return;
+    if (!gitHistory || gitHistory.length === 0) {return;}
 
     // Toggle direction if same column, otherwise default to desc for date, asc for others
     if (column === historySortColumn) {
@@ -579,7 +579,7 @@ async function restoreCommit(hash, message) {
         type: 'warning'
     });
 
-    if (!confirmed) return;
+    if (!confirmed) {return;}
 
     // Show running panel immediately
     showGitRunningPanel('Restore to Commit', `git checkout ${hash.substring(0, 7)} -- .`);
@@ -599,17 +599,17 @@ async function restoreCommit(hash, message) {
 function showGitRestoreResultPanel(hash, success, result) {
     // Build command string from actual operations
     let cmds = [];
-    if (result.stashed) cmds.push('git stash push');
+    if (result.stashed) {cmds.push('git stash push');}
     cmds.push(`git checkout ${hash.substring(0, 7)} -- .`);
-    if (result.deleted_files?.length > 0) cmds.push(`rm (${result.deleted_files.length} files)`);
+    if (result.deleted_files?.length > 0) {cmds.push(`rm (${result.deleted_files.length} files)`);}
 
     // Build output HTML
     let outputHtml;
     if (success) {
         outputHtml = `<span class="success-text">Restored to commit:</span> <span class="hash">${escapeHtml(hash.substring(0, 7))}</span>\n`;
-        if (result.message) outputHtml += `<span style="color: #888;">Message:</span> ${escapeHtml(result.message)}\n`;
-        if (result.stashed) outputHtml += `<span style="color: #ff9800;">Uncommitted changes were stashed</span>\n`;
-        if (result.deleted_files?.length > 0) outputHtml += `<span style="color: #888;">Deleted ${result.deleted_files.length} file(s) not in target commit</span>\n`;
+        if (result.message) {outputHtml += `<span style="color: #888;">Message:</span> ${escapeHtml(result.message)}\n`;}
+        if (result.stashed) {outputHtml += `<span style="color: #ff9800;">Uncommitted changes were stashed</span>\n`;}
+        if (result.deleted_files?.length > 0) {outputHtml += `<span style="color: #888;">Deleted ${result.deleted_files.length} file(s) not in target commit</span>\n`;}
     } else {
         outputHtml = `<span class="error-text">${escapeHtml(result.error || 'Unknown error occurred')}</span>`;
     }
@@ -654,7 +654,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const action = actionEl.dataset.action;
             if (action === 'history-page-size') {
                 const size = parseInt(actionEl.value);
-                if (size) setHistoryPageSize(size);
+                if (size) {setHistoryPageSize(size);}
             }
         }
     });
@@ -677,25 +677,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const action = actionEl.dataset.action;
             if (action === 'switchGitTab') {
                 const tab = actionEl.dataset.tab;
-                if (tab) switchGitTab(tab);
+                if (tab) {switchGitTab(tab);}
             } else if (action === 'discard-file') {
                 e.stopPropagation();
                 const path = actionEl.dataset.path;
-                if (path) discardGitFile(path);
+                if (path) {discardGitFile(path);}
             } else if (action === 'commit') {
                 handleCommitClick();
             } else if (action === 'restore-commit') {
                 const hash = actionEl.dataset.hash;
                 const message = actionEl.dataset.message;
-                if (hash) restoreCommit(hash, message);
+                if (hash) {restoreCommit(hash, message);}
             } else if (action === 'clearGitHistory') {
                 clearGitHistory();
             } else if (action === 'sort-history') {
                 const column = actionEl.dataset.sort;
-                if (column) sortHistory(column);
+                if (column) {sortHistory(column);}
             } else if (action === 'history-page') {
                 const page = parseInt(actionEl.dataset.page);
-                if (page) setHistoryPage(page);
+                if (page) {setHistoryPage(page);}
             }
         }
     });

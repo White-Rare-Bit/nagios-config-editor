@@ -45,7 +45,7 @@ function parseArchiveDate(filename) {
  * @returns {boolean} True if any item matches
  */
 function searchInEntryArray(arr, query, fields) {
-    if (!arr) return false;
+    if (!arr) {return false;}
     return arr.some(item =>
         fields.some(field => item[field] && item[field].toLowerCase().includes(query))
     );
@@ -60,13 +60,13 @@ function searchInEntryArray(arr, query, fields) {
  * @returns {string} Badge HTML or empty string if count is 0
  */
 function generateBadge(count, cssClass, singular, plural) {
-    if (count === 0) return '';
+    if (count === 0) {return '';}
     return `<span class="audit-badge ${cssClass}">${count} ${count === 1 ? singular : plural}</span>`;
 }
 
 // Convert path to display path with config folder prefix
 function toDisplayPath(path) {
-    if (!path) return '';
+    if (!path) {return '';}
     if (path.startsWith(configPath + '/')) {
         return configRootName + '/' + path.substring(configPath.length + 1);
     } else if (path === configPath) {
@@ -179,12 +179,12 @@ function renderEntries() {
     let filteredEntries = allEntries;
     if (!activeFilters.has('all')) {
         filteredEntries = allEntries.filter(entry => {
-            if (activeFilters.has('creates') && (entry.object_creations || []).length > 0) return true;
-            if (activeFilters.has('attrs') && (entry.object_edits || []).length > 0) return true;
-            if (activeFilters.has('moves') && ((entry.object_moves || []).length > 0 || (entry.file_moves || []).length > 0 || (entry.folder_moves || []).length > 0)) return true;
-            if (activeFilters.has('deletes') && ((entry.object_deletions || []).length > 0 || (entry.file_deletions || []).length > 0)) return true;
-            if (activeFilters.has('git') && entry.action && entry.action.startsWith('git_')) return true;
-            if (activeFilters.has('backups') && entry.action && entry.action.startsWith('backup')) return true;
+            if (activeFilters.has('creates') && (entry.object_creations || []).length > 0) {return true;}
+            if (activeFilters.has('attrs') && (entry.object_edits || []).length > 0) {return true;}
+            if (activeFilters.has('moves') && ((entry.object_moves || []).length > 0 || (entry.file_moves || []).length > 0 || (entry.folder_moves || []).length > 0)) {return true;}
+            if (activeFilters.has('deletes') && ((entry.object_deletions || []).length > 0 || (entry.file_deletions || []).length > 0)) {return true;}
+            if (activeFilters.has('git') && entry.action && entry.action.startsWith('git_')) {return true;}
+            if (activeFilters.has('backups') && entry.action && entry.action.startsWith('backup')) {return true;}
             return false;
         });
     }
@@ -195,28 +195,28 @@ function renderEntries() {
         filteredEntries = filteredEntries.filter(entry => {
             // Search in timestamp
             const time = new Date(entry.timestamp).toLocaleString().toLowerCase();
-            if (time.includes(query)) return true;
+            if (time.includes(query)) {return true;}
 
             // Search in user info
-            if (entry.userName && entry.userName.toLowerCase().includes(query)) return true;
-            if (entry.userEmail && entry.userEmail.toLowerCase().includes(query)) return true;
+            if (entry.userName && entry.userName.toLowerCase().includes(query)) {return true;}
+            if (entry.userEmail && entry.userEmail.toLowerCase().includes(query)) {return true;}
 
             // Search in action type
-            if (entry.action && entry.action.toLowerCase().includes(query)) return true;
+            if (entry.action && entry.action.toLowerCase().includes(query)) {return true;}
 
             // Search in entry arrays using helper
-            if (searchInEntryArray(entry.object_edits, query, ['object_name', 'object_type'])) return true;
-            if (searchInEntryArray(entry.object_moves, query, ['object_name', 'from_file', 'to_file'])) return true;
-            if (searchInEntryArray(entry.object_creations, query, ['object_name', 'file'])) return true;
-            if (searchInEntryArray(entry.object_deletions, query, ['object_name', 'file'])) return true;
-            if (searchInEntryArray(entry.file_moves, query, ['from', 'to'])) return true;
-            if (searchInEntryArray(entry.file_deletions, query, ['path'])) return true;
+            if (searchInEntryArray(entry.object_edits, query, ['object_name', 'object_type'])) {return true;}
+            if (searchInEntryArray(entry.object_moves, query, ['object_name', 'from_file', 'to_file'])) {return true;}
+            if (searchInEntryArray(entry.object_creations, query, ['object_name', 'file'])) {return true;}
+            if (searchInEntryArray(entry.object_deletions, query, ['object_name', 'file'])) {return true;}
+            if (searchInEntryArray(entry.file_moves, query, ['from', 'to'])) {return true;}
+            if (searchInEntryArray(entry.file_deletions, query, ['path'])) {return true;}
 
             // Search in git-related fields
-            if (entry.commit_hash && entry.commit_hash.toLowerCase().includes(query)) return true;
-            if (entry.message && entry.message.toLowerCase().includes(query)) return true;
-            if (entry.backup_name && entry.backup_name.toLowerCase().includes(query)) return true;
-            if (entry.description && entry.description.toLowerCase().includes(query)) return true;
+            if (entry.commit_hash && entry.commit_hash.toLowerCase().includes(query)) {return true;}
+            if (entry.message && entry.message.toLowerCase().includes(query)) {return true;}
+            if (entry.backup_name && entry.backup_name.toLowerCase().includes(query)) {return true;}
+            if (entry.description && entry.description.toLowerCase().includes(query)) {return true;}
 
             return false;
         });
@@ -272,7 +272,7 @@ function setAuditPage(page) {
     renderEntries();
     // Scroll to top of list
     const container = document.getElementById('auditLogContainer');
-    if (container) container.scrollTop = 0;
+    if (container) {container.scrollTop = 0;}
 }
 
 function setAuditPageSize(size) {
@@ -572,10 +572,10 @@ function renderAuditEntry(entry) {
 
     // Determine primary entry type for color-coding (in priority order)
     let entryType = '';
-    if (deleteCount > 0) entryType = 'deletes';
-    else if (createCount > 0) entryType = 'creates';
-    else if (moveCount > 0 || relocCount > 0 || folderRelocCount > 0) entryType = 'moves';
-    else if (attrCount > 0) entryType = 'attrs';
+    if (deleteCount > 0) {entryType = 'deletes';}
+    else if (createCount > 0) {entryType = 'creates';}
+    else if (moveCount > 0 || relocCount > 0 || folderRelocCount > 0) {entryType = 'moves';}
+    else if (attrCount > 0) {entryType = 'attrs';}
 
     return `
         <div class="audit-entry"${entryType ? ` data-type="${entryType}"` : ''}>
@@ -708,7 +708,7 @@ function updateArchiveSelection() {
 // Event delegation for data-action attributes
 document.addEventListener('click', function(e) {
     const actionEl = e.target.closest('[data-action]');
-    if (!actionEl) return;
+    if (!actionEl) {return;}
 
     const action = actionEl.dataset.action;
     switch (action) {
@@ -723,14 +723,14 @@ document.addEventListener('click', function(e) {
             break;
         case 'audit-page':
             const page = parseInt(actionEl.dataset.page);
-            if (page) setAuditPage(page);
+            if (page) {setAuditPage(page);}
             break;
     }
 });
 
 document.addEventListener('change', function(e) {
     const actionEl = e.target.closest('[data-action]');
-    if (!actionEl) return;
+    if (!actionEl) {return;}
 
     const action = actionEl.dataset.action;
     if (action === 'filterByType') {
@@ -738,6 +738,6 @@ document.addEventListener('change', function(e) {
         filterByType(actionEl);
     } else if (action === 'audit-page-size') {
         const size = parseInt(actionEl.value);
-        if (size) setAuditPageSize(size);
+        if (size) {setAuditPageSize(size);}
     }
 });

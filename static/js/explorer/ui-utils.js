@@ -123,7 +123,7 @@
      * @returns {string} Display path with config root name
      */
     Explorer.toDisplayPath = function(path) {
-        if (!path) return '';
+        if (!path) {return '';}
         const configPath = Explorer.state.configPath;
         const configRootName = Explorer.getConfigRootName();
 
@@ -144,7 +144,7 @@
      * @returns {string} Absolute path
      */
     Explorer.toAbsolutePath = function(displayPath) {
-        if (!displayPath) return '';
+        if (!displayPath) {return '';}
         const configPath = Explorer.state.configPath;
         const configRootName = Explorer.getConfigRootName();
 

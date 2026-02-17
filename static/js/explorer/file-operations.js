@@ -25,10 +25,10 @@
      */
     function afterStagingChange(options = {}) {
         const { save = true, tree = true } = options;
-        if (save) Explorer.saveStagedChanges();
+        if (save) {Explorer.saveStagedChanges();}
         Explorer.updateCommitUI();
         renderTargetPane();
-        if (tree) Explorer.buildTree();
+        if (tree) {Explorer.buildTree();}
     }
 
     // ============================================================================
@@ -37,7 +37,7 @@
 
     function navigateToObjectByIndex(index) {
         const obj = state.allObjects.find(o => o.global_index === index);
-        if (!obj) return;
+        if (!obj) {return;}
 
         // Clear any active filters that might hide the object
         const searchInput = document.getElementById('treeSearch');
@@ -168,12 +168,12 @@
         const newFileIcon = document.getElementById('newFileIcon');
         const newFolderIcon = document.getElementById('newFolderIcon');
 
-        if (createMenuBtn) createMenuBtn.innerHTML = Explorer.getIcon('plus');
-        if (collapseAllBtn) collapseAllBtn.innerHTML = Explorer.getIcon('minimize-2');
-        if (refreshBtn) refreshBtn.innerHTML = Explorer.getIcon('refresh-cw');
-        if (workspaceRootIcon) workspaceRootIcon.innerHTML = Explorer.getIcon('folder-open');
-        if (newFileIcon) newFileIcon.innerHTML = Explorer.getIcon('file-plus');
-        if (newFolderIcon) newFolderIcon.innerHTML = Explorer.getIcon('folder-plus');
+        if (createMenuBtn) {createMenuBtn.innerHTML = Explorer.getIcon('plus');}
+        if (collapseAllBtn) {collapseAllBtn.innerHTML = Explorer.getIcon('minimize-2');}
+        if (refreshBtn) {refreshBtn.innerHTML = Explorer.getIcon('refresh-cw');}
+        if (workspaceRootIcon) {workspaceRootIcon.innerHTML = Explorer.getIcon('folder-open');}
+        if (newFileIcon) {newFileIcon.innerHTML = Explorer.getIcon('file-plus');}
+        if (newFolderIcon) {newFolderIcon.innerHTML = Explorer.getIcon('folder-plus');}
 
         // Close dropdown when clicking outside
         document.addEventListener('click', function(event) {
@@ -198,8 +198,8 @@
         const inlineCreate = document.getElementById('workspaceCreateInline');
         const input = document.getElementById('newItemName');
 
-        if (dropdown) dropdown.classList.remove('visible');
-        if (inlineCreate) inlineCreate.classList.add('visible');
+        if (dropdown) {dropdown.classList.remove('visible');}
+        if (inlineCreate) {inlineCreate.classList.add('visible');}
         if (input) {
             input.placeholder = type === 'folder' ? 'foldername/' : 'filename.cfg';
             input.value = '';
@@ -211,7 +211,7 @@
 
     function hideCreateInput() {
         const inlineCreate = document.getElementById('workspaceCreateInline');
-        if (inlineCreate) inlineCreate.classList.remove('visible');
+        if (inlineCreate) {inlineCreate.classList.remove('visible');}
     }
 
     function handleCreateKeydown(event) {
@@ -241,8 +241,8 @@
         const configRootName = extractFileName(state.configPath);
         const totalObjects = state.allObjects.length;
 
-        if (rootName) rootName.textContent = configRootName;
-        if (rootMeta) rootMeta.textContent = `${totalObjects} object${totalObjects !== 1 ? 's' : ''}`;
+        if (rootName) {rootName.textContent = configRootName;}
+        if (rootMeta) {rootMeta.textContent = `${totalObjects} object${totalObjects !== 1 ? 's' : ''}`;}
     }
 
     function renderTargetPane() {
@@ -264,7 +264,7 @@
                 return root;
             }
             const relativePath = toRelativePath(absPath);
-            if (!relativePath) return root;
+            if (!relativePath) {return root;}
 
             const parts = relativePath.split('/').filter(p => p);
             let current = root;
@@ -395,11 +395,11 @@
 
             // Determine row styling based on staged status
             let rowClasses = 'workspace-tree-row';
-            if (isExpanded) rowClasses += ' expanded';
-            if (isSelected) rowClasses += ' selected';
-            if (isStagedForDeletion) rowClasses += ' staged-deletion';
-            if (isStagedForMove) rowClasses += ' staged-move';
-            if (isStagedNew) rowClasses += ' staged-new';
+            if (isExpanded) {rowClasses += ' expanded';}
+            if (isSelected) {rowClasses += ' selected';}
+            if (isStagedForDeletion) {rowClasses += ' staged-deletion';}
+            if (isStagedForMove) {rowClasses += ' staged-move';}
+            if (isStagedNew) {rowClasses += ' staged-new';}
 
             // Build action button
             let actionHtml = '';
@@ -413,9 +413,9 @@
 
             // Add visual indicator badge
             let indicatorHtml = '';
-            if (isStagedForDeletion) indicatorHtml = '<span class="staged-indicator staged-indicator--delete" title="Staged for deletion">DEL</span>';
-            else if (isStagedForMove) indicatorHtml = '<span class="staged-indicator staged-indicator--move" title="Staged for move">MOV</span>';
-            else if (isStagedNew) indicatorHtml = '<span class="staged-indicator staged-indicator--new" title="Staged for creation">NEW</span>';
+            if (isStagedForDeletion) {indicatorHtml = '<span class="staged-indicator staged-indicator--delete" title="Staged for deletion">DEL</span>';}
+            else if (isStagedForMove) {indicatorHtml = '<span class="staged-indicator staged-indicator--move" title="Staged for move">MOV</span>';}
+            else if (isStagedNew) {indicatorHtml = '<span class="staged-indicator staged-indicator--new" title="Staged for creation">NEW</span>';}
 
             let html = `
             <div class="${rowClasses}" data-depth="${depth}" data-folder="${Explorer.escapeHtml(folder.path)}"
@@ -477,10 +477,10 @@
 
             // Determine row styling based on staged status
             let rowClasses = 'workspace-tree-row';
-            if (isExpanded) rowClasses += ' expanded';
-            if (isStagedForDeletion) rowClasses += ' staged-deletion';
-            if (isStagedForMove || isMovePending) rowClasses += ' staged-move';
-            if (file.isNew || isStagedNew) rowClasses += ' staged-new';
+            if (isExpanded) {rowClasses += ' expanded';}
+            if (isStagedForDeletion) {rowClasses += ' staged-deletion';}
+            if (isStagedForMove || isMovePending) {rowClasses += ' staged-move';}
+            if (file.isNew || isStagedNew) {rowClasses += ' staged-new';}
 
             let actionHtml = '';
             if (isMovePending) {
@@ -497,10 +497,10 @@
 
             // Add visual indicator badge
             let indicatorHtml = '';
-            if (isStagedForDeletion) indicatorHtml = '<span class="staged-indicator staged-indicator--delete" title="Staged for deletion">DEL</span>';
-            else if (isStagedForMove) indicatorHtml = '<span class="staged-indicator staged-indicator--move" title="Staged to move out">MOV</span>';
-            else if (isMovePending) indicatorHtml = '<span class="staged-indicator staged-indicator--move" title="Staged to move here">MOV</span>';
-            else if (file.isNew || isStagedNew) indicatorHtml = '<span class="staged-indicator staged-indicator--new" title="Staged for creation">NEW</span>';
+            if (isStagedForDeletion) {indicatorHtml = '<span class="staged-indicator staged-indicator--delete" title="Staged for deletion">DEL</span>';}
+            else if (isStagedForMove) {indicatorHtml = '<span class="staged-indicator staged-indicator--move" title="Staged to move out">MOV</span>';}
+            else if (isMovePending) {indicatorHtml = '<span class="staged-indicator staged-indicator--move" title="Staged to move here">MOV</span>';}
+            else if (file.isNew || isStagedNew) {indicatorHtml = '<span class="staged-indicator staged-indicator--new" title="Staged for creation">NEW</span>';}
 
             let html = `
             <div class="${rowClasses}" data-depth="${depth}" data-file="${Explorer.escapeHtml(file.path)}"
@@ -772,7 +772,7 @@
 
     function handleFileDragLeave(event) {
         // Only remove highlight if actually leaving the element (not entering a child)
-        if (event.currentTarget.contains(event.relatedTarget)) return;
+        if (event.currentTarget.contains(event.relatedTarget)) {return;}
         event.currentTarget.classList.remove('drop-active');
         // Clear auto-expand timeout when leaving
         if (fileHoverTimeout) {
@@ -789,7 +789,7 @@
     }
 
     function handleObjectDragLeave(event) {
-        if (event.currentTarget.contains(event.relatedTarget)) return;
+        if (event.currentTarget.contains(event.relatedTarget)) {return;}
         event.currentTarget.classList.remove('drop-active');
     }
 
@@ -838,7 +838,7 @@
         Explorer.cleanupDragState();
 
         const dataStr = event.dataTransfer.getData(DATA_TYPES.OBJECTS);
-        if (!dataStr) return;
+        if (!dataStr) {return;}
 
         let data;
         try {
@@ -858,7 +858,7 @@
                     creation.targetFile = targetFile;
                     creation.insertPosition = insertPos;
                     insertPos += 0.001;
-                    if (wasInDifferentFile) moved++;
+                    if (wasInDifferentFile) {moved++;}
                 }
             });
             state.expandedFiles.add(targetFile);
@@ -944,7 +944,7 @@
 
         if (data.type === 'objects' && data.objects && data.objects.length > 0) {
             for (const objData of data.objects) {
-                if (!objData || !objData.source_file) continue;
+                if (!objData || !objData.source_file) {continue;}
 
                 // Use same fallback logic as getObjectKey for null-safe key generation
                 const nameComponent = objData.name ?? objData.display_name ?? `idx:${objData.global_index}`;
@@ -985,7 +985,7 @@
         Explorer.cleanupDragState();
 
         const dataStr = event.dataTransfer.getData(DATA_TYPES.OBJECTS);
-        if (!dataStr) return;
+        if (!dataStr) {return;}
 
         let data;
         try {
@@ -1052,7 +1052,7 @@
         }
 
         const processObject = (objData) => {
-            if (!objData) return;
+            if (!objData) {return;}
 
             // Use same fallback logic as getObjectKey for null-safe key generation
             const nameComponent = objData.name ?? objData.display_name ?? `idx:${objData.global_index}`;
@@ -1195,7 +1195,7 @@
     }
 
     function handleFolderDragLeave(event) {
-        if (event.currentTarget.contains(event.relatedTarget)) return;
+        if (event.currentTarget.contains(event.relatedTarget)) {return;}
         event.currentTarget.classList.remove('drop-active');
         if (folderHoverTimeout) {
             clearTimeout(folderHoverTimeout);
@@ -1356,7 +1356,7 @@
                     existingMove.targetPath = newPath;
                 } else {
                     // Create new staged file move
-                    if (!state.stagedFileMoves) state.stagedFileMoves = [];
+                    if (!state.stagedFileMoves) {state.stagedFileMoves = [];}
                     state.stagedFileMoves.push({
                         sourcePath: sourcePath,
                         targetFolder: effectiveTargetFolder,
@@ -1419,7 +1419,7 @@
                             creation.targetFile = targetFile;
                             maxLine += 100;
                             creation.insertPosition = maxLine;
-                            if (wasInDifferentFile) moved++;
+                            if (wasInDifferentFile) {moved++;}
                         }
                     });
 
@@ -1510,7 +1510,7 @@
 
     function handleFileDragStart(event, filePath) {
         const target = event.currentTarget || event.target;
-        if (!target) return;
+        if (!target) {return;}
 
         if (state.newFiles.has(filePath)) {
             event.dataTransfer.setData('application/x-new-file-move', filePath);
@@ -1532,7 +1532,7 @@
         }
 
         const target = event.currentTarget || event.target;
-        if (!target) return;
+        if (!target) {return;}
         event.dataTransfer.setData(DATA_TYPES.FOLDER_MOVE, folderPath);
         event.dataTransfer.effectAllowed = 'move';
 
@@ -1812,7 +1812,7 @@
 
     function createInlineItem(type) {
         const container = document.getElementById('targetPaneContent');
-        if (!container) return;
+        if (!container) {return;}
 
         // Remove any existing inline edit
         const existing = container.querySelector('.tree-item-inline-edit');

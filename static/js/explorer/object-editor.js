@@ -8,7 +8,7 @@
     const identityFields = constants.identityFields;
 
     // Inheritance cache: stableKey -> {chain, inherited, errors}
-    if (!state.inheritanceCache) state.inheritanceCache = new Map();
+    if (!state.inheritanceCache) {state.inheritanceCache = new Map();}
 
     // Access constants via constants.* at call time — NOT cached as local const.
     // applyMetadata() replaces these with new objects/arrays after page load,
@@ -197,7 +197,7 @@
         setTimeout(() => {
             const titleEl = document.querySelector('#impactSection .section-title');
             const contentEl = document.getElementById('impactContent');
-            if (titleEl) titleEl.classList.add('collapsed');
+            if (titleEl) {titleEl.classList.add('collapsed');}
             if (contentEl) {
                 contentEl.classList.add('collapsed');
                 contentEl.style.display = 'none';
@@ -232,7 +232,7 @@
      * Updates the displayed attributes to reflect the current staging state.
      */
     function syncCenterPaneAfterUndo() {
-        if (!state.editedObject) return;
+        if (!state.editedObject) {return;}
 
         // If showing a new object (staged creation), hide it since creation was likely undone
         if (state.isNewObject) {
@@ -242,7 +242,7 @@
 
         // For existing objects, sync attributes with current pendingEdits state
         const globalIndex = state.editedObject.global_index;
-        if (globalIndex === undefined || globalIndex === -1) return;
+        if (globalIndex === undefined || globalIndex === -1) {return;}
 
         const obj = state.allObjects.find(o => o.global_index === globalIndex);
         if (!obj) {
@@ -294,34 +294,34 @@
                 // notification_options depends on the object type
                 if (objectType === 'host' || objectType === 'hostescalation' || objectType === 'hostdependency') {
                     return constants.HOST_NOTIFICATION_OPTIONS;
-                } else {
+                } 
                     return constants.SERVICE_NOTIFICATION_OPTIONS;
-                }
+                
             } else if (attrName === 'execution_failure_criteria' || attrName === 'notification_failure_criteria') {
                 // Failure criteria depends on dependency type
                 if (objectType === 'hostdependency') {
                     return constants.HOST_FAILURE_CRITERIA;
-                } else {
+                } 
                     return constants.SERVICE_FAILURE_CRITERIA;
-                }
+                
             } else if (attrName === 'escalation_options') {
                 if (objectType === 'hostescalation') {
                     return constants.HOST_ESCALATION_OPTIONS;
-                } else {
+                } 
                     return constants.SERVICE_ESCALATION_OPTIONS;
-                }
+                
             } else if (attrName === 'stalking_options') {
                 if (objectType === 'host') {
                     return constants.HOST_STALKING_OPTIONS;
-                } else {
+                } 
                     return constants.SERVICE_STALKING_OPTIONS;
-                }
+                
             } else if (attrName === 'flap_detection_options') {
                 if (objectType === 'host') {
                     return constants.HOST_FLAP_DETECTION_OPTIONS;
-                } else {
+                } 
                     return constants.SERVICE_FLAP_DETECTION_OPTIONS;
-                }
+                
             }
         }
 
@@ -333,12 +333,12 @@
             return getTemplatesForType(objectType);
         } else if (attrName === 'members') {
             // Members depends on the group type
-            if (objectType === 'hostgroup') refType = 'host';
-            else if (objectType === 'servicegroup') refType = 'service';
-            else if (objectType === 'contactgroup') refType = 'contact';
+            if (objectType === 'hostgroup') {refType = 'host';}
+            else if (objectType === 'servicegroup') {refType = 'service';}
+            else if (objectType === 'contactgroup') {refType = 'contact';}
         }
 
-        if (!refType) return [];
+        if (!refType) {return [];}
 
         // C-06: Build a set of objects staged for deletion
         // stagedObjectDeletions is a Set of global_index values
@@ -355,10 +355,10 @@
         // C-06: Filter out objects that are staged for deletion
         const suggestions = state.allObjects
             .filter(o => {
-                if (o.object_type !== refType) return false;
+                if (o.object_type !== refType) {return false;}
                 // Check if this object is staged for deletion
                 const objKey = `${o.source_file}:${o.line_number}`;
-                if (deletedKeys.has(objKey)) return false;
+                if (deletedKeys.has(objKey)) {return false;}
                 return true;
             })
             .map(o => o.display_name)
@@ -388,7 +388,7 @@
      * Highlights: $MACROS$, escape sequences, pipes, flags
      */
     function highlightCommandSyntax(text) {
-        if (!text) return '';
+        if (!text) {return '';}
 
         // Tokenize and highlight before escaping to avoid regex issues with HTML entities
         const tokens = [];
@@ -448,9 +448,9 @@
      */
     function syncHighlight(textarea) {
         const wrapper = textarea.closest('.attr-value-long-wrapper');
-        if (!wrapper) return;
+        if (!wrapper) {return;}
         const highlight = wrapper.querySelector('.attr-value-highlight');
-        if (!highlight) return;
+        if (!highlight) {return;}
         highlight.innerHTML = highlightCommandSyntax(textarea.value);
     }
     Explorer.syncHighlight = syncHighlight;
@@ -470,7 +470,7 @@
      */
     function lookupDirective(objectType, attrName) {
         var ref = window.NAGIOS_OBJECT_REFERENCE;
-        if (!ref) return null;
+        if (!ref) {return null;}
 
         var lower = attrName.toLowerCase();
 
@@ -481,7 +481,7 @@
                 var d = typeData.directives[i];
                 var names = d.name.split('|');
                 for (var j = 0; j < names.length; j++) {
-                    if (names[j].trim().toLowerCase() === lower) return d;
+                    if (names[j].trim().toLowerCase() === lower) {return d;}
                 }
             }
         }
@@ -493,7 +493,7 @@
                 var d = tmpl.directives[i];
                 var names = d.name.split('|');
                 for (var j = 0; j < names.length; j++) {
-                    if (names[j].trim().toLowerCase() === lower) return d;
+                    if (names[j].trim().toLowerCase() === lower) {return d;}
                 }
             }
         }
@@ -505,7 +505,7 @@
      * Create the singleton popover element (once).
      */
     function ensurePopoverElement() {
-        if (docsPopoverEl) return docsPopoverEl;
+        if (docsPopoverEl) {return docsPopoverEl;}
         docsPopoverEl = document.createElement('div');
         docsPopoverEl.className = 'attr-docs-popover';
         docsPopoverEl.id = 'attrDocsPopover';
@@ -559,8 +559,8 @@
         // Align left edge with attr-name, clamp to viewport
         var left = rect.left;
         var maxLeft = window.innerWidth - 340; // 320px width + 20px margin
-        if (left > maxLeft) left = maxLeft;
-        if (left < 8) left = 8;
+        if (left > maxLeft) {left = maxLeft;}
+        if (left < 8) {left = 8;}
         el.style.left = left + 'px';
     }
 
@@ -618,13 +618,13 @@
     // Dismiss docs popover when center pane scrolls or window resizes
     document.addEventListener('DOMContentLoaded', function() {
         var cb = document.querySelector('.center-body');
-        if (cb) cb.addEventListener('scroll', hideDocsPopover);
+        if (cb) {cb.addEventListener('scroll', hideDocsPopover);}
     });
     window.addEventListener('resize', hideDocsPopover);
 
     function renderCenterAttributes() {
         const container = document.getElementById('centerCardAttributes');
-        if (!state.editedObject) return;
+        if (!state.editedObject) {return;}
         const objectType = state.editedObject.object_type;
 
         container.innerHTML = Object.entries(state.editedObject.attributes || {})
@@ -736,11 +736,11 @@
 
         // Remove existing dropdown
         const existingDropdown = document.querySelector('.attr-autocomplete');
-        if (existingDropdown) existingDropdown.remove();
+        if (existingDropdown) {existingDropdown.remove();}
 
         if (filtered.length === 0 || (currentPart === '' && parts.length > 1 && parts[parts.length - 2] !== '')) {
             // Show all remaining options after comma
-            if (remaining.length === 0) return;
+            if (remaining.length === 0) {return;}
             showAutocompleteDropdown(input, remaining, attrKey);
         } else if (filtered.length > 0) {
             showAutocompleteDropdown(input, filtered, attrKey);
@@ -750,14 +750,14 @@
     function showAutocompleteDropdown(input, suggestions, attrKey, options = {}) {
         const { container, dropdownId, selectHandler, highlightKey = 'highlightedIndex' } = options;
         const row = container || input.closest('.attr-row');
-        if (!row) return;
+        if (!row) {return;}
 
         state.currentAutocompleteKey = attrKey;
         state[highlightKey] = -1;
 
         const dropdown = document.createElement('div');
         dropdown.className = 'attr-autocomplete';
-        if (dropdownId) dropdown.id = dropdownId;
+        if (dropdownId) {dropdown.id = dropdownId;}
         dropdown.innerHTML = suggestions.slice(0, 20).map((s, i) => {
             const handler = selectHandler
                 ? selectHandler(s)
@@ -791,10 +791,10 @@
 
     function selectAttrAutocomplete(attrKey, value) {
         const row = document.querySelector(`[data-attr="${attrKey}"]`);
-        if (!row) return;
+        if (!row) {return;}
 
         const input = row.querySelector('input');
-        if (!input) return;
+        if (!input) {return;}
 
         // For notification options, extract just the short code (e.g., "d" from "d - Down")
         let insertValue = value;
@@ -816,7 +816,7 @@
 
         // Hide dropdown
         const dropdown = document.querySelector('.attr-autocomplete');
-        if (dropdown) dropdown.remove();
+        if (dropdown) {dropdown.remove();}
 
         // Keep focus and show more suggestions
         input.focus();
@@ -874,7 +874,7 @@
             if (state.isNewObject) {
                 // Update the name input at the top for new objects
                 const nameInput = document.getElementById('newObjectNameInput');
-                if (nameInput) nameInput.value = value;
+                if (nameInput) {nameInput.value = value;}
             } else {
                 // Update the name display for existing objects
                 document.getElementById('centerCardName').textContent = state.editedObject.display_name;
@@ -891,14 +891,14 @@
                 const treeItem = document.querySelector(`.tree-item[data-index="${state.editedObject.global_index}"]`);
                 if (treeItem) {
                     const nameSpan = treeItem.querySelector('.tree-item-name');
-                    if (nameSpan) nameSpan.textContent = state.editedObject.display_name;
+                    if (nameSpan) {nameSpan.textContent = state.editedObject.display_name;}
                 }
 
                 // Update the target pane item name in the right panel
                 const targetItem = document.querySelector(`.target-object-item[data-index="${state.editedObject.global_index}"]`);
                 if (targetItem) {
                     const nameSpan = targetItem.querySelector('.obj-name');
-                    if (nameSpan) nameSpan.textContent = state.editedObject.display_name;
+                    if (nameSpan) {nameSpan.textContent = state.editedObject.display_name;}
                 }
             }
         }
@@ -927,7 +927,7 @@
 
             if (state.isNewObject) {
                 const nameInput = document.getElementById('newObjectNameInput');
-                if (nameInput) nameInput.value = '';
+                if (nameInput) {nameInput.value = '';}
             } else {
                 document.getElementById('centerCardName').textContent = state.editedObject.display_name;
 
@@ -935,14 +935,14 @@
                 const treeItem = document.querySelector(`.tree-item[data-index="${state.editedObject.global_index}"]`);
                 if (treeItem) {
                     const nameSpan = treeItem.querySelector('.tree-item-name');
-                    if (nameSpan) nameSpan.textContent = state.editedObject.display_name;
+                    if (nameSpan) {nameSpan.textContent = state.editedObject.display_name;}
                 }
 
                 // Update the target pane item name in the right panel
                 const targetItem = document.querySelector(`.target-object-item[data-index="${state.editedObject.global_index}"]`);
                 if (targetItem) {
                     const nameSpan = targetItem.querySelector('.obj-name');
-                    if (nameSpan) nameSpan.textContent = state.editedObject.display_name;
+                    if (nameSpan) {nameSpan.textContent = state.editedObject.display_name;}
                 }
             }
         }
@@ -1020,7 +1020,7 @@
     function showAddAttrNameAutocomplete() {
         const input = document.getElementById('newAttrName');
         const container = document.getElementById('addAttrNameContainer');
-        if (!input || !container) return;
+        if (!input || !container) {return;}
 
         const value = input.value.toLowerCase();
         const suggestions = state.addAttrNameSuggestions || [];
@@ -1028,9 +1028,9 @@
 
         // Remove existing dropdown
         const existingDropdown = document.getElementById('addAttrNameDropdown');
-        if (existingDropdown) existingDropdown.remove();
+        if (existingDropdown) {existingDropdown.remove();}
 
-        if (filtered.length === 0) return;
+        if (filtered.length === 0) {return;}
 
         state.addAttrNameHighlightedIndex = -1;
 
@@ -1061,11 +1061,11 @@
         }
 
         const dropdown = document.getElementById('addAttrNameDropdown');
-        if (dropdown) dropdown.remove();
+        if (dropdown) {dropdown.remove();}
 
         // Focus on the value input
         const valueInput = document.getElementById('newAttrValue');
-        if (valueInput) valueInput.focus();
+        if (valueInput) {valueInput.focus();}
     }
 
     function handleAddAttrNameAutocompleteKey(event) {
@@ -1082,19 +1082,19 @@
         const input = document.getElementById('newAttrValue');
         const container = document.getElementById('addAttrValueContainer');
 
-        if (!attrName || !input || !container) return;
+        if (!attrName || !input || !container) {return;}
 
         const allSuggestions = getAttributeSuggestions(attrName, state.editedObject.object_type);
-        if (allSuggestions.length === 0) return;
+        if (allSuggestions.length === 0) {return;}
 
         const { filtered, remaining } = filterCommaValueSuggestions(input.value, allSuggestions, attrName);
 
         // Remove existing dropdown
         const existingDropdown = document.getElementById('addAttrDropdown');
-        if (existingDropdown) existingDropdown.remove();
+        if (existingDropdown) {existingDropdown.remove();}
 
         const suggestions = filtered.length > 0 ? filtered : remaining;
-        if (suggestions.length === 0) return;
+        if (suggestions.length === 0) {return;}
 
         showAutocompleteDropdown(input, suggestions, attrName, {
             container,
@@ -1113,7 +1113,7 @@
     function selectAddAttrAutocomplete(value) {
         const input = document.getElementById('newAttrValue');
         const attrNameInput = document.getElementById('newAttrName');
-        if (!input) return;
+        if (!input) {return;}
 
         // For notification options, extract just the short code (e.g., "d" from "d - Down")
         let insertValue = value;
@@ -1133,7 +1133,7 @@
         input.value = parts.filter(p => p).join(',');
 
         const dropdown = document.getElementById('addAttrDropdown');
-        if (dropdown) dropdown.remove();
+        if (dropdown) {dropdown.remove();}
 
         input.focus();
     }
@@ -1274,7 +1274,7 @@
     function restoreDetailSectionState() {
         try {
             const saved = localStorage.getItem('detailSectionState');
-            if (!saved) return;
+            if (!saved) {return;}
             const sectionState = JSON.parse(saved);
             for (const [name, expanded] of Object.entries(sectionState)) {
                 const titleEl = document.querySelector(`#${name}Section .section-title`);
@@ -1317,9 +1317,9 @@
             if (result.success) {
                 state.inheritanceCache.set(stableKey, result.data);
                 return result.data;
-            } else {
+            } 
                 return {chain: [], inherited: {}, errors: ['Unable to load inheritance data']};
-            }
+            
         } catch (error) {
             return {chain: [], inherited: {}, errors: ['Unable to load inheritance data']};
         }
@@ -1367,7 +1367,7 @@
      */
     function renderInheritanceSection(data, obj) {
         const content = document.getElementById('inheritanceContent');
-        if (!content) return;
+        if (!content) {return;}
 
         // Render errors if any
         if (data.errors && data.errors.length > 0) {
@@ -1402,7 +1402,7 @@
             html += '<div class="inherited-attrs-table">';
             for (const [key, rawValue] of Object.entries(data.inherited)) {
                 // Skip control directives
-                if (['use', 'name', 'register'].includes(key)) continue;
+                if (['use', 'name', 'register'].includes(key)) {continue;}
 
                 // Handle both old string format and new {value, source} format
                 const displayValue = (typeof rawValue === 'object' && rawValue !== null) ? rawValue.value : rawValue;
@@ -1457,10 +1457,10 @@
         // C-06: Filter out templates that are staged for deletion
         const templates = state.allObjects
             .filter(o => {
-                if (o.object_type !== objectType || o.attributes.register !== '0') return false;
+                if (o.object_type !== objectType || o.attributes.register !== '0') {return false;}
                 // Check if this template is staged for deletion
                 const objKey = `${o.source_file}:${o.line_number}`;
-                if (deletedKeys.has(objKey)) return false;
+                if (deletedKeys.has(objKey)) {return false;}
                 return true;
             })
             .map(o => {

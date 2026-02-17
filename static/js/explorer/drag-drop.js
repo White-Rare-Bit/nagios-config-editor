@@ -26,7 +26,7 @@
 
         // Clean up drag badge
         const badge = document.getElementById('drag-badge-temp');
-        if (badge) badge.remove();
+        if (badge) {badge.remove();}
     };
 
 })(window.Explorer);
