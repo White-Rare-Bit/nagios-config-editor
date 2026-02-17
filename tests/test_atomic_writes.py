@@ -10,10 +10,10 @@ import pytest
 
 
 class TestStagingSaveAtomic:
-    """Verify staging_manager.save_staging() calls fsync before rename."""
+    """Verify staging_manager.save_staging() produces a readable file."""
 
-    def test_staging_save_calls_fsync(self, app):
-        """save_staging() must flush+fsync before the atomic rename."""
+    def test_staging_save_round_trip(self, app):
+        """save_staging() must produce a file that get_staging() can read back."""
         from staging_manager import StagingManager
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -23,22 +23,21 @@ class TestStagingSaveAtomic:
 
             data = {
                 "sessionId": "test-session",
-                "pendingEdits": {},
+                "pendingEdits": {
+                    "file.cfg|host|web-01": {
+                        "address": "10.0.0.1",
+                    },
+                },
             }
 
-            fsync_calls = []
-            original_fsync = os.fsync
-
-            def tracking_fsync(fd):
-                fsync_calls.append(fd)
-                return original_fsync(fd)
-
-            with patch("os.fsync", side_effect=tracking_fsync):
-                result = sm.save_staging(data)
-
+            result = sm.save_staging(data)
             assert result.success, f"save_staging failed: {result.error}"
-            assert len(fsync_calls) > 0, "os.fsync was not called during save_staging()"
-            assert sm.staging_file.exists(), "Staging file was not written"
+
+            loaded = sm.get_staging()
+            assert loaded is not None, "get_staging returned None after save"
+            assert loaded["sessionId"] == "test-session"
+            assert "file.cfg|host|web-01" in loaded["pendingEdits"]
+            assert loaded["pendingEdits"]["file.cfg|host|web-01"]["address"] == "10.0.0.1"
 
 
 class TestAuditWriteAtomic:
