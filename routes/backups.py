@@ -2,11 +2,10 @@
 
 import logging
 import os
-from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 
-from audit_service import write_audit_log
+from audit_service import log_audit
 from staging_manager import StagingStatus
 
 from .helpers import (
@@ -43,13 +42,12 @@ def api_create_backup():
     backup_path = bm.create_backup(description, user_name=user_name, user_email=user_email)
 
     # Write audit log entry
-    write_audit_log({
-        "timestamp": datetime.now().isoformat(),
-        "action": "backup_created",
-        "description": description,
-        "backup_path": os.path.basename(backup_path) if backup_path else None,
-        **identity,
-    })
+    log_audit(
+        action="backup_created",
+        user=identity.get("userEmail", ""),
+        description=description,
+        backup_path=os.path.basename(backup_path) if backup_path else None,
+    )
 
     return jsonify({"success": True, "path": backup_path})
 
@@ -95,12 +93,11 @@ def api_restore_backup(backup_name):
             })
 
         # Write audit log entry
-        write_audit_log({
-            "timestamp": datetime.now().isoformat(),
-            "action": "backup_restored",
-            "backup_name": backup_name,
-            **identity,
-        })
+        log_audit(
+            action="backup_restored",
+            user=identity.get("userEmail", ""),
+            backup_name=backup_name,
+        )
 
         return jsonify({"success": True, **result})
     except ValueError as e:
@@ -120,12 +117,12 @@ def api_delete_all_backups():
 
     if deleted_count > 0:
         # Write audit log entry
-        write_audit_log({
-            "timestamp": datetime.now().isoformat(),
-            "action": "backups_deleted",
-            "deleted_count": deleted_count,
-            **get_audit_user_identity(),
-        })
+        identity = get_audit_user_identity()
+        log_audit(
+            action="backups_deleted",
+            user=identity.get("userEmail", ""),
+            deleted_count=deleted_count,
+        )
 
     return jsonify({"success": True, "deleted_count": deleted_count})
 
@@ -137,11 +134,11 @@ def api_delete_backup(backup_name):
     bm = get_backup_manager()
     if bm.delete_backup(backup_name):
         # Write audit log entry
-        write_audit_log({
-            "timestamp": datetime.now().isoformat(),
-            "action": "backup_deleted",
-            "backup_name": backup_name,
-            **get_audit_user_identity(),
-        })
+        identity = get_audit_user_identity()
+        log_audit(
+            action="backup_deleted",
+            user=identity.get("userEmail", ""),
+            backup_name=backup_name,
+        )
         return jsonify({"success": True})
     return jsonify({"error": "Backup not found"}), 404

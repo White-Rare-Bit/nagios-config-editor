@@ -3,15 +3,9 @@
 import json
 import logging
 import os
-from datetime import datetime
 
 from flask import Blueprint, current_app, jsonify, request, send_file
 
-from audit_service import (
-    get_audit_log_dir,
-    get_audit_log_path,
-    rotate_audit_log,
-)
 from server_config import save_config as save_server_config
 from validator import verify_nagios_binary
 
@@ -355,104 +349,3 @@ def api_frontend_log():
     return jsonify({"success": True})
 
 
-@bp.route("/api/audit-log", methods=["GET"])
-def api_get_audit_log():
-    """Get the audit log."""
-    # Use None to get default project root path, ensuring consistency with write_audit_log()
-    audit_path = get_audit_log_path(None)
-    if not os.path.exists(audit_path):
-        return jsonify({"entries": []})
-
-    try:
-        with open(audit_path) as f:
-            data = json.load(f)
-        return jsonify(data)
-    except (OSError, json.JSONDecodeError) as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@bp.route("/api/audit-log", methods=["POST"])
-def api_save_audit_log():
-    """Save an audit log entry."""
-    # Use None to get default project root path, ensuring consistency with write_audit_log()
-    audit_path = get_audit_log_path(None)
-
-    try:
-        entries = []
-        if os.path.exists(audit_path):
-            with open(audit_path) as f:
-                data = json.load(f)
-                entries = data.get("entries", [])
-
-        new_entry = request.json
-        entries.append(new_entry)
-
-        entries = rotate_audit_log(entries)
-
-        with open(audit_path, "w") as f:
-            json.dump({"entries": entries}, f, indent=2)
-
-        return jsonify({"success": True})
-    except (OSError, json.JSONDecodeError) as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@bp.route("/api/audit-log/clear", methods=["POST"])
-def api_clear_audit_log():
-    """Clear the audit log."""
-    # Use None to get default project root path, ensuring consistency with write_audit_log()
-    audit_path = get_audit_log_path(None)
-
-    try:
-        with open(audit_path, "w") as f:
-            json.dump({"entries": []}, f)
-        return jsonify({"success": True})
-    except OSError as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@bp.route("/api/audit-log/archives", methods=["GET"])
-def api_list_audit_archives():
-    """List all archived audit log files."""
-    # Use None to get default project root path, ensuring consistency with write_audit_log()
-    log_dir = get_audit_log_dir(None)
-
-    archives = []
-    try:
-        for filename in os.listdir(log_dir):
-            if filename.startswith("audit_log_") and filename.endswith(".json"):
-                filepath = os.path.join(log_dir, filename)
-                stat = os.stat(filepath)
-                archives.append({
-                    "filename": filename,
-                    "size": stat.st_size,
-                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                })
-
-        archives.sort(key=lambda x: x["filename"], reverse=True)
-
-        return jsonify({"archives": archives})
-    except OSError as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@bp.route("/api/audit-log/archives/<filename>", methods=["GET"])
-def api_get_audit_archive(filename):
-    """Get a specific archived audit log."""
-    if not filename.startswith("audit_log_") or not filename.endswith(".json"):
-        return jsonify({"error": "Invalid archive filename"}), 400
-    if "/" in filename or "\\" in filename or ".." in filename:
-        return jsonify({"error": "Invalid archive filename"}), 400
-
-    log_dir = get_audit_log_dir()
-    filepath = os.path.join(log_dir, filename)
-
-    if not os.path.exists(filepath):
-        return jsonify({"error": "Archive not found"}), 404
-
-    try:
-        with open(filepath, encoding="utf-8") as f:
-            data = json.load(f)
-        return jsonify(data)
-    except (OSError, json.JSONDecodeError) as e:
-        return jsonify({"error": str(e)}), 500

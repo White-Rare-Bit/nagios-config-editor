@@ -5,12 +5,11 @@ import multiprocessing
 import os
 import time
 import uuid
-from datetime import datetime
 
 from flask import Blueprint, current_app, jsonify, request
 
 import file_operations
-from audit_service import write_audit_log
+from audit_service import log_audit
 from nagios_model import NAME_FIELDS
 from staging_manager import UNDO_HANDLERS, OperationType, UndoKeyError
 
@@ -807,56 +806,24 @@ def _execute_apply_phases(service, staging_data):
     return applied_summary, all_details, phase_errors, None
 
 
-def _build_audit_entry(staging_data, session_id, all_details, errors):
-    """Build an audit log entry dict from apply operation results.
-
-    Args:
-        staging_data: Staging data dict
-        session_id: Session ID
-        all_details: Details from each phase
-        errors: List of errors encountered
-
-    Returns:
-        Audit entry dict ready for write_audit_log()
-
-    """
-    audit_entry = {
-        "timestamp": datetime.now().isoformat(),
-        "userName": staging_data.get("userName", ""),
-        "userEmail": staging_data.get("userEmail", ""),
-        "sessionId": session_id,
-    }
-
-    # Map phase detail keys to audit entry keys
-    _PHASE_TO_AUDIT_KEY = {
-        "objectEdits": "object_edits",
-        "objectMoves": "object_moves",
-        "objectCreations": "object_creations",
-        "objectDeletions": "object_deletions",
-        "folderCreations": "folder_creations",
-        "fileMoves": "file_moves",
-        "folderMoves": "folder_moves",
-    }
-    for phase_key, audit_key in _PHASE_TO_AUDIT_KEY.items():
-        if all_details.get(phase_key):
-            audit_entry[audit_key] = all_details[phase_key]
-
-    # Combine file and folder deletions into a single audit field
-    file_deletions = all_details.get("fileDeletions", []) + all_details.get("folderDeletions", [])
-    if file_deletions:
-        audit_entry["file_deletions"] = file_deletions
-
-    if errors:
-        audit_entry["errors"] = errors
-
-    return audit_entry
+_PHASE_TO_AUDIT_KEY = {
+    "objectEdits": "object_edits",
+    "objectMoves": "object_moves",
+    "objectCreations": "object_creations",
+    "objectDeletions": "object_deletions",
+    "folderCreations": "folder_creations",
+    "fileCreations": "file_creations",
+    "fileMoves": "file_moves",
+    "folderMoves": "folder_moves",
+    "fileDeletions": "file_deletions",
+    "folderDeletions": "folder_deletions",
+}
 
 
 def _write_apply_audit_log(staging_data, session_id, all_details, errors, log):
-    """Write audit log entry for apply operation.
+    """Write audit log entries for an apply operation.
 
-    C-10: Returns success status and error message if write fails.
-    Caller should include audit failure in response warnings.
+    Emits one log_audit() call per individual change, all sharing the same txn ID.
 
     Args:
         staging_data: Staging data dict
@@ -869,13 +836,66 @@ def _write_apply_audit_log(staging_data, session_id, all_details, errors, log):
         Tuple of (success: bool, error_message: Optional[str])
 
     """
+    txn = uuid.uuid4().hex[:8]
+    user = staging_data.get("userEmail", "")
+
     try:
-        audit_entry = _build_audit_entry(staging_data, session_id, all_details, errors)
-        write_audit_log(audit_entry)
+        for phase_key, audit_key in _PHASE_TO_AUDIT_KEY.items():
+            details = all_details.get(phase_key, [])
+            for detail in details:
+                if audit_key == "object_edits":
+                    obj_type = detail.get("object_type", "")
+                    obj_name = detail.get("object_name", "")
+                    for change in detail.get("changes", []):
+                        log_audit(
+                            action="apply", user=user, txn=txn,
+                            type=obj_type, name=obj_name,
+                            field=change.get("key", ""),
+                            op=change.get("type", "modify"),
+                            from_val=change.get("from", ""),
+                            to_val=change.get("to", ""),
+                        )
+                elif audit_key == "object_creations":
+                    log_audit(
+                        action="apply", user=user, txn=txn,
+                        type=detail.get("object_type", ""),
+                        name=detail.get("object_name", ""),
+                        op="create",
+                    )
+                elif audit_key == "object_deletions":
+                    log_audit(
+                        action="apply", user=user, txn=txn,
+                        type=detail.get("object_type", ""),
+                        name=detail.get("object_name", ""),
+                        op="delete",
+                    )
+                elif audit_key == "object_moves":
+                    log_audit(
+                        action="apply", user=user, txn=txn,
+                        type=detail.get("object_type", ""),
+                        name=detail.get("object_name", ""),
+                        op="move",
+                        from_val=detail.get("from_file", ""),
+                        to_val=detail.get("to_file", ""),
+                    )
+                elif audit_key in ("file_creations", "file_deletions", "file_moves",
+                                   "folder_creations", "folder_deletions", "folder_moves"):
+                    op_type = audit_key.rstrip("s").split("_")[-1]
+                    prefix = "file" if "file" in audit_key else "folder"
+                    log_audit(
+                        action="apply", user=user, txn=txn,
+                        op=f"{prefix}_{op_type}",
+                        path=detail.get("path", detail.get("from", "")),
+                    )
+
+        if errors:
+            for error in errors:
+                log_audit(action="apply_error", user=user, txn=txn, error=str(error))
+
         return True, None
-    except (OSError, ValueError) as e:
+    except Exception as e:
         error_msg = f"Failed to write audit log: {e}"
-        log.exception(error_msg)  # C-10: Elevated from warning to error
+        log.exception(error_msg)
         return False, error_msg
 
 
@@ -1813,12 +1833,6 @@ def api_staging_commit():
 
     # Note: Backup is created in /api/staging/apply BEFORE changes are written to disk
 
-    audit_log = {
-        "timestamp": datetime.now().isoformat(),
-        "userName": user_name,
-        "userEmail": user_email,
-    }
-
     try:
         # Clear staging (releases lock)
         sm.clear_staging()
@@ -1827,20 +1841,13 @@ def api_staging_commit():
         get_service().reload()
 
         # Log to audit file
-        try:
-            write_audit_log(audit_log)
-        except (OSError, ValueError) as e:
-            logger.warning("Failed to write audit log: %s", e)
+        log_audit(action="staging_commit", user=user_email)
 
-        return jsonify({
-            "success": True,
-            "auditLog": audit_log,
-        })
+        return jsonify({"success": True})
 
     except Exception as e:  # noqa: BLE001
         logger.exception("Commit failed: %s", e)
         return jsonify({
             "success": False,
             "error": str(e),
-            "auditLog": audit_log,
         }), 500

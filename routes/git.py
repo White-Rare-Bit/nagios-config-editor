@@ -1,11 +1,10 @@
 """Git integration routes."""
 
 import logging
-from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 
-from audit_service import write_audit_log
+from audit_service import log_audit
 from file_operations import is_safe_path
 from staging_manager import StagingStatus
 
@@ -82,34 +81,21 @@ def _validate_commit_files(files, config_path):
 def _write_commit_audit_log(commit_hash, message, user_name, user_email, initialized):
     """Write audit log entry for a git commit."""
     if initialized:
-        write_audit_log({
-            "timestamp": datetime.now().isoformat(),
-            "action": "git_initialized",
-            "commit_hash": commit_hash,
-            "message": message,
-            "userName": user_name,
-            "userEmail": user_email,
-        })
+        log_audit(
+            action="git_initialized", user=user_email,
+            commit_hash=commit_hash, message=message,
+        )
         return
+
+    kwargs = {"commit_hash": commit_hash, "message": message}
 
     staging_mgr = get_staging_manager()
     staging = staging_mgr.get_staging()
-    restore_info = {}
     if staging and staging.get("status") == StagingStatus.RESTORE_PENDING.value:
-        restore_info = {
-            "restoreType": staging.get("restoreType", ""),
-            "restoreFrom": staging.get("restoreFrom", ""),
-        }
+        kwargs["restoreType"] = staging.get("restoreType", "")
+        kwargs["restoreFrom"] = staging.get("restoreFrom", "")
 
-    write_audit_log({
-        "timestamp": datetime.now().isoformat(),
-        "action": "git_commit",
-        "commit_hash": commit_hash,
-        "message": message,
-        "userName": user_name,
-        "userEmail": user_email,
-        **restore_info,
-    })
+    log_audit(action="git_commit", user=user_email, **kwargs)
 
 
 @bp.route("/api/git/identity", methods=["GET"])
@@ -415,12 +401,11 @@ def api_git_discard_all():
         get_service().reload()
 
         # Write audit log entry for discard
-        write_audit_log({
-            "timestamp": datetime.now().isoformat(),
-            "action": "git_discarded",
-            "description": "Discarded all uncommitted changes",
-            **get_audit_user_identity(),
-        })
+        identity = get_audit_user_identity()
+        log_audit(
+            action="git_discarded", user=identity.get("userEmail", ""),
+            description="Discarded all uncommitted changes",
+        )
 
         return jsonify({
             "success": True,
@@ -461,13 +446,10 @@ def api_git_clear_history():
             return jsonify({"error": result.error}), 400
 
         # Write audit log entry for clear history
-        write_audit_log({
-            "timestamp": datetime.now().isoformat(),
-            "action": "git_clear_history",
-            "description": "Cleared all git history and reinitialized repository",
-            "userName": user_name,
-            "userEmail": user_email,
-        })
+        log_audit(
+            action="git_clear_history", user=user_email,
+            description="Cleared all git history and reinitialized repository",
+        )
 
         return jsonify({"success": True, "message": result.data["message"]})
 
@@ -553,15 +535,12 @@ def api_git_restore():
 
         # Write audit log entry for git restore
         audit_identity = get_audit_user_identity()
-        write_audit_log({
-            "timestamp": datetime.now().isoformat(),
-            "action": "git_restored",
-            "userName": audit_identity.get("userName"),
-            "userEmail": audit_identity.get("userEmail"),
-            "commit_hash": commit_hash,
-            "commit_message": result.data["message"],
-            "deleted_files_count": len(result.data["deleted_files"]),
-        })
+        log_audit(
+            action="git_restored", user=audit_identity.get("userEmail", ""),
+            commit_hash=commit_hash,
+            commit_message=result.data["message"],
+            deleted_files_count=len(result.data["deleted_files"]),
+        )
 
         # Create staging lock so other sessions see the pending restore changes
         sm = get_staging_manager()
