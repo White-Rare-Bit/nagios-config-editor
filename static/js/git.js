@@ -98,17 +98,17 @@ async function loadGitStatus(forceRefresh = false) {
 /**
  * Builds HTML for the staging preview section showing pending staged changes.
  */
-function buildStagingPreviewHtml(stagingInfo) {
-    if (!stagingInfo || !stagingInfo.hasStagedChanges || !stagingInfo.stagedChanges) {
+function buildStagingPreviewHtml(staging) {
+    if (!staging || !staging.hasStagedChanges || !staging.stagedChanges) {
         return '';
     }
-    const items = stagingInfo.stagedChanges.map(c => `<li>${escapeHtml(c.label)}</li>`).join('');
+    const items = staging.stagedChanges.map(c => `<li>${escapeHtml(c.label)}</li>`).join('');
     return `
         <div class="git-staging-preview">
             <div class="git-staging-preview-header">
                 <i class="fa-solid fa-layer-group"></i>
                 <span>Pending Staged Changes</span>
-                <span class="git-staging-preview-count">${stagingInfo.totalStagedCount}</span>
+                <span class="git-staging-preview-count">${staging.totalStagedCount}</span>
             </div>
             <ul class="git-staging-preview-list">${items}</ul>
             <div class="git-staging-preview-note">These changes have not been written to disk yet.</div>
@@ -340,24 +340,22 @@ function showGitClearHistoryResultPanel(success, result) {
 // Tab switching
 function switchGitTab(tab) {
     // Only allow 'changes' or 'history' tabs
-    if (tab !== 'changes' && tab !== 'history') {
-        tab = 'changes';
-    }
-    currentTab = tab;
+    const activeTab = (tab === 'changes' || tab === 'history') ? tab : 'changes';
+    currentTab = activeTab;
 
     // Persist tab selection
-    localStorage.setItem('gitPageTab', tab);
+    localStorage.setItem('gitPageTab', activeTab);
 
     // Update tab buttons
-    document.getElementById('tabChanges').classList.toggle('active', tab === 'changes');
-    document.getElementById('tabHistory').classList.toggle('active', tab === 'history');
+    document.getElementById('tabChanges').classList.toggle('active', activeTab === 'changes');
+    document.getElementById('tabHistory').classList.toggle('active', activeTab === 'history');
 
     // Show/hide content
-    document.getElementById('gitContent').style.display = tab === 'changes' ? 'flex' : 'none';
-    document.getElementById('historyContent').style.display = tab === 'history' ? 'flex' : 'none';
+    document.getElementById('gitContent').style.display = activeTab === 'changes' ? 'flex' : 'none';
+    document.getElementById('historyContent').style.display = activeTab === 'history' ? 'flex' : 'none';
 
     // Load data if needed
-    if (tab === 'history' && gitHistory === null) {
+    if (activeTab === 'history' && gitHistory === null) {
         loadGitHistory();
     }
 }

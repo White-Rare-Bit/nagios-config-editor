@@ -69,25 +69,26 @@ const ApiClient = (function() {
      */
     async function request(url, method, data, options = {}) {
         let controller, timeoutId;
-        if (options.timeout && !options.signal) {
+        let opts = options;
+        if (opts.timeout && !opts.signal) {
             controller = new AbortController();
-            timeoutId = setTimeout(() => controller.abort(), options.timeout);
-            options = { ...options, signal: controller.signal };
+            timeoutId = setTimeout(() => controller.abort(), opts.timeout);
+            opts = { ...opts, signal: controller.signal };
         }
 
         try {
             const fetchOptions = {
                 method,
                 headers: getStagingHeaders(),
-                signal: options.signal
+                signal: opts.signal
             };
             if (data !== undefined) {
                 fetchOptions.body = JSON.stringify(data);
             }
             const response = await fetch(url, fetchOptions);
-            return handleResponse(response, options);
+            return handleResponse(response, opts);
         } catch (e) {
-            return handleError(e, options);
+            return handleError(e, opts);
         } finally {
             if (timeoutId) {clearTimeout(timeoutId);}
         }

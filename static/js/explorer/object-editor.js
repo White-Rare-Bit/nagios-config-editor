@@ -49,11 +49,8 @@
                 if (!hasAny) {
                     errors.push(`One of these fields is required: ${req.join(' or ')}`);
                 }
-            } else {
-                // Simple required field
-                if (!attributes[req] || attributes[req].trim() === '') {
-                    errors.push(`'${req}' is required`);
-                }
+            } else if (!attributes[req] || attributes[req].trim() === '') {
+                errors.push(`'${req}' is required`);
             }
         }
 

@@ -33,10 +33,10 @@ function validatePath(path, fieldName) {
         return { valid: true, error: null }; // Empty paths are allowed (will use defaults)
     }
 
-    path = path.trim();
+    const trimmedPath = path.trim();
 
     // Check for null byte injection
-    if (path.includes('\0')) {
+    if (trimmedPath.includes('\0')) {
         return {
             valid: false,
             error: `${fieldName}: Path contains invalid null character`
@@ -45,7 +45,7 @@ function validatePath(path, fieldName) {
 
     // Check for path traversal attempts
     // Split by both forward and back slashes to handle cross-platform paths
-    const segments = path.split(/[/\\]/);
+    const segments = trimmedPath.split(/[/\\]/);
     for (const segment of segments) {
         if (segment === '..') {
             return {
@@ -57,7 +57,7 @@ function validatePath(path, fieldName) {
 
     // Check for other potentially dangerous patterns
     // Control characters (except common whitespace)
-    if (/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(path)) {
+    if (/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(trimmedPath)) {
         return {
             valid: false,
             error: `${fieldName}: Path contains invalid control characters`

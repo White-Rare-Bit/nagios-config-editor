@@ -553,7 +553,7 @@
             let html = '';
             const groupTypes = ['hostgroup', 'servicegroup', 'contactgroup'];
 
-            for (const [type, refs] of Object.entries(groups)) {
+            for (const [type, groupRefs] of Object.entries(groups)) {
                 const typeLabel = typeLabels[type] || type;
                 const isGroupType = groupTypes.includes(type);
 
@@ -562,7 +562,7 @@
                 if (isGroupType) {
                     const refsWithParents = [];
                     const refsWithoutParents = [];
-                    for (const ref of refs) {
+                    for (const ref of groupRefs) {
                         const parentChain = getParentGroups(ref.object);
                         if (parentChain.length > 0) {
                             refsWithParents.push({ ref, parentChain });
@@ -576,7 +576,7 @@
                     html += '</div>';
                 } else {
                     html += `<div class="ref-type-list">
-                        ${refs.map(ref => {
+                        ${groupRefs.map(ref => {
                             let badgeHtml = '';
                             let fieldHtml = '';
                             if (ref.isDependencyRule) {

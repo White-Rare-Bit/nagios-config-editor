@@ -326,7 +326,8 @@
             console.error('Failed to load virtual tree:', result.error);
             // Fall back to regular loadObjects but warn user
             Explorer.showToast('Failed to load merged view. Showing disk state only - staged changes may not be visible.', 'warning');
-            return Explorer.loadObjects();
+            Explorer.loadObjects();
+            return;
         }
 
         const data = result.data;

@@ -1880,11 +1880,9 @@
         const basePath = state.selectedFolder || state.configPath;
 
         if (type === 'folder') {
-            if (name.endsWith('/')) {
-                name = name.slice(0, -1);
-            }
+            const folderName = name.endsWith('/') ? name.slice(0, -1) : name;
 
-            const fullPath = basePath + '/' + name;
+            const fullPath = basePath + '/' + folderName;
 
             if (state.existingFolders.includes(fullPath)) {
                 showToast('Folder already exists', 'warning');
@@ -1912,16 +1910,16 @@
             state.expandedFolders.add(fullPath);
             row.remove();
             afterStagingChange({ save: false, tree: false });
-            showToast(`Staged folder "${name}/". Use Commit to apply.`, 'info');
+            showToast(`Staged folder "${folderName}/". Use Commit to apply.`, 'info');
         } else {
-            name = name.replace(/\.cfg$/i, '');
-            if (!name) {
+            const baseName = name.replace(/\.cfg$/i, '');
+            if (!baseName) {
                 row.remove();
                 return;
             }
-            name += '.cfg';
+            const fileName = baseName + '.cfg';
 
-            const fullPath = basePath + '/' + name;
+            const fullPath = basePath + '/' + fileName;
 
             const existingFiles = [...new Set(state.allObjects.map(o => o.source_file))];
             if (existingFiles.includes(fullPath) || state.newFiles.has(fullPath)) {
@@ -1934,7 +1932,7 @@
             state.expandedFiles.add(fullPath);
             row.remove();
             afterStagingChange({ tree: false });
-            showToast(`Staged new file "${name}". Commit to create.`, 'info');
+            showToast(`Staged new file "${fileName}". Commit to create.`, 'info');
         }
     }
 

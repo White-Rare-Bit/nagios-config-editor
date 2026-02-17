@@ -1147,7 +1147,7 @@ function highlightSuggestionRow(id) {
         container.scrollTo({ top: centerOffset, behavior: 'smooth' });
 
         row.classList.remove('highlighted');
-        void row.offsetWidth;
+        row.offsetWidth; // force reflow
         row.classList.add('highlighted');
         setTimeout(() => row.classList.remove('highlighted'), 1500);
     }
@@ -1233,7 +1233,7 @@ function highlightAnalysisItem(tab, objectType, objectName) {
             const items = container.querySelectorAll('.cleanup-suggestion');
             if (items[targetIdx]) {
                 items[targetIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                void items[targetIdx].offsetWidth;
+                items[targetIdx].offsetWidth; // force reflow
                 items[targetIdx].classList.add('highlighted');
                 setTimeout(() => items[targetIdx].classList.remove('highlighted'), 2000);
             }
@@ -1263,7 +1263,7 @@ function highlightCleanupItem(globalIndex, suggestionType, checkObjectsArray = f
                 item.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 // Remove class first, force reflow, then add to ensure animation restarts
                 item.classList.remove('highlighted');
-                void item.offsetWidth;
+                item.offsetWidth; // force reflow
                 item.classList.add('highlighted');
                 setTimeout(() => item.classList.remove('highlighted'), 2000);
             }
@@ -1370,13 +1370,13 @@ function toggleSuggestionSection(sectionName) {
  * Save suggestion section expanded/collapsed state
  */
 function saveSuggestionSectionState() {
-    const state = {};
+    const sectionState = {};
     document.querySelectorAll('.suggestion-section').forEach(section => {
         const name = section.dataset.section;
-        state[name] = !section.classList.contains('collapsed');
+        sectionState[name] = !section.classList.contains('collapsed');
     });
     try {
-        localStorage.setItem('suggestionSectionState', JSON.stringify(state));
+        localStorage.setItem('suggestionSectionState', JSON.stringify(sectionState));
     } catch (e) {
         // Ignore localStorage errors
     }
@@ -1389,8 +1389,8 @@ function restoreSuggestionSectionState() {
     try {
         const saved = localStorage.getItem('suggestionSectionState');
         if (!saved) {return;}
-        const state = JSON.parse(saved);
-        for (const [name, expanded] of Object.entries(state)) {
+        const sectionState = JSON.parse(saved);
+        for (const [name, expanded] of Object.entries(sectionState)) {
             const section = document.querySelector(`.suggestion-section[data-section="${name}"]`);
             const body = document.getElementById(name + 'SectionBody');
             if (section && body) {

@@ -892,13 +892,13 @@ function renderCleanupSuggestions() {
 
         // Render items within this group
         for (const { suggestion: s, index: i } of items) {
-            let severityClass;
+            let itemSeverityClass;
             if (s.severity === 'error') {
-                severityClass = 'cleanup-error';
+                itemSeverityClass = 'cleanup-error';
             } else if (s.severity === 'warning') {
-                severityClass = 'cleanup-warning';
+                itemSeverityClass = 'cleanup-warning';
             } else {
-                severityClass = 'cleanup-info';
+                itemSeverityClass = 'cleanup-info';
             }
 
             // Simplify description for grouped items
@@ -927,7 +927,7 @@ function renderCleanupSuggestions() {
             }
 
             html += `
-                <div class="cleanup-suggestion ${severityClass}" data-index="${i}" onclick="Explorer.showCleanupDetail(${i})">
+                <div class="cleanup-suggestion ${itemSeverityClass}" data-index="${i}" onclick="Explorer.showCleanupDetail(${i})">
                     <div class="cleanup-info">
                         <div class="cleanup-title">${Explorer.escapeHtml(displayTitle)}</div>
                         ${displayDesc ? `<div class="cleanup-desc">${Explorer.escapeHtml(displayDesc)}</div>` : ''}

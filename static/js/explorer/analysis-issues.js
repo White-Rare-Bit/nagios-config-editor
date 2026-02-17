@@ -463,8 +463,11 @@
         // Determine if this should be a template (for missing_template issues)
         const isTemplate = issue.type === 'missing_template';
 
+        // For templates, use the referencing object's type instead
+        const effectiveType = isTemplate ? issue.object_type : objectType;
+
         // For templates, the name field is 'name' and we need to set register=0
-        const nameField = isTemplate ? 'name' : (Explorer.constants.nameFields[objectType] || 'name');
+        const nameField = isTemplate ? 'name' : (Explorer.constants.nameFields[effectiveType] || 'name');
 
         // Build initial attributes
         const attributes = {};
@@ -472,27 +475,24 @@
 
         if (isTemplate) {
             attributes.register = '0';
-            // For templates, we need to determine the actual object type from the referencing object
-            // The issue.object_type tells us what type of object is referencing the template
-            objectType = issue.object_type;
         }
 
         // Add common required attributes based on type
-        if (objectType === 'command') {
+        if (effectiveType === 'command') {
             attributes.command_line = '/usr/lib/nagios/plugins/check_dummy 0 "OK"';
-        } else if (objectType === 'timeperiod') {
+        } else if (effectiveType === 'timeperiod') {
             attributes.alias = objectName;
-        } else if (objectType === 'host' && !isTemplate) {
+        } else if (effectiveType === 'host' && !isTemplate) {
             attributes.alias = objectName;
             attributes.address = '127.0.0.1';
-        } else if (objectType === 'contact') {
+        } else if (effectiveType === 'contact') {
             attributes.alias = objectName;
-        } else if (objectType === 'hostgroup' || objectType === 'servicegroup' || objectType === 'contactgroup') {
+        } else if (effectiveType === 'hostgroup' || effectiveType === 'servicegroup' || effectiveType === 'contactgroup') {
             attributes.alias = objectName;
         }
 
         // Show dialog to select target file and confirm creation
-        showCreateObjectForIssueDialog(objectType, attributes, targetFile, isTemplate);
+        showCreateObjectForIssueDialog(effectiveType, attributes, targetFile, isTemplate);
     }
 
     function showCreateObjectForIssueDialog(objectType, attributes, suggestedFile, isTemplate) {

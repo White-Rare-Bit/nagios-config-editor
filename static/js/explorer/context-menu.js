@@ -509,13 +509,10 @@
                     madeChange = true;
                     updatedCount++;
                 }
-            } else {
-                // Set value
-                if (editedAttrs[name] !== value) {
-                    editedAttrs[name] = value;
-                    madeChange = true;
-                    updatedCount++;
-                }
+            } else if (editedAttrs[name] !== value) {
+                editedAttrs[name] = value;
+                madeChange = true;
+                updatedCount++;
             }
 
             if (madeChange) {

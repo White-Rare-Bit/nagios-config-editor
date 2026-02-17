@@ -311,7 +311,7 @@ console.log('dependencies.js loaded');
         const [startType, startName] = parseNodeId(startNodeId);
 
         // Helper to add a node if not at max
-        function addNode(nodeId) {
+        function collectNode(nodeId) {
             if (addedNodeIds.size >= maxNodes || addedNodeIds.has(nodeId)) {return false;}
             addedNodeIds.add(nodeId);
             return true;
@@ -330,7 +330,7 @@ console.log('dependencies.js loaded');
         function addTemplates(nodeId) {
             const templateEdges = findEdges(null, nodeId, 'use');
             for (const edge of templateEdges) {
-                if (addNode(edge.from)) {
+                if (collectNode(edge.from)) {
                     addTemplates(edge.from);  // Follow template inheritance chain
                 }
             }
@@ -345,12 +345,12 @@ console.log('dependencies.js loaded');
             for (const label of depLabels) {
                 const edges = findEdges(nodeId, null, label);
                 for (const edge of edges) {
-                    if (addNode(edge.to)) {
+                    if (collectNode(edge.to)) {
                         // If we added a contactgroup, also add its members (contacts)
                         if (label === 'contact_groups') {
                             const memberEdges = findEdges(edge.to, null, 'members');
                             for (const memberEdge of memberEdges) {
-                                addNode(memberEdge.to);
+                                collectNode(memberEdge.to);
                             }
                         }
                     }
@@ -363,7 +363,7 @@ console.log('dependencies.js loaded');
             // Host points TO hostgroups
             const hgEdges = findEdges(hostId, null, 'hostgroups');
             for (const edge of hgEdges) {
-                addNode(edge.to);
+                collectNode(edge.to);
             }
         }
 
@@ -372,7 +372,7 @@ console.log('dependencies.js loaded');
             // Services directly targeting this host (host points TO service via host_name)
             const directEdges = findEdges(hostId, null, 'host_name');
             for (const edge of directEdges) {
-                if (addNode(edge.to)) {
+                if (collectNode(edge.to)) {
                     // Add this service's dependencies (commands, contacts, etc.)
                     addTemplates(edge.to);
                     addObjectDependencies(edge.to);
@@ -384,7 +384,7 @@ console.log('dependencies.js loaded');
             for (const hgId of hostgroupIds) {
                 const hgServiceEdges = findEdges(null, hgId, 'hostgroup_name');
                 for (const edge of hgServiceEdges) {
-                    if (addNode(edge.from)) {
+                    if (collectNode(edge.from)) {
                         addTemplates(edge.from);
                         addObjectDependencies(edge.from);
                     }
@@ -402,7 +402,7 @@ console.log('dependencies.js loaded');
             const hostgroupIds = [];
             const hgEdges = findEdges(startNodeId, null, 'hostgroups');
             for (const edge of hgEdges) {
-                if (addNode(edge.to)) {
+                if (collectNode(edge.to)) {
                     hostgroupIds.push(edge.to);
                 }
             }
@@ -411,7 +411,7 @@ console.log('dependencies.js loaded');
             for (const edge of igEdges) {
                 const node = allNodes.find(n => n.id === edge.to);
                 if (node && node.type === 'hostgroup') {
-                    if (addNode(edge.to)) {
+                    if (collectNode(edge.to)) {
                         hostgroupIds.push(edge.to);
                     }
                 }
@@ -420,7 +420,7 @@ console.log('dependencies.js loaded');
             // Add services - host points TO services via host_name (reversed)
             const serviceEdges = findEdges(startNodeId, null, 'host_name');
             for (const edge of serviceEdges) {
-                if (addNode(edge.to)) {
+                if (collectNode(edge.to)) {
                     // Also add the service's dependencies (commands, contacts, timeperiods)
                     addObjectDependencies(edge.to);
                 }
@@ -432,13 +432,13 @@ console.log('dependencies.js loaded');
             // Add parent hosts (this host points TO parents)
             const parentEdges = findEdges(startNodeId, null, 'parents');
             for (const edge of parentEdges) {
-                addNode(edge.to);
+                collectNode(edge.to);
             }
 
             // Add child hosts (other hosts point TO this host as parent)
             for (const edge of allEdges) {
                 if (edge.to === startNodeId && edge.label === 'parents') {
-                    addNode(edge.from);
+                    collectNode(edge.from);
                 }
             }
 
@@ -450,7 +450,7 @@ console.log('dependencies.js loaded');
                 if (node && node.type === 'hostdependency') {
                     if (edge.to === startNodeId &&
                         (edge.label === 'host_name' || edge.label === 'dependent_host_name')) {
-                        addNode(edge.from);
+                        collectNode(edge.from);
                     }
                 }
             }
@@ -460,7 +460,7 @@ console.log('dependencies.js loaded');
                 const node = allNodes.find(n => n.id === edge.from);
                 if (node && node.type === 'hostescalation') {
                     if (edge.to === startNodeId && edge.label === 'host_name') {
-                        addNode(edge.from);
+                        collectNode(edge.from);
                     }
                 }
             }
@@ -473,19 +473,19 @@ console.log('dependencies.js loaded');
             // Add the host this service runs on (host points TO service)
             const hostEdges = findEdges(null, startNodeId, 'host_name');
             for (const edge of hostEdges) {
-                addNode(edge.from);  // Just add host, don't expand it
+                collectNode(edge.from);  // Just add host, don't expand it
             }
 
             // Add hostgroup if service targets a hostgroup (service points TO hostgroup)
             const hgEdges = findEdges(startNodeId, null, 'hostgroup_name');
             for (const edge of hgEdges) {
-                addNode(edge.to);
+                collectNode(edge.to);
             }
 
             // Add servicegroups this service belongs to (service points TO servicegroup)
             const sgEdges = findEdges(startNodeId, null, 'servicegroups');
             for (const edge of sgEdges) {
-                addNode(edge.to);
+                collectNode(edge.to);
             }
 
             // Add servicedependencies that reference this service
@@ -496,7 +496,7 @@ console.log('dependencies.js loaded');
                 if (node && node.type === 'servicedependency') {
                     if (edge.to === startNodeId &&
                         (edge.label === 'service_description' || edge.label === 'dependent_service_description')) {
-                        addNode(edge.from);
+                        collectNode(edge.from);
                     }
                 }
             }
@@ -506,7 +506,7 @@ console.log('dependencies.js loaded');
                 const node = allNodes.find(n => n.id === edge.from);
                 if (node && node.type === 'serviceescalation') {
                     if (edge.to === startNodeId && edge.label === 'service_description') {
-                        addNode(edge.from);
+                        collectNode(edge.from);
                     }
                 }
             }
@@ -518,13 +518,13 @@ console.log('dependencies.js loaded');
             // Members - hostgroup points TO hosts via 'members'
             const memberEdges = findEdges(startNodeId, null, 'members');
             for (const edge of memberEdges) {
-                addNode(edge.to);
+                collectNode(edge.to);
             }
 
             // Services targeting this hostgroup (services point TO hostgroup)
             const serviceEdges = findEdges(null, startNodeId, 'hostgroup_name');
             for (const edge of serviceEdges) {
-                if (addNode(edge.from)) {
+                if (collectNode(edge.from)) {
                     addTemplates(edge.from);
                     addObjectDependencies(edge.from);
                 }
@@ -535,7 +535,7 @@ console.log('dependencies.js loaded');
             // Members
             const memberEdges = findEdges(startNodeId, null, 'members');
             for (const edge of memberEdges) {
-                addNode(edge.to);
+                collectNode(edge.to);
             }
 
         } else if (startType === 'contact') {
@@ -544,7 +544,7 @@ console.log('dependencies.js loaded');
             // Contact groups this contact is in
             const cgEdges = findEdges(null, startNodeId, 'members');
             for (const edge of cgEdges) {
-                addNode(edge.from);
+                collectNode(edge.from);
             }
 
         } else if (startType === 'contactgroup') {
@@ -552,7 +552,7 @@ console.log('dependencies.js loaded');
             // Members
             const memberEdges = findEdges(startNodeId, null, 'members');
             for (const edge of memberEdges) {
-                addNode(edge.to);
+                collectNode(edge.to);
             }
 
         } else if (startType === 'servicedependency') {
@@ -564,11 +564,11 @@ console.log('dependencies.js loaded');
 
             for (const label of reversedLabels) {
                 const edges = findEdges(null, startNodeId, label);
-                for (const edge of edges) { addNode(edge.from); }
+                for (const edge of edges) { collectNode(edge.from); }
             }
             for (const label of normalLabels) {
                 const edges = findEdges(startNodeId, null, label);
-                for (const edge of edges) { addNode(edge.to); }
+                for (const edge of edges) { collectNode(edge.to); }
             }
 
         } else if (startType === 'hostdependency') {
@@ -578,11 +578,11 @@ console.log('dependencies.js loaded');
 
             for (const label of reversedLabels) {
                 const edges = findEdges(null, startNodeId, label);
-                for (const edge of edges) { addNode(edge.from); }
+                for (const edge of edges) { collectNode(edge.from); }
             }
             for (const label of normalLabels) {
                 const edges = findEdges(startNodeId, null, label);
-                for (const edge of edges) { addNode(edge.to); }
+                for (const edge of edges) { collectNode(edge.to); }
             }
 
         } else if (startType === 'serviceescalation') {
@@ -593,16 +593,16 @@ console.log('dependencies.js loaded');
 
             for (const label of reversedLabels) {
                 const edges = findEdges(null, startNodeId, label);
-                for (const edge of edges) { addNode(edge.from); }
+                for (const edge of edges) { collectNode(edge.from); }
             }
             for (const label of normalLabels) {
                 const edges = findEdges(startNodeId, null, label);
                 for (const edge of edges) {
-                    if (addNode(edge.to)) {
+                    if (collectNode(edge.to)) {
                         if (label === 'contact_groups') {
                             const memberEdges = findEdges(edge.to, null, 'members');
                             for (const memberEdge of memberEdges) {
-                                addNode(memberEdge.to);
+                                collectNode(memberEdge.to);
                             }
                         }
                     }
@@ -616,16 +616,16 @@ console.log('dependencies.js loaded');
 
             for (const label of reversedLabels) {
                 const edges = findEdges(null, startNodeId, label);
-                for (const edge of edges) { addNode(edge.from); }
+                for (const edge of edges) { collectNode(edge.from); }
             }
             for (const label of normalLabels) {
                 const edges = findEdges(startNodeId, null, label);
                 for (const edge of edges) {
-                    if (addNode(edge.to)) {
+                    if (collectNode(edge.to)) {
                         if (label === 'contact_groups') {
                             const memberEdges = findEdges(edge.to, null, 'members');
                             for (const memberEdge of memberEdges) {
-                                addNode(memberEdge.to);
+                                collectNode(memberEdge.to);
                             }
                         }
                     }
@@ -641,7 +641,7 @@ console.log('dependencies.js loaded');
             const commandFields = ['check_command', 'event_handler', 'host_notification_commands', 'service_notification_commands'];
             for (const edge of allEdges) {
                 if (edge.to === startNodeId && commandFields.includes(edge.label)) {
-                    addNode(edge.from);
+                    collectNode(edge.from);
                 }
             }
 
@@ -653,7 +653,7 @@ console.log('dependencies.js loaded');
             const timeperiodFields = ['check_period', 'notification_period', 'host_notification_period', 'service_notification_period', 'escalation_period'];
             for (const edge of allEdges) {
                 if (edge.to === startNodeId && timeperiodFields.includes(edge.label)) {
-                    addNode(edge.from);
+                    collectNode(edge.from);
                 }
             }
 
@@ -932,7 +932,7 @@ console.log('dependencies.js loaded');
 
             // Group nodes by type into clusters
             const clusters = {};
-            for (const clusterName in clusterDefs) {
+            for (const clusterName of Object.keys(clusterDefs)) {
                 clusters[clusterName] = [];
             }
             clusters.other = [];
@@ -944,7 +944,7 @@ console.log('dependencies.js loaded');
 
                 // Find cluster by type
                 let assigned = false;
-                for (const clusterName in clusterDefs) {
+                for (const clusterName of Object.keys(clusterDefs)) {
                     if (clusterDefs[clusterName].types.includes(node.type)) {
                         clusters[clusterName].push(nodeId);
                         assigned = true;
@@ -2045,7 +2045,7 @@ console.log('dependencies.js loaded');
             const pos = organizedPositions[n.id] || nodePositions[n.id];
             if (pos) {typeNodes[n.type].push(pos);}
         });
-        for (const type in typeNodes) {
+        for (const type of Object.keys(typeNodes)) {
             const positions = typeNodes[type];
             if (positions.length > 0) {
                 typeCentroids[type] = {
