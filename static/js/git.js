@@ -653,7 +653,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (actionEl) {
             const action = actionEl.dataset.action;
             if (action === 'history-page-size') {
-                const size = parseInt(actionEl.value);
+                const size = parseInt(actionEl.value, 10);
                 if (size) {setHistoryPageSize(size);}
             }
         }
@@ -694,7 +694,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const column = actionEl.dataset.sort;
                 if (column) {sortHistory(column);}
             } else if (action === 'history-page') {
-                const page = parseInt(actionEl.dataset.page);
+                const page = parseInt(actionEl.dataset.page, 10);
                 if (page) {setHistoryPage(page);}
             }
         }

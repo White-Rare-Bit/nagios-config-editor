@@ -369,7 +369,7 @@ async function buildChangesFilesHtml(gitChanges, contextLines, options = {}) {
 }
 
 async function updateGitOnlyContextLines(value) {
-    const intValue = parseInt(value);
+    const intValue = parseInt(value, 10);
     baseState.gitOnlyContextLines = intValue === 10 ? 9999 : intValue;
     document.getElementById('gitOnlyContextLinesValue').textContent = intValue === 10 ? 'All' : value;
 
@@ -1174,7 +1174,7 @@ function renderReferenceUpdateDiff(mod) {
 }
 
 function updateGlobalContextLines(value) {
-    const intValue = parseInt(value);
+    const intValue = parseInt(value, 10);
     baseState.commitContextLines = intValue === 10 ? 9999 : intValue;
     document.getElementById('globalContextLinesValue').textContent = intValue === 10 ? 'All' : value;
 

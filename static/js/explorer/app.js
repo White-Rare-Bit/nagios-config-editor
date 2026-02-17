@@ -270,7 +270,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         objectTree.addEventListener('dragstart', (event) => {
             const treeItem = event.target.closest('.tree-item[draggable="true"]');
             if (treeItem) {
-                const index = parseInt(treeItem.dataset.index);
+                const index = parseInt(treeItem.dataset.index, 10);
                 if (!isNaN(index)) {
                     Explorer.handleDragStart(event, index);
                 }
@@ -286,7 +286,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         objectTree.addEventListener('mouseover', (event) => {
             const treeItem = event.target.closest('.tree-item[data-index]');
             if (treeItem) {
-                state.hoveredIndex = parseInt(treeItem.dataset.index);
+                state.hoveredIndex = parseInt(treeItem.dataset.index, 10);
             }
         });
 
@@ -566,7 +566,7 @@ function handleStagedItemClick(event, idx) {
         }
     } else if (event.shiftKey && state.selectedStagedIndices.size > 0) {
         // Range select
-        const allStaged = Array.from(document.querySelectorAll('.tree-item.staged-creation')).map(el => parseInt(el.dataset.stagedIndex));
+        const allStaged = Array.from(document.querySelectorAll('.tree-item.staged-creation')).map(el => parseInt(el.dataset.stagedIndex, 10));
         const lastSelected = Array.from(state.selectedStagedIndices).pop();
         const start = allStaged.indexOf(lastSelected);
         const end = allStaged.indexOf(idx);
@@ -584,7 +584,7 @@ function handleStagedItemClick(event, idx) {
 function updateStagedSelection() {
     // Update visual selection for staged items
     document.querySelectorAll('.tree-item.staged-creation').forEach(el => {
-        const idx = parseInt(el.dataset.stagedIndex);
+        const idx = parseInt(el.dataset.stagedIndex, 10);
         el.classList.toggle('selected', state.selectedStagedIndices.has(idx));
     });
 
@@ -894,7 +894,7 @@ function handleItemClick(event, index) {
         }
     } else if (event.shiftKey && state.selectedKeys.size > 0) {
         // Range select
-        const all = Array.from(document.querySelectorAll('.tree-item:not(.staged-creation)')).map(el => parseInt(el.dataset.index));
+        const all = Array.from(document.querySelectorAll('.tree-item:not(.staged-creation)')).map(el => parseInt(el.dataset.index, 10));
         const selectedIndices = Explorer.getSelectedIndices();
         const lastSelected = Array.from(Explorer.getSelectedIndices()).pop();
         const start = all.indexOf(lastSelected);
@@ -961,7 +961,7 @@ function selectObjectByStableKey(stableKey) {
 function updateSelection() {
     // Update tree items - highlight selected and show staged items differently
     document.querySelectorAll('.tree-item').forEach(el => {
-        const index = parseInt(el.dataset.index);
+        const index = parseInt(el.dataset.index, 10);
         el.classList.toggle('selected', Explorer.isSelectedByIndex(index));
         el.classList.toggle('staged', state.stagedMoves.has(Explorer.getObjectKeyByIndex(index)));
     });

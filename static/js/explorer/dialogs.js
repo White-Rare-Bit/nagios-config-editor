@@ -1034,7 +1034,7 @@
         Explorer.closeActionsMenu();
         const items = document.querySelectorAll('.tree-item:not([style*="display: none"])');
         items.forEach(item => {
-            const idx = parseInt(item.dataset.index);
+            const idx = parseInt(item.dataset.index, 10);
             if (!isNaN(idx)) {Explorer.selectObjectByIndex(idx);}
         });
         Explorer.updateSelection();

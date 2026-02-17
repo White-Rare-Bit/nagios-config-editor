@@ -158,7 +158,7 @@
         state.selectedKeys.add(Explorer.getObjectKey(obj));
 
         document.querySelectorAll('.tree-item').forEach(el => {
-            const index = parseInt(el.dataset.index);
+            const index = parseInt(el.dataset.index, 10);
             el.classList.toggle('selected', Explorer.isSelectedByIndex(index));
         });
 

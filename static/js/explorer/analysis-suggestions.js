@@ -179,7 +179,7 @@
 
         if (!container || !slider) {return;}
 
-        const minObjects = parseInt(slider.value);
+        const minObjects = parseInt(slider.value, 10);
         if (sliderValue) {sliderValue.textContent = minObjects;}
 
         const filtered = state.allTemplateSuggestions.filter(s => s.count >= minObjects);
@@ -265,7 +265,7 @@
 
         if (!container || !slider) {return;}
 
-        const minMembers = parseInt(slider.value);
+        const minMembers = parseInt(slider.value, 10);
         if (sliderValue) {sliderValue.textContent = minMembers;}
 
         const filtered = state.allGroupingSuggestions.filter(s => s.count >= minMembers);

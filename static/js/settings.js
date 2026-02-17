@@ -482,8 +482,8 @@ async function saveLoggingSettings() {
     const settings = {
         enabled: document.getElementById('loggingEnabled').checked,
         log_level: document.getElementById('loggingLevel').value,
-        max_file_size_mb: parseInt(document.getElementById('loggingMaxSize').value) || 10,
-        max_backup_files: parseInt(document.getElementById('loggingMaxBackups').value) || 5
+        max_file_size_mb: parseInt(document.getElementById('loggingMaxSize').value, 10) || 10,
+        max_backup_files: parseInt(document.getElementById('loggingMaxBackups').value, 10) || 5
     };
 
     const result = await ApiClient.post('/api/settings/logging', settings, { silent: true });

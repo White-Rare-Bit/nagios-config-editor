@@ -722,7 +722,7 @@ document.addEventListener('click', function(e) {
             loadArchive(actionEl.dataset.archive);
             break;
         case 'audit-page':
-            const page = parseInt(actionEl.dataset.page);
+            const page = parseInt(actionEl.dataset.page, 10);
             if (page) {setAuditPage(page);}
             break;
     }
@@ -737,7 +737,7 @@ document.addEventListener('change', function(e) {
         auditCurrentPage = 1; // Reset to first page on filter change
         filterByType(actionEl);
     } else if (action === 'audit-page-size') {
-        const size = parseInt(actionEl.value);
+        const size = parseInt(actionEl.value, 10);
         if (size) {setAuditPageSize(size);}
     }
 });

@@ -180,8 +180,8 @@ function sortBackups(column) {
             aVal = a.dataset.date || '';
             bVal = b.dataset.date || '';
         } else if (column === SORT_COLUMNS.FILES) {
-            aVal = parseInt(a.dataset.files) || 0;
-            bVal = parseInt(b.dataset.files) || 0;
+            aVal = parseInt(a.dataset.files, 10) || 0;
+            bVal = parseInt(b.dataset.files, 10) || 0;
         }
 
         if (typeof aVal === 'number') {
@@ -338,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (actionEl) {
             const action = actionEl.dataset.action;
             if (action === 'backup-page-size') {
-                const size = parseInt(actionEl.value);
+                const size = parseInt(actionEl.value, 10);
                 if (size) {setBackupPageSize(size);}
             }
         }
@@ -370,7 +370,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (column) {sortBackups(column);}
                 break;
             case 'backup-page':
-                const page = parseInt(actionEl.dataset.page);
+                const page = parseInt(actionEl.dataset.page, 10);
                 if (page) {setBackupPage(page);}
                 break;
         }
