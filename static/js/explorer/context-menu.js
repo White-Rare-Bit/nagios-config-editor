@@ -761,10 +761,11 @@
 
     function handleDragStart(event, index) {
         // If clicking on unselected item, select just that one
+        // IMPORTANT: Don't call updateSelection() here - it causes layout changes
+        // (border-left: 3px solid on .selected) that make Chrome cancel the drag
         if (!Explorer.isSelectedByIndex(index)) {
             Explorer.clearSelection();
             Explorer.selectObjectByIndex(index);
-            Explorer.updateSelection();
         }
 
         // SIMPLE: Get selected objects by their stable keys, then look them up fresh
@@ -840,6 +841,9 @@
 
     function handleDragEnd(event) {
         Explorer.cleanupDragState();
+        // Apply visual selection after drag completes (deferred from handleDragStart
+        // to avoid layout changes that cancel the drag operation)
+        Explorer.updateSelection();
     }
 
     function handleDragOver(event) {
