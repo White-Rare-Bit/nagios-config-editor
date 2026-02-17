@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Logs - Nagios Bulk Editor{% endblock %}
+{% block body_class %} nbe-dark-page{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('static', filename='css/logs.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="page-container logs-container">
+    <!-- Left Sidebar -->
+    <div class="page-sidebar">
+        <div class="panel-header"><span class="panel-header-title">Logs</span></div>
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Log Type</div>
+            <div class="sidebar-section-content">
+                <div class="logs-tabs">
+                    <button class="logs-tab active" data-tab="audit">Audit Log</button>
+                    <button class="logs-tab" data-tab="app">Application Log</button>
+                </div>
+            </div>
+        </div>
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Filter</div>
+            <div class="sidebar-section-content">
+                <input type="text" class="form-input" id="logsSearch" placeholder="Search logs..." />
+                <div class="logs-filters" id="logsFilters">
+                    <!-- Filter chips injected by JS based on active tab -->
+                </div>
+            </div>
+        </div>
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Actions</div>
+            <div class="sidebar-section-content">
+                <button class="btn btn-secondary btn-sm btn-block" data-action="downloadLog">
+                    <i class="fa-solid fa-download"></i> Download
+                </button>
+                <button class="btn btn-danger-outline btn-sm btn-block" data-action="clearLog">
+                    <i class="fa-solid fa-trash"></i> Clear Log
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="page-main">
+        <div class="panel-header">
+            <span class="panel-header-title" id="logsTitle">Audit Log</span>
+            <span class="logs-count" id="logsCount"></span>
+        </div>
+        <div class="logs-table-container">
+            <table class="logs-table" id="logsTable">
+                <thead id="logsTableHead">
+                    <!-- Column headers injected by JS based on active tab -->
+                </thead>
+                <tbody id="logsTableBody">
+                    <!-- Rows injected by JS -->
+                </tbody>
+            </table>
+            <div class="logs-empty" id="logsEmpty" style="display:none;">
+                <i class="fa-solid fa-file-lines"></i>
+                <p>No log entries found.</p>
+            </div>
+        </div>
+        <div class="logs-footer">
+            <button class="btn btn-secondary btn-sm" id="loadMoreBtn" style="display:none;" data-action="loadMore">
+                Load More
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/logs.js') }}"></script>
+{% endblock %}
