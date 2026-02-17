@@ -162,6 +162,39 @@
     /**
      * Load staged changes from server
      */
+    function syncStagingFromData(state, data) {
+        // Object operations - dict format: {key: entry, ...}
+        if (data.pendingEdits) {
+            const validEdits = Object.entries(data.pendingEdits).filter(([key, edit]) => {
+                return edit && edit.object && edit.object.source_file;
+            });
+            state.pendingEdits = new Map(validEdits);
+        }
+        if (data.stagedMoves) {
+            state.stagedMoves = new Map(Object.entries(data.stagedMoves));
+        }
+        if (data.stagedCreations) {
+            state.stagedCreations = data.stagedCreations;
+        }
+        if (data.newFiles) {
+            state.newFiles = new Set(data.newFiles);
+        }
+        if (data.stagedObjectDeletions) {
+            state.stagedObjectDeletions = new Set(data.stagedObjectDeletions);
+        }
+
+        // File/folder operations
+        state.stagedFileCreations = data.stagedFileCreations || [];
+        state.stagedFileDeletions = data.stagedFileDeletions || [];
+        state.stagedFileMoves = data.stagedFileMoves || [];
+        state.stagedFolderCreations = data.stagedFolderCreations || [];
+        state.stagedFolderDeletions = data.stagedFolderDeletions || [];
+        state.stagedFolderMoves = data.stagedFolderMoves || [];
+
+        // Undo stack
+        state.undoStack = data.undoStack || [];
+    }
+
     Explorer.loadStagedChanges = async function(checkLockState = true) {
         const result = await ApiClient.get('/api/staging', { silent: true });
         const state = Explorer.state;
@@ -182,40 +215,9 @@
                 Explorer.updateEditingLockedUI();
             }
 
-            // Object operations - dict format: {key: entry, ...}
-            if (data.pendingEdits) {
-                const validEdits = Object.entries(data.pendingEdits).filter(([key, edit]) => {
-                    return edit && edit.object && edit.object.source_file;
-                });
-                state.pendingEdits = new Map(validEdits);
-            }
-            if (data.stagedMoves) {
-                state.stagedMoves = new Map(Object.entries(data.stagedMoves));
-            }
-            if (data.stagedCreations) {
-                state.stagedCreations = data.stagedCreations;
-            }
-            if (data.newFiles) {
-                state.newFiles = new Set(data.newFiles);
-            }
-            if (data.stagedObjectDeletions) {
-                state.stagedObjectDeletions = new Set(data.stagedObjectDeletions);
-            }
-
-            // File/folder operations
-            state.stagedFileCreations = data.stagedFileCreations || [];
-            state.stagedFileDeletions = data.stagedFileDeletions || [];
-            state.stagedFileMoves = data.stagedFileMoves || [];
-            state.stagedFolderCreations = data.stagedFolderCreations || [];
-            state.stagedFolderDeletions = data.stagedFolderDeletions || [];
-            state.stagedFolderMoves = data.stagedFolderMoves || [];
-
-            // Undo stack
-            state.undoStack = data.undoStack || [];
-
+            syncStagingFromData(state, data);
             lastStagingTimestamp = data.lastModified;
         } else {
-            // No staging data from backend - clear local staging state
             Explorer.resetStagingState();
             if (checkLockState && window.isEditingLocked) {
                 window.isEditingLocked = false;

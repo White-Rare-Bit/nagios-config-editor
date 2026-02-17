@@ -93,6 +93,33 @@
      * Populate Explorer.constants from /api/metadata response.
      * Called once at startup from data-loading.js.
      */
+    // Mapping from constants key → notification_options API key
+    const NOTIFICATION_OPTION_KEYS = [
+        'HOST_NOTIFICATION_OPTIONS', 'SERVICE_NOTIFICATION_OPTIONS',
+        'NOTIFICATION_OPTION_ATTRS',
+        'HOST_FAILURE_CRITERIA', 'SERVICE_FAILURE_CRITERIA',
+        'HOST_STALKING_OPTIONS', 'SERVICE_STALKING_OPTIONS',
+        'HOST_FLAP_DETECTION_OPTIONS', 'SERVICE_FLAP_DETECTION_OPTIONS',
+        'HOST_ESCALATION_OPTIONS', 'SERVICE_ESCALATION_OPTIONS',
+    ];
+
+    function applyNotificationOptions(c, opts) {
+        for (const key of NOTIFICATION_OPTION_KEYS) {
+            const apiKey = key.toLowerCase();
+            c[key] = opts[apiKey] || [];
+        }
+    }
+
+    function buildAttrReferenceMap(c) {
+        const nameFieldValues = new Set(Object.values(c.nameFields));
+        c.ATTR_REFERENCE_MAP = {};
+        for (const [field, type] of Object.entries(c.referenceFields)) {
+            if (!nameFieldValues.has(field) || field === 'host_name') {
+                c.ATTR_REFERENCE_MAP[field] = type;
+            }
+        }
+    }
+
     Explorer.applyMetadata = function(meta) {
         const c = Explorer.constants;
 
@@ -104,30 +131,8 @@
         c.defaultAttributes = meta.default_attributes || c.defaultAttributes;
         c.groupStructure = meta.group_structure || c.groupStructure;
 
-        // Build ATTR_REFERENCE_MAP from referenceFields (same data, used for autocomplete)
-        // Exclude fields that are also name fields (they refer to the object itself)
-        const nameFieldValues = new Set(Object.values(c.nameFields));
-        c.ATTR_REFERENCE_MAP = {};
-        for (const [field, type] of Object.entries(c.referenceFields)) {
-            // Include fields useful for autocomplete hints
-            if (!nameFieldValues.has(field) || field === 'host_name') {
-                c.ATTR_REFERENCE_MAP[field] = type;
-            }
-        }
-
-        // Notification options
-        const opts = meta.notification_options || {};
-        c.HOST_NOTIFICATION_OPTIONS = opts.host_notification_options || [];
-        c.SERVICE_NOTIFICATION_OPTIONS = opts.service_notification_options || [];
-        c.NOTIFICATION_OPTION_ATTRS = opts.notification_option_attrs || [];
-        c.HOST_FAILURE_CRITERIA = opts.host_failure_criteria || [];
-        c.SERVICE_FAILURE_CRITERIA = opts.service_failure_criteria || [];
-        c.HOST_STALKING_OPTIONS = opts.host_stalking_options || [];
-        c.SERVICE_STALKING_OPTIONS = opts.service_stalking_options || [];
-        c.HOST_FLAP_DETECTION_OPTIONS = opts.host_flap_detection_options || [];
-        c.SERVICE_FLAP_DETECTION_OPTIONS = opts.service_flap_detection_options || [];
-        c.HOST_ESCALATION_OPTIONS = opts.host_escalation_options || [];
-        c.SERVICE_ESCALATION_OPTIONS = opts.service_escalation_options || [];
+        buildAttrReferenceMap(c);
+        applyNotificationOptions(c, meta.notification_options || {});
     };
 
     /**
