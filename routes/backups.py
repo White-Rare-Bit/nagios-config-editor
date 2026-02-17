@@ -9,6 +9,7 @@ from audit_service import log_audit
 from staging_manager import StagingStatus
 
 from .helpers import (
+    format_audit_user,
     get_audit_user_identity,
     get_backup_manager,
     get_service,
@@ -44,7 +45,7 @@ def api_create_backup():
     # Write audit log entry
     log_audit(
         action="backup_created",
-        user=identity.get("userEmail", ""),
+        user=format_audit_user(identity),
         description=description,
         backup_path=os.path.basename(backup_path) if backup_path else None,
     )
@@ -95,7 +96,7 @@ def api_restore_backup(backup_name):
         # Write audit log entry
         log_audit(
             action="backup_restored",
-            user=identity.get("userEmail", ""),
+            user=format_audit_user(identity),
             backup_name=backup_name,
         )
 
@@ -120,7 +121,7 @@ def api_delete_all_backups():
         identity = get_audit_user_identity()
         log_audit(
             action="backups_deleted",
-            user=identity.get("userEmail", ""),
+            user=format_audit_user(identity),
             deleted_count=deleted_count,
         )
 
@@ -137,7 +138,7 @@ def api_delete_backup(backup_name):
         identity = get_audit_user_identity()
         log_audit(
             action="backup_deleted",
-            user=identity.get("userEmail", ""),
+            user=format_audit_user(identity),
             backup_name=backup_name,
         )
         return jsonify({"success": True})

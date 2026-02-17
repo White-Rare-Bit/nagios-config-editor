@@ -1,19 +1,6 @@
 /* Logs page — unified audit + application log viewer
    Extends shared dark-page.css layout (page-container, page-sidebar, page-main) */
 
-/* ── Sidebar: log type buttons ── */
-.logs-container .logs-type-btn {
-    margin-bottom: var(--nbe-space-xs);
-    text-align: left;
-    justify-content: flex-start;
-}
-
-.logs-container .logs-type-btn.active {
-    background: var(--nbe-dark-accent-alpha-20);
-    color: var(--nbe-dark-accent-primary);
-    border-color: var(--nbe-dark-accent-primary);
-}
-
 /* ── Sidebar: filter chips ── */
 .logs-filters {
     display: flex;
@@ -47,7 +34,36 @@
     border-color: var(--nbe-dark-accent-primary);
 }
 
-/* ── Header: tabs + count ── */
+/* ── Main content area ── */
+.logs-container .page-main,
+.logs-container .logs-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--nbe-dark-bg-primary);
+}
+
+/* ── Header ── */
+.logs-container .page-header,
+.logs-container .logs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 36px;
+    padding: 0 var(--nbe-space-lg);
+    background: var(--nbe-dark-bg-secondary);
+    border-bottom: 1px solid var(--nbe-dark-border-primary);
+}
+
+.logs-container .page-title {
+    margin: 0;
+    font-size: var(--nbe-font-size-lg);
+    font-weight: 600;
+    color: var(--nbe-dark-text-primary);
+}
+
+/* Tabs */
 .logs-container .page-tabs {
     display: flex;
     gap: var(--nbe-space-xs);
@@ -57,7 +73,7 @@
 }
 
 .logs-container .page-tab {
-    padding: var(--nbe-space-xs) var(--nbe-space-sm);
+    padding: var(--nbe-space-xs) var(--nbe-space-lg);
     background: transparent;
     border: none;
     border-radius: var(--nbe-radius-sm, 3px);
@@ -66,24 +82,32 @@
     color: var(--nbe-dark-text-secondary);
     cursor: pointer;
     transition: all var(--nbe-transition-fast);
+    position: relative;
+    overflow: hidden;
+}
+
+.logs-container .page-tab::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: currentcolor;
+    opacity: 0;
+    transition: opacity var(--nbe-transition-fast);
+    pointer-events: none;
+}
+
+.logs-container .page-tab:hover::before {
+    opacity: var(--nbe-state-hover-opacity);
 }
 
 .logs-container .page-tab:hover {
-    background: var(--nbe-dark-bg-hover);
+    color: var(--nbe-dark-accent-primary);
 }
 
 .logs-container .page-tab.active {
     background: var(--nbe-dark-accent-alpha-20);
     color: var(--nbe-dark-accent-primary);
-}
-
-.logs-header .badge-count {
-    font-size: var(--nbe-font-size-sm);
-    color: var(--nbe-dark-text-secondary);
-    background: var(--nbe-dark-bg-tertiary);
-    padding: var(--nbe-space-xs) var(--nbe-space-sm);
-    border-radius: var(--nbe-radius-md);
-    margin-left: auto;
 }
 
 /* ── Danger zone (reuses shared pattern from dark-page.css) ── */
@@ -167,14 +191,19 @@
     text-align: left;
     padding: var(--nbe-space-sm) var(--nbe-space-md);
     border-bottom: 2px solid var(--nbe-dark-border-primary);
+    border-right: 1px solid rgba(255, 255, 255, 0.15);
     white-space: nowrap;
     position: sticky;
     top: 0;
     z-index: 1;
 }
 
+.logs-table th:last-child {
+    border-right: none;
+}
+
 .logs-table tbody tr {
-    border-bottom: 1px solid var(--nbe-dark-border-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     transition: background-color 0.15s;
 }
 
@@ -190,11 +219,16 @@
     padding: var(--nbe-space-sm) var(--nbe-space-md);
     vertical-align: top;
     color: var(--nbe-dark-text-primary);
+    border-right: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.logs-table td:last-child {
+    border-right: none;
 }
 
 /* ── Column widths ── */
 .logs-col-timestamp {
-    width: 120px;
+    width: 150px;
     font-family: var(--nbe-font-mono);
     font-size: var(--nbe-typography-secondary-size);
     color: var(--nbe-dark-text-secondary);
@@ -202,16 +236,24 @@
 }
 
 .logs-col-user {
-    width: 160px;
-    max-width: 160px;
+    width: 180px;
+    max-width: 180px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.logs-col-action,
-.logs-col-level {
+.logs-user-email {
+    color: var(--nbe-dark-text-muted);
+    font-size: var(--nbe-typography-muted-size);
+}
+
+.logs-col-action {
     width: 100px;
+}
+
+.logs-col-level {
+    width: 80px;
 }
 
 .logs-col-object {
@@ -225,7 +267,7 @@
 }
 
 .logs-col-source {
-    width: 160px;
+    width: 180px;
     font-family: var(--nbe-font-mono);
     font-size: var(--nbe-typography-secondary-size);
 }
@@ -239,6 +281,7 @@
     font-size: var(--nbe-font-size-xs);
     text-transform: uppercase;
     letter-spacing: 0.03em;
+    border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .logs-badge-apply {
@@ -276,16 +319,9 @@
     color: var(--nbe-dark-validation-warning-text);
 }
 
-/* ── Transaction grouping ── */
-.logs-txn-group td:first-child {
-    border-left: 3px solid var(--nbe-dark-accent-primary);
-}
-
-.logs-txn-continuation .logs-col-timestamp,
-.logs-txn-continuation .logs-col-user,
-.logs-txn-continuation .logs-col-action {
+/* ── Empty value placeholder ── */
+.logs-empty-value {
     color: var(--nbe-dark-text-muted);
-    opacity: 0.5;
 }
 
 /* ── Empty state ── */
@@ -321,3 +357,31 @@
     color: var(--nbe-dark-text-muted);
     margin: 0 var(--nbe-space-xs);
 }
+
+.logs-detail-sep {
+    color: var(--nbe-dark-text-muted);
+    margin: 0 var(--nbe-space-2xs);
+}
+
+/* ── Object type badges (matches dep-type-badge from dependencies page) ── */
+.logs-type-badge {
+    display: inline-block;
+    font-size: var(--nbe-font-size-2xs);
+    padding: var(--nbe-space-2xs) var(--nbe-space-xs);
+    border-radius: var(--nbe-radius-sm);
+    color: var(--nbe-dark-text-primary);
+    margin-right: var(--nbe-space-sm);
+    text-transform: uppercase;
+    background: var(--nbe-dark-bg-tertiary);
+    vertical-align: middle;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.logs-type-badge--host { background: var(--nbe-dark-type-host-bg); color: var(--nbe-dark-type-host-text); }
+.logs-type-badge--hostgroup { background: var(--nbe-dark-type-hostgroup-bg); color: var(--nbe-dark-type-hostgroup-text); }
+.logs-type-badge--service { background: var(--nbe-dark-type-service-bg); color: var(--nbe-dark-type-service-text); }
+.logs-type-badge--servicegroup { background: var(--nbe-dark-type-servicegroup-bg); color: var(--nbe-dark-type-servicegroup-text); }
+.logs-type-badge--contact { background: var(--nbe-dark-type-contact-bg); color: var(--nbe-dark-type-contact-text); }
+.logs-type-badge--contactgroup { background: var(--nbe-dark-type-contactgroup-bg); color: var(--nbe-dark-type-contactgroup-text); }
+.logs-type-badge--command { background: var(--nbe-dark-type-command-bg); color: var(--nbe-dark-type-command-text); }
+.logs-type-badge--timeperiod { background: var(--nbe-dark-type-timeperiod-bg); color: var(--nbe-dark-type-timeperiod-text); }

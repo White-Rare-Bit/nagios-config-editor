@@ -8,7 +8,7 @@ All pages extend `base.html`. Override blocks: `title`, `extra_css`, `content`, 
 base.html
   ├─ explorer.html      (3-pane object explorer)
   ├─ dependencies.html   (Cytoscape graph)
-  ├─ audit_log.html
+  ├─ logs.html
   ├─ backups.html
   ├─ git.html
   ├─ settings.html

@@ -123,7 +123,7 @@
 }
 
 .git-container .page-tab {
-    padding: var(--nbe-space-xs) var(--nbe-space-sm);
+    padding: var(--nbe-space-xs) var(--nbe-space-lg);
     background: transparent;
     border: none;
     border-radius: var(--nbe-radius-sm);
@@ -132,10 +132,27 @@
     color: var(--nbe-dark-text-secondary);
     cursor: pointer;
     transition: all var(--nbe-transition-fast);
+    position: relative;
+    overflow: hidden;
+}
+
+.git-container .page-tab::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: currentcolor;
+    opacity: 0;
+    transition: opacity var(--nbe-transition-fast);
+    pointer-events: none;
+}
+
+.git-container .page-tab:hover::before {
+    opacity: var(--nbe-state-hover-opacity);
 }
 
 .git-container .page-tab:hover {
-    background: var(--nbe-dark-bg-hover);
+    color: var(--nbe-dark-accent-primary);
 }
 
 .git-container .page-tab.active {

@@ -13,17 +13,6 @@
     <div class="page-sidebar">
         <div class="panel-header"><span class="panel-header-title">Logs</span></div>
         <div class="sidebar-section">
-            <div class="sidebar-section-title">Log Type</div>
-            <div class="sidebar-section-content">
-                <button class="nbe-btn nbe-btn--dark nbe-btn--tonal nbe-btn--full logs-type-btn active" data-tab="audit">
-                    <i class="fa-solid fa-shield-halved"></i> Audit Log
-                </button>
-                <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--full logs-type-btn" data-tab="app">
-                    <i class="fa-solid fa-terminal"></i> Application Log
-                </button>
-            </div>
-        </div>
-        <div class="sidebar-section">
             <div class="sidebar-section-title">Search</div>
             <div class="sidebar-section-content">
                 <div class="form-field">
@@ -34,6 +23,19 @@
                 </div>
             </div>
         </div>
+
+        <div class="sidebar-section sidebar-section-info">
+            <div class="sidebar-section-title">Info</div>
+            <div class="sidebar-section-content">
+                <p class="sidebar-info-text">
+                    The audit log records all changes applied to Nagios configuration files, grouped by transaction.
+                </p>
+                <p class="sidebar-info-text">
+                    The application log captures internal events like backups, git operations, and parser warnings.
+                </p>
+            </div>
+        </div>
+
         <div class="sidebar-section">
             <div class="sidebar-section-title">Actions</div>
             <div class="sidebar-section-content">
@@ -60,16 +62,17 @@
     <!-- Main Content -->
     <div class="page-main logs-main">
         <div class="page-header logs-header">
-            <h2 class="page-title" id="logsTitle">Audit Log</h2>
-            <div class="page-tabs" id="logsTabs" role="tablist">
-                <button class="page-tab active" data-action="switchTab" data-tab="audit">
+            <h2 class="page-title">Log Entries</h2>
+            <div class="page-tabs" id="logsTabs" role="tablist" aria-label="Log type tabs">
+                <button class="page-tab active" data-action="switchTab" data-tab="audit"
+                        role="tab" aria-selected="true">
                     Audit
                 </button>
-                <button class="page-tab" data-action="switchTab" data-tab="app">
+                <button class="page-tab" data-action="switchTab" data-tab="app"
+                        role="tab" aria-selected="false">
                     Application
                 </button>
             </div>
-            <span class="badge-count" id="logsCount"></span>
         </div>
         <div class="logs-table-container">
             <table class="logs-table" id="logsTable" role="grid" aria-label="Log entries">

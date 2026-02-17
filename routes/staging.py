@@ -14,6 +14,7 @@ from nagios_model import NAME_FIELDS
 from staging_manager import UNDO_HANDLERS, OperationType, UndoKeyError
 
 from .helpers import (
+    format_audit_user,
     get_backup_manager,
     get_config,
     get_config_path,
@@ -837,7 +838,10 @@ def _write_apply_audit_log(staging_data, session_id, all_details, errors, log):
 
     """
     txn = uuid.uuid4().hex[:8]
-    user = staging_data.get("userEmail", "")
+    user = format_audit_user(
+        name=staging_data.get("userName", ""),
+        email=staging_data.get("userEmail", ""),
+    )
 
     try:
         for phase_key, audit_key in _PHASE_TO_AUDIT_KEY.items():
@@ -853,7 +857,7 @@ def _write_apply_audit_log(staging_data, session_id, all_details, errors, log):
                             field=change.get("key", ""),
                             op=change.get("type", "modify"),
                             from_val=change.get("from", ""),
-                            to_val=change.get("to", ""),
+                            to_val=change.get("to", change.get("value", "")),
                         )
                 elif audit_key == "object_creations":
                     log_audit(
@@ -1841,7 +1845,7 @@ def api_staging_commit():
         get_service().reload()
 
         # Log to audit file
-        log_audit(action="staging_commit", user=user_email)
+        log_audit(action="staging_commit", user=format_audit_user(name=user_name, email=user_email))
 
         return jsonify({"success": True})
 

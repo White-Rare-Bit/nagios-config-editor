@@ -188,7 +188,7 @@
                                 <div class="cleanup-title">${Explorer.escapeHtml(title)}</div>
                                 <div class="cleanup-desc">${Explorer.escapeHtml(desc)}</div>
                             </div>
-                            <button class="nbe-btn nbe-btn--dark nbe-btn--xs" onclick="event.stopPropagation(); Explorer.resolveGroupedError(${idx})">Create ${group.objectType}</button>
+                            <button class="nbe-btn nbe-btn--dark nbe-btn--tonal nbe-btn--xs" onclick="event.stopPropagation(); Explorer.resolveGroupedError(${idx})">Create ${group.objectType}</button>
                         </div>
                     `;
                 } else {

@@ -9,6 +9,7 @@ from file_operations import is_safe_path
 from staging_manager import StagingStatus
 
 from .helpers import (
+    format_audit_user,
     get_audit_user_identity,
     get_config_path,
     get_git_service,
@@ -80,9 +81,10 @@ def _validate_commit_files(files, config_path):
 
 def _write_commit_audit_log(commit_hash, message, user_name, user_email, initialized):
     """Write audit log entry for a git commit."""
+    user = format_audit_user(name=user_name, email=user_email)
     if initialized:
         log_audit(
-            action="git_initialized", user=user_email,
+            action="git_initialized", user=user,
             commit_hash=commit_hash, message=message,
         )
         return
@@ -95,7 +97,7 @@ def _write_commit_audit_log(commit_hash, message, user_name, user_email, initial
         kwargs["restoreType"] = staging.get("restoreType", "")
         kwargs["restoreFrom"] = staging.get("restoreFrom", "")
 
-    log_audit(action="git_commit", user=user_email, **kwargs)
+    log_audit(action="git_commit", user=user, **kwargs)
 
 
 @bp.route("/api/git/identity", methods=["GET"])
@@ -403,7 +405,7 @@ def api_git_discard_all():
         # Write audit log entry for discard
         identity = get_audit_user_identity()
         log_audit(
-            action="git_discarded", user=identity.get("userEmail", ""),
+            action="git_discarded", user=format_audit_user(identity),
             description="Discarded all uncommitted changes",
         )
 
@@ -447,7 +449,7 @@ def api_git_clear_history():
 
         # Write audit log entry for clear history
         log_audit(
-            action="git_clear_history", user=user_email,
+            action="git_clear_history", user=format_audit_user(name=user_name, email=user_email),
             description="Cleared all git history and reinitialized repository",
         )
 
@@ -536,7 +538,7 @@ def api_git_restore():
         # Write audit log entry for git restore
         audit_identity = get_audit_user_identity()
         log_audit(
-            action="git_restored", user=audit_identity.get("userEmail", ""),
+            action="git_restored", user=format_audit_user(audit_identity),
             commit_hash=commit_hash,
             commit_message=result.data["message"],
             deleted_files_count=len(result.data["deleted_files"]),

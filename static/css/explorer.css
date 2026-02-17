@@ -3590,17 +3590,31 @@
 .add-attr-btn {
     margin-top: var(--nbe-space-md);
     padding: var(--nbe-space-sm) var(--nbe-space-lg);
-    border: 1px dashed var(--nbe-dark-border-primary);
-    background: none;
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    background: var(--nbe-dark-accent-alpha-20);
     border-radius: var(--nbe-radius-md);
-    color: var(--nbe-dark-text-secondary);
+    color: var(--nbe-dark-accent-primary);
     cursor: pointer;
     font-size: var(--nbe-typography-body-size);
     font-family: var(--nbe-font-mono);
+    position: relative;
+    overflow: hidden;
+    transition: all var(--nbe-transition-fast);
 }
 
-.add-attr-btn:hover {
-    background: var(--nbe-dark-accent-alpha-10);
+.add-attr-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: currentcolor;
+    opacity: 0;
+    transition: opacity var(--nbe-transition-fast);
+    pointer-events: none;
+}
+
+.add-attr-btn:hover::before {
+    opacity: var(--nbe-state-hover-opacity);
 }
 
 /* Inheritance Section Styles */

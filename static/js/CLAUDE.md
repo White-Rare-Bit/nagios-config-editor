@@ -19,7 +19,7 @@ All page modules use IIFE pattern. Explorer modules in `explorer/` (see `explore
 
 | File | What |
 |------|------|
-| `audit-log.js` | Audit log filtering, pagination |
+| `logs.js` | Unified log viewer: audit + app tabs, filtering, pagination |
 | `backups.js` | Backup list/restore/delete |
 | `bulk-rename.js` | Pattern-based bulk rename with preview |
 | `dependencies.js` | Cytoscape graph visualization |

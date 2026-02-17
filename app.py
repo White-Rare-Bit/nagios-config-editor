@@ -82,6 +82,9 @@ def _setup_logging(server_config, log_dir_override=None):
     audit_logger.addHandler(audit_handler)
     audit_logger.propagate = False  # Don't duplicate audit lines into app.log
 
+    # Suppress werkzeug request logs from app.log (floods with GET /api/... lines)
+    logging.getLogger("werkzeug").propagate = False
+
     # Store config for settings page and log viewer
     app.extensions["log_dir"] = log_dir
     app.extensions["log_config"] = {

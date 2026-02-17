@@ -116,3 +116,17 @@ def get_audit_user_identity():
         "userName": user_name,
         "userEmail": user_email,
     }
+
+
+def format_audit_user(identity=None, *, name=None, email=None):
+    """Format user identity for audit log entries as 'Name <email>'.
+
+    Accepts either an identity dict (from get_audit_user_identity) or
+    explicit name/email kwargs.
+    """
+    if identity:
+        name = name or identity.get("userName")
+        email = email or identity.get("userEmail")
+    if name and email:
+        return f"{name} <{email}>"
+    return email or name or ""

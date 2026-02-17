@@ -4,19 +4,21 @@ Writes NagiosObject instances back to configuration files.
 Handles formatting and maintains consistency.
 """
 
+import logging
 import os
 import tempfile
 from pathlib import Path
 
 from nagios_model import NagiosObject, format_object_block
 
+logger = logging.getLogger(__name__)
+
 
 class NagiosConfigWriter:
     """Writer for Nagios configuration files."""
 
-    def __init__(self, indent: str = "    ", op_logger=None):
+    def __init__(self, indent: str = "    "):
         self.indent = indent
-        self._op_logger = op_logger
 
     def object_to_string(self, obj: NagiosObject) -> str:
         """Convert a NagiosObject to its config file string representation."""
@@ -68,8 +70,7 @@ class NagiosConfigWriter:
 
     def write_file(self, filepath: str, objects: list[NagiosObject]) -> None:
         """Write objects to a configuration file atomically."""
-        if self._op_logger:
-            self._op_logger.info("writer", "write_file", params={"filepath": filepath, "object_count": len(objects)})  # noqa: PLE1205
+        logger.info("write_file: %s (%d objects)", filepath, len(objects))
         content = self.objects_to_string(objects)
         path = Path(filepath)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -89,19 +90,13 @@ class NagiosConfigWriter:
             try:
                 os.unlink(temp_path)
             except OSError as cleanup_err:
-                # Log temp file cleanup failure for manual intervention
-                if self._op_logger:
-                    self._op_logger.exception("writer", "write_file",  # noqa: PLE1205
-                        params={"filepath": filepath, "temp_file": temp_path},
-                        error=f"DISK_LEAK: Temp file cleanup failed: {cleanup_err}")
-            if self._op_logger:
-                self._op_logger.exception("writer", "write_file", params={"filepath": filepath}, error=str(e))  # noqa: PLE1205
+                logger.exception("DISK_LEAK: Temp file cleanup failed for %s: %s", temp_path, cleanup_err)
+            logger.exception("write_file failed for %s", filepath)
             raise
 
     def write_objects_to_original_files(self, objects: list[NagiosObject]) -> dict[str, int]:
         """Write objects back to their original source files."""
-        if self._op_logger:
-            self._op_logger.info("writer", "write_objects_to_original_files", params={"total_objects": len(objects)})  # noqa: PLE1205
+        logger.info("write_objects_to_original_files: %d objects", len(objects))
         # Group objects by source file
         by_file: dict[str, list[NagiosObject]] = {}
         for obj in objects:

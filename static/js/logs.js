@@ -2,8 +2,8 @@
  * Logs page — unified audit + application log viewer.
  *
  * Tabs switch between audit and app logs. Each tab has its own column layout,
- * filter chips, and API endpoint. Audit tab groups rows by transaction ID.
- * Client-side pagination via shared renderPagination component.
+ * filter chips, and API endpoint. Client-side pagination via shared
+ * renderPagination component.
  */
 
 /* global ApiClient, showToast, showConfirmDialog, escapeHtml, renderPagination */
@@ -27,10 +27,12 @@ const TAB_CONFIG = {
         clearUrl: '/api/logs/audit/clear',
         columns: ['Timestamp', 'User', 'Action', 'Object', 'Details'],
         filters: [
-            { key: 'apply', label: 'Apply' },
-            { key: 'git_commit', label: 'Git' },
-            { key: 'backup_created', label: 'Backup' },
-            { key: 'apply_error', label: 'Errors' },
+            { key: 'create', label: 'Creates', field: 'op' },
+            { key: 'modify', label: 'Edits', field: 'op' },
+            { key: 'move', label: 'Moves', field: 'op' },
+            { key: 'delete', label: 'Deletes', field: 'op' },
+            { key: 'git', label: 'Git', field: 'action', prefix: true },
+            { key: 'backup', label: 'Backups', field: 'action', prefix: true },
         ],
         filterParam: 'action',
         renderRow: renderAuditRow,
@@ -54,22 +56,10 @@ const TAB_CONFIG = {
 
 // ── Initialization ─────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-    initTabs();
     initSearch();
     renderFilters();
     loadEntries();
 });
-
-function initTabs() {
-    // Sidebar type buttons
-    document.querySelectorAll('.logs-type-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const tabName = btn.dataset.tab;
-            if (tabName === activeTab) {return;}
-            switchTab(tabName);
-        });
-    });
-}
 
 function initSearch() {
     const input = document.getElementById('logsSearch');
@@ -92,23 +82,12 @@ function switchTab(tabName) {
     searchQuery = '';
     activeFilters.clear();
 
-    // Update sidebar type buttons
-    document.querySelectorAll('.logs-type-btn').forEach(btn => {
-        const isActive = btn.dataset.tab === tabName;
-        btn.classList.toggle('active', isActive);
-        // Switch between tonal (active) and outlined (inactive)
-        btn.classList.toggle('nbe-btn--tonal', isActive);
-        btn.classList.toggle('nbe-btn--outlined', !isActive);
-    });
-
     // Update header tabs
     document.querySelectorAll('.page-tab[data-tab]').forEach(t => {
-        t.classList.toggle('active', t.dataset.tab === tabName);
+        const isActive = t.dataset.tab === tabName;
+        t.classList.toggle('active', isActive);
+        t.setAttribute('aria-selected', isActive);
     });
-
-    // Update title
-    const titleEl = document.getElementById('logsTitle');
-    if (titleEl) {titleEl.textContent = TAB_CONFIG[tabName].title;}
 
     // Clear search
     const input = document.getElementById('logsSearch');
@@ -170,13 +149,15 @@ function renderTable() {
 
     // Apply filter chips
     if (activeFilters.size > 0) {
-        const param = config.filterParam;
+        const filterDefs = config.filters.filter(f => activeFilters.has(f.key));
         filtered = filtered.filter(e => {
-            const val = (e[param] || '').toLowerCase();
-            for (const f of activeFilters) {
-                if (val === f.toLowerCase()) {return true;}
-                // Match action prefixes (e.g. "git_commit" matches "git_*")
-                if (val.startsWith(f.toLowerCase())) {return true;}
+            for (const def of filterDefs) {
+                const val = (e[def.field || config.filterParam] || '').toLowerCase();
+                if (def.prefix) {
+                    if (val.startsWith(def.key.toLowerCase())) {return true;}
+                } else {
+                    if (val === def.key.toLowerCase()) {return true;}
+                }
             }
             return false;
         });
@@ -192,18 +173,15 @@ function renderTable() {
 
     const tbody = document.getElementById('logsTableBody');
     const empty = document.getElementById('logsEmpty');
-    const countEl = document.getElementById('logsCount');
 
     if (!filtered.length) {
         if (tbody) {tbody.innerHTML = '';}
         if (empty) {empty.style.display = '';}
-        if (countEl) {countEl.textContent = '';}
         renderLogPagination(0);
         return;
     }
 
     if (empty) {empty.style.display = 'none';}
-    if (countEl) {countEl.textContent = `(${filtered.length} entries)`;}
 
     // Paginate
     const totalItems = filtered.length;
@@ -254,43 +232,36 @@ function renderTableHead(columns) {
     thead.innerHTML = '<tr>' + columns.map(col => `<th>${col}</th>`).join('') + '</tr>';
 }
 
-// ── Audit row rendering with transaction grouping ──────────────────────────
+// ── Audit row rendering ─────────────────────────────────────────────────────
 function renderAuditRows(tbody, pageEntries) {
-    let lastTxn = null;
-
     pageEntries.forEach(entry => {
-        const txn = entry.txn || '';
-        const isContinuation = txn && txn === lastTxn;
-        const isGroupStart = txn && txn !== lastTxn;
-        lastTxn = txn;
-
-        const classes = [];
-        if (isGroupStart || isContinuation) {classes.push('logs-txn-group');}
-        if (isContinuation) {classes.push('logs-txn-continuation');}
-
-        tbody.insertAdjacentHTML('beforeend', renderAuditRow(entry, classes));
+        tbody.insertAdjacentHTML('beforeend', renderAuditRow(entry));
     });
 }
 
-function renderAuditRow(entry, extraClasses) {
-    const classes = (extraClasses || []).join(' ');
+function renderAuditRow(entry) {
     const action = entry.action || '';
     const badgeClass = getActionBadgeClass(action);
 
-    // Build object cell
+    // Build object cell with type badge
     let objectCell = '';
     if (entry.type && entry.name) {
-        objectCell = `<span class="logs-detail-field">${escapeHtml(entry.type)}</span> ${escapeHtml(entry.name)}`;
+        const typeLower = entry.type.toLowerCase();
+        objectCell = `<span class="logs-type-badge logs-type-badge--${typeLower}">${escapeHtml(entry.type.toUpperCase())}</span> ${escapeHtml(entry.name)}`;
     } else if (entry.path) {
-        objectCell = escapeHtml(entry.path);
+        objectCell = escapeHtml(truncatePath(entry.path));
     }
 
     // Build details cell
     let detailsCell = buildDetailsCell(entry);
 
-    return `<tr class="${classes}">
+    const userCell = entry.user
+        ? formatUserCell(entry.user)
+        : '<span class="logs-empty-value">&mdash;</span>';
+
+    return `<tr>
         <td class="logs-col-timestamp">${escapeHtml(entry.timestamp || '')}</td>
-        <td class="logs-col-user">${escapeHtml(entry.user || '')}</td>
+        <td class="logs-col-user">${userCell}</td>
         <td class="logs-col-action"><span class="logs-badge ${badgeClass}">${escapeHtml(action)}</span></td>
         <td class="logs-col-object">${objectCell}</td>
         <td class="logs-col-details">${detailsCell}</td>
@@ -300,35 +271,60 @@ function renderAuditRow(entry, extraClasses) {
 function buildDetailsCell(entry) {
     const op = entry.op || '';
 
-    if (op === 'modify' && entry.field) {
+    // Field change (modify/add) with field name
+    if ((op === 'modify' || op === 'add') && entry.field) {
         const from = entry.from != null ? entry.from : '';
         const to = entry.to != null ? entry.to : '';
-        return `<span class="logs-detail-field">${escapeHtml(entry.field)}</span>: `
-            + `<span class="logs-detail-from">${escapeHtml(from)}</span>`
-            + `<span class="logs-detail-arrow">&rarr;</span>`
-            + `<span class="logs-detail-to">${escapeHtml(to)}</span>`;
+        let html = `<span class="logs-detail-field">${escapeHtml(entry.field)}</span>: `;
+        if (from) {
+            html += `<span class="logs-detail-from">${escapeHtml(from)}</span>`
+                + `<span class="logs-detail-arrow">&rarr;</span>`;
+        }
+        if (to) {
+            html += `<span class="logs-detail-to">${escapeHtml(to)}</span>`;
+        }
+        return html;
     }
 
+    // Move with from → to paths
     if (op === 'move') {
-        const from = entry.from || '';
-        const to = entry.to || '';
+        const from = truncatePath(entry.from || '');
+        const to = truncatePath(entry.to || '');
         return `<span class="logs-detail-op">move</span> `
             + `<span class="logs-detail-from">${escapeHtml(from)}</span>`
             + `<span class="logs-detail-arrow">&rarr;</span>`
             + `<span class="logs-detail-to">${escapeHtml(to)}</span>`;
     }
 
+    // Other known op without field detail
     if (op) {
         return `<span class="logs-detail-op">${escapeHtml(op)}</span>`;
     }
 
-    // Fallback: show any extra fields
+    // Fallback: show extra fields as structured key: value pairs
     const skip = new Set(['timestamp', 'txn', 'user', 'action', 'type', 'name', 'op', 'field', 'from', 'to', 'path']);
-    const extra = Object.entries(entry)
+    const pairs = Object.entries(entry)
         .filter(([k]) => !skip.has(k))
-        .map(([k, v]) => `${escapeHtml(k)}=${escapeHtml(String(v))}`)
-        .join(' ');
-    return extra ? `<span class="logs-detail-field">${extra}</span>` : '';
+        .map(([k, v]) =>
+            `<span class="logs-detail-field">${escapeHtml(k)}</span>: ${escapeHtml(truncatePath(String(v)))}`
+        );
+    return pairs.join('<span class="logs-detail-sep"> · </span>');
+}
+
+function truncatePath(str) {
+    // Only truncate strings that look like absolute paths with 4+ segments
+    if (!str.startsWith('/') || str.split('/').length < 5) {return str;}
+    const parts = str.split('/');
+    return '…/' + parts.slice(-3).join('/');
+}
+
+function formatUserCell(user) {
+    // Parse "Name <email>" format, fall back to plain display
+    const match = user.match(/^(.+?)\s*<(.+)>$/);
+    if (match) {
+        return `${escapeHtml(match[1])} <span class="logs-user-email">${escapeHtml(match[2])}</span>`;
+    }
+    return escapeHtml(user);
 }
 
 function getActionBadgeClass(action) {

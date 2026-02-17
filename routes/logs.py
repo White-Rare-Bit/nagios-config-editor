@@ -4,7 +4,7 @@ import logging
 import os
 import re
 
-from flask import Blueprint, current_app, jsonify, request, send_file
+from flask import Blueprint, current_app, jsonify, send_file
 
 bp = Blueprint("logs", __name__)
 logger = logging.getLogger(__name__)
@@ -71,10 +71,10 @@ def parse_app_line(line):
     }
 
 
-def _read_log_entries(log_path, parser_fn, limit=100, offset=0, filter_key=None, filter_value=None):
-    """Read and parse log entries from a .log file.
+def _read_log_entries(log_path, parser_fn):
+    """Read and parse all log entries from a .log file.
 
-    Returns entries in reverse order (newest first).
+    Returns entries in reverse order (newest first) and the total parsed count.
     """
     if not os.path.exists(log_path):
         return [], 0
@@ -85,47 +85,26 @@ def _read_log_entries(log_path, parser_fn, limit=100, offset=0, filter_key=None,
     except OSError:
         return [], 0
 
-    total = len(lines)
     entries = []
-    skipped = 0
-
     for line in reversed(lines):
         entry = parser_fn(line)
-        if entry is None:
-            continue
-        if filter_key and filter_value:
-            if entry.get(filter_key, "").upper() != filter_value.upper():
-                continue
-        if skipped < offset:
-            skipped += 1
-            continue
-        entries.append(entry)
-        if len(entries) >= limit:
-            break
+        if entry is not None:
+            entries.append(entry)
 
-    return entries, total
+    return entries, len(entries)
 
 
 @bp.route("/api/logs/audit", methods=["GET"])
 def api_get_audit_logs():
-    """Get parsed audit log entries."""
-    limit = request.args.get("limit", 100, type=int)
-    offset = request.args.get("offset", 0, type=int)
-    action_filter = request.args.get("action", "")
-
+    """Get all parsed audit log entries (frontend handles pagination)."""
     log_path = os.path.join(_get_log_dir(), "audit.log")
-    entries, total = _read_log_entries(
-        log_path, parse_audit_line, limit, offset,
-        filter_key="action" if action_filter else None,
-        filter_value=action_filter or None,
-    )
+    entries, total = _read_log_entries(log_path, parse_audit_line)
 
     return jsonify({
         "success": True,
         "data": {
             "entries": entries,
             "total": total,
-            "has_more": offset + len(entries) < total,
         },
     })
 
@@ -153,24 +132,15 @@ def api_clear_audit_log():
 
 @bp.route("/api/logs/app", methods=["GET"])
 def api_get_app_logs():
-    """Get parsed application log entries."""
-    limit = request.args.get("limit", 100, type=int)
-    offset = request.args.get("offset", 0, type=int)
-    level_filter = request.args.get("level", "")
-
+    """Get all parsed application log entries (frontend handles pagination)."""
     log_path = os.path.join(_get_log_dir(), "app.log")
-    entries, total = _read_log_entries(
-        log_path, parse_app_line, limit, offset,
-        filter_key="level" if level_filter else None,
-        filter_value=level_filter or None,
-    )
+    entries, total = _read_log_entries(log_path, parse_app_line)
 
     return jsonify({
         "success": True,
         "data": {
             "entries": entries,
             "total": total,
-            "has_more": offset + len(entries) < total,
         },
     })
 

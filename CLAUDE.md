@@ -56,8 +56,7 @@ All service methods return `OperationResult(success: bool, error: str = None, da
 | `file_operations.py` | Atomic file ops, path safety |
 | `git_service.py` | Git wrapper, retry logic |
 | `validator.py` | nagios -v validation |
-| `operation_logger.py` | Structured JSON logging |
-| `audit_service.py` | Audit log writer |
+| `audit_service.py` | JSON audit log (append-only JSONL) |
 
 ## Domain Metadata
 

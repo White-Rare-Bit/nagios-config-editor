@@ -828,15 +828,15 @@ const CLEANUP_GROUP_CONFIG = {
 
 function renderCleanupItemButtons(s, i) {
     if (s.type === 'duplicate') {
-        return `<button class="nbe-btn nbe-btn--dark nbe-btn--xs" onclick="event.stopPropagation(); Explorer.fixDuplicate(${i})">Resolve</button>`;
+        return `<button class="nbe-btn nbe-btn--dark nbe-btn--tonal nbe-btn--xs" onclick="event.stopPropagation(); Explorer.fixDuplicate(${i})">Resolve</button>`;
     }
     if (s.type === 'long_host_list') {
-        return `<button class="nbe-btn nbe-btn--dark nbe-btn--xs" onclick="event.stopPropagation(); Explorer.fixLongHostList(${i})">Create Hostgroup</button>`;
+        return `<button class="nbe-btn nbe-btn--dark nbe-btn--tonal nbe-btn--xs" onclick="event.stopPropagation(); Explorer.fixLongHostList(${i})">Create Hostgroup</button>`;
     }
     if (s.issueData) {
         const resolveInfo = Explorer.getIssueResolveInfo(s.issueData);
         if (resolveInfo) {
-            return `<button class="nbe-btn nbe-btn--dark nbe-btn--xs" onclick="event.stopPropagation(); Explorer.resolveCleanupIssue(${i})">Create ${resolveInfo.objectType}</button>`;
+            return `<button class="nbe-btn nbe-btn--dark nbe-btn--tonal nbe-btn--xs" onclick="event.stopPropagation(); Explorer.resolveCleanupIssue(${i})">Create ${resolveInfo.objectType}</button>`;
         }
     }
     if (s.action === 'delete') {
