@@ -1,5 +1,5 @@
 // Shared pagination component
-// Used by: backups.js, audit-log.js, git.js
+// Used by: backups.js, logs.js, git.js
 
 /**
  * Renders pagination controls HTML.
