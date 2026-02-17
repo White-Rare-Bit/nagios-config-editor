@@ -397,10 +397,12 @@
         background-color: var(--nbe-dark-prose-highlight);
         box-shadow: inset 3px 0 0 var(--nbe-dark-accent-primary);
     }
+
     70% {
         background-color: var(--nbe-dark-prose-highlight-fade);
         box-shadow: inset 3px 0 0 var(--nbe-dark-accent-primary);
     }
+
     100% {
         background-color: transparent;
         box-shadow: none;

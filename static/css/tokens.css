@@ -6,26 +6,29 @@
 
 /* Bundled Web Fonts - ensures consistent rendering on Ubuntu 22.04+/RHEL 8+ */
 @font-face {
-    font-family: 'Inter';
+    font-family: Inter;
     font-style: normal;
     font-weight: 400;
     font-display: swap;
     src: url('../vendor/fonts/Inter-Regular.woff2') format('woff2');
 }
+
 @font-face {
-    font-family: 'Inter';
+    font-family: Inter;
     font-style: normal;
     font-weight: 500;
     font-display: swap;
     src: url('../vendor/fonts/Inter-Medium.woff2') format('woff2');
 }
+
 @font-face {
-    font-family: 'Inter';
+    font-family: Inter;
     font-style: normal;
     font-weight: 600;
     font-display: swap;
     src: url('../vendor/fonts/Inter-SemiBold.woff2') format('woff2');
 }
+
 @font-face {
     font-family: 'JetBrains Mono';
     font-style: normal;
@@ -45,15 +48,12 @@
     --nbe-success: #2E7D32;
     --nbe-success-light: #E8F5E9;
     --nbe-success-border: #A5D6A7;
-
     --nbe-warning: #E65100;
     --nbe-warning-light: #FFF3E0;
     --nbe-warning-border: #FFCC80;
-
     --nbe-danger: #C62828;
     --nbe-danger-light: #FFEBEE;
     --nbe-danger-border: #EF9A9A;
-
     --nbe-info: #1565C0;
     --nbe-info-light: #E3F2FD;
     --nbe-info-border: #90CAF9;
@@ -62,13 +62,13 @@
     --nbe-text-primary: #212121;
     --nbe-text-secondary: #616161;
     --nbe-text-muted: #757575;
-    --nbe-text-inverse: #FFFFFF;
+    --nbe-text-inverse: #FFF;
 
     /* ---- Backgrounds ---- */
     --nbe-bg-page: #FAFAFA;
-    --nbe-bg-surface: #FFFFFF;
+    --nbe-bg-surface: #FFF;
     --nbe-bg-subtle: #F5F5F5;
-    --nbe-bg-hover: #EEEEEE;
+    --nbe-bg-hover: #EEE;
     --nbe-bg-selected: #E3F2FD;
     --nbe-bg-dark: #455A64;
     --nbe-bg-zebra: #F5F5F5;
@@ -78,20 +78,20 @@
 
     /* ---- Borders ---- */
     --nbe-border: #E0E0E0;
-    --nbe-border-light: #EEEEEE;
+    --nbe-border-light: #EEE;
     --nbe-border-lighter: #F5F5F5;
     --nbe-border-focus: #1976D2;
 
     /* ---- Focus Ring ---- */
-    --nbe-focus-ring: 0 0 0 2px rgba(25, 118, 210, 0.25);
-    --nbe-focus-ring-inset: inset 0 0 0 2px rgba(25, 118, 210, 0.25);
+    --nbe-focus-ring: 0 0 0 2px rgb(25 118 210 / 25%);
+    --nbe-focus-ring-inset: inset 0 0 0 2px rgb(25 118 210 / 25%);
 
     /* ---- Shadows ---- */
-    --nbe-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.06);
-    --nbe-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
-    --nbe-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
-    --nbe-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.15);
-    --nbe-shadow-overlay: 0 8px 32px rgba(0, 0, 0, 0.25);
+    --nbe-shadow-xs: 0 1px 2px rgb(0 0 0 / 6%);
+    --nbe-shadow-sm: 0 2px 8px rgb(0 0 0 / 8%);
+    --nbe-shadow-md: 0 4px 12px rgb(0 0 0 / 10%);
+    --nbe-shadow-lg: 0 8px 32px rgb(0 0 0 / 15%);
+    --nbe-shadow-overlay: 0 8px 32px rgb(0 0 0 / 25%);
 
     /* MD3 Tonal Elevation */
     --nbe-surface-tint: var(--nbe-primary);
@@ -99,7 +99,6 @@
     --nbe-surface-at-2: color-mix(in srgb, var(--nbe-surface-tint) 8%, var(--nbe-bg-surface));
     --nbe-surface-at-3: color-mix(in srgb, var(--nbe-surface-tint) 11%, var(--nbe-bg-surface));
     --nbe-surface-at-5: color-mix(in srgb, var(--nbe-surface-tint) 14%, var(--nbe-bg-surface));
-
     --nbe-dark-surface-tint: #c0c0c0;
     --nbe-dark-surface-at-1: color-mix(in srgb, var(--nbe-dark-surface-tint) 3%, var(--nbe-dark-bg-primary));
     --nbe-dark-surface-at-2: color-mix(in srgb, var(--nbe-dark-surface-tint) 5%, var(--nbe-dark-bg-primary));
@@ -107,10 +106,13 @@
     --nbe-dark-surface-at-5: color-mix(in srgb, var(--nbe-dark-surface-tint) 14%, var(--nbe-dark-bg-primary));
 
     /* ---- Typography ---- */
+
     /* Inter bundled for cross-platform consistency; system fonts as fallback */
-    --nbe-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --nbe-font-sans: 'Inter', -apple-system, blinkmacsystemfont, 'Segoe UI', roboto, sans-serif;
+
     /* JetBrains Mono bundled for code; system mono fonts as fallback */
     --nbe-font-mono: 'JetBrains Mono', 'SF Mono', 'Consolas', 'Ubuntu Mono', monospace;
+
     /* 8px for Font Awesome icons - maintains proportion with 10px text in collapse toggles */
     --nbe-font-size-3xs: 8px;
     --nbe-font-size-2xs: 9px;
@@ -122,6 +124,7 @@
     --nbe-font-size-lg: 16px;
     --nbe-font-size-xl: 18px;
     --nbe-font-size-2xl: 20px;
+
     /* Icon sizes for decorative elements and empty states */
     --nbe-font-size-icon-sm: 24px;
     --nbe-font-size-icon-md: 32px;
@@ -143,48 +146,38 @@
     --nbe-typography-h1-size: var(--nbe-font-size-2xl);
     --nbe-typography-h1-weight: 600;
     --nbe-typography-h1-line-height: var(--nbe-line-height-tight);
-
     --nbe-typography-h2-size: var(--nbe-font-size-lg);
     --nbe-typography-h2-weight: 600;
     --nbe-typography-h2-line-height: var(--nbe-line-height-tight);
-
     --nbe-typography-h3-size: var(--nbe-font-size-md);
     --nbe-typography-h3-weight: 600;
+
     /* Uses normal line-height (1.5) for token scale consistency */
     --nbe-typography-h3-line-height: var(--nbe-line-height-normal);
-
     --nbe-typography-label-size: var(--nbe-font-size-sm);
     --nbe-typography-label-weight: 600;
     --nbe-typography-label-line-height: var(--nbe-line-height-normal);
-
     --nbe-typography-body-size: var(--nbe-font-size-base);
     --nbe-typography-body-weight: 400;
     --nbe-typography-body-line-height: var(--nbe-line-height-normal);
-
     --nbe-typography-secondary-size: var(--nbe-font-size-sm);
     --nbe-typography-secondary-weight: 400;
     --nbe-typography-secondary-line-height: var(--nbe-line-height-normal);
-
     --nbe-typography-muted-size: var(--nbe-font-size-xs);
     --nbe-typography-muted-weight: 400;
     --nbe-typography-muted-line-height: var(--nbe-line-height-normal);
-
     --nbe-typography-code-size: var(--nbe-font-size-sm);
     --nbe-typography-code-weight: 400;
     --nbe-typography-code-line-height: var(--nbe-line-height-relaxed);
-
     --nbe-typography-badge-size: var(--nbe-font-size-xs);
     --nbe-typography-badge-weight: 600;
     --nbe-typography-badge-line-height: var(--nbe-line-height-tight);
-
     --nbe-typography-button-size: var(--nbe-font-size-base);
     --nbe-typography-button-weight: 500;
     --nbe-typography-button-line-height: 1;
-
     --nbe-typography-button-sm-size: var(--nbe-font-size-sm);
     --nbe-typography-button-sm-weight: 500;
     --nbe-typography-button-sm-line-height: 1;
-
     --nbe-typography-input-size: var(--nbe-font-size-base);
     --nbe-typography-input-weight: 400;
     --nbe-typography-input-line-height: var(--nbe-line-height-normal);
@@ -233,10 +226,15 @@
        Usage: @media (max-width: 768px) or @media (min-width: 769px)
        These are documented here but used directly in media queries since
        CSS custom properties cannot be used in media query conditions */
+
     /* --nbe-breakpoint-sm: 576px;   Small devices (phones) */
+
     /* --nbe-breakpoint-md: 768px;   Medium devices (tablets) */
+
     /* --nbe-breakpoint-lg: 992px;   Large devices (desktops) */
+
     /* --nbe-breakpoint-xl: 1200px;  Extra large devices */
+
     /* --nbe-breakpoint-2xl: 1400px; Extra extra large */
 
     /* ---- Transitions ---- */
@@ -250,41 +248,41 @@
     --nbe-state-pressed-opacity: 0.1;
 
     /* ---- Opacity/Alpha Overlays ---- */
-    --nbe-overlay-dark: rgba(0, 0, 0, 0.5);
-    --nbe-overlay-darker: rgba(0, 0, 0, 0.6);
-    --nbe-overlay-darkest: rgba(0, 0, 0, 0.7);
-    --nbe-overlay-terminal: rgba(0, 0, 0, 0.75);
-    --nbe-overlay-light: rgba(255, 255, 255, 0.9);
-    --nbe-overlay-light-subtle: rgba(255, 255, 255, 0.92);
-    --nbe-white-alpha-10: rgba(255, 255, 255, 0.1);
-    --nbe-white-alpha-15: rgba(255, 255, 255, 0.15);
-    --nbe-white-alpha-20: rgba(255, 255, 255, 0.2);
-    --nbe-white-alpha-25: rgba(255, 255, 255, 0.25);
-    --nbe-white-alpha-30: rgba(255, 255, 255, 0.3);
-    --nbe-white-alpha-40: rgba(255, 255, 255, 0.4);
-    --nbe-white-alpha-50: rgba(255, 255, 255, 0.5);
-    --nbe-white-alpha-60: rgba(255, 255, 255, 0.6);
-    --nbe-white-alpha-70: rgba(255, 255, 255, 0.7);
-    --nbe-white-alpha-80: rgba(255, 255, 255, 0.8);
-    --nbe-white-alpha-90: rgba(255, 255, 255, 0.9);
-    --nbe-primary-alpha-10: rgba(25, 118, 210, 0.1);
-    --nbe-primary-alpha-15: rgba(25, 118, 210, 0.15);
-    --nbe-primary-alpha-20: rgba(25, 118, 210, 0.2);
-    --nbe-primary-alpha-25: rgba(25, 118, 210, 0.25);
-    --nbe-primary-alpha-40: rgba(25, 118, 210, 0.4);
-    --nbe-primary-alpha-50: rgba(25, 118, 210, 0.5);
-    --nbe-black-alpha-10: rgba(0, 0, 0, 0.1);
-    --nbe-black-alpha-15: rgba(0, 0, 0, 0.15);
-    --nbe-black-alpha-20: rgba(0, 0, 0, 0.2);
-    --nbe-black-alpha-50: rgba(0, 0, 0, 0.5);
-    --nbe-black-alpha-75: rgba(0, 0, 0, 0.75);
-    --nbe-black-alpha-90: rgba(0, 0, 0, 0.9);
+    --nbe-overlay-dark: rgb(0 0 0 / 50%);
+    --nbe-overlay-darker: rgb(0 0 0 / 60%);
+    --nbe-overlay-darkest: rgb(0 0 0 / 70%);
+    --nbe-overlay-terminal: rgb(0 0 0 / 75%);
+    --nbe-overlay-light: rgb(255 255 255 / 90%);
+    --nbe-overlay-light-subtle: rgb(255 255 255 / 92%);
+    --nbe-white-alpha-10: rgb(255 255 255 / 10%);
+    --nbe-white-alpha-15: rgb(255 255 255 / 15%);
+    --nbe-white-alpha-20: rgb(255 255 255 / 20%);
+    --nbe-white-alpha-25: rgb(255 255 255 / 25%);
+    --nbe-white-alpha-30: rgb(255 255 255 / 30%);
+    --nbe-white-alpha-40: rgb(255 255 255 / 40%);
+    --nbe-white-alpha-50: rgb(255 255 255 / 50%);
+    --nbe-white-alpha-60: rgb(255 255 255 / 60%);
+    --nbe-white-alpha-70: rgb(255 255 255 / 70%);
+    --nbe-white-alpha-80: rgb(255 255 255 / 80%);
+    --nbe-white-alpha-90: rgb(255 255 255 / 90%);
+    --nbe-primary-alpha-10: rgb(25 118 210 / 10%);
+    --nbe-primary-alpha-15: rgb(25 118 210 / 15%);
+    --nbe-primary-alpha-20: rgb(25 118 210 / 20%);
+    --nbe-primary-alpha-25: rgb(25 118 210 / 25%);
+    --nbe-primary-alpha-40: rgb(25 118 210 / 40%);
+    --nbe-primary-alpha-50: rgb(25 118 210 / 50%);
+    --nbe-black-alpha-10: rgb(0 0 0 / 10%);
+    --nbe-black-alpha-15: rgb(0 0 0 / 15%);
+    --nbe-black-alpha-20: rgb(0 0 0 / 20%);
+    --nbe-black-alpha-50: rgb(0 0 0 / 50%);
+    --nbe-black-alpha-75: rgb(0 0 0 / 75%);
+    --nbe-black-alpha-90: rgb(0 0 0 / 90%);
 
     /* ---- Commit Button (PAN-OS orange accent) ---- */
     --nbe-commit-bg: linear-gradient(135deg, #ff6b35 0%, #f54e00 100%);
-    --nbe-commit-bg-hover: linear-gradient(135deg, #ff7a47 0%, #ff5500 100%);
-    --nbe-commit-shadow: 0 2px 8px rgba(245, 78, 0, 0.4);
-    --nbe-commit-shadow-hover: 0 4px 12px rgba(245, 78, 0, 0.5);
+    --nbe-commit-bg-hover: linear-gradient(135deg, #ff7a47 0%, #f50 100%);
+    --nbe-commit-shadow: 0 2px 8px rgb(245 78 0 / 40%);
+    --nbe-commit-shadow-hover: 0 4px 12px rgb(245 78 0 / 50%);
 
     /* ---- Code/Terminal (dark theme) ---- */
     --nbe-code-bg: #263238;
@@ -293,9 +291,7 @@
 
     /* ---- Diff Colors (dark theme context) ---- */
     --nbe-diff-add: #4DB6AC;
-    --nbe-diff-add-bg: rgba(76, 175, 80, 0.3);
     --nbe-diff-remove: #EF5350;
-    --nbe-diff-remove-bg: rgba(244, 67, 54, 0.3);
     --nbe-diff-header: #64B5F6;
     --nbe-diff-hunk: #42A5F5;
     --nbe-diff-context: #9E9E9E;
@@ -307,19 +303,19 @@
     /* ---- Undo Button ---- */
     --nbe-undo-bg: #546E7A;
     --nbe-undo-bg-hover: #607D8B;
-    --nbe-undo-text: #FFFFFF;
+    --nbe-undo-text: #FFF;
 
     /* ---- Terminal/Git Panel ---- */
-    --nbe-terminal-bg: #000000;
-    --nbe-terminal-header-bg: #333333;
-    --nbe-terminal-border: #555555;
-    --nbe-terminal-text: #cccccc;
-    --nbe-terminal-text-muted: #999999;
-    --nbe-terminal-text-bright: #ffffff;
-    --nbe-terminal-prompt: #00aa00;
-    --nbe-terminal-hash: #eeee00;
-    --nbe-terminal-success: #00cc00;
-    --nbe-terminal-error: #ee4444;
+    --nbe-terminal-bg: #000;
+    --nbe-terminal-header-bg: #333;
+    --nbe-terminal-border: #555;
+    --nbe-terminal-text: #ccc;
+    --nbe-terminal-text-muted: #999;
+    --nbe-terminal-text-bright: #fff;
+    --nbe-terminal-prompt: #0a0;
+    --nbe-terminal-hash: #ee0;
+    --nbe-terminal-success: #0c0;
+    --nbe-terminal-error: #e44;
 
     /* ---- Lock Banner ---- */
     --nbe-lock-banner-bg: linear-gradient(135deg, #ff9800, #f57c00);
@@ -351,11 +347,11 @@
 
     /* ---- Diff Colors (GitHub-style dark theme) ---- */
     --nbe-diff-add-text: #81C784;
-    --nbe-diff-add-bg: rgba(76, 175, 80, 0.15);
+    --nbe-diff-add-bg: rgb(76 175 80 / 15%);
     --nbe-diff-remove-text: #E57373;
-    --nbe-diff-remove-bg: rgba(244, 67, 54, 0.15);
+    --nbe-diff-remove-bg: rgb(244 67 54 / 15%);
     --nbe-diff-header-text: #64B5F6;
-    --nbe-diff-hunk-bg: rgba(33, 150, 243, 0.1);
+    --nbe-diff-hunk-bg: rgb(33 150 243 / 10%);
 
     /* ---- Tree Panel (explorer-specific but shared with graph) ---- */
     --nbe-tree-row-height: 32px;
@@ -363,6 +359,7 @@
     --nbe-tree-icon-size: 16px;
 
     /* ---- Object Type Badges (semantic color categories) ---- */
+
     /* Infrastructure (green) - hosts, hostgroups */
     --nbe-type-infra-bg: #E8F5E9;
     --nbe-type-infra-text: #1B5E20;
@@ -404,6 +401,7 @@
     --nbe-chip-valid-text: #1B5E20;
 
     /* ---- Dark Theme Tokens (Explorer UI) ---- */
+
     /* Single source of truth for dark theme - enables theme toggle capability.
        Color palette matches VS Code Dark+ theme (terminal-inspired design).
        All tokens maintain WCAG AA contrast ratios (4.5:1 text, 3:1 UI). */
@@ -431,7 +429,7 @@
     --nbe-dark-accent-secondary: #90CAF9;
     --nbe-dark-accent-warning: #FFE082;
     --nbe-dark-accent-danger: #EF9A9A;
-    --nbe-dark-warning-bg: rgba(255, 224, 130, 0.15);
+    --nbe-dark-warning-bg: rgb(255 224 130 / 15%);
 
     /* Input/form controls */
     --nbe-dark-input-bg: #2d2d2d;        /* Input background */
@@ -447,34 +445,34 @@
     --nbe-dark-btn-border: #404040;      /* Default button border */
     --nbe-dark-btn-primary-bg: #80CBC4;
     --nbe-dark-btn-primary-hover: #4DB6AC;
-    --nbe-dark-btn-danger-bg: rgba(220, 53, 69, 0.8); /* Danger button background */
-    --nbe-dark-btn-danger-hover: rgba(220, 53, 69, 1); /* Danger button hover */
+    --nbe-dark-btn-danger-bg: rgb(220 53 69 / 80%); /* Danger button background */
+    --nbe-dark-btn-danger-hover: rgb(220 53 69 / 100%); /* Danger button hover */
 
     /* Tab tokens for dark theme */
     --nbe-dark-tab-bg: transparent;      /* Inactive tab background */
-    --nbe-dark-tab-bg-hover: rgba(255, 255, 255, 0.1); /* Tab hover background */
+    --nbe-dark-tab-bg-hover: rgb(255 255 255 / 10%); /* Tab hover background */
     --nbe-dark-tab-active-bg: transparent; /* Active tab background */
-    --nbe-dark-tab-text: rgba(255, 255, 255, 0.6); /* Inactive tab text */
-    --nbe-dark-tab-text-hover: rgba(255, 255, 255, 0.8); /* Tab hover text */
+    --nbe-dark-tab-text: rgb(255 255 255 / 60%); /* Inactive tab text */
+    --nbe-dark-tab-text-hover: rgb(255 255 255 / 80%); /* Tab hover text */
     --nbe-dark-tab-text-active: #fff;    /* Active tab text */
     --nbe-dark-tab-border-active: #80CBC4; /* Active tab border */
 
     /* Alpha overlays for dark theme */
-    --nbe-dark-accent-alpha-10: rgba(128, 203, 196, 0.1);
-    --nbe-dark-accent-alpha-15: rgba(128, 203, 196, 0.15);
-    --nbe-dark-accent-alpha-20: rgba(128, 203, 196, 0.2);
-    --nbe-dark-accent-alpha-30: rgba(128, 203, 196, 0.3);
-    --nbe-dark-accent-alpha-60: rgba(128, 203, 196, 0.6);
+    --nbe-dark-accent-alpha-10: rgb(128 203 196 / 10%);
+    --nbe-dark-accent-alpha-15: rgb(128 203 196 / 15%);
+    --nbe-dark-accent-alpha-20: rgb(128 203 196 / 20%);
+    --nbe-dark-accent-alpha-30: rgb(128 203 196 / 30%);
+    --nbe-dark-accent-alpha-60: rgb(128 203 196 / 60%);
 
     /* Validation state backgrounds */
-    --nbe-dark-validation-success-bg: rgba(76, 175, 80, 0.1);
-    --nbe-dark-validation-success-badge: rgba(76, 175, 80, 0.2);
-    --nbe-dark-validation-error-bg: rgba(244, 67, 54, 0.1);
-    --nbe-dark-validation-error-badge: rgba(244, 67, 54, 0.2);
-    --nbe-dark-validation-warning-bg: rgba(255, 193, 7, 0.1);
-    --nbe-dark-validation-warning-badge: rgba(255, 193, 7, 0.2);
-    --nbe-dark-validation-info-bg: rgba(33, 150, 243, 0.1);
-    --nbe-dark-validation-info-badge: rgba(33, 150, 243, 0.2);
+    --nbe-dark-validation-success-bg: rgb(76 175 80 / 10%);
+    --nbe-dark-validation-success-badge: rgb(76 175 80 / 20%);
+    --nbe-dark-validation-error-bg: rgb(244 67 54 / 10%);
+    --nbe-dark-validation-error-badge: rgb(244 67 54 / 20%);
+    --nbe-dark-validation-warning-bg: rgb(255 193 7 / 10%);
+    --nbe-dark-validation-warning-badge: rgb(255 193 7 / 20%);
+    --nbe-dark-validation-info-bg: rgb(33 150 243 / 10%);
+    --nbe-dark-validation-info-badge: rgb(33 150 243 / 20%);
 
     /* Validation state text colors (for dark theme) */
     --nbe-dark-validation-success-text: #81c784;  /* Light green text */
@@ -483,61 +481,63 @@
     --nbe-dark-validation-info-text: #64b5f6;     /* Light blue text */
 
     /* Validation state borders (for dark theme) */
-    --nbe-dark-validation-success-border: rgba(76, 175, 80, 0.3);
-    --nbe-dark-validation-error-border: rgba(244, 67, 54, 0.3);
-    --nbe-dark-validation-warning-border: rgba(255, 193, 7, 0.3);
-    --nbe-dark-validation-info-border: rgba(33, 150, 243, 0.3);
+    --nbe-dark-validation-success-border: rgb(76 175 80 / 30%);
+    --nbe-dark-validation-error-border: rgb(244 67 54 / 30%);
+    --nbe-dark-validation-warning-border: rgb(255 193 7 / 30%);
+    --nbe-dark-validation-info-border: rgb(33 150 243 / 30%);
 
     /* ---- Dark Theme Prose/Docs Colors ---- */
     --nbe-dark-prose-text: #B0BEC5;
-    --nbe-dark-prose-note-bg: rgba(33, 150, 243, 0.08);
-    --nbe-dark-prose-note-border: rgba(33, 150, 243, 0.25);
-    --nbe-dark-prose-tip-bg: rgba(76, 175, 80, 0.08);
-    --nbe-dark-prose-tip-border: rgba(76, 175, 80, 0.25);
-    --nbe-dark-prose-danger-bg: rgba(244, 67, 54, 0.08);
-    --nbe-dark-prose-danger-border: rgba(244, 67, 54, 0.25);
-    --nbe-dark-prose-highlight: rgba(33, 150, 243, 0.25);
-    --nbe-dark-prose-highlight-fade: rgba(33, 150, 243, 0.1);
-    --nbe-dark-badge-required-bg: rgba(244, 67, 54, 0.15);
+    --nbe-dark-prose-note-bg: rgb(33 150 243 / 8%);
+    --nbe-dark-prose-note-border: rgb(33 150 243 / 25%);
+    --nbe-dark-prose-tip-bg: rgb(76 175 80 / 8%);
+    --nbe-dark-prose-tip-border: rgb(76 175 80 / 25%);
+    --nbe-dark-prose-danger-bg: rgb(244 67 54 / 8%);
+    --nbe-dark-prose-danger-border: rgb(244 67 54 / 25%);
+    --nbe-dark-prose-highlight: rgb(33 150 243 / 25%);
+    --nbe-dark-prose-highlight-fade: rgb(33 150 243 / 10%);
+    --nbe-dark-badge-required-bg: rgb(244 67 54 / 15%);
 
     /* ---- Dark Theme Object Type Badge Colors ---- */
+
     /* Infrastructure (green) - hosts, hostgroups */
-    --nbe-dark-type-host-bg: rgba(76, 175, 80, 0.2);
+    --nbe-dark-type-host-bg: rgb(76 175 80 / 20%);
     --nbe-dark-type-host-text: #81c784;
-    --nbe-dark-type-hostgroup-bg: rgba(139, 195, 74, 0.2);
+    --nbe-dark-type-hostgroup-bg: rgb(139 195 74 / 20%);
     --nbe-dark-type-hostgroup-text: #aed581;
 
     /* Monitoring (blue) - services, servicegroups */
-    --nbe-dark-type-service-bg: rgba(33, 150, 243, 0.2);
+    --nbe-dark-type-service-bg: rgb(33 150 243 / 20%);
     --nbe-dark-type-service-text: #64b5f6;
-    --nbe-dark-type-servicegroup-bg: rgba(3, 169, 244, 0.2);
+    --nbe-dark-type-servicegroup-bg: rgb(3 169 244 / 20%);
     --nbe-dark-type-servicegroup-text: #4fc3f7;
 
     /* People (orange) - contacts, contactgroups */
-    --nbe-dark-type-contact-bg: rgba(255, 152, 0, 0.2);
+    --nbe-dark-type-contact-bg: rgb(255 152 0 / 20%);
     --nbe-dark-type-contact-text: #ffb74d;
-    --nbe-dark-type-contactgroup-bg: rgba(255, 193, 7, 0.2);
+    --nbe-dark-type-contactgroup-bg: rgb(255 193 7 / 20%);
     --nbe-dark-type-contactgroup-text: #ffd54f;
 
     /* System (purple) - commands */
-    --nbe-dark-type-command-bg: rgba(156, 39, 176, 0.2);
+    --nbe-dark-type-command-bg: rgb(156 39 176 / 20%);
     --nbe-dark-type-command-text: #ba68c8;
 
     /* Neutral (gray) - timeperiods */
-    --nbe-dark-type-timeperiod-bg: rgba(96, 125, 139, 0.2);
+    --nbe-dark-type-timeperiod-bg: rgb(96 125 139 / 20%);
     --nbe-dark-type-timeperiod-text: #90a4ae;
 
     /* Dependencies (red/purple) - dependencies, escalations */
-    --nbe-dark-type-hostdependency-bg: rgba(244, 67, 54, 0.2);
+    --nbe-dark-type-hostdependency-bg: rgb(244 67 54 / 20%);
     --nbe-dark-type-hostdependency-text: #EF9A9A;
-    --nbe-dark-type-servicedependency-bg: rgba(197, 134, 192, 0.2);
+    --nbe-dark-type-servicedependency-bg: rgb(197 134 192 / 20%);
     --nbe-dark-type-servicedependency-text: #c586c0;
-    --nbe-dark-type-hostescalation-bg: rgba(208, 160, 205, 0.2);
+    --nbe-dark-type-hostescalation-bg: rgb(208 160 205 / 20%);
     --nbe-dark-type-hostescalation-text: #d0a0cd;
-    --nbe-dark-type-serviceescalation-bg: rgba(197, 134, 192, 0.2);
+    --nbe-dark-type-serviceescalation-bg: rgb(197 134 192 / 20%);
     --nbe-dark-type-serviceescalation-text: #c586c0;
 
     /* ---- Graph/Legend Palette Colors ---- */
+
     /* Material Design inspired colors for graph nodes and legends */
     --nbe-palette-green: #4CAF50;
     --nbe-palette-light-green: #8BC34A;
@@ -557,17 +557,17 @@
     --nbe-palette-lavender: #d0a0cd;      /* Lavender for escalation types */
 
     /* ---- Suggestion Badge Colors (dark theme) ---- */
-    --nbe-dark-suggestion-subnet-bg: rgba(33, 150, 243, 0.2);
+    --nbe-dark-suggestion-subnet-bg: rgb(33 150 243 / 20%);
     --nbe-dark-suggestion-subnet-text: #64b5f6;
-    --nbe-dark-suggestion-prefix-bg: rgba(76, 175, 80, 0.2);
+    --nbe-dark-suggestion-prefix-bg: rgb(76 175 80 / 20%);
     --nbe-dark-suggestion-prefix-text: #81c784;
-    --nbe-dark-suggestion-suffix-bg: rgba(255, 152, 0, 0.2);
+    --nbe-dark-suggestion-suffix-bg: rgb(255 152 0 / 20%);
     --nbe-dark-suggestion-suffix-text: #ffb74d;
-    --nbe-dark-suggestion-parent-bg: rgba(156, 39, 176, 0.2);
+    --nbe-dark-suggestion-parent-bg: rgb(156 39 176 / 20%);
     --nbe-dark-suggestion-parent-text: #ba68c8;
-    --nbe-dark-suggestion-services-bg: rgba(33, 150, 243, 0.2);
+    --nbe-dark-suggestion-services-bg: rgb(33 150 243 / 20%);
     --nbe-dark-suggestion-services-text: #64b5f6;
-    --nbe-dark-suggestion-ungrouped-bg: rgba(244, 67, 54, 0.2);
+    --nbe-dark-suggestion-ungrouped-bg: rgb(244 67 54 / 20%);
     --nbe-dark-suggestion-ungrouped-text: #e57373;
 
     /* ---- Additional Dark Theme Accent Hover ---- */
@@ -575,9 +575,9 @@
     --nbe-dark-accent-danger-hover: #E57373;
 
     /* ---- Git Diff Colors ---- */
-    --nbe-dark-diff-added-bg: rgba(76, 175, 80, 0.15);
+    --nbe-dark-diff-added-bg: rgb(76 175 80 / 15%);
     --nbe-dark-diff-added-text: #81C784;
-    --nbe-dark-diff-removed-bg: rgba(244, 67, 54, 0.15);
+    --nbe-dark-diff-removed-bg: rgb(244 67 54 / 15%);
     --nbe-dark-diff-removed-text: #E57373;
 }
 
@@ -628,7 +628,7 @@
     content: "";
     position: absolute;
     inset: 0;
-    background: currentColor;
+    background: currentcolor;
     opacity: 0;
     transition: opacity var(--nbe-transition-fast);
     pointer-events: none;
@@ -728,7 +728,7 @@
     content: "";
     position: absolute;
     inset: 0;
-    background: currentColor;
+    background: currentcolor;
     opacity: 0;
     transition: opacity var(--nbe-transition-fast);
     pointer-events: none;
@@ -765,7 +765,7 @@
 }
 
 .nbe-btn--primary:focus-visible {
-    box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.25);
+    box-shadow: 0 0 0 2px rgb(46 125 50 / 25%);
 }
 
 /* Secondary: White with gray border for Cancel/Close */
@@ -783,7 +783,7 @@
 }
 
 .nbe-btn--danger:focus-visible {
-    box-shadow: 0 0 0 2px rgba(198, 40, 40, 0.25);
+    box-shadow: 0 0 0 2px rgb(198 40 40 / 25%);
 }
 
 /* Info: Blue for informational actions (View, Edit, Reload) */
@@ -875,7 +875,7 @@
     position: absolute;
     width: 14px;
     height: 14px;
-    border: 2px solid currentColor;
+    border: 2px solid currentcolor;
     border-radius: 50%;
     border-top-color: transparent;
     animation: nbe-btn-spin 0.6s linear infinite;
@@ -883,7 +883,7 @@
 
 .nbe-btn--primary[data-loading="true"]::after,
 .nbe-btn--info[data-loading="true"]::after {
-    border-color: rgba(255, 255, 255, 0.3);
+    border-color: rgb(255 255 255 / 30%);
     border-top-color: white;
 }
 

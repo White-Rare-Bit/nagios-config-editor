@@ -28,6 +28,7 @@
 }
 
 /* Commit Dialog - Enterprise Style */
+
 /* Using higher specificity to override Bootstrap modal without !important */
 .global-dialog.commit-dialog,
 .commit-dialog.commit-dialog {
@@ -359,6 +360,7 @@
 /* Tree Panel - Enterprise Style */
 .tree-panel {
     --nbe-panel-bg: var(--nbe-dark-surface-at-1);
+
     width: var(--nbe-panel-width);
     background: var(--nbe-panel-bg);
     border-right: 1px solid var(--nbe-dark-border-primary);
@@ -829,6 +831,7 @@
 }
 
 /* Object type color coding - semantic categories using design tokens */
+
 /* Infrastructure (green) */
 .tree-item-type.type-host { background: var(--nbe-type-infra-bg); color: var(--nbe-type-infra-text); }
 .tree-item-type.type-hostgroup { background: var(--nbe-type-infra-bg-alt); color: var(--nbe-type-infra-text-alt); }
@@ -955,6 +958,7 @@
 /* Center Pane (Object Editor) */
 .center-pane {
     --nbe-panel-bg: var(--nbe-dark-surface-at-2);
+
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -1174,6 +1178,7 @@
 /* Right Pane (Tabbed) - matches left pane style */
 .right-pane {
     --nbe-panel-bg: var(--nbe-dark-surface-at-1);
+
     position: relative;
     width: 440px;
     display: flex;
@@ -1236,8 +1241,7 @@
 
 .tab-body {
     flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden auto;
     padding: var(--nbe-space-sm) var(--nbe-space-md) var(--nbe-space-sm) var(--nbe-space-sm);
 }
 
@@ -1496,15 +1500,16 @@
 }
 
 /* Create Dropdown Menu */
+
 /* Create Input (shown inline when creating) */
+
 /* =============================================================================
    WORKSPACE TREE ROWS - Enterprise File Browser
    ============================================================================= */
 
 .workspace-tree-container {
     flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden auto;
     padding: var(--nbe-space-sm) 0;
 }
 
@@ -1892,6 +1897,7 @@
 }
 
 /* Legacy support - hide old create section */
+
 /* Validation Summary Banner */
 .validation-summary {
     display: flex;
@@ -2015,8 +2021,7 @@
 /* Flat suggestions list */
 .suggestions-list {
     flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden auto;
 }
 
 /* Individual suggestion row */
@@ -2168,6 +2173,7 @@
 }
 
 /* Batch create type rows for bulk create dialog */
+
 /* Expandable detail panel */
 .suggestion-detail-panel {
     padding: var(--nbe-space-sm-plus) var(--nbe-space-md) var(--nbe-space-sm-plus) var(--nbe-space-2xl);
@@ -2210,6 +2216,7 @@
 }
 
 /* Bulk actions footer */
+
 /* Empty state for suggestions */
 .suggestions-empty {
     display: flex;
@@ -2243,8 +2250,7 @@
    ============================================================================ */
 .suggestion-sections {
     flex: 1;
-    overflow-y: auto;
-    overflow-x: visible;
+    overflow: visible auto;
 }
 
 .suggestion-section {
@@ -2365,6 +2371,7 @@
 }
 
 /* Compact Empty States - smaller variant for analysis panels */
+
 /* Note: Full .empty-state pattern is in forms.css, this is a compact override */
 .empty-state {
     padding: var(--nbe-space-xl) var(--nbe-space-lg);
@@ -2687,10 +2694,12 @@
         box-shadow: 0 0 0 3px var(--nbe-dark-accent-alpha-60);
         background-color: var(--nbe-dark-accent-alpha-20);
     }
+
     50% {
         box-shadow: 0 0 0 6px var(--nbe-dark-accent-alpha-30);
         background-color: var(--nbe-dark-accent-alpha-10);
     }
+
     100% {
         box-shadow: 0 0 0 0 transparent;
         background-color: transparent;
@@ -2704,6 +2713,7 @@
         border-left-color: var(--nbe-danger);
         border-left-width: 4px;
     }
+
     100% {
         background: transparent;
         border-left-color: var(--nbe-danger);
@@ -2718,6 +2728,7 @@
         border-left-color: var(--nbe-warning);
         border-left-width: 4px;
     }
+
     100% {
         background: transparent;
         border-left-color: var(--nbe-warning);
@@ -2732,6 +2743,7 @@
         border-left-color: var(--nbe-primary);
         border-left-width: 4px;
     }
+
     100% {
         background: transparent;
         border-left-color: var(--nbe-primary);
@@ -2891,7 +2903,9 @@
 }
 
 /* File/Folder items in target pane - matches tree folder style */
+
 /* Config root header */
+
 /* Folder styles */
 
 /* Staged deletion styles */
@@ -2974,10 +2988,7 @@
 .drop-zone::before {
     content: '';
     position: absolute;
-    left: 8px;
-    right: 8px;
-    top: -8px;
-    bottom: -8px;
+    inset: -8px 8px;
     z-index: 10;
 }
 
@@ -3024,10 +3035,7 @@
 /* Object Detail Modal - Enterprise Style */
 .object-detail-modal {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    inset: 0;
     background: var(--nbe-black-alpha-50);
     display: none;
     align-items: center;
@@ -3121,6 +3129,7 @@
 }
 
 /* Type-specific colors matching tree-item-type - semantic categories */
+
 /* Infrastructure (green) */
 .card-type.type-host { background: var(--nbe-type-infra-bg); color: var(--nbe-type-infra-text); }
 .card-type.type-hostgroup { background: var(--nbe-type-infra-bg-alt); color: var(--nbe-type-infra-text-alt); }
@@ -3382,7 +3391,7 @@
     font-family: var(--nbe-font-mono);
     font-size: var(--nbe-typography-body-size);
     color: var(--nbe-dark-accent-primary);
-    word-break: break-word;
+    overflow-wrap: anywhere;
     padding-right: var(--nbe-space-md);
 }
 
@@ -3432,7 +3441,7 @@
     font-size: var(--nbe-typography-body-size);
     line-height: 1.4;
     white-space: pre-wrap;
-    word-wrap: break-word;
+    overflow-wrap: break-word;
     color: var(--nbe-dark-text-primary);
     pointer-events: none;
     border: 1px solid transparent;
@@ -3796,10 +3805,7 @@
 /* Preview Modal - Terminal Style */
 .preview-modal {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    inset: 0;
     background: var(--nbe-black-alpha-75);
     display: none;
     align-items: center;
@@ -3875,10 +3881,7 @@
 /* Dialog - Enterprise Style */
 .dialog-overlay {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    inset: 0;
     background: var(--nbe-black-alpha-50);
     display: none;
     align-items: center;
@@ -4340,6 +4343,7 @@
 /* Dim other panes when dragging objects to right pane */
 body.dragging-objects .tree-panel {
     opacity: 0.5;
+
     /* Don't disable pointer-events on tree-panel - it cancels the drag */
 }
 
@@ -5026,6 +5030,7 @@ body.dragging-objects .right-pane::after {
     font-weight: 600;
     text-transform: uppercase;
     flex-shrink: 0;
+
     /* Ensure badge colors override chain item colors */
     background: var(--nbe-dark-bg-hover);
     color: var(--nbe-dark-text-secondary);
@@ -5141,6 +5146,7 @@ body.dragging-objects .right-pane::after {
 }
 
 /* Preview change styles */
+
 /* When editing is locked, grey out everything except commit dialog */
 body.editing-locked .tree-panel,
 body.editing-locked .center-pane,
@@ -5313,12 +5319,12 @@ i.tree-icon--new {
 }
 
 .attr-docs-popover .attr-docs-badge--required {
-    background: rgba(239, 68, 68, 0.15);
+    background: rgb(239 68 68 / 15%);
     color: var(--nbe-dark-accent-danger);
 }
 
 .attr-docs-popover .attr-docs-badge--optional {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgb(255 255 255 / 8%);
     color: var(--nbe-dark-text-secondary);
 }
 

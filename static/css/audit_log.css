@@ -258,7 +258,7 @@
 
 .audit-container .page-sidebar .danger-zone-toggle::after {
     content: '\f078';
-    font-family: 'Font Awesome 6 Free';
+    font-family: 'Font Awesome 6 Free', sans-serif;
     font-weight: 900;
     font-size: var(--nbe-typography-muted-size);
     margin-left: auto;
@@ -605,6 +605,7 @@
     margin-right: var(--nbe-space-xs-plus);
     min-width: 45px;
     text-align: center;
+
     /* Default fallback */
     background: var(--nbe-dark-bg-hover);
     color: var(--nbe-dark-text-secondary);

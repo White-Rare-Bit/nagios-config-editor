@@ -58,7 +58,7 @@
 
 .git-container .danger-zone-toggle::after {
     content: '\f078';
-    font-family: 'Font Awesome 6 Free';
+    font-family: 'Font Awesome 6 Free', sans-serif;
     font-weight: 900;
     font-size: var(--nbe-font-size-xs);
     margin-left: auto;

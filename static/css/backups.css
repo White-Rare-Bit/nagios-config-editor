@@ -45,7 +45,7 @@
 
 .backup-container .page-sidebar .danger-zone-toggle::after {
     content: '\f078';
-    font-family: 'Font Awesome 6 Free';
+    font-family: 'Font Awesome 6 Free', sans-serif;
     font-weight: 900;
     font-size: var(--nbe-typography-muted-size);
     margin-left: auto;
@@ -275,10 +275,7 @@
 .backup-row.deleting::after {
     content: '';
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    inset: 0;
     background: linear-gradient(90deg, transparent, var(--nbe-dark-accent-alpha-20), transparent);
     animation: shimmer 1.5s infinite;
 }

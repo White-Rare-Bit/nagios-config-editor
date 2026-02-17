@@ -207,7 +207,7 @@ body.editing-locked .settings-container #serverTab {
 /* Server settings tab button shows locked indicator */
 body.editing-locked .settings-container .nbe-tab[data-tab="server"]::after {
     content: '\f023'; /* lock icon */
-    font-family: 'Font Awesome 6 Free';
+    font-family: 'Font Awesome 6 Free', sans-serif;
     font-weight: 900;
     margin-left: var(--nbe-space-sm);
     font-size: var(--nbe-font-size-xs);
@@ -268,10 +268,7 @@ body.editing-locked .settings-container #identityTab {
 .browse-overlay {
     display: none;
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    inset: 0;
     background: var(--nbe-overlay-darker);
     z-index: var(--nbe-z-modal);
     align-items: center;

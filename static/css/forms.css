@@ -288,7 +288,7 @@
    ============================================================================= */
 
 /* Medium devices and below (tablets) */
-@media (max-width: 768px) {
+@media (width <= 768px) {
     .form-section {
         padding: var(--nbe-space-sm) var(--nbe-space-md);
     }
@@ -303,7 +303,7 @@
 }
 
 /* Small devices (phones) */
-@media (max-width: 576px) {
+@media (width <= 576px) {
     .form-group label {
         font-size: var(--nbe-font-size-xs);
     }
