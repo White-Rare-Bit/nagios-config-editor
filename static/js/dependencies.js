@@ -392,13 +392,51 @@ console.log('dependencies.js loaded');
             }
         }
 
-        // Main logic based on object type
-        if (startType === 'host') {
-            // For a host: templates, hostgroups, services, and their dependencies
+        // Collect edges pointing TO startNodeId from objects of a given type with matching labels
+        function addRelatedObjectsOfType(objectType, edgeLabels) {
+            for (const edge of allEdges) {
+                if (edge.to === startNodeId && edgeLabels.includes(edge.label)) {
+                    const node = allNodes.find(n => n.id === edge.from);
+                    if (node && node.type === objectType) {
+                        collectNode(edge.from);
+                    }
+                }
+            }
+        }
+
+        // Collect edges pointing TO startNodeId with matching labels (any type)
+        function addObjectsReferencingMe(edgeLabels) {
+            for (const edge of allEdges) {
+                if (edge.to === startNodeId && edgeLabels.includes(edge.label)) {
+                    collectNode(edge.from);
+                }
+            }
+        }
+
+        // Shared pattern for dependency/escalation types: reversed + normal edge traversal
+        function expandEdgePattern(reversedLabels, normalLabels, expandMembersFor) {
+            for (const label of reversedLabels) {
+                const edges = findEdges(null, startNodeId, label);
+                for (const edge of edges) { collectNode(edge.from); }
+            }
+            for (const label of normalLabels) {
+                const edges = findEdges(startNodeId, null, label);
+                for (const edge of edges) {
+                    if (collectNode(edge.to) && expandMembersFor && expandMembersFor.includes(label)) {
+                        const memberEdges = findEdges(edge.to, null, 'members');
+                        for (const memberEdge of memberEdges) {
+                            collectNode(memberEdge.to);
+                        }
+                    }
+                }
+            }
+        }
+
+        function expandHost() {
             addTemplates(startNodeId);
             addObjectDependencies(startNodeId);
 
-            // Get hostgroups - host points TO hostgroups
+            // Get hostgroups
             const hostgroupIds = [];
             const hgEdges = findEdges(startNodeId, null, 'hostgroups');
             for (const edge of hgEdges) {
@@ -406,7 +444,6 @@ console.log('dependencies.js loaded');
                     hostgroupIds.push(edge.to);
                 }
             }
-            // Also check 'in-group' label
             const igEdges = findEdges(startNodeId, null, 'in-group');
             for (const edge of igEdges) {
                 const node = allNodes.find(n => n.id === edge.to);
@@ -417,111 +454,49 @@ console.log('dependencies.js loaded');
                 }
             }
 
-            // Add services - host points TO services via host_name (reversed)
+            // Add services
             const serviceEdges = findEdges(startNodeId, null, 'host_name');
             for (const edge of serviceEdges) {
                 if (collectNode(edge.to)) {
-                    // Also add the service's dependencies (commands, contacts, timeperiods)
                     addObjectDependencies(edge.to);
                 }
             }
-
-            // Add services for hostgroups this host belongs to
             addServicesForHost(startNodeId, startName, hostgroupIds);
 
-            // Add parent hosts (this host points TO parents)
+            // Add parent and child hosts
             const parentEdges = findEdges(startNodeId, null, 'parents');
-            for (const edge of parentEdges) {
-                collectNode(edge.to);
-            }
-
-            // Add child hosts (other hosts point TO this host as parent)
+            for (const edge of parentEdges) { collectNode(edge.to); }
             for (const edge of allEdges) {
                 if (edge.to === startNodeId && edge.label === 'parents') {
                     collectNode(edge.from);
                 }
             }
 
-            // Add hostdependencies that reference this host
-            // - as master (host_name): this host is pointed TO by the dependency
-            // - as dependent (dependent_host_name): this host is pointed TO by the dependency
-            for (const edge of allEdges) {
-                const node = allNodes.find(n => n.id === edge.from);
-                if (node && node.type === 'hostdependency') {
-                    if (edge.to === startNodeId &&
-                        (edge.label === 'host_name' || edge.label === 'dependent_host_name')) {
-                        collectNode(edge.from);
-                    }
-                }
-            }
+            addRelatedObjectsOfType('hostdependency', ['host_name', 'dependent_host_name']);
+            addRelatedObjectsOfType('hostescalation', ['host_name']);
+        }
 
-            // Add hostescalations that apply to this host
-            for (const edge of allEdges) {
-                const node = allNodes.find(n => n.id === edge.from);
-                if (node && node.type === 'hostescalation') {
-                    if (edge.to === startNodeId && edge.label === 'host_name') {
-                        collectNode(edge.from);
-                    }
-                }
-            }
-
-        } else if (startType === 'service') {
-            // For a service: templates, host, commands, contacts, timeperiods
+        function expandService() {
             addTemplates(startNodeId);
             addObjectDependencies(startNodeId);
 
-            // Add the host this service runs on (host points TO service)
             const hostEdges = findEdges(null, startNodeId, 'host_name');
-            for (const edge of hostEdges) {
-                collectNode(edge.from);  // Just add host, don't expand it
-            }
+            for (const edge of hostEdges) { collectNode(edge.from); }
 
-            // Add hostgroup if service targets a hostgroup (service points TO hostgroup)
             const hgEdges = findEdges(startNodeId, null, 'hostgroup_name');
-            for (const edge of hgEdges) {
-                collectNode(edge.to);
-            }
+            for (const edge of hgEdges) { collectNode(edge.to); }
 
-            // Add servicegroups this service belongs to (service points TO servicegroup)
             const sgEdges = findEdges(startNodeId, null, 'servicegroups');
-            for (const edge of sgEdges) {
-                collectNode(edge.to);
-            }
+            for (const edge of sgEdges) { collectNode(edge.to); }
 
-            // Add servicedependencies that reference this service
-            // - as master (service_description): this service points TO the dependency
-            // - as dependent (dependent_service_description): this service points TO the dependency
-            for (const edge of allEdges) {
-                const node = allNodes.find(n => n.id === edge.from);
-                if (node && node.type === 'servicedependency') {
-                    if (edge.to === startNodeId &&
-                        (edge.label === 'service_description' || edge.label === 'dependent_service_description')) {
-                        collectNode(edge.from);
-                    }
-                }
-            }
+            addRelatedObjectsOfType('servicedependency', ['service_description', 'dependent_service_description']);
+            addRelatedObjectsOfType('serviceescalation', ['service_description']);
+        }
 
-            // Add serviceescalations that apply to this service
-            for (const edge of allEdges) {
-                const node = allNodes.find(n => n.id === edge.from);
-                if (node && node.type === 'serviceescalation') {
-                    if (edge.to === startNodeId && edge.label === 'service_description') {
-                        collectNode(edge.from);
-                    }
-                }
-            }
-
-        } else if (startType === 'hostgroup') {
-            // For a hostgroup: members (hosts) and services targeting this group
+        function expandHostgroup() {
             addTemplates(startNodeId);
-
-            // Members - hostgroup points TO hosts via 'members'
             const memberEdges = findEdges(startNodeId, null, 'members');
-            for (const edge of memberEdges) {
-                collectNode(edge.to);
-            }
-
-            // Services targeting this hostgroup (services point TO hostgroup)
+            for (const edge of memberEdges) { collectNode(edge.to); }
             const serviceEdges = findEdges(null, startNodeId, 'hostgroup_name');
             for (const edge of serviceEdges) {
                 if (collectNode(edge.from)) {
@@ -529,136 +504,64 @@ console.log('dependencies.js loaded');
                     addObjectDependencies(edge.from);
                 }
             }
+        }
 
-        } else if (startType === 'servicegroup') {
+        function expandMemberGroup() {
             addTemplates(startNodeId);
-            // Members
             const memberEdges = findEdges(startNodeId, null, 'members');
-            for (const edge of memberEdges) {
-                collectNode(edge.to);
-            }
+            for (const edge of memberEdges) { collectNode(edge.to); }
+        }
 
-        } else if (startType === 'contact') {
+        function expandContact() {
             addTemplates(startNodeId);
             addObjectDependencies(startNodeId);
-            // Contact groups this contact is in
             const cgEdges = findEdges(null, startNodeId, 'members');
-            for (const edge of cgEdges) {
-                collectNode(edge.from);
-            }
+            for (const edge of cgEdges) { collectNode(edge.from); }
+        }
 
-        } else if (startType === 'contactgroup') {
+        function expandCommand() {
             addTemplates(startNodeId);
-            // Members
-            const memberEdges = findEdges(startNodeId, null, 'members');
-            for (const edge of memberEdges) {
-                collectNode(edge.to);
-            }
+            addObjectsReferencingMe(['check_command', 'event_handler', 'host_notification_commands', 'service_notification_commands']);
+        }
 
-        } else if (startType === 'servicedependency') {
-            // Service dependencies link master service to dependent service
-            // host_name is reversed (FROM host TO this), others are normal (FROM this TO target)
-            const reversedLabels = ['host_name', 'dependent_host_name'];
-            const normalLabels = ['hostgroup_name', 'service_description',
-                                  'dependent_hostgroup_name', 'dependent_service_description'];
-
-            for (const label of reversedLabels) {
-                const edges = findEdges(null, startNodeId, label);
-                for (const edge of edges) { collectNode(edge.from); }
-            }
-            for (const label of normalLabels) {
-                const edges = findEdges(startNodeId, null, label);
-                for (const edge of edges) { collectNode(edge.to); }
-            }
-
-        } else if (startType === 'hostdependency') {
-            // Host dependencies link master host to dependent host
-            const reversedLabels = ['host_name', 'dependent_host_name'];
-            const normalLabels = ['hostgroup_name', 'dependent_hostgroup_name'];
-
-            for (const label of reversedLabels) {
-                const edges = findEdges(null, startNodeId, label);
-                for (const edge of edges) { collectNode(edge.from); }
-            }
-            for (const label of normalLabels) {
-                const edges = findEdges(startNodeId, null, label);
-                for (const edge of edges) { collectNode(edge.to); }
-            }
-
-        } else if (startType === 'serviceescalation') {
-            // Service escalations link services to contact groups
-            // host_name is reversed, others are normal
-            const reversedLabels = ['host_name'];
-            const normalLabels = ['hostgroup_name', 'service_description', 'contact_groups', 'escalation_period'];
-
-            for (const label of reversedLabels) {
-                const edges = findEdges(null, startNodeId, label);
-                for (const edge of edges) { collectNode(edge.from); }
-            }
-            for (const label of normalLabels) {
-                const edges = findEdges(startNodeId, null, label);
-                for (const edge of edges) {
-                    if (collectNode(edge.to)) {
-                        if (label === 'contact_groups') {
-                            const memberEdges = findEdges(edge.to, null, 'members');
-                            for (const memberEdge of memberEdges) {
-                                collectNode(memberEdge.to);
-                            }
-                        }
-                    }
-                }
-            }
-
-        } else if (startType === 'hostescalation') {
-            // Host escalations link hosts to contact groups
-            const reversedLabels = ['host_name'];
-            const normalLabels = ['hostgroup_name', 'contact_groups', 'escalation_period'];
-
-            for (const label of reversedLabels) {
-                const edges = findEdges(null, startNodeId, label);
-                for (const edge of edges) { collectNode(edge.from); }
-            }
-            for (const label of normalLabels) {
-                const edges = findEdges(startNodeId, null, label);
-                for (const edge of edges) {
-                    if (collectNode(edge.to)) {
-                        if (label === 'contact_groups') {
-                            const memberEdges = findEdges(edge.to, null, 'members');
-                            for (const memberEdge of memberEdges) {
-                                collectNode(memberEdge.to);
-                            }
-                        }
-                    }
-                }
-            }
-
-        } else if (startType === 'command') {
-            // Commands are referenced BY other objects (hosts, services, contacts)
-            // Find all edges where this command is the target
+        function expandTimeperiod() {
             addTemplates(startNodeId);
+            addObjectsReferencingMe(['check_period', 'notification_period', 'host_notification_period', 'service_notification_period', 'escalation_period']);
+        }
 
-            // Find objects that USE this command (edge labels are raw field names)
-            const commandFields = ['check_command', 'event_handler', 'host_notification_commands', 'service_notification_commands'];
-            for (const edge of allEdges) {
-                if (edge.to === startNodeId && commandFields.includes(edge.label)) {
-                    collectNode(edge.from);
-                }
-            }
+        const typeHandlers = {
+            host: expandHost,
+            service: expandService,
+            hostgroup: expandHostgroup,
+            servicegroup: expandMemberGroup,
+            contact: expandContact,
+            contactgroup: expandMemberGroup,
+            servicedependency: () => expandEdgePattern(
+                ['host_name', 'dependent_host_name'],
+                ['hostgroup_name', 'service_description', 'dependent_hostgroup_name', 'dependent_service_description']
+            ),
+            hostdependency: () => expandEdgePattern(
+                ['host_name', 'dependent_host_name'],
+                ['hostgroup_name', 'dependent_hostgroup_name']
+            ),
+            serviceescalation: () => expandEdgePattern(
+                ['host_name'],
+                ['hostgroup_name', 'service_description', 'contact_groups', 'escalation_period'],
+                ['contact_groups']
+            ),
+            hostescalation: () => expandEdgePattern(
+                ['host_name'],
+                ['hostgroup_name', 'contact_groups', 'escalation_period'],
+                ['contact_groups']
+            ),
+            command: expandCommand,
+            timeperiod: expandTimeperiod
+        };
 
-        } else if (startType === 'timeperiod') {
-            // Timeperiods are referenced BY other objects (hosts, services, contacts)
-            addTemplates(startNodeId);
-
-            // Find objects that USE this timeperiod (edge labels are raw field names)
-            const timeperiodFields = ['check_period', 'notification_period', 'host_notification_period', 'service_notification_period', 'escalation_period'];
-            for (const edge of allEdges) {
-                if (edge.to === startNodeId && timeperiodFields.includes(edge.label)) {
-                    collectNode(edge.from);
-                }
-            }
-
+        const handler = typeHandlers[startType];
+        if (handler) {
+            handler();
         } else {
-            // Generic fallback: just add templates
             addTemplates(startNodeId);
             addObjectDependencies(startNodeId);
         }
@@ -683,12 +586,11 @@ console.log('dependencies.js loaded');
     // Tree Layout Algorithm
     // ========================================
 
-    // Calculate positions using a proper tree structure where children are positioned under their parent
-    function calculateOrganizedPositions(nodes, edges, centerNodeId, layoutType = 'static') {
-        const positions = {};
-        if (!centerNodeId || nodes.length === 0) {return positions;}
-
-        // Build node lookup and adjacency
+    /**
+     * Build a BFS tree from nodes/edges with a given center node.
+     * Returns tree structure used by all layout strategies.
+     */
+    function buildBfsTree(nodes, edges, centerNodeId) {
         const nodeMap = {};
         for (const node of nodes) {
             nodeMap[node.id] = node;
@@ -703,18 +605,13 @@ console.log('dependencies.js loaded');
             if (adjacency[edge.to]) {adjacency[edge.to].add(edge.from);}
         }
 
-        // Build tree structure using BFS - each node gets exactly one parent
-        const children = {};   // nodeId -> [childIds]
-        const parent = {};     // nodeId -> parentId
-        const depth = {};      // nodeId -> depth in tree
-
+        const children = {};
+        const depth = {};
         for (const node of nodes) {
             children[node.id] = [];
-            parent[node.id] = null;
             depth[node.id] = -1;
         }
 
-        // BFS to build tree
         const visited = new Set();
         if (adjacency[centerNodeId]) {
             visited.add(centerNodeId);
@@ -725,7 +622,6 @@ console.log('dependencies.js loaded');
                 const nodeId = queue.shift();
                 const neighbors = Array.from(adjacency[nodeId] || []);
 
-                // Sort neighbors by type then name for consistent ordering
                 const typeOrder = ['hostgroup', 'host', 'servicegroup', 'service', 'contactgroup', 'contact', 'command', 'timeperiod'];
                 neighbors.sort((a, b) => {
                     const nodeA = nodeMap[a];
@@ -740,7 +636,6 @@ console.log('dependencies.js loaded');
                 for (const neighborId of neighbors) {
                     if (!visited.has(neighborId)) {
                         visited.add(neighborId);
-                        parent[neighborId] = nodeId;
                         children[nodeId].push(neighborId);
                         depth[neighborId] = depth[nodeId] + 1;
                         queue.push(neighborId);
@@ -749,446 +644,409 @@ console.log('dependencies.js loaded');
             }
         }
 
-        // Handle disconnected nodes - place them at the end
         const disconnected = [];
         for (const node of nodes) {
             if (!visited.has(node.id)) {
                 disconnected.push(node.id);
-                depth[node.id] = 999;  // Far depth
+                depth[node.id] = 999;
             }
         }
 
-        // Calculate subtree widths (how much space each subtree needs)
-        const subtreeWidth = {};
-        const { nodeWidth } = LAYOUT_CONFIG;
+        return { nodeMap, adjacency, children, depth, visited, disconnected };
+    }
 
-        function calcSubtreeWidth(nodeId) {
+    /**
+     * Calculate subtree widths for tree layout positioning.
+     */
+    function calcAllSubtreeWidths(children, adjacency, centerNodeId, nodeWidth) {
+        const subtreeWidth = {};
+
+        function calc(nodeId) {
             const childIds = children[nodeId];
             if (childIds.length === 0) {
                 subtreeWidth[nodeId] = nodeWidth;
                 return nodeWidth;
             }
-
             let total = 0;
             for (const childId of childIds) {
-                total += calcSubtreeWidth(childId);
+                total += calc(childId);
             }
             subtreeWidth[nodeId] = Math.max(nodeWidth, total);
             return subtreeWidth[nodeId];
         }
 
         if (adjacency[centerNodeId]) {
-            calcSubtreeWidth(centerNodeId);
+            calc(centerNodeId);
+        }
+        return subtreeWidth;
+    }
+
+    /**
+     * Position nodes in a top-down hierarchical tree layout.
+     */
+    function positionHierarchicalTree(tree, subtreeWidth, centerNodeId, tierSpacing, nodeWidth) {
+        const positions = {};
+
+        function positionVertical(nodeId, xCenter, y) {
+            positions[nodeId] = { x: xCenter, y: y };
+            const childIds = tree.children[nodeId];
+            if (childIds.length === 0) {return;}
+
+            let totalChildWidth = 0;
+            for (const childId of childIds) {
+                totalChildWidth += subtreeWidth[childId];
+            }
+
+            let childX = xCenter - totalChildWidth / 2;
+            const childY = y + tierSpacing;
+            for (const childId of childIds) {
+                const childWidth = subtreeWidth[childId];
+                positionVertical(childId, childX + childWidth / 2, childY);
+                childX += childWidth;
+            }
         }
 
-        // Position nodes based on layout type
+        if (tree.adjacency[centerNodeId]) {
+            positionVertical(centerNodeId, 0, 0);
+        }
+
+        if (tree.disconnected.length > 0) {
+            const maxDepth = Math.max(...Object.values(tree.depth).filter(d => d < 999));
+            const disconnectedY = (maxDepth + 2) * tierSpacing;
+            const totalWidth = tree.disconnected.length * nodeWidth;
+            let x = -totalWidth / 2;
+            for (const nodeId of tree.disconnected) {
+                positions[nodeId] = { x: x + nodeWidth / 2, y: disconnectedY };
+                x += nodeWidth;
+            }
+        }
+
+        return positions;
+    }
+
+    /**
+     * Position nodes in a left-to-right hierarchical tree layout.
+     */
+    function positionHierarchicalLRTree(tree, subtreeWidth, centerNodeId, tierSpacing, nodeWidth) {
+        const positions = {};
+
+        function positionHorizontal(nodeId, x, yCenter) {
+            positions[nodeId] = { x: x, y: yCenter };
+            const childIds = tree.children[nodeId];
+            if (childIds.length === 0) {return;}
+
+            let totalChildHeight = 0;
+            for (const childId of childIds) {
+                totalChildHeight += subtreeWidth[childId];
+            }
+
+            let childY = yCenter - totalChildHeight / 2;
+            const childX = x + tierSpacing;
+            for (const childId of childIds) {
+                const childHeight = subtreeWidth[childId];
+                positionHorizontal(childId, childX, childY + childHeight / 2);
+                childY += childHeight;
+            }
+        }
+
+        if (tree.adjacency[centerNodeId]) {
+            positionHorizontal(centerNodeId, 0, 0);
+        }
+
+        if (tree.disconnected.length > 0) {
+            const maxDepth = Math.max(...Object.values(tree.depth).filter(d => d < 999));
+            const disconnectedX = (maxDepth + 2) * tierSpacing;
+            const totalHeight = tree.disconnected.length * nodeWidth;
+            let y = -totalHeight / 2;
+            for (const nodeId of tree.disconnected) {
+                positions[nodeId] = { x: disconnectedX, y: y + nodeWidth / 2 };
+                y += nodeWidth;
+            }
+        }
+
+        return positions;
+    }
+
+    /**
+     * Assign nodes in a cluster to positions around a center point in concentric rings.
+     */
+    function positionClusterNodes(nodeList, centerX, centerY, clusterAngle, nodeMap, layoutConfig) {
+        const positions = {};
+        let maxRadius = 0;
+        const { clusterRadius, clusterRadiusStep, nodesPerRing } = layoutConfig;
+
+        nodeList.sort((a, b) => {
+            const nodeA = nodeMap[a];
+            const nodeB = nodeMap[b];
+            return (nodeA?.label || '').localeCompare(nodeB?.label || '');
+        });
+
+        if (nodeList.length === 1) {
+            positions[nodeList[0]] = { x: centerX, y: centerY };
+        } else {
+            nodeList.forEach((nodeId, i) => {
+                const ringIndex = Math.floor(i / nodesPerRing);
+                const posInRing = i % nodesPerRing;
+                const nodesInThisRing = Math.min(nodesPerRing, nodeList.length - ringIndex * nodesPerRing);
+
+                const nodeRadius = clusterRadius + ringIndex * clusterRadiusStep;
+                maxRadius = Math.max(maxRadius, nodeRadius);
+
+                const angleStep = (2 * Math.PI) / nodesInThisRing;
+                const nodeAngle = clusterAngle + posInRing * angleStep;
+
+                positions[nodeId] = {
+                    x: centerX + Math.cos(nodeAngle) * nodeRadius,
+                    y: centerY + Math.sin(nodeAngle) * nodeRadius
+                };
+            });
+        }
+
+        return { positions, maxRadius };
+    }
+
+    /**
+     * Position an orbiting cluster around its parent cluster's bounds.
+     */
+    function positionOrbitCluster(nodeList, parentBounds, nodeMap) {
+        const positions = {};
+        const orbitRadius = parentBounds.outerRadius + LAYOUT_CONFIG.orbitGap;
+        const circumference = 2 * Math.PI * orbitRadius;
+        const nodesPerOrbitRing = Math.max(6, Math.floor(circumference / 80));
+
+        let maxOrbitRadius = orbitRadius;
+
+        nodeList.sort((a, b) => {
+            const nodeA = nodeMap[a];
+            const nodeB = nodeMap[b];
+            return (nodeA?.label || '').localeCompare(nodeB?.label || '');
+        });
+
+        nodeList.forEach((nodeId, i) => {
+            const ringIndex = Math.floor(i / nodesPerOrbitRing);
+            const posInRing = i % nodesPerOrbitRing;
+            const nodesInThisRing = Math.min(nodesPerOrbitRing, nodeList.length - ringIndex * nodesPerOrbitRing);
+
+            const nodeRadius = orbitRadius + ringIndex * 80;
+            maxOrbitRadius = Math.max(maxOrbitRadius, nodeRadius);
+
+            const angleStep = (2 * Math.PI) / nodesInThisRing;
+            const nodeAngle = posInRing * angleStep - Math.PI / 2;
+
+            positions[nodeId] = {
+                x: parentBounds.centerX + Math.cos(nodeAngle) * nodeRadius,
+                y: parentBounds.centerY + Math.sin(nodeAngle) * nodeRadius
+            };
+        });
+
+        return { positions, maxOrbitRadius };
+    }
+
+    // Satellite cluster definitions for static layout
+    const CLUSTER_DEFS = {
+        'contactgroups': { types: ['contactgroup'], angle: -Math.PI / 2, color: '#FFC107' },
+        'contacts': { types: ['contact'], angle: -Math.PI / 2, color: '#FF9800', orbitsAround: 'contactgroups' },
+        'services': { types: ['service'], angle: -Math.PI / 2, color: '#2196F3', orbitsAround: 'contacts' },
+        'commands': { types: ['command'], angle: -Math.PI / 2, color: '#9C27B0', orbitsAround: 'services' },
+        'timeperiods': { types: ['timeperiod'], angle: -Math.PI / 2, color: '#607D8B', orbitsAround: 'services' },
+        'hostgroups': { types: ['hostgroup'], angle: Math.PI, color: '#8BC34A' },
+        'servicegroups': { types: ['servicegroup'], angle: 0, color: '#03A9F4' },
+        'hosts': { types: ['host'], angle: Math.PI * 3/4, color: '#4CAF50' },
+        'dependencies': {
+            types: ['servicedependency', 'hostdependency', 'serviceescalation', 'hostescalation'],
+            angle: Math.PI / 4, color: '#E91E63'
+        }
+    };
+
+    /**
+     * Group visited nodes into type-based clusters for static layout.
+     */
+    function groupNodesByCluster(visited, centerNodeId, nodeMap, clusterDefs) {
+        const clusters = {};
+        for (const clusterName of Object.keys(clusterDefs)) {
+            clusters[clusterName] = [];
+        }
+        clusters.other = [];
+
+        for (const nodeId of visited) {
+            if (nodeId === centerNodeId) {continue;}
+            const node = nodeMap[nodeId];
+            if (!node) {continue;}
+
+            let assigned = false;
+            for (const clusterName of Object.keys(clusterDefs)) {
+                if (clusterDefs[clusterName].types.includes(node.type)) {
+                    clusters[clusterName].push(nodeId);
+                    assigned = true;
+                    break;
+                }
+            }
+            if (!assigned) {
+                clusters.other.push(nodeId);
+            }
+        }
+
+        return clusters;
+    }
+
+    /**
+     * Position all clusters in the static satellite layout.
+     */
+    function positionStaticClusters(tree, centerNodeId) {
+        const positions = {};
+        const clusterDefs = { ...CLUSTER_DEFS };
+        const clusters = groupNodesByCluster(tree.visited, centerNodeId, tree.nodeMap, clusterDefs);
+
+        if (clusters.other.length > 0) {
+            clusterDefs.other = { types: [], angle: Math.PI * 2/3, color: '#9E9E9E' };
+        }
+
+        positions[centerNodeId] = { x: 0, y: 0 };
+        const { clusterDistance } = LAYOUT_CONFIG;
+        const clusterBounds = {};
+
+        function getOrbitDepth(clusterName) {
+            const def = clusterDefs[clusterName];
+            if (!def || !def.orbitsAround) {return 0;}
+            return 1 + getOrbitDepth(def.orbitsAround);
+        }
+
+        const clusterOrder = Object.keys(clusters).filter(name => clusters[name].length > 0);
+        clusterOrder.sort((a, b) => getOrbitDepth(a) - getOrbitDepth(b));
+
+        for (const clusterName of clusterOrder) {
+            const nodeList = clusters[clusterName];
+            const def = clusterDefs[clusterName];
+            if (!def) {continue;}
+
+            if (!def.orbitsAround) {
+                const clusterAngle = def.angle;
+                const cx = Math.cos(clusterAngle) * clusterDistance;
+                const cy = Math.sin(clusterAngle) * clusterDistance;
+
+                const result = positionClusterNodes(nodeList, cx, cy, clusterAngle, tree.nodeMap, LAYOUT_CONFIG);
+                Object.assign(positions, result.positions);
+
+                clusterBounds[clusterName] = {
+                    centerX: cx, centerY: cy,
+                    maxRadius: result.maxRadius,
+                    outerRadius: result.maxRadius
+                };
+            } else {
+                const parentName = def.orbitsAround;
+                let parentBounds = clusterBounds[parentName];
+
+                if (!parentBounds) {
+                    const parentDef = clusterDefs[parentName];
+                    const fallbackAngle = parentDef ? parentDef.angle : def.angle;
+                    parentBounds = {
+                        centerX: Math.cos(fallbackAngle) * clusterDistance,
+                        centerY: Math.sin(fallbackAngle) * clusterDistance,
+                        maxRadius: 0, outerRadius: 0
+                    };
+                    clusterBounds[parentName] = parentBounds;
+                }
+
+                const result = positionOrbitCluster(nodeList, parentBounds, tree.nodeMap);
+                Object.assign(positions, result.positions);
+
+                clusterBounds[clusterName] = {
+                    centerX: parentBounds.centerX, centerY: parentBounds.centerY,
+                    maxRadius: result.maxOrbitRadius, outerRadius: result.maxOrbitRadius
+                };
+                parentBounds.outerRadius = result.maxOrbitRadius;
+
+                let ancestor = parentName;
+                while (ancestor) {
+                    const ancestorBounds = clusterBounds[ancestor];
+                    if (ancestorBounds) {
+                        ancestorBounds.outerRadius = Math.max(ancestorBounds.outerRadius, result.maxOrbitRadius);
+                    }
+                    ancestor = clusterDefs[ancestor]?.orbitsAround;
+                }
+            }
+        }
+
+        if (tree.disconnected.length > 0) {
+            const disconnectedAngle = Math.PI * 7/8;
+            const dcX = Math.cos(disconnectedAngle) * clusterDistance;
+            const dcY = Math.sin(disconnectedAngle) * clusterDistance;
+
+            if (tree.disconnected.length === 1) {
+                positions[tree.disconnected[0]] = { x: dcX, y: dcY };
+            } else {
+                const angleStep = (2 * Math.PI) / tree.disconnected.length;
+                tree.disconnected.forEach((nodeId, i) => {
+                    positions[nodeId] = {
+                        x: dcX + Math.cos(i * angleStep) * LAYOUT_CONFIG.clusterRadius,
+                        y: dcY + Math.sin(i * angleStep) * LAYOUT_CONFIG.clusterRadius
+                    };
+                });
+            }
+        }
+
+        return positions;
+    }
+
+    /**
+     * Run collision resolution to push overlapping nodes apart.
+     */
+    function resolveCollisions(positions, centerNodeId) {
+        const NODE_MIN_DISTANCE = 80;
+        const ITERATIONS = 6;
+
+        for (let iter = 0; iter < ITERATIONS; iter++) {
+            const nodeIds = Object.keys(positions);
+            for (let i = 0; i < nodeIds.length; i++) {
+                for (let j = i + 1; j < nodeIds.length; j++) {
+                    const idA = nodeIds[i];
+                    const idB = nodeIds[j];
+                    const posA = positions[idA];
+                    const posB = positions[idB];
+
+                    const dx = posB.x - posA.x;
+                    const dy = posB.y - posA.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < NODE_MIN_DISTANCE && dist > 0) {
+                        const overlap = NODE_MIN_DISTANCE - dist;
+                        const pushX = (dx / dist) * overlap * 0.5;
+                        const pushY = (dy / dist) * overlap * 0.5;
+
+                        if (idA !== centerNodeId) {
+                            posA.x -= pushX;
+                            posA.y -= pushY;
+                        }
+                        if (idB !== centerNodeId) {
+                            posB.x += pushX;
+                            posB.y += pushY;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Calculate positions using a proper tree structure where children are positioned under their parent
+    function calculateOrganizedPositions(nodes, edges, centerNodeId, layoutType = 'static') {
+        if (!centerNodeId || nodes.length === 0) {return {};}
+
+        const tree = buildBfsTree(nodes, edges, centerNodeId);
+        const { nodeWidth } = LAYOUT_CONFIG;
+        const subtreeWidth = calcAllSubtreeWidths(tree.children, tree.adjacency, centerNodeId, nodeWidth);
+
         const tierSpacing = layoutType === 'hierarchicalLR'
             ? LAYOUT_CONFIG.tierSpacingHorizontal
             : LAYOUT_CONFIG.tierSpacingVertical;
 
+        let positions;
         if (layoutType === 'hierarchical') {
-            // Top-down tree layout
-            function positionVertical(nodeId, xCenter, y) {
-                positions[nodeId] = { x: xCenter, y: y };
-
-                const childIds = children[nodeId];
-                if (childIds.length === 0) {return;}
-
-                // Calculate total width of children
-                let totalChildWidth = 0;
-                for (const childId of childIds) {
-                    totalChildWidth += subtreeWidth[childId];
-                }
-
-                // Position children centered under this node
-                let childX = xCenter - totalChildWidth / 2;
-                const childY = y + tierSpacing;
-
-                for (const childId of childIds) {
-                    const childWidth = subtreeWidth[childId];
-                    const childCenterX = childX + childWidth / 2;
-                    positionVertical(childId, childCenterX, childY);
-                    childX += childWidth;
-                }
-            }
-
-            if (adjacency[centerNodeId]) {
-                positionVertical(centerNodeId, 0, 0);
-            }
-
-            // Position disconnected nodes at the bottom
-            if (disconnected.length > 0) {
-                const maxDepth = Math.max(...Object.values(depth).filter(d => d < 999));
-                const disconnectedY = (maxDepth + 2) * tierSpacing;
-                const totalWidth = disconnected.length * nodeWidth;
-                let x = -totalWidth / 2;
-                for (const nodeId of disconnected) {
-                    positions[nodeId] = { x: x + nodeWidth / 2, y: disconnectedY };
-                    x += nodeWidth;
-                }
-            }
-
+            positions = positionHierarchicalTree(tree, subtreeWidth, centerNodeId, tierSpacing, nodeWidth);
         } else if (layoutType === 'hierarchicalLR') {
-            // Left-to-right tree layout
-            function positionHorizontal(nodeId, x, yCenter) {
-                positions[nodeId] = { x: x, y: yCenter };
-
-                const childIds = children[nodeId];
-                if (childIds.length === 0) {return;}
-
-                // Calculate total height of children
-                let totalChildHeight = 0;
-                for (const childId of childIds) {
-                    totalChildHeight += subtreeWidth[childId];  // reuse width as height for LR
-                }
-
-                // Position children centered beside this node
-                let childY = yCenter - totalChildHeight / 2;
-                const childX = x + tierSpacing;
-
-                for (const childId of childIds) {
-                    const childHeight = subtreeWidth[childId];
-                    const childCenterY = childY + childHeight / 2;
-                    positionHorizontal(childId, childX, childCenterY);
-                    childY += childHeight;
-                }
-            }
-
-            if (adjacency[centerNodeId]) {
-                positionHorizontal(centerNodeId, 0, 0);
-            }
-
-            // Position disconnected nodes at the right
-            if (disconnected.length > 0) {
-                const maxDepth = Math.max(...Object.values(depth).filter(d => d < 999));
-                const disconnectedX = (maxDepth + 2) * tierSpacing;
-                const totalHeight = disconnected.length * nodeWidth;
-                let y = -totalHeight / 2;
-                for (const nodeId of disconnected) {
-                    positions[nodeId] = { x: disconnectedX, y: y + nodeWidth / 2 };
-                    y += nodeWidth;
-                }
-            }
-
+            positions = positionHierarchicalLRTree(tree, subtreeWidth, centerNodeId, tierSpacing, nodeWidth);
         } else {
-            // Static layout - Satellite clusters
-            // Each object type forms its own cluster orbiting the focus node
-
-            // Define cluster types - each type gets its own cluster at a specific angle
-            // Commands and timeperiods will orbit around services instead of being separate
-            // Notification-centric layout:
-            // contactgroups (center) -> contacts -> services -> commands/timeperiods
-            const clusterDefs = {
-                'contactgroups': {
-                    types: ['contactgroup'],
-                    angle: -Math.PI / 2,    // Top - notification satellite
-                    color: '#FFC107'
-                },
-                'contacts': {
-                    types: ['contact'],
-                    angle: -Math.PI / 2,
-                    color: '#FF9800',
-                    orbitsAround: 'contactgroups'
-                },
-                'services': {
-                    types: ['service'],
-                    angle: -Math.PI / 2,
-                    color: '#2196F3',
-                    orbitsAround: 'contacts'
-                },
-                'commands': {
-                    types: ['command'],
-                    angle: -Math.PI / 2,
-                    color: '#9C27B0',
-                    orbitsAround: 'services'
-                },
-                'timeperiods': {
-                    types: ['timeperiod'],
-                    angle: -Math.PI / 2,
-                    color: '#607D8B',
-                    orbitsAround: 'services'
-                },
-                'hostgroups': {
-                    types: ['hostgroup'],
-                    angle: Math.PI,         // Left
-                    color: '#8BC34A'
-                },
-                'servicegroups': {
-                    types: ['servicegroup'],
-                    angle: 0,               // Right
-                    color: '#03A9F4'
-                },
-                'hosts': {
-                    types: ['host'],
-                    angle: Math.PI * 3/4,   // Bottom-left
-                    color: '#4CAF50'
-                },
-                'dependencies': {
-                    types: ['servicedependency', 'hostdependency', 'serviceescalation', 'hostescalation'],
-                    angle: Math.PI / 4,     // Bottom-right
-                    color: '#E91E63'
-                }
-            };
-
-            // Group nodes by type into clusters
-            const clusters = {};
-            for (const clusterName of Object.keys(clusterDefs)) {
-                clusters[clusterName] = [];
-            }
-            clusters.other = [];
-
-            for (const nodeId of visited) {
-                if (nodeId === centerNodeId) {continue;}
-                const node = nodeMap[nodeId];
-                if (!node) {continue;}
-
-                // Find cluster by type
-                let assigned = false;
-                for (const clusterName of Object.keys(clusterDefs)) {
-                    if (clusterDefs[clusterName].types.includes(node.type)) {
-                        clusters[clusterName].push(nodeId);
-                        assigned = true;
-                        break;
-                    }
-                }
-
-                if (!assigned) {
-                    clusters.other.push(nodeId);
-                }
-            }
-
-            // Add 'other' cluster definition if needed
-            if (clusters.other.length > 0) {
-                clusterDefs.other = {
-                    types: [],
-                    angle: Math.PI * 2/3,
-                    color: '#9E9E9E'
-                };
-            }
-
-            // Position center node
-            positions[centerNodeId] = { x: 0, y: 0 };
-
-            // Position each cluster - use centralized config
-            const {
-                clusterDistance,
-                clusterRadius,
-                clusterRadiusStep,
-                nodesPerRing,
-                orbitGap
-            } = LAYOUT_CONFIG;
-
-            // Track cluster bounds for orbiting calculations
-            const clusterBounds = {};  // clusterName -> { centerX, centerY, maxRadius }
-
-            // Helper function to position a cluster's nodes
-            function positionClusterNodes(clusterName, nodeList, centerX, centerY, clusterAngle) {
-                let maxRadius = 0;
-
-                // Sort nodes by name for consistency
-                nodeList.sort((a, b) => {
-                    const nodeA = nodeMap[a];
-                    const nodeB = nodeMap[b];
-                    return (nodeA?.label || '').localeCompare(nodeB?.label || '');
-                });
-
-                if (nodeList.length === 1) {
-                    positions[nodeList[0]] = { x: centerX, y: centerY };
-                    maxRadius = 0;
-                } else {
-                    nodeList.forEach((nodeId, i) => {
-                        const ringIndex = Math.floor(i / nodesPerRing);
-                        const posInRing = i % nodesPerRing;
-                        const nodesInThisRing = Math.min(nodesPerRing, nodeList.length - ringIndex * nodesPerRing);
-
-                        const nodeRadius = clusterRadius + ringIndex * clusterRadiusStep;
-                        maxRadius = Math.max(maxRadius, nodeRadius);
-
-                        const angleStep = (2 * Math.PI) / nodesInThisRing;
-                        const startAngle = clusterAngle;
-                        const nodeAngle = startAngle + posInRing * angleStep;
-
-                        positions[nodeId] = {
-                            x: centerX + Math.cos(nodeAngle) * nodeRadius,
-                            y: centerY + Math.sin(nodeAngle) * nodeRadius
-                        };
-                    });
-                }
-
-                return maxRadius;
-            }
-
-            // Build topological order for chained orbits
-            // e.g., contactgroups -> contacts -> services -> commands
-            function getOrbitChainRoot(clusterName) {
-                const def = clusterDefs[clusterName];
-                if (!def || !def.orbitsAround) {return clusterName;}
-                return getOrbitChainRoot(def.orbitsAround);
-            }
-
-            function getOrbitDepth(clusterName) {
-                const def = clusterDefs[clusterName];
-                if (!def || !def.orbitsAround) {return 0;}
-                return 1 + getOrbitDepth(def.orbitsAround);
-            }
-
-            // Sort clusters by orbit depth (roots first, then their children)
-            const clusterOrder = Object.keys(clusters).filter(name => clusters[name].length > 0);
-            clusterOrder.sort((a, b) => getOrbitDepth(a) - getOrbitDepth(b));
-
-            // Position clusters in dependency order
-            for (const clusterName of clusterOrder) {
-                const nodeList = clusters[clusterName];
-                const def = clusterDefs[clusterName];
-                if (!def) {continue;}
-
-                if (!def.orbitsAround) {
-                    // Root cluster - position at its angle from center
-                    const clusterAngle = def.angle;
-                    const clusterCenterX = Math.cos(clusterAngle) * clusterDistance;
-                    const clusterCenterY = Math.sin(clusterAngle) * clusterDistance;
-
-                    const maxRadius = positionClusterNodes(clusterName, nodeList, clusterCenterX, clusterCenterY, clusterAngle);
-
-                    clusterBounds[clusterName] = {
-                        centerX: clusterCenterX,
-                        centerY: clusterCenterY,
-                        maxRadius: maxRadius,
-                        outerRadius: maxRadius  // Track outermost extent including children
-                    };
-                } else {
-                    // Orbiting cluster - position around parent's center
-                    const parentName = def.orbitsAround;
-                    let parentBounds = clusterBounds[parentName];
-
-                    // If parent has no nodes, create virtual bounds at its angle
-                    if (!parentBounds) {
-                        const parentDef = clusterDefs[parentName];
-                        const fallbackAngle = parentDef ? parentDef.angle : def.angle;
-                        const fallbackX = Math.cos(fallbackAngle) * clusterDistance;
-                        const fallbackY = Math.sin(fallbackAngle) * clusterDistance;
-                        parentBounds = {
-                            centerX: fallbackX,
-                            centerY: fallbackY,
-                            maxRadius: 0,
-                            outerRadius: 0
-                        };
-                        clusterBounds[parentName] = parentBounds;
-                    }
-
-                    // Position this cluster as a ring outside the parent's outer radius
-                    const orbitRadius = parentBounds.outerRadius + orbitGap;
-
-                    // Calculate nodes per ring for this orbit
-                    const circumference = 2 * Math.PI * orbitRadius;
-                    const minSpacing = 80;
-                    const nodesPerOrbitRing = Math.max(6, Math.floor(circumference / minSpacing));
-
-                    let maxOrbitRadius = orbitRadius;
-
-                    // Sort nodes by name for consistency
-                    nodeList.sort((a, b) => {
-                        const nodeA = nodeMap[a];
-                        const nodeB = nodeMap[b];
-                        return (nodeA?.label || '').localeCompare(nodeB?.label || '');
-                    });
-
-                    // Position nodes in concentric orbit rings
-                    nodeList.forEach((nodeId, i) => {
-                        const ringIndex = Math.floor(i / nodesPerOrbitRing);
-                        const posInRing = i % nodesPerOrbitRing;
-                        const nodesInThisRing = Math.min(nodesPerOrbitRing, nodeList.length - ringIndex * nodesPerOrbitRing);
-
-                        const nodeRadius = orbitRadius + ringIndex * 80;
-                        maxOrbitRadius = Math.max(maxOrbitRadius, nodeRadius);
-
-                        const angleStep = (2 * Math.PI) / nodesInThisRing;
-                        const nodeAngle = posInRing * angleStep - Math.PI / 2;  // Start from top
-
-                        positions[nodeId] = {
-                            x: parentBounds.centerX + Math.cos(nodeAngle) * nodeRadius,
-                            y: parentBounds.centerY + Math.sin(nodeAngle) * nodeRadius
-                        };
-                    });
-
-                    // Store this cluster's bounds
-                    clusterBounds[clusterName] = {
-                        centerX: parentBounds.centerX,
-                        centerY: parentBounds.centerY,
-                        maxRadius: maxOrbitRadius,
-                        outerRadius: maxOrbitRadius
-                    };
-
-                    // Update parent's outer radius to include this orbit
-                    parentBounds.outerRadius = maxOrbitRadius;
-
-                    // Propagate outer radius up the chain
-                    let ancestor = parentName;
-                    while (ancestor) {
-                        const ancestorBounds = clusterBounds[ancestor];
-                        if (ancestorBounds) {
-                            ancestorBounds.outerRadius = Math.max(ancestorBounds.outerRadius, maxOrbitRadius);
-                        }
-                        const ancestorDef = clusterDefs[ancestor];
-                        ancestor = ancestorDef?.orbitsAround;
-                    }
-                }
-            }
-
-            // Position disconnected nodes
-            if (disconnected.length > 0) {
-                const disconnectedAngle = Math.PI * 7/8;
-                const dcX = Math.cos(disconnectedAngle) * clusterDistance;
-                const dcY = Math.sin(disconnectedAngle) * clusterDistance;
-
-                if (disconnected.length === 1) {
-                    positions[disconnected[0]] = { x: dcX, y: dcY };
-                } else {
-                    const angleStep = (2 * Math.PI) / disconnected.length;
-                    disconnected.forEach((nodeId, i) => {
-                        const angle = i * angleStep;
-                        positions[nodeId] = {
-                            x: dcX + Math.cos(angle) * clusterRadius,
-                            y: dcY + Math.sin(angle) * clusterRadius
-                        };
-                    });
-                }
-            }
-
-            // Collision detection within clusters
-            const NODE_MIN_DISTANCE = 80;
-            const ITERATIONS = 6;
-
-            for (let iter = 0; iter < ITERATIONS; iter++) {
-                const nodeIds = Object.keys(positions);
-                for (let i = 0; i < nodeIds.length; i++) {
-                    for (let j = i + 1; j < nodeIds.length; j++) {
-                        const idA = nodeIds[i];
-                        const idB = nodeIds[j];
-                        const posA = positions[idA];
-                        const posB = positions[idB];
-
-                        const dx = posB.x - posA.x;
-                        const dy = posB.y - posA.y;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-
-                        if (dist < NODE_MIN_DISTANCE && dist > 0) {
-                            const overlap = NODE_MIN_DISTANCE - dist;
-                            const pushX = (dx / dist) * overlap * 0.5;
-                            const pushY = (dy / dist) * overlap * 0.5;
-
-                            if (idA !== centerNodeId) {
-                                posA.x -= pushX;
-                                posA.y -= pushY;
-                            }
-                            if (idB !== centerNodeId) {
-                                posB.x += pushX;
-                                posB.y += pushY;
-                            }
-                        }
-                    }
-                }
-            }
+            positions = positionStaticClusters(tree, centerNodeId);
+            resolveCollisions(positions, centerNodeId);
         }
 
         return positions;
@@ -1638,6 +1496,52 @@ console.log('dependencies.js loaded');
     }
 
     /**
+     * Resolve applicable expansion rules for a node type, merging base + atType rules.
+     * atType rule merging via union enables type-aware behavior at intermediate nodes.
+     * Union (not override) prevents losing base rules when type-specific rules apply.
+     */
+    function resolveApplicableRules(rules, currentType) {
+        let forward = rules.forward || [];
+        let backward = rules.backward || [];
+        if (rules.atType?.[currentType]) {
+            const typeRules = rules.atType[currentType];
+            forward = [...new Set([...forward, ...(typeRules.forward || [])])];
+            backward = [...new Set([...backward, ...(typeRules.backward || [])])];
+        }
+        return { forward, backward };
+    }
+
+    /**
+     * Collect node IDs reachable via forward edges (edge.from === nodeId) matching given labels.
+     */
+    function collectForwardTargets(edges, nodeId, labels, visited, nodes) {
+        const targets = [];
+        for (const edge of edges) {
+            if (labels.includes(edge.label) && edge.from === nodeId) {
+                if (nodes.find(n => n.id === edge.to) && !visited.has(edge.to)) {
+                    targets.push(edge.to);
+                }
+            }
+        }
+        return targets;
+    }
+
+    /**
+     * Collect node IDs reachable via backward edges (edge.to === nodeId) matching given labels.
+     */
+    function collectBackwardTargets(edges, nodeId, labels, visited, nodes) {
+        const targets = [];
+        for (const edge of edges) {
+            if (labels.includes(edge.label) && edge.to === nodeId) {
+                if (nodes.find(n => n.id === edge.from) && !visited.has(edge.from)) {
+                    targets.push(edge.from);
+                }
+            }
+        }
+        return targets;
+    }
+
+    /**
      * Shared BFS implementation for rule-based expansion.
      * @param {string} startNodeId - Node ID to expand from
      * @param {string} preset - Quick view preset name
@@ -1653,10 +1557,7 @@ console.log('dependencies.js loaded');
         const startNode = nodes.find(n => n.id === startNodeId);
         if (!startNode) {return;}
 
-        const nodeType = startNode.type;
-        const rules = expansionRules[nodeType]?.[preset];
-
-        // No rules defined -> show nothing (prevents unpredictable expansion)
+        const rules = expansionRules[startNode.type]?.[preset];
         if (!rules) {return;}
 
         const visited = new Set();
@@ -1670,51 +1571,19 @@ console.log('dependencies.js loaded');
             const currentNode = nodes.find(n => n.id === nodeId);
             if (!currentNode) {continue;}
 
-            const currentType = currentNode.type;
-
             // stopAt nodes: prevent expansion through unwanted intermediate nodes
-            // (e.g., services view from hostgroup shouldn't expand to sibling hosts)
             // Dual tracking required: visited set prevents BFS cycles, resultSet
             // controls graph membership. Mark visited but exclude from graph.
             const shouldApplyStopAt = exemptRootFromStopAt ? (nodeId !== startNodeId) : true;
-            if (shouldApplyStopAt && rules.stopAt?.includes(currentType)) {
+            if (shouldApplyStopAt && rules.stopAt?.includes(currentNode.type)) {
                 continue;
             }
 
             resultSet.add(nodeId);
 
-            // Get applicable rules: base rules + type-specific atType rules
-            // atType rule merging via union enables type-aware behavior at intermediate nodes
-            // Union (not override) prevents losing base rules when type-specific rules apply
-            let applicableForward = rules.forward || [];
-            let applicableBackward = rules.backward || [];
-
-            if (rules.atType && rules.atType[currentType]) {
-                const typeRules = rules.atType[currentType];
-                // Union of arrays: combine base + type-specific rules
-                applicableForward = [...new Set([...applicableForward, ...(typeRules.forward || [])])];
-                applicableBackward = [...new Set([...applicableBackward, ...(typeRules.backward || [])])];
-            }
-
-            // Follow forward edges: edge.from === nodeId
-            for (const edge of edges) {
-                if (applicableForward.includes(edge.label) && edge.from === nodeId) {
-                    const targetNode = nodes.find(n => n.id === edge.to);
-                    if (targetNode && !visited.has(edge.to)) {
-                        toVisit.push(edge.to);
-                    }
-                }
-            }
-
-            // Follow backward edges: edge.to === nodeId
-            for (const edge of edges) {
-                if (applicableBackward.includes(edge.label) && edge.to === nodeId) {
-                    const sourceNode = nodes.find(n => n.id === edge.from);
-                    if (sourceNode && !visited.has(edge.from)) {
-                        toVisit.push(edge.from);
-                    }
-                }
-            }
+            const { forward, backward } = resolveApplicableRules(rules, currentNode.type);
+            toVisit.push(...collectForwardTargets(edges, nodeId, forward, visited, nodes));
+            toVisit.push(...collectBackwardTargets(edges, nodeId, backward, visited, nodes));
         }
     }
 

@@ -59,6 +59,105 @@
 
     // Nagios attribute definitions by object type (from constants, populated by /api/metadata)
 
+    // Issue badge formatters keyed by issue type
+    const ISSUE_BADGE_FORMATTERS = {
+        duplicate_name: (issue, obj, displayName) => ({
+            label: `Duplicate ${obj.object_type}: ${displayName}`,
+            title: issue.message || `Duplicate ${obj.object_type} name`
+        }),
+        duplicate: (issue, obj, displayName) => ({
+            label: `Duplicate ${obj.object_type}: ${displayName}`,
+            title: issue.message || `Duplicate ${obj.object_type} name`
+        }),
+        orphan: (issue, obj, displayName) => ({
+            label: `Orphan ${obj.object_type}: ${displayName}`,
+            title: 'This object is not referenced by any other object'
+        }),
+        empty_group: (issue, obj, displayName) => ({
+            label: `Empty ${obj.object_type}: ${displayName}`,
+            title: 'This group has no members'
+        }),
+        unused_template: (issue, obj, displayName) => ({
+            label: `Unused template: ${displayName}`,
+            title: issue.message || `This template is not used by any ${obj.object_type}`
+        }),
+        unused_command: (issue, obj, displayName) => ({
+            label: `Unused command: ${displayName}`,
+            title: 'This command is not used by any service or host'
+        }),
+        unused_contact: (issue, obj, displayName) => ({
+            label: `Unused contact: ${displayName}`,
+            title: 'This contact is not used by any object'
+        }),
+        unused_contactgroup: (issue, obj, displayName) => ({
+            label: `Unused contactgroup: ${displayName}`,
+            title: 'This contact group is not used by any object'
+        }),
+        unused_timeperiod: (issue, obj, displayName) => ({
+            label: `Unused timeperiod: ${displayName}`,
+            title: 'This time period is not used by any object'
+        }),
+        long_host_list: (issue, obj) => {
+            const hostCount = obj.attributes?.host_name?.split(',').length || 0;
+            return {
+                label: `Consider hostgroup: ${hostCount} individual hosts listed`,
+                title: `This ${obj.object_type} has ${hostCount} hosts listed individually. Consider using a hostgroup instead.`
+            };
+        },
+    };
+
+    const MISSING_REF_PATTERNS = {
+        'missing_template': /undefined \w+ template[:\s]+['"]?([^'"]+)['"]?$/i,
+        'missing_command': /non-existent command[:\s]+['"]?([^'"!]+)/i,
+        'missing_timeperiod': /non-existent timeperiod[:\s]+['"]?([^'"]+)['"]?$/i,
+        'missing_contact': /non-existent contact[:\s]+['"]?([^'"]+)['"]?$/i,
+        'missing_contactgroup': /non-existent contactgroup[:\s]+['"]?([^'"]+)['"]?$/i,
+        'missing_hostgroup': /non-existent hostgroup[:\s]+['"]?([^'"]+)['"]?$/i,
+        'missing_servicegroup': /non-existent servicegroup[:\s]+['"]?([^'"]+)['"]?$/i,
+        'missing_host': /non-existent host[:\s]+['"]?([^'"]+)['"]?$/i
+    };
+
+    function formatIssueBadge(issue, obj, displayName) {
+        const formatter = ISSUE_BADGE_FORMATTERS[issue.type];
+        if (formatter) {
+            return formatter(issue, obj, displayName);
+        }
+
+        // Handle missing_* types with regex extraction
+        let issueLabel = Explorer.getIssueShortLabel(issue);
+        let issueTitle = 'Click to view in Analysis tab';
+        if (issue.type && issue.type.startsWith('missing_') && issue.message) {
+            const pattern = MISSING_REF_PATTERNS[issue.type];
+            if (pattern) {
+                const match = issue.message.match(pattern);
+                if (match) {
+                    issueLabel = `Missing ${issue.type.replace('missing_', '')}: ${match[1]}`;
+                }
+            }
+            issueTitle = issue.message;
+        }
+        return { label: issueLabel, title: issueTitle };
+    }
+
+    function updateIssueBadge(issueBtn, issue, obj, hostListInfo) {
+        const displayName = obj.display_name || obj.attributes?.name || '';
+        if (issue) {
+            const icon = Explorer.getIssueIcon(issue);
+            const badge = formatIssueBadge(issue, obj, displayName);
+            issueBtn.innerHTML = `${icon} ${badge.label}`;
+            issueBtn.className = `card-issue-btn severity-${issue.severity}`;
+            issueBtn.style.display = 'inline-flex';
+            issueBtn.title = badge.title;
+        } else if (hostListInfo.shouldGroup) {
+            issueBtn.innerHTML = `<i class="fa-solid fa-list"></i> Consider hostgroup: ${hostListInfo.count} individual hosts listed`;
+            issueBtn.className = 'card-issue-btn severity-info';
+            issueBtn.style.display = 'inline-flex';
+            issueBtn.title = `This ${obj.object_type} has ${hostListInfo.count} hosts listed individually. Consider using a hostgroup instead.`;
+        } else {
+            issueBtn.style.display = 'none';
+        }
+    }
+
     function showCenterPaneObject(obj) {
         hideDocsPopover();
         DebugLogger.debug('Showing object in center pane', {
@@ -70,7 +169,6 @@
         // Check if there are pending edits for this object
         const pendingEdit = state.pendingEdits.get(obj.global_index);
         if (pendingEdit) {
-            // Use the edited attributes, but keep object reference for other properties
             state.editedObject = {...obj, attributes: {...pendingEdit.edited}};
             state.originalAttributes = {...pendingEdit.original};
         } else {
@@ -80,8 +178,6 @@
 
         state.isNewObject = false;
         state.newObjectStagedIndex = null;
-
-        // Hide close button for regular objects
         document.getElementById('centerCloseBtn').style.display = 'none';
 
         const isTemplate = Explorer.isObjectTemplate(obj);
@@ -89,108 +185,30 @@
         const hostListInfo = Explorer.getHostListInfo(obj);
         const issue = Explorer.getObjectIssue(obj);
 
-        // Store current object info for issue navigation
         state.currentCenterObject = obj;
         state.currentCenterIssue = issue;
         state.currentCenterIsOrphan = isOrphan;
         state.currentCenterHostListInfo = hostListInfo;
 
-        let typeText = isTemplate ? `${obj.object_type} template` : obj.object_type;
-
+        const typeText = isTemplate ? `${obj.object_type} template` : obj.object_type;
         const typeEl = document.getElementById('centerCardType');
         typeEl.textContent = typeText;
         typeEl.className = 'card-type type-' + obj.object_type + (isTemplate ? ' is-template' : '');
 
-        // Show separate issue button
-        const issueBtn = document.getElementById('centerCardIssue');
-        const badgeDisplayName = obj.display_name || obj.attributes?.name || '';
-        if (issue) {
-            const icon = Explorer.getIssueIcon(issue);
-            let issueLabel = Explorer.getIssueShortLabel(issue);
-            let issueTitle = 'Click to view in Analysis tab';
-            const displayName = badgeDisplayName;
-
-            // Format labels to match cleanup tab titles
-            if (issue.type === 'duplicate_name' || issue.type === 'duplicate') {
-                issueLabel = `Duplicate ${obj.object_type}: ${displayName}`;
-                issueTitle = issue.message || `Duplicate ${obj.object_type} name`;
-            } else if (issue.type === 'orphan') {
-                issueLabel = `Orphan ${obj.object_type}: ${displayName}`;
-                issueTitle = 'This object is not referenced by any other object';
-            } else if (issue.type === 'empty_group') {
-                issueLabel = `Empty ${obj.object_type}: ${displayName}`;
-                issueTitle = 'This group has no members';
-            } else if (issue.type === 'unused_template') {
-                issueLabel = `Unused template: ${displayName}`;
-                issueTitle = issue.message || `This template is not used by any ${obj.object_type}`;
-            } else if (issue.type === 'unused_command') {
-                issueLabel = `Unused command: ${displayName}`;
-                issueTitle = 'This command is not used by any service or host';
-            } else if (issue.type === 'unused_contact') {
-                issueLabel = `Unused contact: ${displayName}`;
-                issueTitle = 'This contact is not used by any object';
-            } else if (issue.type === 'unused_contactgroup') {
-                issueLabel = `Unused contactgroup: ${displayName}`;
-                issueTitle = 'This contact group is not used by any object';
-            } else if (issue.type === 'unused_timeperiod') {
-                issueLabel = `Unused timeperiod: ${displayName}`;
-                issueTitle = 'This time period is not used by any object';
-            } else if (issue.type === 'long_host_list') {
-                const hostCount = obj.attributes?.host_name?.split(',').length || 0;
-                issueLabel = `Consider hostgroup: ${hostCount} individual hosts listed`;
-                issueTitle = `This ${obj.object_type} has ${hostCount} hosts listed individually. Consider using a hostgroup instead.`;
-            } else if (issue.type && issue.type.startsWith('missing_') && issue.message) {
-                // For missing references, extract the missing name from the message
-                const patterns = {
-                    'missing_template': /undefined \w+ template[:\s]+['"]?([^'"]+)['"]?$/i,
-                    'missing_command': /non-existent command[:\s]+['"]?([^'"!]+)/i,
-                    'missing_timeperiod': /non-existent timeperiod[:\s]+['"]?([^'"]+)['"]?$/i,
-                    'missing_contact': /non-existent contact[:\s]+['"]?([^'"]+)['"]?$/i,
-                    'missing_contactgroup': /non-existent contactgroup[:\s]+['"]?([^'"]+)['"]?$/i,
-                    'missing_hostgroup': /non-existent hostgroup[:\s]+['"]?([^'"]+)['"]?$/i,
-                    'missing_servicegroup': /non-existent servicegroup[:\s]+['"]?([^'"]+)['"]?$/i,
-                    'missing_host': /non-existent host[:\s]+['"]?([^'"]+)['"]?$/i
-                };
-                const pattern = patterns[issue.type];
-                if (pattern) {
-                    const match = issue.message.match(pattern);
-                    if (match) {
-                        const typeLabel = issue.type.replace('missing_', '');
-                        issueLabel = `Missing ${typeLabel}: ${match[1]}`;
-                    }
-                }
-                issueTitle = issue.message;
-            }
-
-            issueBtn.innerHTML = `${icon} ${issueLabel}`;
-            issueBtn.className = `card-issue-btn severity-${issue.severity}`;
-            issueBtn.style.display = 'inline-flex';
-            issueBtn.title = issueTitle;
-        } else if (hostListInfo.shouldGroup) {
-            issueBtn.innerHTML = `<i class="fa-solid fa-list"></i> Consider hostgroup: ${hostListInfo.count} individual hosts listed`;
-            issueBtn.className = 'card-issue-btn severity-info';
-            issueBtn.style.display = 'inline-flex';
-            issueBtn.title = `This ${obj.object_type} has ${hostListInfo.count} hosts listed individually. Consider using a hostgroup instead.`;
-        } else {
-            issueBtn.style.display = 'none';
-        }
+        updateIssueBadge(document.getElementById('centerCardIssue'), issue, obj, hostListInfo);
 
         // Compute display name from staged attributes if available
         const nameField = Explorer.getNameFieldForObject(obj);
         const displayName = state.editedObject.attributes[nameField] || obj.display_name;
         document.getElementById('centerCardName').textContent = displayName;
 
-        // Show just filename in breadcrumb (not full path)
         const filename = obj.source_file.split('/').pop() || obj.source_file;
         document.getElementById('centerCardFile').textContent = filename;
-        document.getElementById('centerCardFile').title = obj.source_file; // Full path on hover
+        document.getElementById('centerCardFile').title = obj.source_file;
 
         renderCenterAttributes();
-
-        // Load unified Impact & Relationships section
         Explorer.loadImpactAndRelationships(state.editedObject);
 
-        // Default impact section to collapsed, then restore saved state from localStorage
         setTimeout(() => {
             const titleEl = document.querySelector('#impactSection .section-title');
             const contentEl = document.getElementById('impactContent');
@@ -280,65 +298,31 @@
         content.style.display = 'none';
     }
 
-    function getAttributeSuggestions(attrName, objectType) {
-        // Handle notification options and failure criteria
-        if (constants.NOTIFICATION_OPTION_ATTRS.includes(attrName)) {
-            if (attrName === 'host_notification_options') {
-                return constants.HOST_NOTIFICATION_OPTIONS;
-            } else if (attrName === 'service_notification_options') {
-                return constants.SERVICE_NOTIFICATION_OPTIONS;
-            } else if (attrName === 'notification_options') {
-                // notification_options depends on the object type
-                if (objectType === 'host' || objectType === 'hostescalation' || objectType === 'hostdependency') {
-                    return constants.HOST_NOTIFICATION_OPTIONS;
-                } 
-                    return constants.SERVICE_NOTIFICATION_OPTIONS;
-                
-            } else if (attrName === 'execution_failure_criteria' || attrName === 'notification_failure_criteria') {
-                // Failure criteria depends on dependency type
-                if (objectType === 'hostdependency') {
-                    return constants.HOST_FAILURE_CRITERIA;
-                } 
-                    return constants.SERVICE_FAILURE_CRITERIA;
-                
-            } else if (attrName === 'escalation_options') {
-                if (objectType === 'hostescalation') {
-                    return constants.HOST_ESCALATION_OPTIONS;
-                } 
-                    return constants.SERVICE_ESCALATION_OPTIONS;
-                
-            } else if (attrName === 'stalking_options') {
-                if (objectType === 'host') {
-                    return constants.HOST_STALKING_OPTIONS;
-                } 
-                    return constants.SERVICE_STALKING_OPTIONS;
-                
-            } else if (attrName === 'flap_detection_options') {
-                if (objectType === 'host') {
-                    return constants.HOST_FLAP_DETECTION_OPTIONS;
-                } 
-                    return constants.SERVICE_FLAP_DETECTION_OPTIONS;
-                
-            }
+    // Host-type object types for option lookups
+    const HOST_TYPES = new Set(['host', 'hostescalation', 'hostdependency']);
+
+    function getOptionSuggestions(attrName, objectType) {
+        if (attrName === 'host_notification_options') {return constants.HOST_NOTIFICATION_OPTIONS;}
+        if (attrName === 'service_notification_options') {return constants.SERVICE_NOTIFICATION_OPTIONS;}
+        if (attrName === 'notification_options') {
+            return HOST_TYPES.has(objectType) ? constants.HOST_NOTIFICATION_OPTIONS : constants.SERVICE_NOTIFICATION_OPTIONS;
         }
-
-        let refType = constants.ATTR_REFERENCE_MAP[attrName];
-
-        // Handle special cases
-        if (attrName === 'use') {
-            // Templates of the same type with register=0
-            return getTemplatesForType(objectType);
-        } else if (attrName === 'members') {
-            // Members depends on the group type
-            if (objectType === 'hostgroup') {refType = 'host';}
-            else if (objectType === 'servicegroup') {refType = 'service';}
-            else if (objectType === 'contactgroup') {refType = 'contact';}
+        if (attrName === 'execution_failure_criteria' || attrName === 'notification_failure_criteria') {
+            return objectType === 'hostdependency' ? constants.HOST_FAILURE_CRITERIA : constants.SERVICE_FAILURE_CRITERIA;
         }
+        if (attrName === 'escalation_options') {
+            return objectType === 'hostescalation' ? constants.HOST_ESCALATION_OPTIONS : constants.SERVICE_ESCALATION_OPTIONS;
+        }
+        if (attrName === 'stalking_options') {
+            return objectType === 'host' ? constants.HOST_STALKING_OPTIONS : constants.SERVICE_STALKING_OPTIONS;
+        }
+        if (attrName === 'flap_detection_options') {
+            return objectType === 'host' ? constants.HOST_FLAP_DETECTION_OPTIONS : constants.SERVICE_FLAP_DETECTION_OPTIONS;
+        }
+        return null;
+    }
 
-        if (!refType) {return [];}
-
-        // C-06: Build a set of objects staged for deletion
-        // stagedObjectDeletions is a Set of global_index values
+    function getDeletedObjectKeys() {
         const stagedDeletionIndices = state.stagedObjectDeletions || new Set();
         const deletedKeys = new Set();
         for (const idx of stagedDeletionIndices) {
@@ -347,22 +331,10 @@
                 deletedKeys.add(`${obj.source_file}:${obj.line_number}`);
             }
         }
+        return deletedKeys;
+    }
 
-        // Get all objects of the referenced type from current disk state
-        // C-06: Filter out objects that are staged for deletion
-        const suggestions = state.allObjects
-            .filter(o => {
-                if (o.object_type !== refType) {return false;}
-                // Check if this object is staged for deletion
-                const objKey = `${o.source_file}:${o.line_number}`;
-                if (deletedKeys.has(objKey)) {return false;}
-                return true;
-            })
-            .map(o => o.display_name)
-            .filter(name => name && name !== '(unnamed)');
-
-        // F-04: Also include staged creations that haven't been applied yet
-        // This allows referencing objects created in the same editing session
+    function addStagedCreationSuggestions(suggestions, refType) {
         const stagedCreations = state.stagedCreations || [];
         for (const creation of stagedCreations) {
             if (creation.object_type === refType) {
@@ -373,8 +345,40 @@
                 }
             }
         }
+    }
 
-        return [...new Set(suggestions)].sort(); // Remove duplicates and sort
+    function getAttributeSuggestions(attrName, objectType) {
+        // Handle notification options and failure criteria
+        if (constants.NOTIFICATION_OPTION_ATTRS.includes(attrName)) {
+            const options = getOptionSuggestions(attrName, objectType);
+            if (options) {return options;}
+        }
+
+        if (attrName === 'use') {
+            return getTemplatesForType(objectType);
+        }
+
+        let refType = constants.ATTR_REFERENCE_MAP[attrName];
+        if (attrName === 'members') {
+            if (objectType === 'hostgroup') {refType = 'host';}
+            else if (objectType === 'servicegroup') {refType = 'service';}
+            else if (objectType === 'contactgroup') {refType = 'contact';}
+        }
+
+        if (!refType) {return [];}
+
+        const deletedKeys = getDeletedObjectKeys();
+        const suggestions = state.allObjects
+            .filter(o => {
+                if (o.object_type !== refType) {return false;}
+                return !deletedKeys.has(`${o.source_file}:${o.line_number}`);
+            })
+            .map(o => o.display_name)
+            .filter(name => name && name !== '(unnamed)');
+
+        addStagedCreationSuggestions(suggestions, refType);
+
+        return [...new Set(suggestions)].sort();
     }
 
     // Attributes that typically have long values and should use textarea
@@ -829,77 +833,74 @@
         });
     }
 
-    function updateAttribute(key, value, inputElement) {
-        // Skip validation for identity/text fields
+    const COMMAND_ATTRS = new Set(['check_command', 'event_handler', 'host_notification_commands', 'service_notification_commands']);
+
+    function validateReferenceValue(key, value) {
         const objIdentityFields = identityFields[state.editedObject.object_type] || [];
-        const isIdentityField = objIdentityFields.includes(key);
+        if (objIdentityFields.includes(key)) {return true;}
 
-        // Validate reference values (commands, groups, timeperiods, etc.)
         const suggestions = getAttributeSuggestions(key, state.editedObject.object_type);
-        if (suggestions.length > 0 && value && !isIdentityField) {
-            // Skip validation for notification options (they use short codes like d,r,f)
-            if (!constants.NOTIFICATION_OPTION_ATTRS.includes(key)) {
-                const values = Explorer.parseCommaValues(value);
-                const isCommandAttr = ['check_command', 'event_handler', 'host_notification_commands', 'service_notification_commands'].includes(key);
+        if (suggestions.length === 0 || !value) {return true;}
+        if (constants.NOTIFICATION_OPTION_ATTRS.includes(key)) {return true;}
 
-                for (const v of values) {
-                    let checkValue = isCommandAttr ? v.split('!')[0] : v;
-                    checkValue = Explorer.stripPrefix(checkValue);
-                    if (!suggestions.includes(checkValue)) {
-                        showToast(`"${checkValue}" does not exist`, 'error');
-                        // Revert the input to the old value
-                        if (inputElement) {
-                            inputElement.value = state.editedObject.attributes[key] || '';
-                        }
-                        return;
-                    }
-                }
+        const values = Explorer.parseCommaValues(value);
+        const isCommandAttr = COMMAND_ATTRS.has(key);
+        for (const v of values) {
+            let checkValue = isCommandAttr ? v.split('!')[0] : v;
+            checkValue = Explorer.stripPrefix(checkValue);
+            if (!suggestions.includes(checkValue)) {
+                showToast(`"${checkValue}" does not exist`, 'error');
+                return false;
             }
+        }
+        return true;
+    }
+
+    function syncNameDisplays(key, value) {
+        const nameField = Explorer.getNewObjectNameField(state.editedObject.object_type);
+        if (key !== nameField) {return;}
+
+        state.editedObject.display_name = value || '(unnamed)';
+
+        if (state.isNewObject) {
+            const nameInput = document.getElementById('newObjectNameInput');
+            if (nameInput) {nameInput.value = value;}
+            return;
+        }
+
+        document.getElementById('centerCardName').textContent = state.editedObject.display_name;
+
+        const objKey = Explorer.getObjectKey(state.editedObject);
+        const objTab = state.openTabs.find(t => t.key === objKey);
+        if (objTab) {
+            objTab.label = value || '(unnamed)';
+            Explorer.renderTabBar();
+        }
+
+        const treeItem = document.querySelector(`.tree-item[data-index="${state.editedObject.global_index}"]`);
+        if (treeItem) {
+            const nameSpan = treeItem.querySelector('.tree-item-name');
+            if (nameSpan) {nameSpan.textContent = state.editedObject.display_name;}
+        }
+
+        const targetItem = document.querySelector(`.target-object-item[data-index="${state.editedObject.global_index}"]`);
+        if (targetItem) {
+            const nameSpan = targetItem.querySelector('.obj-name');
+            if (nameSpan) {nameSpan.textContent = state.editedObject.display_name;}
+        }
+    }
+
+    function updateAttribute(key, value, inputElement) {
+        if (!validateReferenceValue(key, value)) {
+            if (inputElement) {
+                inputElement.value = state.editedObject.attributes[key] || '';
+            }
+            return;
         }
 
         state.editedObject.attributes[key] = value;
-
-        // Refresh info sections if relevant attributes changed
         Explorer.refreshRelatedSections(key, state.editedObject);
-
-        // Check if this is the name field for this object type
-        const nameField = Explorer.getNewObjectNameField(state.editedObject.object_type);
-        if (key === nameField) {
-            // Update display name
-            state.editedObject.display_name = value || '(unnamed)';
-
-            if (state.isNewObject) {
-                // Update the name input at the top for new objects
-                const nameInput = document.getElementById('newObjectNameInput');
-                if (nameInput) {nameInput.value = value;}
-            } else {
-                // Update the name display for existing objects
-                document.getElementById('centerCardName').textContent = state.editedObject.display_name;
-
-                // Update tab label if this object has an open tab
-                const objKey = Explorer.getObjectKey(state.editedObject);
-                const objTab = state.openTabs.find(t => t.key === objKey);
-                if (objTab) {
-                    objTab.label = value || '(unnamed)';
-                    Explorer.renderTabBar();
-                }
-
-                // Update the tree item name in the left panel
-                const treeItem = document.querySelector(`.tree-item[data-index="${state.editedObject.global_index}"]`);
-                if (treeItem) {
-                    const nameSpan = treeItem.querySelector('.tree-item-name');
-                    if (nameSpan) {nameSpan.textContent = state.editedObject.display_name;}
-                }
-
-                // Update the target pane item name in the right panel
-                const targetItem = document.querySelector(`.target-object-item[data-index="${state.editedObject.global_index}"]`);
-                if (targetItem) {
-                    const nameSpan = targetItem.querySelector('.obj-name');
-                    if (nameSpan) {nameSpan.textContent = state.editedObject.display_name;}
-                }
-            }
-        }
-
+        syncNameDisplays(key, value);
         checkForChanges();
     }
 
@@ -1362,64 +1363,59 @@
      * @param {Object} data - {chain, inherited, errors} from API
      * @param {Object} obj - Current object being edited
      */
+    function renderTemplateChainBreadcrumb(chain, obj) {
+        let html = '<div class="template-breadcrumb">';
+        chain.forEach((tmpl, idx) => {
+            html += `<span class="template-name">${escapeHtml(tmpl.name)}</span>`;
+            if (idx < chain.length - 1) {
+                html += ' <i class="fa-solid fa-chevron-right"></i> ';
+            }
+        });
+        const displayName = obj.display_name || obj.get_name?.() || obj.attributes?.name || 'this object';
+        html += ` <i class="fa-solid fa-chevron-right"></i> <span class="template-name this-object">${escapeHtml(displayName)}</span>`;
+        html += '</div>';
+        return html;
+    }
+
+    function renderInheritedAttributes(inherited, obj) {
+        const entries = Object.entries(inherited).filter(([key]) => !['use', 'name', 'register'].includes(key));
+        if (entries.length === 0) {
+            return '<div class="empty-state-small">No inherited attributes</div>';
+        }
+
+        let html = '<div class="inherited-attrs-table">';
+        for (const [key, rawValue] of entries) {
+            const displayValue = (typeof rawValue === 'object' && rawValue !== null) ? rawValue.value : rawValue;
+            const isOverridden = obj.attributes && obj.attributes.hasOwnProperty(key);
+
+            html += `<div class="attr-row ${isOverridden ? 'overridden' : ''}">`;
+            html += `<div class="attr-key inherited-attr">${escapeHtml(key)}</div>`;
+            html += `<div class="attr-value inherited-attr">${escapeHtml(displayValue)}</div>`;
+            if (isOverridden) {
+                html += `<div class="attr-override-badge"><i class="fa-solid fa-circle-check"></i> Overridden</div>`;
+            }
+            html += '</div>';
+        }
+        html += '</div>';
+        return html;
+    }
+
     function renderInheritanceSection(data, obj) {
         const content = document.getElementById('inheritanceContent');
         if (!content) {return;}
 
-        // Render errors if any
         if (data.errors && data.errors.length > 0) {
             content.innerHTML = `<div class="inheritance-error"><i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(data.errors[0])}</div>`;
             return;
         }
 
-        // Check if object has no template usage
         if (!data.chain || data.chain.length === 0) {
             content.innerHTML = '<div class="empty-state-small">No template inheritance</div>';
             return;
         }
 
-        let html = '';
-
-        // Render template chain breadcrumb
-        if (data.chain && data.chain.length > 0) {
-            html += '<div class="template-breadcrumb">';
-            data.chain.forEach((tmpl, idx) => {
-                html += `<span class="template-name">${escapeHtml(tmpl.name)}</span>`;
-                if (idx < data.chain.length - 1) {
-                    html += ' <i class="fa-solid fa-chevron-right"></i> ';
-                }
-            });
-            const displayName = obj.display_name || obj.get_name?.() || obj.attributes?.name || 'this object';
-            html += ` <i class="fa-solid fa-chevron-right"></i> <span class="template-name this-object">${escapeHtml(displayName)}</span>`;
-            html += '</div>';
-        }
-
-        // Render inherited attributes
-        if (data.inherited && Object.keys(data.inherited).length > 0) {
-            html += '<div class="inherited-attrs-table">';
-            for (const [key, rawValue] of Object.entries(data.inherited)) {
-                // Skip control directives
-                if (['use', 'name', 'register'].includes(key)) {continue;}
-
-                // Handle both old string format and new {value, source} format
-                const displayValue = (typeof rawValue === 'object' && rawValue !== null) ? rawValue.value : rawValue;
-
-                // Check if object overrides this attribute
-                const isOverridden = obj.attributes && obj.attributes.hasOwnProperty(key);
-
-                html += `<div class="attr-row ${isOverridden ? 'overridden' : ''}">`;
-                html += `<div class="attr-key inherited-attr">${escapeHtml(key)}</div>`;
-                html += `<div class="attr-value inherited-attr">${escapeHtml(displayValue)}</div>`;
-                if (isOverridden) {
-                    html += `<div class="attr-override-badge"><i class="fa-solid fa-circle-check"></i> Overridden</div>`;
-                }
-                html += '</div>';
-            }
-            html += '</div>';
-        } else {
-            html += '<div class="empty-state-small">No inherited attributes</div>';
-        }
-
+        let html = renderTemplateChainBreadcrumb(data.chain, obj);
+        html += renderInheritedAttributes(data.inherited || {}, obj);
         content.innerHTML = html;
     }
 

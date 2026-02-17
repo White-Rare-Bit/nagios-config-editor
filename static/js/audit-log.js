@@ -154,6 +154,52 @@ async function refreshAuditLog() {
     renderEntries();
 }
 
+// Filter matchers: each returns true if the entry matches the given filter category
+const TYPE_FILTER_MATCHERS = {
+    creates: entry => (entry.object_creations || []).length > 0,
+    attrs: entry => (entry.object_edits || []).length > 0,
+    moves: entry => (entry.object_moves || []).length > 0 || (entry.file_moves || []).length > 0 || (entry.folder_moves || []).length > 0,
+    deletes: entry => (entry.object_deletions || []).length > 0 || (entry.file_deletions || []).length > 0,
+    git: entry => entry.action && entry.action.startsWith('git_'),
+    backups: entry => entry.action && entry.action.startsWith('backup'),
+};
+
+function matchesTypeFilter(entry) {
+    for (const filter of activeFilters) {
+        const matcher = TYPE_FILTER_MATCHERS[filter];
+        if (matcher && matcher(entry)) {return true;}
+    }
+    return false;
+}
+
+// Searchable array fields in audit entries
+const SEARCH_ARRAY_FIELDS = [
+    { key: 'object_edits', fields: ['object_name', 'object_type'] },
+    { key: 'object_moves', fields: ['object_name', 'from_file', 'to_file'] },
+    { key: 'object_creations', fields: ['object_name', 'file'] },
+    { key: 'object_deletions', fields: ['object_name', 'file'] },
+    { key: 'file_moves', fields: ['from', 'to'] },
+    { key: 'file_deletions', fields: ['path'] },
+];
+
+// Searchable scalar fields in audit entries
+const SEARCH_SCALAR_FIELDS = ['userName', 'userEmail', 'action', 'commit_hash', 'message', 'backup_name', 'description'];
+
+function matchesSearchQuery(entry, query) {
+    const time = new Date(entry.timestamp).toLocaleString().toLowerCase();
+    if (time.includes(query)) {return true;}
+
+    for (const field of SEARCH_SCALAR_FIELDS) {
+        if (entry[field] && entry[field].toLowerCase().includes(query)) {return true;}
+    }
+
+    for (const { key, fields } of SEARCH_ARRAY_FIELDS) {
+        if (searchInEntryArray(entry[key], query, fields)) {return true;}
+    }
+
+    return false;
+}
+
 function renderEntries() {
     const container = document.getElementById('auditLogContainer');
     const countEl = document.getElementById('entryCount');
@@ -178,48 +224,13 @@ function renderEntries() {
     // Filter entries by type
     let filteredEntries = allEntries;
     if (!activeFilters.has('all')) {
-        filteredEntries = allEntries.filter(entry => {
-            if (activeFilters.has('creates') && (entry.object_creations || []).length > 0) {return true;}
-            if (activeFilters.has('attrs') && (entry.object_edits || []).length > 0) {return true;}
-            if (activeFilters.has('moves') && ((entry.object_moves || []).length > 0 || (entry.file_moves || []).length > 0 || (entry.folder_moves || []).length > 0)) {return true;}
-            if (activeFilters.has('deletes') && ((entry.object_deletions || []).length > 0 || (entry.file_deletions || []).length > 0)) {return true;}
-            if (activeFilters.has('git') && entry.action && entry.action.startsWith('git_')) {return true;}
-            if (activeFilters.has('backups') && entry.action && entry.action.startsWith('backup')) {return true;}
-            return false;
-        });
+        filteredEntries = allEntries.filter(matchesTypeFilter);
     }
 
     // Filter entries by search query
     if (searchQuery) {
         const query = searchQuery.toLowerCase();
-        filteredEntries = filteredEntries.filter(entry => {
-            // Search in timestamp
-            const time = new Date(entry.timestamp).toLocaleString().toLowerCase();
-            if (time.includes(query)) {return true;}
-
-            // Search in user info
-            if (entry.userName && entry.userName.toLowerCase().includes(query)) {return true;}
-            if (entry.userEmail && entry.userEmail.toLowerCase().includes(query)) {return true;}
-
-            // Search in action type
-            if (entry.action && entry.action.toLowerCase().includes(query)) {return true;}
-
-            // Search in entry arrays using helper
-            if (searchInEntryArray(entry.object_edits, query, ['object_name', 'object_type'])) {return true;}
-            if (searchInEntryArray(entry.object_moves, query, ['object_name', 'from_file', 'to_file'])) {return true;}
-            if (searchInEntryArray(entry.object_creations, query, ['object_name', 'file'])) {return true;}
-            if (searchInEntryArray(entry.object_deletions, query, ['object_name', 'file'])) {return true;}
-            if (searchInEntryArray(entry.file_moves, query, ['from', 'to'])) {return true;}
-            if (searchInEntryArray(entry.file_deletions, query, ['path'])) {return true;}
-
-            // Search in git-related fields
-            if (entry.commit_hash && entry.commit_hash.toLowerCase().includes(query)) {return true;}
-            if (entry.message && entry.message.toLowerCase().includes(query)) {return true;}
-            if (entry.backup_name && entry.backup_name.toLowerCase().includes(query)) {return true;}
-            if (entry.description && entry.description.toLowerCase().includes(query)) {return true;}
-
-            return false;
-        });
+        filteredEntries = filteredEntries.filter(entry => matchesSearchQuery(entry, query));
     }
 
     countEl.textContent = `${filteredEntries.length} entr${filteredEntries.length === 1 ? 'y' : 'ies'}`;
@@ -281,106 +292,84 @@ function setAuditPageSize(size) {
     renderEntries();
 }
 
-function renderActionEntry(entry, time) {
-    let badge = '';
-    let icon = '';
-    let title = '';
-    let details = '';
+const ACTION_CONFIG = {
+    backup_created: { badgeClass: 'backup', badgeText: 'backup created', icon: 'fa-floppy-disk', title: 'Backup Created' },
+    backup_restored: { badgeClass: 'restore', badgeText: 'backup restored', icon: 'fa-rotate-left', title: 'Backup Restored' },
+    backup_deleted: { badgeClass: 'deletes', badgeText: 'backup deleted', icon: 'fa-trash', title: 'Backup Deleted' },
+    backups_deleted: { badgeClass: 'deletes', icon: 'fa-trash', title: 'All Backups Deleted' },
+    git_initialized: { badgeClass: 'git', badgeText: 'git initialized', icon: 'fa-code-branch', title: 'Git Repository Initialized' },
+    git_restored: { badgeClass: 'restore', badgeText: 'git restored', icon: 'fa-clock-rotate-left', title: 'Restored to Git Commit' },
+    git_commit: { badgeClass: 'git', badgeText: 'git commit', icon: 'fa-check', title: 'Git Commit' },
+    git_discarded: { badgeClass: 'git', badgeText: 'discarded', icon: 'fa-trash', title: 'Discarded Uncommitted Changes' },
+    git_clear_history: { badgeClass: 'git', badgeText: 'history cleared', icon: 'fa-rotate', title: 'Cleared Git History' },
+};
 
-    switch (entry.action) {
+function buildActionDetails(entry, action) {
+    let details = '';
+    switch (action) {
         case 'backup_created':
-            badge = '<span class="audit-badge backup">backup created</span>';
-            icon = '<i class="fa-solid fa-floppy-disk"></i>';
-            title = 'Backup Created';
             details = entry.description ? `<div class="audit-detail-item">${escapeHtml(entry.description)}</div>` : '';
             break;
         case 'backup_restored':
-            badge = '<span class="audit-badge restore">backup restored</span>';
-            icon = '<i class="fa-solid fa-rotate-left"></i>';
-            title = 'Backup Restored';
             details = `<div class="audit-detail-item">Restored from: ${escapeHtml(entry.backup_name)}</div>`;
             break;
         case 'backup_deleted':
-            badge = '<span class="audit-badge deletes">backup deleted</span>';
-            icon = '<i class="fa-solid fa-trash"></i>';
-            title = 'Backup Deleted';
             details = `<div class="audit-detail-item">Deleted: ${escapeHtml(entry.backup_name)}</div>`;
             break;
         case 'backups_deleted':
-            badge = `<span class="audit-badge deletes">${entry.deleted_count} backups deleted</span>`;
-            icon = '<i class="fa-solid fa-trash"></i>';
-            title = 'All Backups Deleted';
             details = `<div class="audit-detail-item">${entry.deleted_count} backup${entry.deleted_count !== 1 ? 's' : ''} deleted</div>`;
             break;
         case 'git_initialized':
-            badge = '<span class="audit-badge git">git initialized</span>';
-            icon = '<i class="fa-solid fa-code-branch"></i>';
-            title = 'Git Repository Initialized';
             details = `<div class="audit-detail-item">First commit: ${escapeHtml(entry.commit_hash)}</div>`;
-            if (entry.message) {
-                details += `<div class="audit-detail-item" class="audit-detail-muted">${escapeHtml(entry.message)}</div>`;
-            }
+            if (entry.message) {details += `<div class="audit-detail-item" class="audit-detail-muted">${escapeHtml(entry.message)}</div>`;}
             break;
         case 'git_restored':
-            badge = '<span class="audit-badge restore">git restored</span>';
-            icon = '<i class="fa-solid fa-clock-rotate-left"></i>';
-            title = 'Restored to Git Commit';
             details = `<div class="audit-detail-item">Commit: ${escapeHtml(entry.commit_hash)}</div>`;
-            if (entry.commit_message) {
-                details += `<div class="audit-detail-item" class="audit-detail-muted">${escapeHtml(entry.commit_message)}</div>`;
-            }
-            if (entry.deleted_files_count > 0) {
-                details += `<div class="audit-detail-item" style="color: var(--color-delete);">${entry.deleted_files_count} file${entry.deleted_files_count !== 1 ? 's' : ''} removed</div>`;
-            }
+            if (entry.commit_message) {details += `<div class="audit-detail-item" class="audit-detail-muted">${escapeHtml(entry.commit_message)}</div>`;}
+            if (entry.deleted_files_count > 0) {details += `<div class="audit-detail-item" style="color: var(--color-delete);">${entry.deleted_files_count} file${entry.deleted_files_count !== 1 ? 's' : ''} removed</div>`;}
             break;
         case 'git_commit':
-            badge = '<span class="audit-badge git">git commit</span>';
-            icon = '<i class="fa-solid fa-check"></i>';
-            // Check if this was a commit after restore
-            if (entry.restoreType === 'backup') {
-                title = 'Committed Backup Restore';
-                details = `<div class="audit-detail-item">Commit: ${escapeHtml(entry.commit_hash)}</div>`;
-                details += `<div class="audit-detail-item">Restored from: ${escapeHtml(entry.restoreFrom)}</div>`;
-            } else if (entry.restoreType === 'git') {
-                title = 'Committed Git Restore';
-                details = `<div class="audit-detail-item">Commit: ${escapeHtml(entry.commit_hash)}</div>`;
-                details += `<div class="audit-detail-item">Restored from: ${escapeHtml(entry.restoreFrom)}</div>`;
-            } else {
-                title = 'Git Commit';
-                details = `<div class="audit-detail-item">Commit: ${escapeHtml(entry.commit_hash)}</div>`;
-            }
-            if (entry.message) {
-                details += `<div class="audit-detail-item" class="audit-detail-muted">${escapeHtml(entry.message)}</div>`;
-            }
+            details = `<div class="audit-detail-item">Commit: ${escapeHtml(entry.commit_hash)}</div>`;
+            if (entry.restoreType) {details += `<div class="audit-detail-item">Restored from: ${escapeHtml(entry.restoreFrom)}</div>`;}
+            if (entry.message) {details += `<div class="audit-detail-item" class="audit-detail-muted">${escapeHtml(entry.message)}</div>`;}
             break;
         case 'git_discarded':
-            badge = '<span class="audit-badge git">discarded</span>';
-            icon = '<i class="fa-solid fa-trash"></i>';
-            title = 'Discarded Uncommitted Changes';
-            details = `<div class="audit-detail-item">Reverted working directory to HEAD</div>`;
+            details = '<div class="audit-detail-item">Reverted working directory to HEAD</div>';
             break;
         case 'git_clear_history':
-            badge = '<span class="audit-badge git">history cleared</span>';
-            icon = '<i class="fa-solid fa-rotate"></i>';
-            title = 'Cleared Git History';
             details = `<div class="audit-detail-item">${escapeHtml(entry.description || 'Repository reinitialized with fresh history')}</div>`;
             break;
-        default:
-            badge = `<span class="audit-badge">${escapeHtml(entry.action)}</span>`;
-            icon = '<i class="fa-solid fa-clipboard-list"></i>';
-            title = entry.action.replace(/_/g, ' ');
-            break;
+    }
+    return details;
+}
+
+function renderUserHtml(entry) {
+    if (!entry.userName && !entry.userEmail) {return '';}
+    const userName = entry.userName || 'Unknown';
+    const userEmail = entry.userEmail ? ` (${entry.userEmail})` : '';
+    return `<span class="audit-entry-user">${escapeHtml(userName)}${escapeHtml(userEmail)}</span>`;
+}
+
+function renderActionEntry(entry, time) {
+    const config = ACTION_CONFIG[entry.action];
+    let badge, icon, title;
+
+    if (config) {
+        const badgeText = config.badgeText || (entry.action === 'backups_deleted' ? `${entry.deleted_count} backups deleted` : entry.action);
+        badge = `<span class="audit-badge ${config.badgeClass}">${escapeHtml(badgeText)}</span>`;
+        icon = `<i class="fa-solid ${config.icon}"></i>`;
+        title = entry.action === 'git_commit' && entry.restoreType
+            ? `Committed ${entry.restoreType === 'backup' ? 'Backup' : 'Git'} Restore`
+            : config.title;
+    } else {
+        badge = `<span class="audit-badge">${escapeHtml(entry.action)}</span>`;
+        icon = '<i class="fa-solid fa-clipboard-list"></i>';
+        title = entry.action.replace(/_/g, ' ');
     }
 
-    // User identity
-    let userHtml = '';
-    if (entry.userName || entry.userEmail) {
-        const userName = entry.userName || 'Unknown';
-        const userEmail = entry.userEmail ? ` (${entry.userEmail})` : '';
-        userHtml = `<span class="audit-entry-user">${escapeHtml(userName)}${escapeHtml(userEmail)}</span>`;
-    }
+    const details = buildActionDetails(entry, entry.action);
+    const userHtml = renderUserHtml(entry);
 
-    // Determine entry type for color-coding
     let entryType = 'backup';
     if (entry.action && entry.action.startsWith('git_')) {
         entryType = 'git';
@@ -405,14 +394,91 @@ function renderActionEntry(entry, time) {
     `;
 }
 
-function renderAuditEntry(entry) {
-    const time = new Date(entry.timestamp).toLocaleString();
+function renderEditsSection(edits) {
+    if (!edits || edits.length === 0) {return '';}
+    let html = '<div class="audit-detail-section"><div class="audit-detail-title">Attribute Changes</div>';
+    edits.forEach(change => {
+        html += `<div class="audit-detail-item">`;
+        html += `<div class="object-info"><span class="object-type type-${escapeHtml(change.object_type)}">${escapeHtml(change.object_type)}</span>${escapeHtml(change.object_name)}</div>`;
+        if (change.changes && change.changes.length > 0) {
+            change.changes.forEach(c => {
+                if (c.type === 'add') {
+                    html += `<div class="change-line change-add">+ ${escapeHtml(c.key)}: ${escapeHtml(c.value)}</div>`;
+                } else if (c.type === 'remove') {
+                    html += `<div class="change-line change-remove">- ${escapeHtml(c.key)}: ${escapeHtml(c.value)}</div>`;
+                } else {
+                    html += `<div class="change-line change-modify">~ ${escapeHtml(c.key)}: ${escapeHtml(c.from)} &rarr; ${escapeHtml(c.to)}</div>`;
+                }
+            });
+        }
+        html += '</div>';
+    });
+    html += '</div>';
+    return html;
+}
 
-    // Handle action-based entries (backups, git operations)
-    if (entry.action) {
-        return renderActionEntry(entry, time);
+function renderMovesSection(moves) {
+    if (!moves || moves.length === 0) {return '';}
+    let html = '<div class="audit-detail-section"><div class="audit-detail-title">Object Moves</div>';
+    moves.forEach(move => {
+        html += `<div class="audit-detail-item">`;
+        html += `<div class="object-info"><span class="object-type type-${escapeHtml(move.object_type)}">${escapeHtml(move.object_type)}</span>${escapeHtml(move.object_name)}</div>`;
+        html += `<div class="change-line change-modify">${escapeHtml(toDisplayPath(move.from_file))} &rarr; ${escapeHtml(toDisplayPath(move.to_file))}</div>`;
+        html += '</div>';
+    });
+    html += '</div>';
+    return html;
+}
+
+function renderCreationsSection(creations) {
+    if (!creations || creations.length === 0) {return '';}
+    let html = '<div class="audit-detail-section"><div class="audit-detail-title">Objects Created</div>';
+    creations.forEach(creation => {
+        html += `<div class="audit-detail-item">`;
+        html += `<div class="object-info"><span class="object-type type-${escapeHtml(creation.object_type)}">${escapeHtml(creation.object_type)}</span>${escapeHtml(creation.object_name)}</div>`;
+        html += `<div class="change-line change-add">+ Created in ${escapeHtml(toDisplayPath(creation.file))}</div>`;
+        html += '</div>';
+    });
+    html += '</div>';
+    return html;
+}
+
+function renderRelocationsSection(title, items, fromField, toField) {
+    if (!items || items.length === 0) {return '';}
+    let html = `<div class="audit-detail-section"><div class="audit-detail-title">${title}</div>`;
+    items.forEach(item => {
+        html += `<div class="audit-detail-item">`;
+        html += `<div class="change-line change-modify">${escapeHtml(toDisplayPath(item[fromField]))} &rarr; ${escapeHtml(toDisplayPath(item[toField]))}</div>`;
+        html += '</div>';
+    });
+    html += '</div>';
+    return html;
+}
+
+function renderDeletionsSection(objDeletions, fileDeletions) {
+    let html = '';
+    if (objDeletions && objDeletions.length > 0) {
+        html += '<div class="audit-detail-section"><div class="audit-detail-title">Objects Deleted</div>';
+        objDeletions.forEach(deletion => {
+            html += `<div class="audit-detail-item">`;
+            html += `<div class="object-info"><span class="object-type type-${escapeHtml(deletion.object_type)}">${escapeHtml(deletion.object_type)}</span>${escapeHtml(deletion.object_name)}</div>`;
+            html += `<div class="change-line change-remove">- Deleted from ${escapeHtml(toDisplayPath(deletion.file))}</div>`;
+            html += '</div>';
+        });
+        html += '</div>';
     }
+    if (fileDeletions && fileDeletions.length > 0) {
+        html += '<div class="audit-detail-section"><div class="audit-detail-title">Files/Folders Deleted</div>';
+        fileDeletions.forEach(deletion => {
+            const suffix = deletion.type === 'folder' ? '/ (folder)' : '';
+            html += `<div class="audit-detail-item"><div class="change-line change-remove">- ${escapeHtml(toDisplayPath(deletion.path))}${suffix}</div></div>`;
+        });
+        html += '</div>';
+    }
+    return html;
+}
 
+function computeEntryCounts(entry) {
     const attrCount = (entry.object_edits || []).length;
     const moveCount = (entry.object_moves || []).length;
     const createCount = (entry.object_creations || []).length;
@@ -421,161 +487,59 @@ function renderAuditEntry(entry) {
     const folderRelocCount = (entry.folder_moves || []).length;
     const objDeleteCount = (entry.object_deletions || []).length;
     const fileDeleteCount = (entry.file_deletions || []).length;
-    const deleteCount = objDeleteCount + fileDeleteCount;
-    const errorCount = (entry.errors || []).length;
+    return { attrCount, moveCount, createCount, folderCount, relocCount, folderRelocCount, objDeleteCount, fileDeleteCount, deleteCount: objDeleteCount + fileDeleteCount, errorCount: (entry.errors || []).length };
+}
+
+function renderAuditEntry(entry) {
+    const time = new Date(entry.timestamp).toLocaleString();
+
+    if (entry.action) {
+        return renderActionEntry(entry, time);
+    }
+
+    const counts = computeEntryCounts(entry);
 
     const badges = [
-        generateBadge(createCount, 'creates', 'object created', 'objects created'),
-        generateBadge(attrCount, 'attrs', 'attribute change', 'attribute changes'),
-        generateBadge(moveCount, 'moves', 'object move', 'object moves'),
-        generateBadge(folderCount, 'folders', 'folder created', 'folders created'),
-        generateBadge(relocCount, 'relocs', 'file relocated', 'files relocated'),
-        generateBadge(folderRelocCount, 'folder-relocs', 'folder relocated', 'folders relocated'),
-        generateBadge(deleteCount, 'deletes', 'deletion', 'deletions'),
-        generateBadge(errorCount, 'errors', 'error', 'errors')
+        generateBadge(counts.createCount, 'creates', 'object created', 'objects created'),
+        generateBadge(counts.attrCount, 'attrs', 'attribute change', 'attribute changes'),
+        generateBadge(counts.moveCount, 'moves', 'object move', 'object moves'),
+        generateBadge(counts.folderCount, 'folders', 'folder created', 'folders created'),
+        generateBadge(counts.relocCount, 'relocs', 'file relocated', 'files relocated'),
+        generateBadge(counts.folderRelocCount, 'folder-relocs', 'folder relocated', 'folders relocated'),
+        generateBadge(counts.deleteCount, 'deletes', 'deletion', 'deletions'),
+        generateBadge(counts.errorCount, 'errors', 'error', 'errors')
     ].join('');
 
     let detailsHtml = '<div class="audit-entry-details">';
-
-    // Attribute changes (object_edits)
-    if (attrCount > 0) {
-        detailsHtml += '<div class="audit-detail-section">';
-        detailsHtml += '<div class="audit-detail-title">Attribute Changes</div>';
-        entry.object_edits.forEach(change => {
-            detailsHtml += `<div class="audit-detail-item">`;
-            detailsHtml += `<div class="object-info"><span class="object-type type-${escapeHtml(change.object_type)}">${escapeHtml(change.object_type)}</span>${escapeHtml(change.object_name)}</div>`;
-            if (change.changes && change.changes.length > 0) {
-                change.changes.forEach(c => {
-                    if (c.type === 'add') {
-                        detailsHtml += `<div class="change-line change-add">+ ${escapeHtml(c.key)}: ${escapeHtml(c.value)}</div>`;
-                    } else if (c.type === 'remove') {
-                        detailsHtml += `<div class="change-line change-remove">- ${escapeHtml(c.key)}: ${escapeHtml(c.value)}</div>`;
-                    } else {
-                        detailsHtml += `<div class="change-line change-modify">~ ${escapeHtml(c.key)}: ${escapeHtml(c.from)} &rarr; ${escapeHtml(c.to)}</div>`;
-                    }
-                });
-            }
-            detailsHtml += '</div>';
-        });
-        detailsHtml += '</div>';
-    }
-
-    // Object moves between files (object_moves)
-    if (moveCount > 0) {
-        detailsHtml += '<div class="audit-detail-section">';
-        detailsHtml += '<div class="audit-detail-title">Object Moves</div>';
-        entry.object_moves.forEach(move => {
-            detailsHtml += `<div class="audit-detail-item">`;
-            detailsHtml += `<div class="object-info"><span class="object-type type-${escapeHtml(move.object_type)}">${escapeHtml(move.object_type)}</span>${escapeHtml(move.object_name)}</div>`;
-            detailsHtml += `<div class="change-line change-modify">${escapeHtml(toDisplayPath(move.from_file))} &rarr; ${escapeHtml(toDisplayPath(move.to_file))}</div>`;
-            detailsHtml += '</div>';
-        });
-        detailsHtml += '</div>';
-    }
-
-    // Object creations
-    if (createCount > 0) {
-        detailsHtml += '<div class="audit-detail-section">';
-        detailsHtml += '<div class="audit-detail-title">Objects Created</div>';
-        entry.object_creations.forEach(creation => {
-            detailsHtml += `<div class="audit-detail-item">`;
-            detailsHtml += `<div class="object-info"><span class="object-type type-${escapeHtml(creation.object_type)}">${escapeHtml(creation.object_type)}</span>${escapeHtml(creation.object_name)}</div>`;
-            detailsHtml += `<div class="change-line change-add">+ Created in ${escapeHtml(toDisplayPath(creation.file))}</div>`;
-            detailsHtml += '</div>';
-        });
-        detailsHtml += '</div>';
-    }
-
-    // Folder creations
-    if (folderCount > 0) {
-        detailsHtml += '<div class="audit-detail-section">';
-        detailsHtml += '<div class="audit-detail-title">Folders Created</div>';
+    detailsHtml += renderEditsSection(entry.object_edits);
+    detailsHtml += renderMovesSection(entry.object_moves);
+    detailsHtml += renderCreationsSection(entry.object_creations);
+    if (counts.folderCount > 0) {
+        detailsHtml += '<div class="audit-detail-section"><div class="audit-detail-title">Folders Created</div>';
         entry.folder_creations.forEach(folder => {
-            detailsHtml += `<div class="audit-detail-item">`;
-            detailsHtml += `<div class="change-line change-add">+ ${escapeHtml(toDisplayPath(folder.path))}/</div>`;
-            detailsHtml += '</div>';
+            detailsHtml += `<div class="audit-detail-item"><div class="change-line change-add">+ ${escapeHtml(toDisplayPath(folder.path))}/</div></div>`;
         });
         detailsHtml += '</div>';
     }
-
-    // File relocations (file_moves)
-    if (relocCount > 0) {
-        detailsHtml += '<div class="audit-detail-section">';
-        detailsHtml += '<div class="audit-detail-title">Files Relocated</div>';
-        entry.file_moves.forEach(reloc => {
-            detailsHtml += `<div class="audit-detail-item">`;
-            detailsHtml += `<div class="change-line change-modify">${escapeHtml(toDisplayPath(reloc.from))} &rarr; ${escapeHtml(toDisplayPath(reloc.to))}</div>`;
-            detailsHtml += '</div>';
-        });
-        detailsHtml += '</div>';
-    }
-
-    // Folder relocations (folder_moves)
-    if (folderRelocCount > 0) {
-        detailsHtml += '<div class="audit-detail-section">';
-        detailsHtml += '<div class="audit-detail-title">Folders Relocated</div>';
-        entry.folder_moves.forEach(reloc => {
-            detailsHtml += `<div class="audit-detail-item">`;
-            detailsHtml += `<div class="change-line change-modify">${escapeHtml(toDisplayPath(reloc.from))} &rarr; ${escapeHtml(toDisplayPath(reloc.to))}</div>`;
-            detailsHtml += '</div>';
-        });
-        detailsHtml += '</div>';
-    }
-
-    // Object deletions
-    if (objDeleteCount > 0) {
-        detailsHtml += '<div class="audit-detail-section">';
-        detailsHtml += '<div class="audit-detail-title">Objects Deleted</div>';
-        entry.object_deletions.forEach(deletion => {
-            detailsHtml += `<div class="audit-detail-item">`;
-            detailsHtml += `<div class="object-info"><span class="object-type type-${escapeHtml(deletion.object_type)}">${escapeHtml(deletion.object_type)}</span>${escapeHtml(deletion.object_name)}</div>`;
-            detailsHtml += `<div class="change-line change-remove">- Deleted from ${escapeHtml(toDisplayPath(deletion.file))}</div>`;
-            detailsHtml += '</div>';
-        });
-        detailsHtml += '</div>';
-    }
-
-    // File deletions
-    if (fileDeleteCount > 0) {
-        detailsHtml += '<div class="audit-detail-section">';
-        detailsHtml += '<div class="audit-detail-title">Files/Folders Deleted</div>';
-        entry.file_deletions.forEach(deletion => {
-            detailsHtml += `<div class="audit-detail-item">`;
-            if (deletion.type === 'folder') {
-                detailsHtml += `<div class="change-line change-remove">- ${escapeHtml(toDisplayPath(deletion.path))}/ (folder)</div>`;
-            } else {
-                detailsHtml += `<div class="change-line change-remove">- ${escapeHtml(toDisplayPath(deletion.path))}</div>`;
-            }
-            detailsHtml += '</div>';
-        });
-        detailsHtml += '</div>';
-    }
-
+    detailsHtml += renderRelocationsSection('Files Relocated', entry.file_moves, 'from', 'to');
+    detailsHtml += renderRelocationsSection('Folders Relocated', entry.folder_moves, 'from', 'to');
+    detailsHtml += renderDeletionsSection(entry.object_deletions, entry.file_deletions);
     detailsHtml += '</div>';
 
-    // Errors
     let errorsHtml = '';
-    if (errorCount > 0) {
-        errorsHtml = '<div class="audit-entry-errors">';
-        errorsHtml += '<strong>Errors:</strong><br>';
+    if (counts.errorCount > 0) {
+        errorsHtml = '<div class="audit-entry-errors"><strong>Errors:</strong><br>';
         errorsHtml += entry.errors.map(e => escapeHtml(e)).join('<br>');
         errorsHtml += '</div>';
     }
 
-    // User identity
-    let userHtml = '';
-    if (entry.userName || entry.userEmail) {
-        const userName = entry.userName || 'Unknown';
-        const userEmail = entry.userEmail ? ` (${entry.userEmail})` : '';
-        userHtml = `<span class="audit-entry-user">${escapeHtml(userName)}${escapeHtml(userEmail)}</span>`;
-    }
+    const userHtml = renderUserHtml(entry);
 
-    // Determine primary entry type for color-coding (in priority order)
     let entryType = '';
-    if (deleteCount > 0) {entryType = 'deletes';}
-    else if (createCount > 0) {entryType = 'creates';}
-    else if (moveCount > 0 || relocCount > 0 || folderRelocCount > 0) {entryType = 'moves';}
-    else if (attrCount > 0) {entryType = 'attrs';}
+    if (counts.deleteCount > 0) {entryType = 'deletes';}
+    else if (counts.createCount > 0) {entryType = 'creates';}
+    else if (counts.moveCount > 0 || counts.relocCount > 0 || counts.folderRelocCount > 0) {entryType = 'moves';}
+    else if (counts.attrCount > 0) {entryType = 'attrs';}
 
     return `
         <div class="audit-entry"${entryType ? ` data-type="${entryType}"` : ''}>

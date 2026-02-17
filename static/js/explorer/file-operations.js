@@ -245,24 +245,142 @@
         if (rootMeta) {rootMeta.textContent = `${totalObjects} object${totalObjects !== 1 ? 's' : ''}`;}
     }
 
-    function renderTargetPane() {
-        const container = document.getElementById('targetPaneContent');
+    // ============================================================================
+    // Shared Helpers
+    // ============================================================================
 
-        // Update header info
-        updateWorkspaceHeader();
+    function getFolderStagedStatus(path) {
+        return {
+            isStagedForDeletion: (state.stagedFolderDeletions || []).some(d => d.path === path),
+            isStagedForMove: (state.stagedFolderMoves || []).some(m => m.sourcePath === path),
+            isStagedNew: (state.stagedFolderCreations || []).some(c => c.path === path)
+        };
+    }
 
-        // Combine files from objects with all files from filesystem (includes empty files)
+    function getFileStagedStatus(path) {
+        return {
+            isStagedForDeletion: (state.stagedFileDeletions || []).some(d => d.path === path),
+            isStagedForMove: (state.stagedFileMoves || []).some(m => m.sourcePath === path),
+            isStagedNew: (state.stagedFileCreations || []).some(c => c.path === path)
+        };
+    }
+
+    function buildStagedIndicator(statuses) {
+        if (statuses.isStagedForDeletion) {return '<span class="staged-indicator staged-indicator--delete" title="Staged for deletion">DEL</span>';}
+        if (statuses.isStagedForMove) {return '<span class="staged-indicator staged-indicator--move" title="Staged for move">MOV</span>';}
+        if (statuses.isMovePending) {return '<span class="staged-indicator staged-indicator--move" title="Staged to move here">MOV</span>';}
+        if (statuses.isStagedNew) {return '<span class="staged-indicator staged-indicator--new" title="Staged for creation">NEW</span>';}
+        return '';
+    }
+
+    function buildFolderActionButton(path, status, canDelete) {
+        const escaped = Explorer.escapeJs(path);
+        if (status.isStagedNew) {
+            return `<button class="tree-action-btn" onclick="event.stopPropagation(); Explorer.unstageFolderCreation('${escaped}', event)" title="Undo">${Explorer.getIcon('x')}</button>`;
+        }
+        if (status.isStagedForDeletion) {
+            return `<button class="tree-action-btn" onclick="event.stopPropagation(); Explorer.unstageFolderDeletion('${escaped}', event)" title="Undo deletion">${Explorer.getIcon('x')}</button>`;
+        }
+        if (canDelete) {
+            return `<button class="tree-action-btn tree-action-btn--danger" onclick="event.stopPropagation(); Explorer.stageDeleteFolder('${escaped}', event)" title="Delete folder">${Explorer.getIcon('trash-2')}</button>`;
+        }
+        return '';
+    }
+
+    function buildFileActionButton(file, status) {
+        const escaped = Explorer.escapeJs(file.path);
+        if (status.isMovePending) {
+            return `<button class="tree-action-btn" onclick="event.stopPropagation(); Explorer.unstageFileMove('${Explorer.escapeJs(file.originalPath)}', event)" title="Undo move">${Explorer.getIcon('x')}</button>`;
+        }
+        if (file.isNew || status.isStagedNew) {
+            return `<button class="tree-action-btn" onclick="event.stopPropagation(); Explorer.undoNewFile('${escaped}', event)" title="Undo">${Explorer.getIcon('x')}</button>`;
+        }
+        if (status.isStagedForDeletion) {
+            return `<button class="tree-action-btn" onclick="event.stopPropagation(); Explorer.unstageFileDeletion('${escaped}', event)" title="Undo deletion">${Explorer.getIcon('x')}</button>`;
+        }
+        if (!status.isStagedForMove) {
+            return `<button class="tree-action-btn tree-action-btn--danger" onclick="event.stopPropagation(); Explorer.stageDeleteFile('${escaped}', event)" title="Delete file">${Explorer.getIcon('trash-2')}</button>`;
+        }
+        return '';
+    }
+
+    function getMaxLineInFile(targetFile) {
+        const targetObjects = state.allObjects.filter(o => o.source_file === targetFile);
+        let maxLine = targetObjects.reduce((max, o) => Math.max(max, o.line_number), 0);
+        for (const [_, move] of state.stagedMoves) {
+            if (move.targetFile === targetFile && move.insertPosition) {
+                maxLine = Math.max(maxLine, move.insertPosition);
+            }
+        }
+        for (const c of state.stagedCreations) {
+            if (c.targetFile === targetFile && c.insertPosition !== undefined) {
+                maxLine = Math.max(maxLine, c.insertPosition);
+            }
+        }
+        return maxLine;
+    }
+
+    function stageObjectsToFile(indices, targetFile) {
+        let staged = 0;
+        for (const idx of indices) {
+            const obj = state.allObjects.find(o => o.global_index === idx);
+            if (obj) {
+                const objKey = Explorer.getObjectKey(obj);
+                state.stagedMoves.set(objKey, {
+                    originalFile: obj.source_file,
+                    targetFile: targetFile,
+                    object: {
+                        source_file: obj.source_file,
+                        object_type: obj.object_type,
+                        name: obj.name,
+                        display_name: obj.display_name,
+                        attributes: obj.attributes
+                    },
+                    insertPosition: Infinity
+                });
+                staged++;
+            }
+        }
+        return staged;
+    }
+
+    function isStagedCreationTemplate(creation) {
+        const attrs = creation.attributes || {};
+        return attrs.register === '0' ||
+            (creation.object_type === 'host' && attrs.name && !attrs.host_name) ||
+            (creation.object_type === 'service' && attrs.name && !attrs.service_description) ||
+            (creation.object_type === 'contact' && attrs.name && !attrs.contact_name);
+    }
+
+    function buildRowClasses(base, flags) {
+        let classes = base;
+        for (const [cls, condition] of flags) {
+            if (condition) {classes += ' ' + cls;}
+        }
+        return classes;
+    }
+
+    function addFileToTree(path, ensureFolderPath, props) {
+        const parts = path.split('/');
+        const filename = parts.pop();
+        const dir = parts.join('/') || state.configPath;
+        const folder = ensureFolderPath(dir);
+        if (!folder.files.some(f => f.path === path)) {
+            folder.files.push({ path, name: filename, ...props });
+        }
+    }
+
+    // ============================================================================
+    // Target Pane (Right Side File Browser) - Rendering
+    // ============================================================================
+
+    function buildFolderTree() {
         const filesFromObjects = state.allObjects.map(o => o.source_file);
         const files = [...new Set([...filesFromObjects, ...state.allFiles])].sort();
-
-        // Build a nested folder tree structure starting from config root
         const root = { folders: {}, files: [], path: state.configPath, isNew: false };
 
-        // Helper to ensure folder path exists in tree
         function ensureFolderPath(absPath) {
-            if (absPath === state.configPath) {
-                return root;
-            }
+            if (absPath === state.configPath) {return root;}
             const relativePath = toRelativePath(absPath);
             if (!relativePath) {return root;}
 
@@ -280,7 +398,7 @@
             return current;
         }
 
-        // Add existing files to tree (skip files being moved to staged folders)
+        // Determine files being moved to staged folders (skip from original location)
         const filesBeingMovedToStagedFolders = new Set(
             (state.stagedFileMoves || [])
                 .filter(m => (state.stagedFolderCreations || []).some(c =>
@@ -290,65 +408,37 @@
         );
 
         for (const file of files) {
-            // Skip files being moved to staged folders (they'll appear at target location)
-            if (filesBeingMovedToStagedFolders.has(file)) {
-                continue;
-            }
+            if (filesBeingMovedToStagedFolders.has(file)) {continue;}
             const parts = file.split('/');
             const filename = parts.pop();
             const dir = parts.join('/') || state.configPath;
-            const folder = ensureFolderPath(dir);
-            folder.files.push({ path: file, name: filename, isNew: false });
+            ensureFolderPath(dir).files.push({ path: file, name: filename, isNew: false });
         }
 
-        // Add existing folders from filesystem
         for (const folderPath of state.existingFolders) {
             ensureFolderPath(folderPath);
         }
-
-        // Add staged folder creations (not yet on disk)
         for (const staged of (state.stagedFolderCreations || [])) {
-            if (staged.path) {
-                ensureFolderPath(staged.path);
-            }
+            if (staged.path) {ensureFolderPath(staged.path);}
         }
-
-        // Add staged file creations (not yet on disk)
         for (const staged of (state.stagedFileCreations || [])) {
-            if (staged.path) {
-                const parts = staged.path.split('/');
-                const filename = parts.pop();
-                const dir = parts.join('/') || state.configPath;
-                const folder = ensureFolderPath(dir);
-                if (!folder.files.some(f => f.path === staged.path)) {
-                    folder.files.push({ path: staged.path, name: filename, isNew: true });
-                }
-            }
+            if (staged.path) {addFileToTree(staged.path, ensureFolderPath, { isNew: true });}
         }
-
-        // Add staged file moves at their target locations
         for (const move of (state.stagedFileMoves || [])) {
-            if (move.targetPath) {
-                const parts = move.targetPath.split('/');
-                const filename = parts.pop();
-                const dir = parts.join('/') || state.configPath;
-                const folder = ensureFolderPath(dir);
-                if (!folder.files.some(f => f.path === move.targetPath)) {
-                    folder.files.push({ path: move.targetPath, name: filename, isNew: false, isMovePending: true, originalPath: move.sourcePath });
-                }
-            }
+            if (move.targetPath) {addFileToTree(move.targetPath, ensureFolderPath, { isNew: false, isMovePending: true, originalPath: move.sourcePath });}
+        }
+        for (const newFile of state.newFiles) {
+            addFileToTree(newFile, ensureFolderPath, { isNew: true });
         }
 
-        // Add new files (staged only, not yet on disk)
-        for (const newFile of state.newFiles) {
-            const parts = newFile.split('/');
-            const filename = parts.pop();
-            const dir = parts.join('/') || state.configPath;
-            const folder = ensureFolderPath(dir);
-            if (!folder.files.some(f => f.path === newFile)) {
-                folder.files.push({ path: newFile, name: filename, isNew: true });
-            }
-        }
+        return root;
+    }
+
+    function renderTargetPane() {
+        const container = document.getElementById('targetPaneContent');
+        updateWorkspaceHeader();
+
+        const root = buildFolderTree();
 
         // Count objects in folder recursively
         function countFolderObjects(folder) {
@@ -381,41 +471,22 @@
                 return sum + [...state.stagedMoves.entries()].filter(([_, m]) => m.targetFile === f.path).length;
             }, 0);
 
-            // Check for staged folder operations
-            const isStagedForDeletion = (state.stagedFolderDeletions || []).some(d => d.path === folder.path);
-            const isStagedForMove = (state.stagedFolderMoves || []).some(m => m.sourcePath === folder.path);
-            const isStagedNew = (state.stagedFolderCreations || []).some(c => c.path === folder.path);
+            const status = getFolderStagedStatus(folder.path);
+            const { isStagedForDeletion, isStagedForMove, isStagedNew } = status;
 
             const canDrag = folder.path !== state.configPath;
             const canDelete = folder.path !== state.configPath;
 
             const expandIcon = hasChildren ? Explorer.getIcon('chevron-right') : '';
             const folderIcon = isExpanded ? Explorer.getIcon('folder-open') : Explorer.getIcon('folder');
-            const deleteIcon = Explorer.getIcon('trash-2');
 
-            // Determine row styling based on staged status
-            let rowClasses = 'workspace-tree-row';
-            if (isExpanded) {rowClasses += ' expanded';}
-            if (isSelected) {rowClasses += ' selected';}
-            if (isStagedForDeletion) {rowClasses += ' staged-deletion';}
-            if (isStagedForMove) {rowClasses += ' staged-move';}
-            if (isStagedNew) {rowClasses += ' staged-new';}
+            const rowClasses = buildRowClasses('workspace-tree-row', [
+                ['expanded', isExpanded], ['selected', isSelected],
+                ['staged-deletion', isStagedForDeletion], ['staged-move', isStagedForMove], ['staged-new', isStagedNew]
+            ]);
 
-            // Build action button
-            let actionHtml = '';
-            if (isStagedNew) {
-                actionHtml = `<button class="tree-action-btn" onclick="event.stopPropagation(); Explorer.unstageFolderCreation('${Explorer.escapeJs(folder.path)}', event)" title="Undo">${Explorer.getIcon('x')}</button>`;
-            } else if (isStagedForDeletion) {
-                actionHtml = `<button class="tree-action-btn" onclick="event.stopPropagation(); Explorer.unstageFolderDeletion('${Explorer.escapeJs(folder.path)}', event)" title="Undo deletion">${Explorer.getIcon('x')}</button>`;
-            } else if (canDelete) {
-                actionHtml = `<button class="tree-action-btn tree-action-btn--danger" onclick="event.stopPropagation(); Explorer.stageDeleteFolder('${Explorer.escapeJs(folder.path)}', event)" title="Delete folder">${deleteIcon}</button>`;
-            }
-
-            // Add visual indicator badge
-            let indicatorHtml = '';
-            if (isStagedForDeletion) {indicatorHtml = '<span class="staged-indicator staged-indicator--delete" title="Staged for deletion">DEL</span>';}
-            else if (isStagedForMove) {indicatorHtml = '<span class="staged-indicator staged-indicator--move" title="Staged for move">MOV</span>';}
-            else if (isStagedNew) {indicatorHtml = '<span class="staged-indicator staged-indicator--new" title="Staged for creation">NEW</span>';}
+            const actionHtml = buildFolderActionButton(folder.path, status, canDelete);
+            const indicatorHtml = buildStagedIndicator(status);
 
             let html = `
             <div class="${rowClasses}" data-depth="${depth}" data-folder="${Explorer.escapeHtml(folder.path)}"
@@ -465,42 +536,21 @@
             const creationCount = stagedCreationsForFile.length;
             const hasObjects = fileObjects.length > 0 || pendingCount > 0 || creationCount > 0;
 
-            // Check for staged file operations
-            const isStagedForDeletion = (state.stagedFileDeletions || []).some(d => d.path === file.path);
-            const isStagedForMove = (state.stagedFileMoves || []).some(m => m.sourcePath === file.path);
-            const isStagedNew = (state.stagedFileCreations || []).some(c => c.path === file.path);
-            const isMovePending = file.isMovePending || false;
+            const status = getFileStagedStatus(file.path);
+            status.isMovePending = file.isMovePending || false;
+            const { isStagedForDeletion, isStagedForMove, isStagedNew, isMovePending } = status;
 
+            const isNew = file.isNew || isStagedNew;
             const expandIcon = hasObjects ? Explorer.getIcon('chevron-right') : '';
-            const fileIcon = file.isNew || isStagedNew ? Explorer.getIcon('file-plus') : Explorer.getIcon('file-text');
-            const deleteIcon = Explorer.getIcon('trash-2');
+            const fileIcon = isNew ? Explorer.getIcon('file-plus') : Explorer.getIcon('file-text');
 
-            // Determine row styling based on staged status
-            let rowClasses = 'workspace-tree-row';
-            if (isExpanded) {rowClasses += ' expanded';}
-            if (isStagedForDeletion) {rowClasses += ' staged-deletion';}
-            if (isStagedForMove || isMovePending) {rowClasses += ' staged-move';}
-            if (file.isNew || isStagedNew) {rowClasses += ' staged-new';}
+            const rowClasses = buildRowClasses('workspace-tree-row', [
+                ['expanded', isExpanded], ['staged-deletion', isStagedForDeletion],
+                ['staged-move', isStagedForMove || isMovePending], ['staged-new', isNew]
+            ]);
 
-            let actionHtml = '';
-            if (isMovePending) {
-                // File is being moved TO this location - show undo button
-                actionHtml = `<button class="tree-action-btn" onclick="event.stopPropagation(); Explorer.unstageFileMove('${Explorer.escapeJs(file.originalPath)}', event)" title="Undo move">${Explorer.getIcon('x')}</button>`;
-            } else if (file.isNew || isStagedNew) {
-                actionHtml = `<button class="tree-action-btn" onclick="event.stopPropagation(); Explorer.undoNewFile('${Explorer.escapeJs(file.path)}', event)" title="Undo">${Explorer.getIcon('x')}</button>`;
-            } else if (isStagedForDeletion) {
-                actionHtml = `<button class="tree-action-btn" onclick="event.stopPropagation(); Explorer.unstageFileDeletion('${Explorer.escapeJs(file.path)}', event)" title="Undo deletion">${Explorer.getIcon('x')}</button>`;
-            } else if (!isStagedForMove) {
-                // Only show delete button if file is not being moved out
-                actionHtml = `<button class="tree-action-btn tree-action-btn--danger" onclick="event.stopPropagation(); Explorer.stageDeleteFile('${Explorer.escapeJs(file.path)}', event)" title="Delete file">${deleteIcon}</button>`;
-            }
-
-            // Add visual indicator badge
-            let indicatorHtml = '';
-            if (isStagedForDeletion) {indicatorHtml = '<span class="staged-indicator staged-indicator--delete" title="Staged for deletion">DEL</span>';}
-            else if (isStagedForMove) {indicatorHtml = '<span class="staged-indicator staged-indicator--move" title="Staged to move out">MOV</span>';}
-            else if (isMovePending) {indicatorHtml = '<span class="staged-indicator staged-indicator--move" title="Staged to move here">MOV</span>';}
-            else if (file.isNew || isStagedNew) {indicatorHtml = '<span class="staged-indicator staged-indicator--new" title="Staged for creation">NEW</span>';}
+            const actionHtml = buildFileActionButton(file, status);
+            const indicatorHtml = buildStagedIndicator(status);
 
             let html = `
             <div class="${rowClasses}" data-depth="${depth}" data-file="${Explorer.escapeHtml(file.path)}"
@@ -511,8 +561,8 @@
                  draggable="true"
                  ondragstart="Explorer.handleFileDragStart(event, '${Explorer.escapeJs(file.path)}')">
                 ${hasObjects ? `<button class="tree-expand-btn${isExpanded ? ' expanded' : ''}" onclick="event.stopPropagation(); Explorer.toggleFileExpand('${Explorer.escapeJs(file.path)}')">${expandIcon}</button>` : '<span class="tree-expand-placeholder"></span>'}
-                <span class="tree-icon tree-icon--file${file.isNew || isStagedNew ? '-new' : ''}">${fileIcon}</span>
-                <span class="tree-label${file.isNew || isStagedNew ? ' tree-label--staged' : ''}${isStagedForDeletion ? ' tree-label--deleted' : ''}">${Explorer.escapeHtml(file.name)}</span>
+                <span class="tree-icon tree-icon--file${isNew ? '-new' : ''}">${fileIcon}</span>
+                <span class="tree-label${isNew ? ' tree-label--staged' : ''}${isStagedForDeletion ? ' tree-label--deleted' : ''}">${Explorer.escapeHtml(file.name)}</span>
                 ${indicatorHtml}
                 <span class="tree-count${fileObjects.length === 0 ? ' tree-count--empty' : ''}">${fileObjects.length}</span>
                 ${(pendingCount + creationCount) > 0 ? `<span class="tree-count tree-count--pending">+${pendingCount + creationCount}</span>` : ''}
@@ -599,120 +649,112 @@
         renderTargetPane();
     }
 
-    function renderFileObjects(filePath, existingObjects, pendingObjects, stagedCreationsForFile = [], depth = 2) {
-        // Sort existing objects by line_number to preserve file order
-        const sortedExisting = [...existingObjects].sort((a, b) => a.line_number - b.line_number);
+    function buildExistingObjectRow(item, gripIcon, filePath) {
+        const displayName = Explorer.getStagedDisplayName(item.obj);
+        const isTemplate = Explorer.isObjectTemplate(item.obj);
+        const typeLabel = Explorer.getTypeBadge(item.obj.object_type, isTemplate);
+        return `
+            <div class="workspace-object-row" data-index="${item.obj.global_index}" data-position="${item.position}" data-file="${Explorer.escapeHtml(filePath)}"
+                 draggable="true"
+                 ondragstart="Explorer.handleTargetObjectDragStart(event, ${item.obj.global_index}, 'existing', '${Explorer.escapeJs(filePath)}')"
+                 ondragend="Explorer.handleTargetObjectDragEnd(event)">
+                <span class="tree-drag-handle">${gripIcon}</span>
+                <span class="tree-object-type type-${item.obj.object_type}">${typeLabel}</span>
+                <span class="tree-object-name" title="${Explorer.escapeHtml(displayName)}">${Explorer.escapeHtml(displayName)}</span>
+            </div>`;
+    }
 
-        // Build a combined list of existing, pending, and new objects with positions
+    function buildPendingObjectRow(item, gripIcon, xIcon, filePath) {
+        const pendingDisplayName = item.move.object.display_name || item.move.object.name;
+        const isTemplate = Explorer.isObjectTemplate(item.move.object);
+        const typeLabel = Explorer.getTypeBadge(item.move.object.object_type, isTemplate);
+        const escapedKey = Explorer.escapeJs(item.idx);
+        return `
+            <div class="workspace-object-row pending" data-index="${Explorer.escapeHtml(item.idx)}" data-position="${item.position}" data-file="${Explorer.escapeHtml(filePath)}"
+                 draggable="true"
+                 ondragstart="Explorer.handleTargetObjectDragStart(event, '${escapedKey}', 'pending', '${Explorer.escapeJs(filePath)}')"
+                 ondragend="Explorer.handleTargetObjectDragEnd(event)">
+                <span class="tree-drag-handle">${gripIcon}</span>
+                <span class="tree-object-type type-${item.move.object.object_type}">${typeLabel}</span>
+                <span class="tree-object-name" title="${Explorer.escapeHtml(pendingDisplayName)}">${Explorer.escapeHtml(pendingDisplayName)}</span>
+                <button class="tree-object-action" onclick="event.stopPropagation(); Explorer.undoObjectMove('${escapedKey}')" title="Undo move">${xIcon}</button>
+            </div>`;
+    }
+
+    function buildStagedCreationRow(item, gripIcon, xIcon, filePath) {
+        const isTemplate = isStagedCreationTemplate(item.creation);
+        const typeLabel = Explorer.getTypeBadge(item.creation.object_type, isTemplate);
+        const creationDisplayName = item.creation.displayName || '(unnamed)';
+        return `
+            <div class="workspace-object-row staged-creation" data-staged-index="${item.idx}" data-position="${item.position}" data-file="${Explorer.escapeHtml(filePath)}"
+                 draggable="true"
+                 ondragstart="Explorer.handleTargetObjectDragStart(event, ${item.idx}, 'creation', '${Explorer.escapeJs(filePath)}')"
+                 ondragend="Explorer.handleTargetObjectDragEnd(event)">
+                <span class="tree-drag-handle">${gripIcon}</span>
+                <span class="tree-object-type type-${item.creation.object_type}">${typeLabel}</span>
+                <span class="tree-object-name" title="${Explorer.escapeHtml(creationDisplayName)}">${Explorer.escapeHtml(creationDisplayName)}</span>
+                <button class="tree-object-action" onclick="event.stopPropagation(); Explorer.removeStagedCreation(${item.idx})" title="Remove">${xIcon}</button>
+            </div>`;
+    }
+
+    function buildFileItemsList(filePath, existingObjects, pendingObjects, stagedCreationsForFile) {
+        const sortedExisting = [...existingObjects].sort((a, b) => a.line_number - b.line_number);
         const items = [];
 
-        // Add existing objects (excluding those being moved out or deleted)
         for (const obj of sortedExisting) {
             const objKey = Explorer.getObjectKey(obj);
             const isPendingOut = state.stagedMoves.has(objKey) && state.stagedMoves.get(objKey).originalFile === filePath;
             const isDeleted = state.stagedObjectDeletions.has(obj.global_index);
             if (!isPendingOut && !isDeleted) {
-                items.push({
-                    type: 'existing',
-                    obj: obj,
-                    position: obj.line_number
-                });
+                items.push({ type: 'existing', obj, position: obj.line_number });
             }
         }
 
-        // Add pending move objects at their specified positions
         for (const [idx, move] of pendingObjects) {
             items.push({
-                type: 'pending',
-                idx: idx,
-                move: move,
+                type: 'pending', idx, move,
                 position: move.insertPosition !== undefined ? move.insertPosition : Infinity
             });
         }
 
-        // Add staged creations at their specified positions (or end by default)
         for (const { creation, idx } of stagedCreationsForFile) {
             items.push({
-                type: 'creation',
-                creation: creation,
-                idx: idx,
+                type: 'creation', creation, idx,
                 position: creation.insertPosition !== undefined ? creation.insertPosition : Infinity
             });
         }
 
-        // Sort all items by position
         items.sort((a, b) => a.position - b.position);
+        return items;
+    }
 
+    function renderFileObjects(filePath, existingObjects, pendingObjects, stagedCreationsForFile = [], depth = 2) {
+        const items = buildFileItemsList(filePath, existingObjects, pendingObjects, stagedCreationsForFile);
         const gripIcon = Explorer.getIcon('grip-vertical');
         const xIcon = Explorer.getIcon('x');
 
         let html = '';
 
-        // Render drop zone at start of file
         html += `<div class="workspace-drop-zone" data-file="${Explorer.escapeHtml(filePath)}" data-position="0"
                  ondragover="Explorer.handleObjectDragOver(event)"
                  ondrop="Explorer.handleObjectDrop(event, '${Explorer.escapeJs(filePath)}', 0)"
                  ondragleave="Explorer.handleObjectDragLeave(event)"></div>`;
 
+        const itemRenderers = {
+            existing: (item) => buildExistingObjectRow(item, gripIcon, filePath),
+            pending: (item) => buildPendingObjectRow(item, gripIcon, xIcon, filePath),
+            creation: (item) => buildStagedCreationRow(item, gripIcon, xIcon, filePath)
+        };
+
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
+            const renderer = itemRenderers[item.type];
+            if (renderer) {html += renderer(item);}
 
-            if (item.type === 'existing') {
-                const displayName = Explorer.getStagedDisplayName(item.obj);
-                const isTemplate = Explorer.isObjectTemplate(item.obj);
-                const typeLabel = Explorer.getTypeBadge(item.obj.object_type, isTemplate);
-                html += `
-                <div class="workspace-object-row" data-index="${item.obj.global_index}" data-position="${item.position}" data-file="${Explorer.escapeHtml(filePath)}"
-                     draggable="true"
-                     ondragstart="Explorer.handleTargetObjectDragStart(event, ${item.obj.global_index}, 'existing', '${Explorer.escapeJs(filePath)}')"
-                     ondragend="Explorer.handleTargetObjectDragEnd(event)">
-                    <span class="tree-drag-handle">${gripIcon}</span>
-                    <span class="tree-object-type type-${item.obj.object_type}">${typeLabel}</span>
-                    <span class="tree-object-name" title="${Explorer.escapeHtml(displayName)}">${Explorer.escapeHtml(displayName)}</span>
-                </div>
-            `;
-            } else if (item.type === 'pending') {
-                const pendingDisplayName = item.move.object.display_name || item.move.object.name;
-                const isTemplate = Explorer.isObjectTemplate(item.move.object);
-                const typeLabel = Explorer.getTypeBadge(item.move.object.object_type, isTemplate);
-                const escapedKey = Explorer.escapeJs(item.idx);
-                html += `
-                <div class="workspace-object-row pending" data-index="${Explorer.escapeHtml(item.idx)}" data-position="${item.position}" data-file="${Explorer.escapeHtml(filePath)}"
-                     draggable="true"
-                     ondragstart="Explorer.handleTargetObjectDragStart(event, '${escapedKey}', 'pending', '${Explorer.escapeJs(filePath)}')"
-                     ondragend="Explorer.handleTargetObjectDragEnd(event)">
-                    <span class="tree-drag-handle">${gripIcon}</span>
-                    <span class="tree-object-type type-${item.move.object.object_type}">${typeLabel}</span>
-                    <span class="tree-object-name" title="${Explorer.escapeHtml(pendingDisplayName)}">${Explorer.escapeHtml(pendingDisplayName)}</span>
-                    <button class="tree-object-action" onclick="event.stopPropagation(); Explorer.undoObjectMove('${escapedKey}')" title="Undo move">${xIcon}</button>
-                </div>
-            `;
-            } else if (item.type === 'creation') {
-                const creationAttrs = item.creation.attributes || {};
-                const isTemplate = creationAttrs.register === '0' ||
-                    (item.creation.object_type === 'host' && creationAttrs.name && !creationAttrs.host_name) ||
-                    (item.creation.object_type === 'service' && creationAttrs.name && !creationAttrs.service_description) ||
-                    (item.creation.object_type === 'contact' && creationAttrs.name && !creationAttrs.contact_name);
-                const typeLabel = Explorer.getTypeBadge(item.creation.object_type, isTemplate);
-                const creationDisplayName = item.creation.displayName || '(unnamed)';
-                html += `
-                <div class="workspace-object-row staged-creation" data-staged-index="${item.idx}" data-position="${item.position}" data-file="${Explorer.escapeHtml(filePath)}"
-                     draggable="true"
-                     ondragstart="Explorer.handleTargetObjectDragStart(event, ${item.idx}, 'creation', '${Explorer.escapeJs(filePath)}')"
-                     ondragend="Explorer.handleTargetObjectDragEnd(event)">
-                    <span class="tree-drag-handle">${gripIcon}</span>
-                    <span class="tree-object-type type-${item.creation.object_type}">${typeLabel}</span>
-                    <span class="tree-object-name" title="${Explorer.escapeHtml(creationDisplayName)}">${Explorer.escapeHtml(creationDisplayName)}</span>
-                    <button class="tree-object-action" onclick="event.stopPropagation(); Explorer.removeStagedCreation(${item.idx})" title="Remove">${xIcon}</button>
-                </div>
-            `;
-            }
-
-            // Drop zone after each item - use midpoint to next item to avoid position conflicts
             const nextItem = items[i + 1];
             const dropPosition = nextItem
-                ? (item.position + nextItem.position) / 2  // Midpoint between current and next
-                : item.position + 1;  // After last item, just add 1
+                ? (item.position + nextItem.position) / 2
+                : item.position + 1;
             html += `<div class="workspace-drop-zone" data-file="${Explorer.escapeHtml(filePath)}" data-position="${dropPosition}"
                      ondragover="Explorer.handleObjectDragOver(event)"
                      ondrop="Explorer.handleObjectDrop(event, '${Explorer.escapeJs(filePath)}', ${dropPosition})"
@@ -829,12 +871,90 @@
         event.currentTarget.classList.remove('dragging');
     }
 
+    function handleStagedCreationsDrop(dataIndices, targetFile, position) {
+        let moved = 0;
+        let insertPos = position;
+        dataIndices.forEach(idx => {
+            const creation = state.stagedCreations[idx];
+            if (creation) {
+                const wasInDifferentFile = creation.targetFile !== targetFile;
+                creation.targetFile = targetFile;
+                creation.insertPosition = insertPos;
+                insertPos += 0.001;
+                if (wasInDifferentFile) {moved++;}
+            }
+        });
+        state.expandedFiles.add(targetFile);
+        afterStagingChange();
+        if (moved > 0) {
+            showToast(`Moved ${moved} new object(s) to ${extractFileName(targetFile)}`, 'info');
+        }
+    }
+
+    function handleExistingObjectReorder(index, objectMeta, sourceFile, targetFile, position) {
+        let obj = objectMeta ? Explorer.findObjectByAttributes(objectMeta) : null;
+        if (!obj) {
+            obj = state.allObjects.find(o => o.global_index === index);
+        }
+        if (!obj) {
+            console.warn('[drop] Could not find object for reorder:', objectMeta?.name || index);
+            return;
+        }
+        const objKey = Explorer.getObjectKey(obj);
+        state.stagedMoves.set(objKey, {
+            originalFile: obj.source_file,
+            targetFile: targetFile,
+            object: {
+                source_file: obj.source_file,
+                object_type: obj.object_type,
+                name: obj.name,
+                display_name: obj.display_name,
+                attributes: obj.attributes
+            },
+            insertPosition: position
+        });
+        if (sourceFile !== targetFile) {
+            state.expandedFiles.add(targetFile);
+        }
+        afterStagingChange();
+        if (sourceFile !== targetFile) {
+            showToast(`Staged object to move. Use Commit to apply.`, 'info');
+        }
+    }
+
+    function handleReorderDrop(data, targetFile, position) {
+        const { index, itemType, sourceFile, objectMeta } = data;
+
+        if (itemType === 'existing') {
+            handleExistingObjectReorder(index, objectMeta, sourceFile, targetFile, position);
+        } else if (itemType === 'pending') {
+            const move = state.stagedMoves.get(index);
+            if (move) {
+                move.targetFile = targetFile;
+                move.insertPosition = position;
+                afterStagingChange();
+                if (sourceFile !== targetFile) {
+                    showToast(`Moved pending object to ${extractFileName(targetFile)}`, 'info');
+                }
+            }
+        } else if (itemType === 'creation') {
+            const creation = state.stagedCreations[index];
+            if (creation) {
+                const wasInDifferentFile = creation.targetFile !== targetFile;
+                creation.targetFile = targetFile;
+                creation.insertPosition = position;
+                afterStagingChange();
+                if (wasInDifferentFile) {
+                    showToast(`Moved new object to ${extractFileName(targetFile)}`, 'info');
+                }
+            }
+        }
+    }
+
     function handleObjectDrop(event, targetFile, position) {
         event.preventDefault();
         event.stopPropagation();
         event.currentTarget.classList.remove('drop-active');
-
-        // Clean up all drag state
         Explorer.cleanupDragState();
 
         const dataStr = event.dataTransfer.getData(DATA_TYPES.OBJECTS);
@@ -847,106 +967,22 @@
             return;
         }
 
-        // Handle staged creations being moved
         if (data.type === 'staged-creations') {
-            let moved = 0;
-            let insertPos = position;
-            data.indices.forEach(idx => {
-                const creation = state.stagedCreations[idx];
-                if (creation) {
-                    const wasInDifferentFile = creation.targetFile !== targetFile;
-                    creation.targetFile = targetFile;
-                    creation.insertPosition = insertPos;
-                    insertPos += 0.001;
-                    if (wasInDifferentFile) {moved++;}
-                }
-            });
-            state.expandedFiles.add(targetFile);
-            afterStagingChange();
-            if (moved > 0) {
-                showToast(`Moved ${moved} new object(s) to ${extractFileName(targetFile)}`, 'info');
-            }
+            handleStagedCreationsDrop(data.indices, targetFile, position);
             return;
         }
 
-        // Handle reordering objects within the right panel
         if (data.type === 'target-object-reorder') {
-            const { index, itemType, sourceFile, objectMeta } = data;
-
-            if (itemType === 'existing') {
-                let obj = null;
-                if (objectMeta) {
-                    obj = Explorer.findObjectByAttributes(objectMeta);
-                }
-                if (!obj) {
-                    obj = state.allObjects.find(o => o.global_index === index);
-                }
-
-                if (obj) {
-                    const objKey = Explorer.getObjectKey(obj);
-                    const objData = {
-                        source_file: obj.source_file,
-                        object_type: obj.object_type,
-                        name: obj.name,
-                        display_name: obj.display_name,
-                        attributes: obj.attributes
-                    };
-                    if (sourceFile === targetFile) {
-                        state.stagedMoves.set(objKey, {
-                            originalFile: obj.source_file,
-                            targetFile: targetFile,
-                            object: objData,
-                            insertPosition: position
-                        });
-                        afterStagingChange();
-                    } else {
-                        state.stagedMoves.set(objKey, {
-                            originalFile: obj.source_file,
-                            targetFile: targetFile,
-                            object: objData,
-                            insertPosition: position
-                        });
-                        state.expandedFiles.add(targetFile);
-                        afterStagingChange();
-                        showToast(`Staged object to move. Use Commit to apply.`, 'info');
-                    }
-                } else {
-                    console.warn('[drop] Could not find object for reorder:', objectMeta?.name || index);
-                }
-            } else if (itemType === 'pending') {
-                const move = state.stagedMoves.get(index);
-                if (move) {
-                    move.targetFile = targetFile;
-                    move.insertPosition = position;
-                    afterStagingChange();
-                    if (sourceFile !== targetFile) {
-                        showToast(`Moved pending object to ${extractFileName(targetFile)}`, 'info');
-                    }
-                }
-            } else if (itemType === 'creation') {
-                const creation = state.stagedCreations[index];
-                if (creation) {
-                    const wasInDifferentFile = creation.targetFile !== targetFile;
-                    creation.targetFile = targetFile;
-                    creation.insertPosition = position;
-                    afterStagingChange();
-                    if (wasInDifferentFile) {
-                        showToast(`Moved new object to ${extractFileName(targetFile)}`, 'info');
-                    }
-                }
-            }
+            handleReorderDrop(data, targetFile, position);
             return;
         }
 
-        // Handle regular objects using stable keys
         let staged = 0;
         let insertPos = position;
 
         if (data.type === 'objects' && data.objects && data.objects.length > 0) {
             for (const objData of data.objects) {
                 if (!objData || !objData.source_file) {continue;}
-
-                // Use same fallback logic as getObjectKey for null-safe key generation
                 const nameComponent = objData.name ?? objData.display_name ?? `idx:${objData.global_index}`;
                 const objKey = `${objData.source_file}|${objData.object_type}|${nameComponent}`;
                 state.stagedMoves.set(objKey, {
@@ -977,11 +1013,29 @@
         Explorer.buildTree();
     }
 
+    function moveStagedCreationsToFile(dataIndices, targetFile) {
+        let maxLine = getMaxLineInFile(targetFile);
+        let moved = 0;
+        let alreadyInFile = 0;
+        dataIndices.forEach(idx => {
+            const creation = state.stagedCreations[idx];
+            if (creation) {
+                if (creation.targetFile !== targetFile) {
+                    creation.targetFile = targetFile;
+                    maxLine += 100;
+                    creation.insertPosition = maxLine;
+                    moved++;
+                } else {
+                    alreadyInFile++;
+                }
+            }
+        });
+        return { moved, alreadyInFile };
+    }
+
     function handleFileDrop(event, targetFile) {
         event.preventDefault();
         event.currentTarget.classList.remove('drop-active');
-
-        // Clean up all drag state
         Explorer.cleanupDragState();
 
         const dataStr = event.dataTransfer.getData(DATA_TYPES.OBJECTS);
@@ -994,38 +1048,8 @@
             return;
         }
 
-        // Handle staged creations being moved
         if (data.type === 'staged-creations') {
-            // Find the highest position in target file to append at end
-            const targetObjects = state.allObjects.filter(o => o.source_file === targetFile);
-            let maxLine = targetObjects.reduce((max, o) => Math.max(max, o.line_number), 0);
-            for (const [_, move] of state.stagedMoves) {
-                if (move.targetFile === targetFile && move.insertPosition) {
-                    maxLine = Math.max(maxLine, move.insertPosition);
-                }
-            }
-            for (const c of state.stagedCreations) {
-                if (c.targetFile === targetFile && c.insertPosition !== undefined) {
-                    maxLine = Math.max(maxLine, c.insertPosition);
-                }
-            }
-
-            let moved = 0;
-            let alreadyInFile = 0;
-            data.indices.forEach(idx => {
-                const creation = state.stagedCreations[idx];
-                if (creation) {
-                    const wasInDifferentFile = creation.targetFile !== targetFile;
-                    if (wasInDifferentFile) {
-                        creation.targetFile = targetFile;
-                        maxLine += 100;
-                        creation.insertPosition = maxLine;
-                        moved++;
-                    } else {
-                        alreadyInFile++;
-                    }
-                }
-            });
+            const { moved, alreadyInFile } = moveStagedCreationsToFile(data.indices, targetFile);
             state.expandedFiles.add(targetFile);
             afterStagingChange();
             if (moved > 0 && alreadyInFile > 0) {
@@ -1038,26 +1062,14 @@
             return;
         }
 
-        // Handle regular objects
         let staged = 0;
         let cancelled = 0;
-
-        // Find the highest line number in target file to append at end
-        const targetObjects = state.allObjects.filter(o => o.source_file === targetFile);
-        let maxLine = targetObjects.reduce((max, o) => Math.max(max, o.line_number), 0);
-        for (const [_, move] of state.stagedMoves) {
-            if (move.targetFile === targetFile && move.insertPosition) {
-                maxLine = Math.max(maxLine, move.insertPosition);
-            }
-        }
+        let maxLine = getMaxLineInFile(targetFile);
 
         const processObject = (objData) => {
             if (!objData) {return;}
-
-            // Use same fallback logic as getObjectKey for null-safe key generation
             const nameComponent = objData.name ?? objData.display_name ?? `idx:${objData.global_index}`;
             const objKey = `${objData.source_file}|${objData.object_type}|${nameComponent}`;
-
             const existingMove = state.stagedMoves.get(objKey);
 
             if (existingMove && existingMove.originalFile === targetFile) {
@@ -1096,6 +1108,10 @@
         renderTargetPane();
         Explorer.buildTree();
 
+        showFileDropToast(staged, cancelled);
+    }
+
+    function showFileDropToast(staged, cancelled) {
         if (cancelled > 0 && staged === 0) {
             showToast(`${cancelled === 1 ? 'Object move' : cancelled + ' object moves'} cancelled`, 'info');
         } else if (staged > 0 && cancelled > 0) {
@@ -1234,274 +1250,176 @@
         showToast(`Moved folder to ${displayName}/`, 'success');
     }
 
+    function updateFolderReferences(sourcePath, newPath) {
+        const stagedFolder = state.stagedFolderCreations.find(c => c.path === sourcePath);
+        if (stagedFolder) {
+            stagedFolder.path = newPath;
+        }
+        for (const creation of state.stagedCreations) {
+            if (creation.targetFile && creation.targetFile.startsWith(sourcePath + '/')) {
+                creation.targetFile = newPath + creation.targetFile.substring(sourcePath.length);
+            }
+        }
+        for (const newFile of [...state.newFiles]) {
+            if (newFile.startsWith(sourcePath + '/')) {
+                state.newFiles.delete(newFile);
+                state.newFiles.add(newPath + newFile.substring(sourcePath.length));
+            }
+        }
+    }
+
+    function handleFolderOnFolderDrop(folderData, targetFolder) {
+        const sourcePath = folderData;
+        const folderName = sourcePath.split('/').pop();
+        const sourceParent = sourcePath.substring(0, sourcePath.lastIndexOf('/'));
+
+        const normalizedSource = sourcePath.replace(/\/+$/, '');
+        const normalizedTarget = targetFolder.replace(/\/+$/, '');
+
+        if (normalizedTarget === normalizedSource ||
+            normalizedTarget.startsWith(normalizedSource + '/')) {
+            console.warn('Blocked circular folder move:', { sourcePath, targetFolder });
+            showToast('Cannot move folder into itself or its children', 'warning');
+            return;
+        }
+
+        if (sourceParent === targetFolder) {
+            showToast('Folder is already in this location', 'warning');
+            return;
+        }
+
+        const isStagedFolder = (state.stagedFolderCreations || []).some(c => c.path === sourcePath);
+        if (isStagedFolder) {
+            const newPath = targetFolder + '/' + folderName;
+            updateFolderReferences(sourcePath, newPath);
+            state.expandedFolders.add(targetFolder);
+            afterStagingChange({ tree: false });
+            showToast(`Moved new folder to ${extractFileName(targetFolder)}/`, 'info');
+            return;
+        }
+
+        moveFolderImmediate(sourcePath, targetFolder);
+    }
+
+    function handleFileOnFolderDrop(fileData, targetFolder) {
+        const sourcePath = fileData;
+        const fileName = sourcePath.split('/').pop();
+        const sourceParent = sourcePath.substring(0, sourcePath.lastIndexOf('/'));
+        const newPath = targetFolder + '/' + fileName;
+
+        if (state.newFiles.has(sourcePath)) {
+            if (sourceParent === targetFolder) {
+                showToast('File is already in this folder', 'warning');
+                return;
+            }
+            state.newFiles.delete(sourcePath);
+            state.newFiles.add(newPath);
+            for (const creation of state.stagedCreations) {
+                if (creation.targetFile === sourcePath) {
+                    creation.targetFile = newPath;
+                }
+            }
+            state.expandedFolders.add(targetFolder);
+            afterStagingChange({ tree: false });
+            showToast(`Moved new file to ${extractFileName(targetFolder)}/`, 'info');
+            return;
+        }
+
+        if (sourceParent === targetFolder) {
+            showToast('File is already in this folder', 'warning');
+            return;
+        }
+
+        const isTargetStagedFolder = (state.stagedFolderCreations || []).some(c =>
+            c.path === targetFolder || targetFolder.startsWith(c.path + '/')
+        );
+
+        if (isTargetStagedFolder) {
+            const existingMove = (state.stagedFileMoves || []).find(m => m.sourcePath === sourcePath);
+            if (existingMove) {
+                existingMove.targetFolder = targetFolder;
+                existingMove.targetPath = newPath;
+            } else {
+                if (!state.stagedFileMoves) {state.stagedFileMoves = [];}
+                state.stagedFileMoves.push({ sourcePath, targetFolder, targetPath: newPath });
+            }
+            state.expandedFolders.add(targetFolder);
+            afterStagingChange();
+            showToast(`Staged file move to ${extractFileName(targetFolder)}/. Commit to apply.`, 'info');
+            return;
+        }
+
+        moveFileImmediate(sourcePath, targetFolder);
+    }
+
+    function resolveTargetFileInFolder(targetFolder) {
+        const filesInFolder = getFilesInFolder(targetFolder);
+        if (filesInFolder.length === 0) {
+            const newFile = targetFolder + '/objects.cfg';
+            state.newFiles.add(newFile);
+            return newFile;
+        }
+        if (filesInFolder.length === 1) {
+            return filesInFolder[0];
+        }
+        state.expandedFolders.add(targetFolder);
+        showToast('Multiple files in folder. Drop objects on a specific file.', 'info');
+        return null;
+    }
+
+    function handleObjectsOnFolderDrop(data, targetFolder) {
+        const parsedData = JSON.parse(data);
+
+        if (parsedData.type === 'staged-creations') {
+            const targetFile = resolveTargetFileInFolder(targetFolder);
+            if (!targetFile) {renderTargetPane(); return;}
+
+            const { moved } = moveStagedCreationsToFile(parsedData.indices, targetFile);
+            state.expandedFiles.add(targetFile);
+            state.expandedFolders.add(targetFolder);
+            afterStagingChange();
+            if (moved > 0) {
+                showToast(`Moved ${moved} new object(s) to ${extractFileName(targetFile)}`, 'info');
+            }
+            return;
+        }
+
+        const indices = Array.isArray(parsedData) ? parsedData : parsedData.indices;
+        const targetFile = resolveTargetFileInFolder(targetFolder);
+        if (!targetFile) {renderTargetPane(); Explorer.buildTree(); return;}
+
+        state.expandedFiles.add(targetFile);
+        const staged = stageObjectsToFile(indices, targetFile);
+
+        if (staged > 0) {
+            const isNewFile = state.newFiles.has(targetFile);
+            const prefix = isNewFile ? `Created ${extractFileName(targetFile)} and staged` : 'Staged';
+            showToast(`${prefix} ${staged} object(s) to ${extractFileName(targetFile)}. Commit to apply.`, 'info');
+            Explorer.saveStagedChanges();
+            Explorer.updateCommitUI();
+        }
+
+        renderTargetPane();
+        Explorer.buildTree();
+    }
+
     function handleFolderDrop(event, targetFolder) {
         event.preventDefault();
         event.stopPropagation();
         event.currentTarget.classList.remove('drop-active');
-
-        // Clean up all drag state
         Explorer.cleanupDragState();
 
         const data = event.dataTransfer.getData(DATA_TYPES.OBJECTS);
         const fileData = event.dataTransfer.getData(DATA_TYPES.FILE_MOVE);
         const folderData = event.dataTransfer.getData(DATA_TYPES.FOLDER_MOVE);
 
-        const effectiveTargetFolder = targetFolder;
-
-        // Handle folder being dropped into another folder
         if (folderData) {
-            const sourcePath = folderData;
-            const folderName = sourcePath.split('/').pop();
-            const sourceParent = sourcePath.substring(0, sourcePath.lastIndexOf('/'));
-
-            // Can't move folder into itself or its children
-            const normalizedSource = sourcePath.replace(/\/+$/, '');
-            const normalizedTarget = targetFolder.replace(/\/+$/, '');
-
-            if (normalizedTarget === normalizedSource ||
-                normalizedTarget.startsWith(normalizedSource + '/')) {
-                console.warn('Blocked circular folder move:', { sourcePath, targetFolder });
-                showToast('Cannot move folder into itself or its children', 'warning');
-                return;
-            }
-
-            if (sourceParent === effectiveTargetFolder) {
-                showToast('Folder is already in this location', 'warning');
-                return;
-            }
-
-            // Check if this is a staged folder creation (not on disk yet)
-            const isStagedFolder = (state.stagedFolderCreations || []).some(c => c.path === sourcePath);
-            if (isStagedFolder) {
-                // Move staged folder creation to new parent
-                const newPath = effectiveTargetFolder + '/' + folderName;
-
-                // Update the staged folder creation path
-                const stagedFolder = state.stagedFolderCreations.find(c => c.path === sourcePath);
-                if (stagedFolder) {
-                    stagedFolder.path = newPath;
-                }
-
-                // Update any files/creations that reference this folder
-                for (const creation of state.stagedCreations) {
-                    if (creation.targetFile && creation.targetFile.startsWith(sourcePath + '/')) {
-                        creation.targetFile = newPath + creation.targetFile.substring(sourcePath.length);
-                    }
-                }
-                for (const newFile of [...state.newFiles]) {
-                    if (newFile.startsWith(sourcePath + '/')) {
-                        state.newFiles.delete(newFile);
-                        state.newFiles.add(newPath + newFile.substring(sourcePath.length));
-                    }
-                }
-
-                state.expandedFolders.add(effectiveTargetFolder);
-                afterStagingChange({ tree: false });
-                showToast(`Moved new folder to ${extractFileName(effectiveTargetFolder)}/`, 'info');
-                return;
-            }
-
-            moveFolderImmediate(sourcePath, effectiveTargetFolder);
-            return;
-        }
-
-        // Handle file being dropped into folder
-        if (fileData) {
-            const sourcePath = fileData;
-            const fileName = sourcePath.split('/').pop();
-            const sourceParent = sourcePath.substring(0, sourcePath.lastIndexOf('/'));
-            const newPath = effectiveTargetFolder + '/' + fileName;
-            const isNewFile = state.newFiles.has(sourcePath);
-
-            // Handle new files (staged only, not on disk yet)
-            if (isNewFile) {
-                if (sourceParent === effectiveTargetFolder) {
-                    showToast('File is already in this folder', 'warning');
-                    return;
-                }
-                state.newFiles.delete(sourcePath);
-                state.newFiles.add(newPath);
-
-                // Update any staged creations that target this file
-                for (const creation of state.stagedCreations) {
-                    if (creation.targetFile === sourcePath) {
-                        creation.targetFile = newPath;
-                    }
-                }
-
-                state.expandedFolders.add(effectiveTargetFolder);
-                afterStagingChange({ tree: false });
-                const displayName = extractFileName(effectiveTargetFolder);
-                showToast(`Moved new file to ${displayName}/`, 'info');
-                return;
-            }
-
-            if (sourceParent === effectiveTargetFolder) {
-                showToast('File is already in this folder', 'warning');
-                return;
-            }
-
-            // Check if target folder is a staged creation (not on disk yet)
-            const isTargetStagedFolder = (state.stagedFolderCreations || []).some(c =>
-                c.path === effectiveTargetFolder || effectiveTargetFolder.startsWith(c.path + '/')
-            );
-
-            if (isTargetStagedFolder) {
-                // Stage the file move locally - can't use API since folder doesn't exist yet
-                // We need to stage this as a file move that will be applied when folder is created
-                const existingMove = (state.stagedFileMoves || []).find(m => m.sourcePath === sourcePath);
-                if (existingMove) {
-                    // Update existing staged move
-                    existingMove.targetFolder = effectiveTargetFolder;
-                    existingMove.targetPath = newPath;
-                } else {
-                    // Create new staged file move
-                    if (!state.stagedFileMoves) {state.stagedFileMoves = [];}
-                    state.stagedFileMoves.push({
-                        sourcePath: sourcePath,
-                        targetFolder: effectiveTargetFolder,
-                        targetPath: newPath
-                    });
-                }
-
-                state.expandedFolders.add(effectiveTargetFolder);
-                afterStagingChange();
-                const displayName = extractFileName(effectiveTargetFolder);
-                showToast(`Staged file move to ${displayName}/. Commit to apply.`, 'info');
-                return;
-            }
-
-            moveFileImmediate(sourcePath, effectiveTargetFolder);
-            return;
-        }
-
-        // Handle objects being dropped into folder
-        if (data) {
+            handleFolderOnFolderDrop(folderData, targetFolder);
+        } else if (fileData) {
+            handleFileOnFolderDrop(fileData, targetFolder);
+        } else if (data) {
             try {
-                const parsedData = JSON.parse(data);
-
-                // Handle staged creations being moved to folder
-                if (parsedData.type === 'staged-creations') {
-                    const filesInFolder = getFilesInFolder(effectiveTargetFolder);
-
-                    let targetFile;
-                    if (filesInFolder.length === 0) {
-                        targetFile = effectiveTargetFolder + '/objects.cfg';
-                        state.newFiles.add(targetFile);
-                    } else if (filesInFolder.length === 1) {
-                        targetFile = filesInFolder[0];
-                    } else {
-                        state.expandedFolders.add(targetFolder);
-                        showToast('Multiple files in folder. Drop objects on a specific file.', 'info');
-                        renderTargetPane();
-                        return;
-                    }
-
-                    // Find the highest position in target file to append at end
-                    const targetObjects = state.allObjects.filter(o => o.source_file === targetFile);
-                    let maxLine = targetObjects.reduce((max, o) => Math.max(max, o.line_number), 0);
-                    for (const [_, move] of state.stagedMoves) {
-                        if (move.targetFile === targetFile && move.insertPosition) {
-                            maxLine = Math.max(maxLine, move.insertPosition);
-                        }
-                    }
-                    for (const c of state.stagedCreations) {
-                        if (c.targetFile === targetFile && c.insertPosition !== undefined) {
-                            maxLine = Math.max(maxLine, c.insertPosition);
-                        }
-                    }
-
-                    let moved = 0;
-                    parsedData.indices.forEach(idx => {
-                        const creation = state.stagedCreations[idx];
-                        if (creation) {
-                            const wasInDifferentFile = creation.targetFile !== targetFile;
-                            creation.targetFile = targetFile;
-                            maxLine += 100;
-                            creation.insertPosition = maxLine;
-                            if (wasInDifferentFile) {moved++;}
-                        }
-                    });
-
-                    state.expandedFiles.add(targetFile);
-                    state.expandedFolders.add(targetFolder);
-                    afterStagingChange();
-                    if (moved > 0) {
-                        showToast(`Moved ${moved} new object(s) to ${extractFileName(targetFile)}`, 'info');
-                    }
-                    return;
-                }
-
-                // Handle regular objects
-                const indices = Array.isArray(parsedData) ? parsedData : parsedData.indices;
-
-                const filesInFolder = getFilesInFolder(effectiveTargetFolder);
-
-                if (filesInFolder.length === 0) {
-                    const newFile = effectiveTargetFolder + '/objects.cfg';
-                    state.newFiles.add(newFile);
-                    state.expandedFiles.add(newFile);
-
-                    let staged = 0;
-                    for (const idx of indices) {
-                        const obj = state.allObjects.find(o => o.global_index === idx);
-                        if (obj) {
-                            const objKey = Explorer.getObjectKey(obj);
-                            state.stagedMoves.set(objKey, {
-                                originalFile: obj.source_file,
-                                targetFile: newFile,
-                                object: {
-                                    source_file: obj.source_file,
-                                    object_type: obj.object_type,
-                                    name: obj.name,
-                                    display_name: obj.display_name,
-                                    attributes: obj.attributes
-                                },
-                                insertPosition: Infinity
-                            });
-                            staged++;
-                        }
-                    }
-
-                    if (staged > 0) {
-                        showToast(`Created ${extractFileName(newFile)} and staged ${staged} object(s). Commit to apply.`, 'info');
-                        Explorer.saveStagedChanges();
-                        Explorer.updateCommitUI();
-                    }
-                } else if (filesInFolder.length === 1) {
-                    const targetFile = filesInFolder[0];
-                    let staged = 0;
-                    for (const idx of indices) {
-                        const obj = state.allObjects.find(o => o.global_index === idx);
-                        if (obj) {
-                            const objKey = Explorer.getObjectKey(obj);
-                            state.stagedMoves.set(objKey, {
-                                originalFile: obj.source_file,
-                                targetFile: targetFile,
-                                object: {
-                                    source_file: obj.source_file,
-                                    object_type: obj.object_type,
-                                    name: obj.name,
-                                    display_name: obj.display_name,
-                                    attributes: obj.attributes
-                                },
-                                insertPosition: Infinity
-                            });
-                            staged++;
-                        }
-                    }
-                    if (staged > 0) {
-                        showToast(`Staged ${staged} object(s) to ${extractFileName(targetFile)}. Commit to apply.`, 'info');
-                        Explorer.saveStagedChanges();
-                        Explorer.updateCommitUI();
-                    }
-                } else {
-                    state.expandedFolders.add(targetFolder);
-                    showToast('Multiple files in folder. Drop objects on a specific file.', 'info');
-                }
-
-                renderTargetPane();
-                Explorer.buildTree();
+                handleObjectsOnFolderDrop(data, targetFolder);
             } catch (e) {
                 console.error('Error handling folder drop:', e);
             }

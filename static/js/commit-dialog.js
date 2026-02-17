@@ -61,101 +61,64 @@ async function showGlobalCommitDialog() {
     });
 }
 
-async function buildGlobalCommitDialogHtml(data, refData = null, isGitConfigured = true) {
-    const staging = data.staging || {};
-    const allObjects = data.objects;
-    const configPath = data.configPath;
-    const existingFolders = data.existingFolders || [];
-    const gitChanges = data.gitChanges || [];
-    const hasGitChanges = data.hasGitChanges || false;
+/**
+ * Extract normalized staging arrays from a staging object.
+ */
+function extractStagingArrays(staging) {
+    return {
+        pendingEdits: staging.pendingEdits || {},
+        stagedMoves: staging.stagedMoves || {},
+        stagedCreations: staging.stagedCreations || [],
+        stagedObjectDeletions: staging.stagedObjectDeletions || [],
+        stagedFileCreations: staging.stagedFileCreations || [],
+        stagedFileDeletions: staging.stagedFileDeletions || [],
+        stagedFileMoves: staging.stagedFileMoves || [],
+        stagedFolderCreations: staging.stagedFolderCreations || [],
+        stagedFolderDeletions: staging.stagedFolderDeletions || [],
+        stagedFolderMoves: staging.stagedFolderMoves || []
+    };
+}
 
-    const pendingEdits = staging.pendingEdits || {};
-    const stagedMoves = staging.stagedMoves || {};
-    const stagedCreations = staging.stagedCreations || [];
-    const stagedObjectDeletions = staging.stagedObjectDeletions || [];
+/**
+ * Check if a staging object has any file/folder operations.
+ */
+function hasFileOperations(s) {
+    return s.stagedFileCreations.length > 0 || s.stagedFileDeletions.length > 0 || s.stagedFileMoves.length > 0 ||
+           s.stagedFolderCreations.length > 0 || s.stagedFolderDeletions.length > 0 || s.stagedFolderMoves.length > 0;
+}
 
-    // File/folder operations
-    const stagedFileCreations = staging.stagedFileCreations || [];
-    const stagedFileDeletions = staging.stagedFileDeletions || [];
-    const stagedFileMoves = staging.stagedFileMoves || [];
-    const stagedFolderCreations = staging.stagedFolderCreations || [];
-    const stagedFolderDeletions = staging.stagedFolderDeletions || [];
-    const stagedFolderMoves = staging.stagedFolderMoves || [];
+/**
+ * Check if a staging object has any GUI staging changes (object changes or file ops).
+ */
+function hasGuiStagingChanges(s) {
+    const hasObjectChanges = Object.keys(s.pendingEdits).length > 0 || Object.keys(s.stagedMoves).length > 0 ||
+                             s.stagedCreations.length > 0 || s.stagedObjectDeletions.length > 0;
+    return hasObjectChanges || hasFileOperations(s);
+}
 
-    const hasObjectChanges = Object.keys(pendingEdits).length > 0 || Object.keys(stagedMoves).length > 0 ||
-                          stagedCreations.length > 0 || stagedObjectDeletions.length > 0;
-    const hasFileOps = stagedFileCreations.length > 0 || stagedFileDeletions.length > 0 || stagedFileMoves.length > 0 ||
-                       stagedFolderCreations.length > 0 || stagedFolderDeletions.length > 0 || stagedFolderMoves.length > 0;
-    const hasGuiStaging = hasObjectChanges || hasFileOps;
-
-    if (!hasGuiStaging && hasGitChanges) {
-        return await buildGitOnlyCommitDialogHtml(gitChanges, configPath, isGitConfigured);
-    }
-
-    const fileChanges = buildGlobalFileBasedChanges(pendingEdits, stagedMoves, stagedCreations, stagedObjectDeletions, allObjects, configPath);
-
-    // Inject reference updates into file-based changes
-    if (refData && refData.hasNameChanges) {
-        injectReferenceChanges(fileChanges, refData, configPath);
-    }
-
-    let newCount = 0, deletedCount = 0, movedCount = 0, modifyCount = 0;
+/**
+ * Build commit summary stats HTML for the header.
+ */
+function buildCommitSummaryStats(fileChanges) {
+    let newCount = 0, deletedCount = 0, movedCount = 0, modifyCount = 0, refCount = 0;
     fileChanges.forEach(fc => {
         fc.additions.forEach(a => { if (a.isNew) {newCount++;} else {movedCount++;} });
         fc.removals.forEach(r => { if (r.isDeletion) {deletedCount++;} });
         modifyCount += fc.modifications.filter(m => !m.isReferenceUpdate).length;
-    });
-    let refCount = 0;
-    fileChanges.forEach(fc => {
         refCount += fc.modifications.filter(m => m.isReferenceUpdate).length;
     });
+    return { newCount, deletedCount, movedCount, modifyCount, refCount };
+}
 
-    // Check for external changes (git changes that exist alongside staged changes)
-    // This indicates files were modified outside the staging system
-    const hasExternalChanges = hasGuiStaging && hasGitChanges && gitChanges.length > 0;
-
-    // Build external changes section with actual diffs (not just a warning)
-    let externalChangesHtml = '';
-    if (hasExternalChanges) {
-        const externalDiffsHtml = await buildChangesFilesHtml(gitChanges, baseState.commitContextLines, { useExternalStyle: true });
-        externalChangesHtml = `
-            <div class="commit-section commit-external-section">
-                <div class="commit-section-title">
-                    <i class="fa-solid fa-triangle-exclamation" style="color: var(--nbe-warning); margin-right: 6px;"></i>
-                    External Changes <span class="badge">${gitChanges.length} file${gitChanges.length !== 1 ? 's' : ''}</span>
-                    <span class="commit-section-subtitle">(modified outside this editor)</span>
-                </div>
-                ${externalDiffsHtml}
-            </div>
-        `;
-    }
-
-    let html = `
-        <div class="commit-header">
-            <div class="commit-summary">
-                ${fileChanges.size > 0 ? `<div class="commit-stat edits"><span class="commit-stat-count">${fileChanges.size}</span> file${fileChanges.size !== 1 ? 's' : ''} changed</div>` : ''}
-                ${newCount > 0 ? `<div class="commit-stat creates"><span class="commit-stat-count">+${newCount}</span> new</div>` : ''}
-                ${deletedCount > 0 ? `<div class="commit-stat deletes"><span class="commit-stat-count">${deletedCount}</span> deleted</div>` : ''}
-                ${movedCount > 0 ? `<div class="commit-stat moves"><span class="commit-stat-count">${movedCount}</span> moved</div>` : ''}
-                ${modifyCount > 0 ? `<div class="commit-stat edits"><span class="commit-stat-count">~${modifyCount}</span> modified</div>` : ''}
-                ${refCount > 0 ? `<div class="commit-stat refs"><span class="commit-stat-count">${refCount}</span> ref update${refCount !== 1 ? 's' : ''}</div>` : ''}
-            </div>
-            <div class="commit-context-control" title="Number of surrounding lines to show in diffs (drag to adjust)">
-                <label>Context:</label>
-                <input type="range" min="1" max="10" value="${baseState.commitContextLines > 9 ? 10 : baseState.commitContextLines}" oninput="updateGlobalContextLines(this.value)">
-                <span id="globalContextLinesValue" class="context-value">${baseState.commitContextLines > 9 ? 'All' : baseState.commitContextLines}</span>
-            </div>
-        </div>
-        <div class="commit-changes-list" id="globalCommitChangesList">
-            ${buildGlobalCommitChangesListHtml(fileChanges, configPath, existingFolders, allObjects, hasFileOps || hasExternalChanges)}
-            ${buildFileAndFolderOperationsHtml(stagedFolderCreations, stagedFolderDeletions, stagedFolderMoves, stagedFileCreations, stagedFileDeletions, stagedFileMoves, configPath)}
-            ${externalChangesHtml}
-        </div>
-        <div class="commit-footer">
-            <div class="commit-footer-left">
-                ${isGitConfigured ? `
-                <textarea id="globalGitCommitMessage" class="commit-message-textarea" placeholder="Enter commit message..."></textarea>
-                ${refData && refData.hasNameChanges ? `
+/**
+ * Build commit footer HTML with git identity and action buttons.
+ */
+function buildCommitFooterHtml(isGitConfigured, refData) {
+    let identityHtml;
+    if (isGitConfigured) {
+        identityHtml = `<textarea id="globalGitCommitMessage" class="commit-message-textarea" placeholder="Enter commit message..."></textarea>`;
+        if (refData && refData.hasNameChanges) {
+            identityHtml += `
                 <div class="commit-reference-option u-mt-sm">
                     <label class="commit-reference-label">
                         <input type="checkbox" id="globalUpdateReferences" checked onchange="toggleReferencePreview(this.checked)">
@@ -163,27 +126,220 @@ async function buildGlobalCommitDialogHtml(data, refData = null, isGitConfigured
                             <strong>Update references</strong> (${refData.totalReferences} reference${refData.totalReferences !== 1 ? 's' : ''} in other objects)
                         </span>
                     </label>
+                </div>`;
+        }
+    } else {
+        identityHtml = `
+            <div class="git-config-warning">
+                <span class="git-config-warning-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                <div>
+                    <strong>Git identity not configured</strong><br>
+                    <span class="git-config-warning-text">Configure your name and email in <a href="/settings">Settings</a> to enable commits.</span>
                 </div>
-                ` : ''}
-                ` : `
-                <div class="git-config-warning">
-                    <span class="git-config-warning-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
-                    <div>
-                        <strong>Git identity not configured</strong><br>
-                        <span class="git-config-warning-text">Configure your name and email in <a href="/settings">Settings</a> to enable commits.</span>
-                    </div>
-                </div>
-                `}
-            </div>
+            </div>`;
+    }
+    return `
+        <div class="commit-footer">
+            <div class="commit-footer-left">${identityHtml}</div>
             <div class="commit-footer-right">
                 <button class="nbe-btn nbe-btn--dark nbe-btn--danger" onclick="discardGlobalChanges()">Discard All</button>
                 <button class="nbe-btn nbe-btn--dark" onclick="closeGlobalCommitDialog()">Cancel</button>
                 <button class="nbe-btn nbe-btn--dark nbe-btn--tonal" id="globalApplyBtn" onclick="applyGlobalCommit()" ${isGitConfigured ? '' : 'disabled'}>Apply Changes</button>
             </div>
-        </div>
-    `;
+        </div>`;
+}
 
-    return html;
+/**
+ * Build summary stats HTML badges from file changes and stats.
+ */
+function buildSummaryStatsHtml(fileChangesSize, stats) {
+    const badges = [];
+    if (fileChangesSize > 0) {badges.push(`<div class="commit-stat edits"><span class="commit-stat-count">${fileChangesSize}</span> file${fileChangesSize !== 1 ? 's' : ''} changed</div>`);}
+    if (stats.newCount > 0) {badges.push(`<div class="commit-stat creates"><span class="commit-stat-count">+${stats.newCount}</span> new</div>`);}
+    if (stats.deletedCount > 0) {badges.push(`<div class="commit-stat deletes"><span class="commit-stat-count">${stats.deletedCount}</span> deleted</div>`);}
+    if (stats.movedCount > 0) {badges.push(`<div class="commit-stat moves"><span class="commit-stat-count">${stats.movedCount}</span> moved</div>`);}
+    if (stats.modifyCount > 0) {badges.push(`<div class="commit-stat edits"><span class="commit-stat-count">~${stats.modifyCount}</span> modified</div>`);}
+    if (stats.refCount > 0) {badges.push(`<div class="commit-stat refs"><span class="commit-stat-count">${stats.refCount}</span> ref update${stats.refCount !== 1 ? 's' : ''}</div>`);}
+    return badges.join('\n                ');
+}
+
+/**
+ * Build external changes section HTML for files modified outside the editor.
+ */
+async function buildExternalChangesHtml(gitChanges, contextLines) {
+    const externalDiffsHtml = await buildChangesFilesHtml(gitChanges, contextLines, { useExternalStyle: true });
+    return `
+        <div class="commit-section commit-external-section">
+            <div class="commit-section-title">
+                <i class="fa-solid fa-triangle-exclamation" style="color: var(--nbe-warning); margin-right: 6px;"></i>
+                External Changes <span class="badge">${pluralize(gitChanges.length, 'file')}</span>
+                <span class="commit-section-subtitle">(modified outside this editor)</span>
+            </div>
+            ${externalDiffsHtml}
+        </div>`;
+}
+
+/**
+ * Get staging operation counts and summary labels from raw staging object.
+ */
+function getStagingCounts(staging) {
+    const counts = [
+        [Object.keys(staging.pendingEdits || {}).length, 'edit'],
+        [(staging.stagedCreations || []).length, 'creation'],
+        [Object.keys(staging.stagedMoves || {}).length, 'move'],
+        [(staging.stagedObjectDeletions || []).length, 'object deletion'],
+        [(staging.stagedFileCreations || []).length, 'file creation'],
+        [(staging.stagedFileDeletions || []).length, 'file deletion'],
+        [(staging.stagedFileMoves || []).length, 'file move'],
+        [(staging.stagedFolderCreations || []).length, 'folder creation'],
+        [(staging.stagedFolderDeletions || []).length, 'folder deletion'],
+        [(staging.stagedFolderMoves || []).length, 'folder move']
+    ];
+    const changeSummary = [];
+    counts.forEach(([count, label]) => {
+        if (count > 0) {changeSummary.push(pluralize(count, label));}
+    });
+    return {
+        changeCount: counts.reduce((sum, [count]) => sum + count, 0),
+        changeSummary
+    };
+}
+
+/**
+ * Reset frontend state after discarding staging changes.
+ */
+async function resetFrontendAfterDiscard() {
+    updateNavCommitButton(0);
+    updateUndoButton(0);
+    if (typeof Explorer !== 'undefined' && Explorer.resetStagingState) {
+        Explorer.resetStagingState();
+    }
+    if (typeof Explorer !== 'undefined' && Explorer.loadObjects) {
+        await Explorer.loadObjects();
+    }
+    if (typeof buildTree === 'function') {buildTree();}
+    if (typeof renderTargetPane === 'function') {renderTargetPane();}
+}
+
+/**
+ * Validate commit message input. Returns trimmed message or null if invalid.
+ */
+function validateCommitInput() {
+    const input = document.getElementById('globalGitCommitMessage');
+    const message = input ? input.value.trim() : '';
+    if (!message) {
+        showToast('Please enter a commit message', 'error');
+        if (input) {input.focus();}
+        return null;
+    }
+    return message;
+}
+
+/**
+ * Apply GUI staging changes with deferred clear. Returns true on success.
+ */
+async function applyGuiStagingChanges() {
+    showGitRunningPanel('Applying Changes', 'Applying staged changes...');
+    const updateRefsCheckbox = document.getElementById('globalUpdateReferences');
+    const updateReferences = updateRefsCheckbox ? updateRefsCheckbox.checked : false;
+    const applyResult = await ApiClient.post('/api/staging/apply', {
+        updateReferences,
+        deferClear: true
+    }, { silent: true });
+    if (!applyResult.success || !applyResult.data?.success) {
+        showStagingResultPanel(false, applyResult.data?.error || applyResult.error || 'Failed to apply staged changes');
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Check if baseState.diffData has GUI staging changes.
+ */
+function diffDataHasGuiStaging() {
+    if (!baseState.diffData || !baseState.diffData.staging) {return false;}
+    const s = extractStagingArrays(baseState.diffData.staging);
+    return hasGuiStagingChanges(s);
+}
+
+/**
+ * Save expanded state of commit items, returning the set of expanded indices.
+ */
+function saveCommitItemExpansionState() {
+    const expandedIndices = new Set();
+    document.querySelectorAll('#globalCommitContent .commit-item.expanded').forEach((item, idx) => {
+        expandedIndices.add(idx);
+    });
+    return expandedIndices;
+}
+
+/**
+ * Restore expanded state and click handlers on commit items.
+ */
+function restoreCommitItemExpansionState(expandedIndices) {
+    document.querySelectorAll('#globalCommitContent .commit-item').forEach((item, idx) => {
+        if (expandedIndices.has(idx)) {
+            item.classList.add('expanded');
+        }
+        const header = item.querySelector('.commit-item-header');
+        if (header) {
+            header.addEventListener('click', () => {
+                item.classList.toggle('expanded');
+            });
+        }
+    });
+}
+
+/**
+ * Build the context range control HTML.
+ */
+function buildContextControlHtml(contextLines, inputHandler, valueId) {
+    const sliderValue = contextLines > 9 ? 10 : contextLines;
+    const displayValue = contextLines > 9 ? 'All' : contextLines;
+    return `
+        <div class="commit-context-control" title="Number of surrounding lines to show in diffs (drag to adjust)">
+            <label>Context:</label>
+            <input type="range" min="1" max="10" value="${sliderValue}" oninput="${inputHandler}(this.value)">
+            <span id="${valueId}" class="context-value">${displayValue}</span>
+        </div>`;
+}
+
+async function buildGlobalCommitDialogHtml(data, refData = null, isGitConfigured = true) {
+    const allObjects = data.objects;
+    const configPath = data.configPath;
+    const existingFolders = data.existingFolders || [];
+    const gitChanges = data.gitChanges || [];
+
+    const s = extractStagingArrays(data.staging || {});
+    const hasGuiStaging = hasGuiStagingChanges(s);
+
+    if (!hasGuiStaging && data.hasGitChanges) {
+        return await buildGitOnlyCommitDialogHtml(gitChanges, configPath, isGitConfigured);
+    }
+
+    const fileChanges = buildGlobalFileBasedChanges(s.pendingEdits, s.stagedMoves, s.stagedCreations, s.stagedObjectDeletions, allObjects, configPath);
+    if (refData && refData.hasNameChanges) {
+        injectReferenceChanges(fileChanges, refData, configPath);
+    }
+
+    const hasExternalChanges = hasGuiStaging && data.hasGitChanges && gitChanges.length > 0;
+    const externalChangesHtml = hasExternalChanges
+        ? await buildExternalChangesHtml(gitChanges, baseState.commitContextLines)
+        : '';
+
+    return `
+        <div class="commit-header">
+            <div class="commit-summary">
+                ${buildSummaryStatsHtml(fileChanges.size, buildCommitSummaryStats(fileChanges))}
+            </div>
+            ${buildContextControlHtml(baseState.commitContextLines, 'updateGlobalContextLines', 'globalContextLinesValue')}
+        </div>
+        <div class="commit-changes-list" id="globalCommitChangesList">
+            ${buildGlobalCommitChangesListHtml(fileChanges, configPath, existingFolders, allObjects, hasFileOperations(s) || hasExternalChanges)}
+            ${buildFileAndFolderOperationsHtml(s.stagedFolderCreations, s.stagedFolderDeletions, s.stagedFolderMoves, s.stagedFileCreations, s.stagedFileDeletions, s.stagedFileMoves, configPath)}
+            ${externalChangesHtml}
+        </div>
+        ${buildCommitFooterHtml(isGitConfigured, refData)}`;
 }
 
 function toggleReferencePreview(checked) {
@@ -1195,57 +1351,27 @@ function updateGlobalContextLines(value) {
     baseState.commitContextLines = intValue === 10 ? 9999 : intValue;
     document.getElementById('globalContextLinesValue').textContent = intValue === 10 ? 'All' : value;
 
-    if (baseState.diffData && baseState.diffData.staging) {
-        const staging = baseState.diffData.staging;
-        const allObjects = baseState.diffData.objects;
-        const configPath = baseState.diffData.configPath;
-        const existingFolders = baseState.diffData.existingFolders || [];
+    if (!baseState.diffData || !baseState.diffData.staging) {return;}
 
-        const pendingEdits = staging.pendingEdits || {};
-        const stagedMoves = staging.stagedMoves || {};
-        const stagedCreations = staging.stagedCreations || [];
-        const stagedObjectDeletions = staging.stagedObjectDeletions || [];
+    const allObjects = baseState.diffData.objects;
+    const configPath = baseState.diffData.configPath;
+    const existingFolders = baseState.diffData.existingFolders || [];
+    const s = extractStagingArrays(baseState.diffData.staging);
 
-        // File/folder operations
-        const stagedFileCreations = staging.stagedFileCreations || [];
-        const stagedFileDeletions = staging.stagedFileDeletions || [];
-        const stagedFileMoves = staging.stagedFileMoves || [];
-        const stagedFolderCreations = staging.stagedFolderCreations || [];
-        const stagedFolderDeletions = staging.stagedFolderDeletions || [];
-        const stagedFolderMoves = staging.stagedFolderMoves || [];
-        const hasFileOps = stagedFileCreations.length > 0 || stagedFileDeletions.length > 0 || stagedFileMoves.length > 0 ||
-                           stagedFolderCreations.length > 0 || stagedFolderDeletions.length > 0 || stagedFolderMoves.length > 0;
+    const expandedIndices = saveCommitItemExpansionState();
 
-        const expandedIndices = new Set();
-        document.querySelectorAll('#globalCommitContent .commit-item.expanded').forEach((item, idx) => {
-            expandedIndices.add(idx);
-        });
+    const fileChanges = buildGlobalFileBasedChanges(s.pendingEdits, s.stagedMoves, s.stagedCreations, s.stagedObjectDeletions, allObjects, configPath);
+    const updateRefsCheckbox = document.getElementById('globalUpdateReferences');
+    if (baseState.referenceData && baseState.referenceData.hasNameChanges && updateRefsCheckbox && updateRefsCheckbox.checked) {
+        injectReferenceChanges(fileChanges, baseState.referenceData, configPath);
+    }
 
-        const fileChanges = buildGlobalFileBasedChanges(pendingEdits, stagedMoves, stagedCreations, stagedObjectDeletions, allObjects, configPath);
-        if (baseState.referenceData && baseState.referenceData.hasNameChanges) {
-            const updateRefsCheckbox = document.getElementById('globalUpdateReferences');
-            if (updateRefsCheckbox && updateRefsCheckbox.checked) {
-                injectReferenceChanges(fileChanges, baseState.referenceData, configPath);
-            }
-        }
-        const changesList = document.getElementById('globalCommitChangesList');
-        if (changesList) {
-            let html = buildGlobalCommitChangesListHtml(fileChanges, configPath, existingFolders, allObjects, hasFileOps);
-            html += buildFileAndFolderOperationsHtml(stagedFolderCreations, stagedFolderDeletions, stagedFolderMoves, stagedFileCreations, stagedFileDeletions, stagedFileMoves, configPath);
-            changesList.innerHTML = html;
-
-            document.querySelectorAll('#globalCommitContent .commit-item').forEach((item, idx) => {
-                if (expandedIndices.has(idx)) {
-                    item.classList.add('expanded');
-                }
-                const header = item.querySelector('.commit-item-header');
-                if (header) {
-                    header.addEventListener('click', () => {
-                        item.classList.toggle('expanded');
-                    });
-                }
-            });
-        }
+    const changesList = document.getElementById('globalCommitChangesList');
+    if (changesList) {
+        let html = buildGlobalCommitChangesListHtml(fileChanges, configPath, existingFolders, allObjects, hasFileOperations(s));
+        html += buildFileAndFolderOperationsHtml(s.stagedFolderCreations, s.stagedFolderDeletions, s.stagedFolderMoves, s.stagedFileCreations, s.stagedFileDeletions, s.stagedFileMoves, configPath);
+        changesList.innerHTML = html;
+        restoreCommitItemExpansionState(expandedIndices);
     }
 }
 
@@ -1254,29 +1380,8 @@ function closeGlobalCommitDialog() {
 }
 
 async function discardGlobalChanges() {
-    let changeCount = 0;
-    let changeSummary = [];
-    if (baseState.diffData && baseState.diffData.staging) {
-        const s = baseState.diffData.staging;
-        // Collect counts for each operation type
-        const counts = [
-            [Object.keys(s.pendingEdits || {}).length, 'edit'],
-            [(s.stagedCreations || []).length, 'creation'],
-            [Object.keys(s.stagedMoves || {}).length, 'move'],
-            [(s.stagedObjectDeletions || []).length, 'object deletion'],
-            [(s.stagedFileCreations || []).length, 'file creation'],
-            [(s.stagedFileDeletions || []).length, 'file deletion'],
-            [(s.stagedFileMoves || []).length, 'file move'],
-            [(s.stagedFolderCreations || []).length, 'folder creation'],
-            [(s.stagedFolderDeletions || []).length, 'folder deletion'],
-            [(s.stagedFolderMoves || []).length, 'folder move']
-        ];
-
-        counts.forEach(([count, label]) => {
-            if (count > 0) {changeSummary.push(pluralize(count, label));}
-        });
-        changeCount = counts.reduce((sum, [count]) => sum + count, 0);
-    }
+    const staging = baseState.diffData && baseState.diffData.staging;
+    const { changeCount, changeSummary } = staging ? getStagingCounts(staging) : { changeCount: 0, changeSummary: [] };
 
     closeGlobalCommitDialog();
     showGitRunningPanel('Discard Changes', 'Clearing staged changes...');
@@ -1284,22 +1389,7 @@ async function discardGlobalChanges() {
     const result = await ApiClient.del('/api/staging', { silent: true });
 
     if (result.success && result.data?.success) {
-        updateNavCommitButton(0);
-        updateUndoButton(0);
-
-        // Reset frontend staging state
-        if (typeof Explorer !== 'undefined' && Explorer.resetStagingState) {
-            Explorer.resetStagingState();
-        }
-
-        // Reload data from server to get clean state
-        if (typeof Explorer !== 'undefined' && Explorer.loadObjects) {
-            await Explorer.loadObjects();
-        }
-
-        // Rebuild UI
-        if (typeof buildTree === 'function') {buildTree();}
-        if (typeof renderTargetPane === 'function') {renderTargetPane();}
+        await resetFrontendAfterDiscard();
     }
     const data = result.data || {};
     showStagingDiscardResultPanel(result.success && data.success, changeCount, changeSummary, data.error || result.error, data.gitDiscarded);
@@ -1337,61 +1427,22 @@ function showStagingDiscardResultPanel(success, changeCount, changeSummary, erro
 }
 
 async function applyGlobalCommit() {
-    const applyBtn = document.getElementById('globalApplyBtn');
-    const commitMessageInput = document.getElementById('globalGitCommitMessage');
-    const commitMessage = commitMessageInput ? commitMessageInput.value.trim() : '';
-
-    if (!commitMessage) {
-        showToast('Please enter a commit message', 'error');
-        if (commitMessageInput) {
-            commitMessageInput.focus();
-        }
-        return;
-    }
+    const commitMessage = validateCommitInput();
+    if (!commitMessage) {return;}
 
     closeGlobalCommitDialog();
-    const displayMessage = commitMessage.length > 60 ? commitMessage.substring(0, 60) + '...' : commitMessage;
 
-    // Check if we have GUI staging to apply
-    const hasGuiStaging = baseState.diffData && baseState.diffData.staging && (
-        Object.keys(baseState.diffData.staging.pendingEdits || {}).length > 0 ||
-        Object.keys(baseState.diffData.staging.stagedMoves || {}).length > 0 ||
-        (baseState.diffData.staging.stagedCreations || []).length > 0 ||
-        (baseState.diffData.staging.stagedObjectDeletions || []).length > 0 ||
-        (baseState.diffData.staging.stagedFileCreations || []).length > 0 ||
-        (baseState.diffData.staging.stagedFileDeletions || []).length > 0 ||
-        (baseState.diffData.staging.stagedFileMoves || []).length > 0 ||
-        (baseState.diffData.staging.stagedFolderCreations || []).length > 0 ||
-        (baseState.diffData.staging.stagedFolderDeletions || []).length > 0 ||
-        (baseState.diffData.staging.stagedFolderMoves || []).length > 0
-    );
+    const hasGuiStaging = diffDataHasGuiStaging();
 
     if (hasGuiStaging) {
-        // Apply GUI staging first
-        showGitRunningPanel('Applying Changes', 'Applying staged changes...');
-
-        const updateRefsCheckbox = document.getElementById('globalUpdateReferences');
-        const updateReferences = updateRefsCheckbox ? updateRefsCheckbox.checked : false;
-
-        // C-10: Apply with deferClear=true to ensure atomicity with git commit
-        // If git commit fails, staging remains intact for retry
-        const applyResult = await ApiClient.post('/api/staging/apply', {
-            updateReferences,
-            deferClear: true  // Don't clear staging yet - wait for git commit success
-        }, { silent: true });
-
-        if (!applyResult.success || !applyResult.data?.success) {
-            showStagingResultPanel(false, applyResult.data?.error || applyResult.error || 'Failed to apply staged changes');
-            return;
-        }
+        const applied = await applyGuiStagingChanges();
+        if (!applied) {return;}
     } else {
-        // Git-only commit - no staging to apply
         showGitRunningPanel('Git Commit', 'Committing changes...');
     }
 
-    // Now do the git commit - pass callback to clear staging on success
     updateNavCommitButton(0);
-    await autoGitCommitGlobal(commitMessage, hasGuiStaging);  // only clear staging if we had GUI staging
+    await autoGitCommitGlobal(commitMessage, hasGuiStaging);
 }
 
 function showStagingResultPanel(success, message) {
