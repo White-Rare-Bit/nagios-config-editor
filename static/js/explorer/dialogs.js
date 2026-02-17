@@ -796,6 +796,127 @@
         });
     }
 
+    const BULK_COMMAND_ATTRS = new Set(['check_command', 'event_handler', 'host_notification_commands', 'service_notification_commands']);
+
+    function validateBulkActionInputs(action, field, findText, sortedFields) {
+        if (field && !sortedFields.includes(field)) {
+            showToast(`Field "${field}" does not exist in selected objects`, 'warning');
+            return false;
+        }
+        if (action === 'findreplace' && !findText) {
+            showToast('Please enter text to find', 'warning');
+            return false;
+        }
+        if ((action === 'set' || action === 'remove') && !field) {
+            showToast(`Please select an attribute to ${action === 'set' ? 'set' : 'remove'}`, 'warning');
+            return false;
+        }
+        return true;
+    }
+
+    function validateBulkReferenceValues(field, valueText, scope) {
+        const objectTypes = [...new Set(scope.map(idx => {
+            const obj = state.allObjects.find(o => o.global_index === idx);
+            return obj?.object_type;
+        }).filter(t => t))];
+
+        for (const objType of objectTypes) {
+            const suggestions = Explorer.getAttributeSuggestions(field, objType);
+            if (suggestions.length > 0) {
+                const values = valueText.split(',').map(v => v.trim()).filter(v => v);
+                for (const v of values) {
+                    let checkValue = BULK_COMMAND_ATTRS.has(field) ? v.split('!')[0] : v;
+                    checkValue = Explorer.stripPrefix(checkValue);
+                    if (!suggestions.includes(checkValue)) {
+                        showToast(`"${checkValue}" does not exist`, 'error');
+                        return false;
+                    }
+                }
+                break;
+            }
+        }
+        return true;
+    }
+
+    function applyBulkAction(action, field, findText, valueText, editedAttrs) {
+        let changed = false;
+        if (action === 'findreplace') {
+            const fieldsToCheck = field ? [field] : Object.keys(editedAttrs);
+            for (const f of fieldsToCheck) {
+                if (!(f in editedAttrs)) {continue;}
+                const currentValue = editedAttrs[f] || '';
+                const newValue = currentValue.split(findText).join(valueText);
+                if (newValue !== currentValue) {
+                    editedAttrs[f] = newValue;
+                    changed = true;
+                }
+            }
+        } else if (action === 'set') {
+            if (editedAttrs[field] !== valueText) {
+                editedAttrs[field] = valueText;
+                changed = true;
+            }
+        } else if (action === 'remove') {
+            if (field in editedAttrs) {
+                delete editedAttrs[field];
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    function executeBulkEditAction(scope, sortedFields) {
+        const action = document.getElementById('editAttrAction').value;
+        const field = document.getElementById('editAttrField').value.trim();
+        const findText = document.getElementById('editAttrFind').value;
+        const valueText = document.getElementById('editAttrValue').value;
+
+        if (!validateBulkActionInputs(action, field, findText, sortedFields)) {return;}
+        if (action === 'set' && field && valueText && !validateBulkReferenceValues(field, valueText, scope)) {return;}
+
+        let updatedCount = 0;
+        for (const idx of scope) {
+            const obj = state.allObjects.find(o => o.global_index === idx);
+            if (!obj) {continue;}
+
+            const existingEdit = state.pendingEdits.get(idx);
+            const originalAttrs = existingEdit ? existingEdit.original : {...obj.attributes};
+            const editedAttrs = existingEdit ? {...existingEdit.edited} : {...obj.attributes};
+
+            if (applyBulkAction(action, field, findText, valueText, editedAttrs)) {
+                state.pendingEdits.set(idx, {
+                    original: originalAttrs,
+                    edited: editedAttrs,
+                    object: {
+                        source_file: obj.source_file,
+                        line_number: obj.line_number,
+                        object_type: obj.object_type,
+                        name: obj.name,
+                        display_name: obj.display_name
+                    }
+                });
+                updatedCount++;
+            }
+        }
+
+        Explorer.saveStagedChanges();
+        state.healthCheckData = null;
+        Explorer.computeStagedIssues();
+        Explorer.refreshAfterObjectChange();
+        Explorer.closeDialog();
+
+        if (state.editedObject && !state.isNewObject && scope.includes(state.editedObject.global_index)) {
+            Explorer.showCenterPaneObject(state.allObjects.find(o => o.global_index === state.editedObject.global_index));
+        }
+
+        const ACTION_LABELS = { findreplace: 'Updated', set: 'Set attribute in', remove: 'Removed attribute from' };
+        if (updatedCount > 0) {
+            showToast(`${ACTION_LABELS[action] || action} ${updatedCount} object(s). Commit to apply.`, 'info');
+        } else {
+            showToast('No changes made', 'warning');
+        }
+    }
+
     function showEditAttributesDialog() {
         Explorer.hideContextMenu();
         Explorer.closeActionsMenu();
@@ -833,136 +954,7 @@
                 <input type="text" id="editAttrValue" placeholder="Replacement text...">
             </div>
         `, () => {
-            const action = document.getElementById('editAttrAction').value;
-            const field = document.getElementById('editAttrField').value.trim();
-            const findText = document.getElementById('editAttrFind').value;
-            const valueText = document.getElementById('editAttrValue').value;
-
-            // Validate field if specified
-            if (field && !sortedFields.includes(field)) {
-                showToast(`Field "${field}" does not exist in selected objects`, 'warning');
-                return;
-            }
-
-            if (action === 'findreplace' && !findText) {
-                showToast('Please enter text to find', 'warning');
-                return;
-            }
-
-            if (action === 'set' && !field) {
-                showToast('Please select an attribute to set', 'warning');
-                return;
-            }
-
-            if (action === 'remove' && !field) {
-                showToast('Please select an attribute to remove', 'warning');
-                return;
-            }
-
-            // For 'set' action, validate reference values
-            if (action === 'set' && field && valueText) {
-                // Get object type(s) from selection to determine valid suggestions
-                const objectTypes = [...new Set(scope.map(idx => {
-                    const obj = state.allObjects.find(o => o.global_index === idx);
-                    return obj?.object_type;
-                }).filter(t => t))];
-
-                // Check each object type's suggestions for this field
-                for (const objType of objectTypes) {
-                    const suggestions = Explorer.getAttributeSuggestions(field, objType);
-                    if (suggestions.length > 0) {
-                        const values = valueText.split(',').map(v => v.trim()).filter(v => v);
-                        const isCommandAttr = ['check_command', 'event_handler', 'host_notification_commands', 'service_notification_commands'].includes(field);
-
-                        for (const v of values) {
-                            let checkValue = isCommandAttr ? v.split('!')[0] : v;
-                            checkValue = Explorer.stripPrefix(checkValue);
-                            if (!suggestions.includes(checkValue)) {
-                                showToast(`"${checkValue}" does not exist`, 'error');
-                                return;
-                            }
-                        }
-                        break; // Only need to validate once
-                    }
-                }
-            }
-
-            let updatedCount = 0;
-
-            for (const idx of scope) {
-                const obj = state.allObjects.find(o => o.global_index === idx);
-                if (!obj) {continue;}
-
-                const existingEdit = state.pendingEdits.get(idx);
-                const originalAttrs = existingEdit ? existingEdit.original : {...obj.attributes};
-                const editedAttrs = existingEdit ? {...existingEdit.edited} : {...obj.attributes};
-
-                let objectChanged = false;
-
-                if (action === 'findreplace') {
-                    const fieldsToCheck = field ? [field] : Object.keys(editedAttrs);
-                    for (const f of fieldsToCheck) {
-                        if (!(f in editedAttrs)) {continue;}
-                        const currentValue = editedAttrs[f] || '';
-                        const newValue = currentValue.split(findText).join(valueText);
-                        if (newValue !== currentValue) {
-                            editedAttrs[f] = newValue;
-                            objectChanged = true;
-                        }
-                    }
-                } else if (action === 'set') {
-                    if (editedAttrs[field] !== valueText) {
-                        editedAttrs[field] = valueText;
-                        objectChanged = true;
-                    }
-                } else if (action === 'remove') {
-                    if (field in editedAttrs) {
-                        delete editedAttrs[field];
-                        objectChanged = true;
-                    }
-                }
-
-                if (objectChanged) {
-                    state.pendingEdits.set(idx, {
-                        original: originalAttrs,
-                        edited: editedAttrs,
-                        object: {
-                            source_file: obj.source_file,
-                            line_number: obj.line_number,
-                            object_type: obj.object_type,
-                            name: obj.name,
-                            display_name: obj.display_name
-                        }
-                    });
-                    updatedCount++;
-                }
-            }
-
-            // Centralized refresh ensures all UI components stay in sync
-            Explorer.saveStagedChanges();
-            state.healthCheckData = null;
-            Explorer.computeStagedIssues();
-            Explorer.refreshAfterObjectChange();
-            Explorer.closeDialog();
-
-            // Refresh center pane if needed
-            if (state.editedObject && !state.isNewObject && scope.includes(state.editedObject.global_index)) {
-                Explorer.showCenterPaneObject(state.allObjects.find(o => o.global_index === state.editedObject.global_index));
-            }
-
-            if (updatedCount > 0) {
-                let actionText;
-                if (action === 'findreplace') {
-                    actionText = 'Updated';
-                } else if (action === 'set') {
-                    actionText = 'Set attribute in';
-                } else {
-                    actionText = 'Removed attribute from';
-                }
-                showToast(`${actionText} ${updatedCount} object(s). Commit to apply.`, 'info');
-            } else {
-                showToast('No changes made', 'warning');
-            }
+            executeBulkEditAction(scope, sortedFields);
         });
 
         // Setup after dialog shown

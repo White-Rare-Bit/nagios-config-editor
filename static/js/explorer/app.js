@@ -1080,55 +1080,38 @@ function getIssueIcon(issue) {
     return '<i class="fa-solid fa-circle-info"></i>';
 }
 
+function suggestionMatchesObject(s, globalIndex, objName, objectType) {
+    if (s.data?.object?.global_index === globalIndex) {return true;}
+    if (s.data?.objects?.some(o => o.global_index === globalIndex)) {return true;}
+    if (s.data?.issues?.some(i => i.object === objName && i.object_type === objectType)) {return true;}
+    if (s.data?.issue?.object === objName && s.data?.issue?.object_type === objectType) {return true;}
+    return false;
+}
+
+function findMatchingSuggestion(obj, issue, hostListInfo, allSuggestions) {
+    if (issue) {
+        const objName = obj.display_name || obj.name;
+        for (const s of allSuggestions) {
+            if (suggestionMatchesObject(s, obj.global_index, objName, obj.object_type)) {return s.id;}
+        }
+    } else if (hostListInfo?.shouldGroup) {
+        for (const s of allSuggestions) {
+            if (s.type === 'long_host_list' && s.data?.object?.global_index === obj.global_index) {return s.id;}
+        }
+    }
+    return null;
+}
+
 async function navigateToObjectIssue() {
     if (!state.currentCenterObject) {return;}
 
     const obj = state.currentCenterObject;
-    const issue = state.currentCenterIssue;
-    const hostListInfo = state.currentCenterHostListInfo;
 
-    // Switch to Suggestions tab visually, then load data before highlighting
     Explorer.switchTabs('.nbe-tab', '.right-tab-content', 'suggestions', 'tab', 'Tab');
     await loadAllSuggestions();
 
-    // Find the matching suggestion for this object's issue
     const allSuggestions = Explorer.collectAllSuggestions();
-    let matchId = null;
-
-    if (issue) {
-        const objName = obj.display_name || obj.name;
-        const globalIndex = obj.global_index;
-
-        for (const s of allSuggestions) {
-            // Match by object global_index (cleanup suggestions)
-            if (s.data?.object?.global_index === globalIndex) {
-                matchId = s.id;
-                break;
-            }
-            // Match duplicates by objects array
-            if (s.data?.objects?.some(o => o.global_index === globalIndex)) {
-                matchId = s.id;
-                break;
-            }
-            // Match grouped errors by referencing object name
-            if (s.data?.issues?.some(i => i.object === objName && i.object_type === obj.object_type)) {
-                matchId = s.id;
-                break;
-            }
-            // Match health warnings by object name and type
-            if (s.data?.issue?.object === objName && s.data?.issue?.object_type === obj.object_type) {
-                matchId = s.id;
-                break;
-            }
-        }
-    } else if (hostListInfo?.shouldGroup) {
-        for (const s of allSuggestions) {
-            if (s.type === 'long_host_list' && s.data?.object?.global_index === obj.global_index) {
-                matchId = s.id;
-                break;
-            }
-        }
-    }
+    const matchId = findMatchingSuggestion(obj, state.currentCenterIssue, state.currentCenterHostListInfo, allSuggestions);
 
     if (matchId) {
         highlightSuggestionRow(matchId);
