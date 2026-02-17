@@ -78,6 +78,112 @@ async function loadAllSuggestions(forceRefresh = false) {
     renderUnifiedSuggestionsList();
 }
 
+// Issue type handlers for mapHealthCheckToState dispatch
+function processDuplicateIssue(issue, obj, objectsByIndex) {
+    let duplicateGroup = [];
+    if (issue.related_objects) {
+        duplicateGroup = issue.related_objects
+            .map(ro => objectsByIndex.get(ro.global_index))
+            .filter(Boolean);
+    } else if (obj) {
+        duplicateGroup = state.allObjects.filter(o =>
+            o.object_type === issue.object_type &&
+            (o.name === issue.object || o.display_name === issue.object)
+        );
+    }
+    const existingDup = state.allCleanupSuggestions.find(s =>
+        s.type === 'duplicate' && s.object?.object_type === issue.object_type &&
+        (s.object?.name === issue.object || s.object?.display_name === issue.object)
+    );
+    if (!existingDup) {
+        state.allCleanupSuggestions.push({
+            type: 'duplicate',
+            severity: 'error',
+            object: obj || null,
+            objects: duplicateGroup,
+            title: `Duplicate ${issue.object_type}: ${issue.object}`,
+            description: issue.message || `Found ${duplicateGroup.length} definitions with the same identity.`,
+            action: 'review',
+            duplicateGroup: duplicateGroup
+        });
+    }
+}
+
+function processSimpleCleanupIssue(issue, obj) {
+    if (!obj) {return;}
+    state.allCleanupSuggestions.push({
+        type: issue.type,
+        severity: 'warning',
+        object: obj,
+        title: `${issue.type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}: ${issue.object}`,
+        description: issue.message || '',
+        action: 'delete'
+    });
+}
+
+function processTemplateOpportunity(issue) {
+    if (!issue.suggestion) {return;}
+    const s = issue.suggestion;
+    state.allTemplateSuggestions.push({
+        type: s.type,
+        suggestedName: s.suggested_name,
+        attributes: s.attributes,
+        objects: (s.object_indices || []).map(idx =>
+            state.allObjects.find(o => o.global_index === idx)
+        ).filter(Boolean),
+        count: s.count,
+        attrCount: s.attr_count
+    });
+}
+
+const ISSUE_TYPE_HANDLERS = {
+    duplicate: (issue, obj, objectsByIndex) => processDuplicateIssue(issue, obj, objectsByIndex),
+    empty_group: (issue, obj) => {
+        if (!obj) {return;}
+        state.allCleanupSuggestions.push({
+            type: 'empty_group', severity: 'warning', object: obj,
+            title: `Empty ${issue.object_type}: ${issue.object}`,
+            description: issue.message || 'Group has no members and is not referenced',
+            action: 'delete'
+        });
+    },
+    orphan: (issue, obj) => {
+        if (!obj) {return;}
+        state.orphanIndices.add(obj.global_index);
+        state.allCleanupSuggestions.push({
+            type: 'orphan', severity: 'info', object: obj,
+            title: `Orphan ${issue.object_type}: ${issue.object}`,
+            description: issue.message || 'This object is not referenced by any other object in the configuration.',
+            action: 'delete'
+        });
+    },
+    unused_template: (issue, obj) => processSimpleCleanupIssue(issue, obj),
+    unused_command: (issue, obj) => processSimpleCleanupIssue(issue, obj),
+    unused_contact: (issue, obj) => processSimpleCleanupIssue(issue, obj),
+    unused_contactgroup: (issue, obj) => processSimpleCleanupIssue(issue, obj),
+    unused_timeperiod: (issue, obj) => processSimpleCleanupIssue(issue, obj),
+    long_host_list: (issue, obj) => {
+        if (!obj) {return;}
+        state.allCleanupSuggestions.push({
+            type: 'long_host_list', severity: 'info', object: obj,
+            title: `Consider hostgroup: ${issue.object}`,
+            description: issue.message || 'This service has many hosts listed individually.',
+            action: 'review'
+        });
+    },
+    missing_contacts: (issue, obj) => {
+        state.allNotificationSuggestions.push({
+            type: issue.object_type === 'host' ? 'host_no_contacts' : 'service_no_contacts',
+            severity: issue.severity || 'warning',
+            object: obj || null,
+            title: `No contacts: ${issue.object}`,
+            description: issue.message || 'No contacts or contact_groups defined',
+            fix: null
+        });
+    },
+    template_opportunity: (issue) => processTemplateOpportunity(issue),
+};
+
 /**
  * Distribute health-check issues from backend into existing state arrays.
  * Called after fetching /api/health-check or from cached data.
@@ -108,134 +214,14 @@ function mapHealthCheckToState(data) {
     const objectsByIndex = new Map();
     state.allObjects.forEach(o => objectsByIndex.set(o.global_index, o));
 
-    // 6. Loop through issues and distribute to appropriate state arrays
+    // 6. Dispatch each issue to its type handler
     for (const issue of state.allIssues) {
         const obj = issue.global_index != null ? objectsByIndex.get(issue.global_index) : null;
-
-        // Skip issues for objects staged for deletion
         if (obj && state.stagedObjectDeletions.has(obj.global_index)) {continue;}
 
-        switch (issue.type) {
-            case 'duplicate': {
-                // Build duplicateGroup from related_objects if available
-                let duplicateGroup = [];
-                if (issue.related_objects) {
-                    duplicateGroup = issue.related_objects
-                        .map(ro => objectsByIndex.get(ro.global_index))
-                        .filter(Boolean);
-                } else if (obj) {
-                    // Fallback: find all matching objects by name/type
-                    duplicateGroup = state.allObjects.filter(o =>
-                        o.object_type === issue.object_type &&
-                        (o.name === issue.object || o.display_name === issue.object)
-                    );
-                }
-                // Only add one entry per duplicate group (first occurrence)
-                const existingDup = state.allCleanupSuggestions.find(s =>
-                    s.type === 'duplicate' && s.object?.object_type === issue.object_type &&
-                    (s.object?.name === issue.object || s.object?.display_name === issue.object)
-                );
-                if (!existingDup) {
-                    state.allCleanupSuggestions.push({
-                        type: 'duplicate',
-                        severity: 'error',
-                        object: obj || null,
-                        objects: duplicateGroup,
-                        title: `Duplicate ${issue.object_type}: ${issue.object}`,
-                        description: issue.message || `Found ${duplicateGroup.length} definitions with the same identity.`,
-                        action: 'review',
-                        duplicateGroup: duplicateGroup
-                    });
-                }
-                break;
-            }
-
-            case 'empty_group':
-                if (obj) {
-                    state.allCleanupSuggestions.push({
-                        type: 'empty_group',
-                        severity: 'warning',
-                        object: obj,
-                        title: `Empty ${issue.object_type}: ${issue.object}`,
-                        description: issue.message || 'Group has no members and is not referenced',
-                        action: 'delete'
-                    });
-                }
-                break;
-
-            case 'orphan':
-                if (obj) {
-                    state.orphanIndices.add(obj.global_index);
-                    state.allCleanupSuggestions.push({
-                        type: 'orphan',
-                        severity: 'info',
-                        object: obj,
-                        title: `Orphan ${issue.object_type}: ${issue.object}`,
-                        description: issue.message || 'This object is not referenced by any other object in the configuration.',
-                        action: 'delete'
-                    });
-                }
-                break;
-
-            case 'unused_template':
-            case 'unused_command':
-            case 'unused_contact':
-            case 'unused_contactgroup':
-            case 'unused_timeperiod':
-                if (obj) {
-                    state.allCleanupSuggestions.push({
-                        type: issue.type,
-                        severity: 'warning',
-                        object: obj,
-                        title: `${issue.type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}: ${issue.object}`,
-                        description: issue.message || '',
-                        action: 'delete'
-                    });
-                }
-                break;
-
-            case 'long_host_list':
-                if (obj) {
-                    state.allCleanupSuggestions.push({
-                        type: 'long_host_list',
-                        severity: 'info',
-                        object: obj,
-                        title: `Consider hostgroup: ${issue.object}`,
-                        description: issue.message || `This service has many hosts listed individually.`,
-                        action: 'review'
-                    });
-                }
-                break;
-
-            case 'missing_contacts':
-                state.allNotificationSuggestions.push({
-                    type: issue.object_type === 'host' ? 'host_no_contacts' : 'service_no_contacts',
-                    severity: issue.severity || 'warning',
-                    object: obj || null,
-                    title: `No contacts: ${issue.object}`,
-                    description: issue.message || 'No contacts or contact_groups defined',
-                    fix: null
-                });
-                break;
-
-            case 'template_opportunity':
-                if (issue.suggestion) {
-                    const s = issue.suggestion;
-                    state.allTemplateSuggestions.push({
-                        type: s.type,
-                        suggestedName: s.suggested_name,
-                        attributes: s.attributes,
-                        objects: (s.object_indices || []).map(idx =>
-                            state.allObjects.find(o => o.global_index === idx)
-                        ).filter(Boolean),
-                        count: s.count,
-                        attrCount: s.attr_count
-                    });
-                }
-                break;
-
-            // Other types (missing_*, notification_gap for contacts, etc.) are handled
-            // by filterIssues() which builds groupedErrors for the errors tab
+        const handler = ISSUE_TYPE_HANDLERS[issue.type];
+        if (handler) {
+            handler(issue, obj, objectsByIndex);
         }
     }
 }
@@ -276,200 +262,200 @@ function updateSuggestionsBadge() {
 // Current filter state
 let currentSuggestionFilter = 'all';
 
+// Types handled by cleanup or notification collectors (not health warnings)
+const CLEANUP_HANDLED_TYPES = new Set([
+    'duplicate', 'empty_group', 'orphan', 'long_host_list',
+    'unused_template', 'unused_command', 'unused_contact',
+    'unused_contactgroup', 'unused_timeperiod',
+    'missing_contacts', 'template_opportunity',
+]);
+
+function collectErrorSuggestions(suggestions) {
+    if (!state.groupedErrors) {return;}
+    for (const group of state.groupedErrors) {
+        if (!group.objectType || group.objectType === 'command') {continue;}
+
+        let detail = '';
+        if (group.issues && group.issues.length > 0) {
+            const names = group.issues.map(i => i.object || 'unknown');
+            detail = names.length <= 3
+                ? `Referenced by: ${names.join(', ')}`
+                : `Referenced by: ${names.slice(0, 2).join(', ')} +${names.length - 2} more`;
+        }
+
+        suggestions.push({
+            id: `error-${group.objectType}-${group.missingName}`,
+            severity: 'error',
+            type: 'missing',
+            label: `Missing ${group.objectType}`,
+            name: group.missingName || 'unknown',
+            detail,
+            actionLabel: 'Create',
+            actionType: 'create',
+            data: group
+        });
+    }
+}
+
+function collectHealthWarningSuggestions(suggestions) {
+    if (!state.allIssues) {return;}
+    const warnings = state.allIssues.filter(i => i.severity === 'warning' && !CLEANUP_HANDLED_TYPES.has(i.type));
+    for (const issue of warnings) {
+        if (issue.global_index != null && state.stagedObjectDeletions.has(issue.global_index)) {continue;}
+        suggestions.push({
+            id: `health-warning-${issue.type}-${issue.object}`,
+            severity: 'warning',
+            type: 'health_check_warning',
+            label: getHealthWarningLabel(issue.type),
+            name: issue.object || 'unknown',
+            detail: issue.message || '',
+            actionLabel: 'View',
+            actionType: 'navigate',
+            data: { issue }
+        });
+    }
+}
+
+function collectTemplateIssueSuggestions(suggestions) {
+    if (!state.templateIssues) {return;}
+    if (state.templateIssues.invalid_use) {
+        for (const issue of state.templateIssues.invalid_use) {
+            suggestions.push({
+                id: `template-invalid-${issue.object?.global_index}`,
+                severity: 'error',
+                type: 'template_invalid',
+                label: 'Invalid template',
+                name: issue.template_name || 'unknown',
+                detail: `${issue.object_type} "${issue.object_name}" uses undefined template`,
+                actionLabel: 'View',
+                actionType: 'navigate',
+                data: issue
+            });
+        }
+    }
+    if (state.templateIssues.circular_dependencies) {
+        for (const issue of state.templateIssues.circular_dependencies) {
+            suggestions.push({
+                id: `template-circular-${issue.chain?.join('-')}`,
+                severity: 'error',
+                type: 'template_circular',
+                label: 'Circular dependency',
+                name: issue.chain?.[0] || 'unknown',
+                detail: `Template chain: ${issue.chain?.join(' → ')}`,
+                actionLabel: 'View',
+                actionType: 'navigate',
+                data: issue
+            });
+        }
+    }
+}
+
+function collectCleanupSuggestions(suggestions) {
+    if (!state.allCleanupSuggestions) {return;}
+    for (let i = 0; i < state.allCleanupSuggestions.length; i++) {
+        const s = state.allCleanupSuggestions[i];
+        let actionLabel = 'Delete';
+        let actionType = 'delete';
+
+        if (s.type === 'duplicate') {
+            actionLabel = 'Resolve';
+            actionType = 'resolve_duplicate';
+        } else if (s.type === 'long_host_list') {
+            actionLabel = 'Group';
+            actionType = 'create_hostgroup';
+        }
+
+        suggestions.push({
+            id: `cleanup-${s.type}-${i}`,
+            severity: s.severity || 'warning',
+            type: s.type,
+            label: getCleanupTypeLabel(s.type),
+            name: s.object?.display_name || s.title?.split(':')[1]?.trim() || 'unknown',
+            detail: s.description || '',
+            actionLabel,
+            actionType,
+            data: s,
+            cleanupIndex: i
+        });
+    }
+}
+
+function collectNotificationSuggestions(suggestions) {
+    if (!state.allNotificationSuggestions) {return;}
+    for (let i = 0; i < state.allNotificationSuggestions.length; i++) {
+        const s = state.allNotificationSuggestions[i];
+        suggestions.push({
+            id: `notification-${i}`,
+            severity: 'warning',
+            type: 'notification_gap',
+            label: s.type === 'host_no_contacts' ? 'Host no contacts' : 'Service no contacts',
+            name: s.object?.display_name || 'unknown',
+            detail: s.description || 'No contacts or contact_groups defined',
+            actionLabel: 'View',
+            actionType: 'navigate',
+            data: s,
+            notificationIndex: i
+        });
+    }
+}
+
+function collectTemplateSuggestions(suggestions) {
+    if (!state.allTemplateSuggestions) {return;}
+    for (let i = 0; i < state.allTemplateSuggestions.length; i++) {
+        const s = state.allTemplateSuggestions[i];
+        suggestions.push({
+            id: `template-opportunity-${i}`,
+            severity: 'info',
+            type: 'template_opportunity',
+            label: 'Template opportunity',
+            name: s.suggestedName || 'common pattern',
+            detail: `${s.count} ${s.type}s share ${s.attrCount || 0} attributes`,
+            actionLabel: 'Create',
+            actionType: 'create_template',
+            data: s,
+            templateIndex: i
+        });
+    }
+}
+
+function collectGroupingSuggestions(suggestions) {
+    if (!state.allGroupingSuggestions) {return;}
+    for (let i = 0; i < state.allGroupingSuggestions.length; i++) {
+        const s = state.allGroupingSuggestions[i];
+        suggestions.push({
+            id: `grouping-${i}`,
+            severity: 'info',
+            type: 'hostgroup_suggestion',
+            label: 'Hostgroup pattern',
+            name: s.name || 'unnamed group',
+            detail: `${s.members?.length || s.count || 0} hosts match pattern`,
+            actionLabel: 'Create',
+            actionType: 'create_hostgroup_pattern',
+            data: s,
+            groupingIndex: i
+        });
+    }
+}
+
 /**
  * Collect all suggestions into a unified list with normalized format
  */
 function collectAllSuggestions() {
     const suggestions = [];
 
-    // 1. Issues/Errors from health check (grouped errors)
-    if (state.groupedErrors) {
-        for (const group of state.groupedErrors) {
-            // Skip ungrouped errors that can't be resolved by creating something
-            if (!group.objectType) {continue;}
-
-            // Skip missing commands - these are typically external check plugins, not config objects
-            if (group.objectType === 'command') {continue;}
-
-            // Build detail showing actual referencing object names
-            let detail = '';
-            if (group.issues && group.issues.length > 0) {
-                const names = group.issues.map(i => i.object || 'unknown');
-                if (names.length <= 3) {
-                    detail = `Referenced by: ${names.join(', ')}`;
-                } else {
-                    detail = `Referenced by: ${names.slice(0, 2).join(', ')} +${names.length - 2} more`;
-                }
-            }
-
-            suggestions.push({
-                id: `error-${group.objectType}-${group.missingName}`,
-                severity: 'error',
-                type: 'missing',
-                label: `Missing ${group.objectType}`,
-                name: group.missingName || 'unknown',
-                detail,
-                actionLabel: 'Create',
-                actionType: 'create',
-                data: group
-            });
-        }
-    }
-
-    // 1b. Health check warnings (e.g. hosts without services)
-    // Skip types already handled by cleanup (section 3) or notification suggestions
-    const cleanupTypes = new Set([
-        'duplicate', 'empty_group', 'orphan', 'long_host_list',
-        'unused_template', 'unused_command', 'unused_contact',
-        'unused_contactgroup', 'unused_timeperiod',
-        'missing_contacts', 'template_opportunity',
-    ]);
-    if (state.allIssues) {
-        const warnings = state.allIssues.filter(i => i.severity === 'warning' && !cleanupTypes.has(i.type));
-        for (const issue of warnings) {
-            // Skip warnings for objects staged for deletion
-            if (issue.global_index != null && state.stagedObjectDeletions.has(issue.global_index)) {continue;}
-            suggestions.push({
-                id: `health-warning-${issue.type}-${issue.object}`,
-                severity: 'warning',
-                type: 'health_check_warning',
-                label: getHealthWarningLabel(issue.type),
-                name: issue.object || 'unknown',
-                detail: issue.message || '',
-                actionLabel: 'View',
-                actionType: 'navigate',
-                data: { issue }
-            });
-        }
-    }
-
-    // 2. Template Issues (invalid refs, circular deps)
-    if (state.templateIssues) {
-        if (state.templateIssues.invalid_use) {
-            for (const issue of state.templateIssues.invalid_use) {
-                suggestions.push({
-                    id: `template-invalid-${issue.object?.global_index}`,
-                    severity: 'error',
-                    type: 'template_invalid',
-                    label: 'Invalid template',
-                    name: issue.template_name || 'unknown',
-                    detail: `${issue.object_type} "${issue.object_name}" uses undefined template`,
-                    actionLabel: 'View',
-                    actionType: 'navigate',
-                    data: issue
-                });
-            }
-        }
-        if (state.templateIssues.circular_dependencies) {
-            for (const issue of state.templateIssues.circular_dependencies) {
-                suggestions.push({
-                    id: `template-circular-${issue.chain?.join('-')}`,
-                    severity: 'error',
-                    type: 'template_circular',
-                    label: 'Circular dependency',
-                    name: issue.chain?.[0] || 'unknown',
-                    detail: `Template chain: ${issue.chain?.join(' → ')}`,
-                    actionLabel: 'View',
-                    actionType: 'navigate',
-                    data: issue
-                });
-            }
-        }
-    }
-
-    // 3. Cleanup suggestions (duplicates, unused, orphans, etc.)
-    if (state.allCleanupSuggestions) {
-        for (let i = 0; i < state.allCleanupSuggestions.length; i++) {
-            const s = state.allCleanupSuggestions[i];
-            let actionLabel = 'Delete';
-            let actionType = 'delete';
-
-            if (s.type === 'duplicate') {
-                actionLabel = 'Resolve';
-                actionType = 'resolve_duplicate';
-            } else if (s.type === 'long_host_list') {
-                actionLabel = 'Group';
-                actionType = 'create_hostgroup';
-            }
-
-            suggestions.push({
-                id: `cleanup-${s.type}-${i}`,
-                severity: s.severity || 'warning',
-                type: s.type,
-                label: getCleanupTypeLabel(s.type),
-                name: s.object?.display_name || s.title?.split(':')[1]?.trim() || 'unknown',
-                detail: s.description || '',
-                actionLabel,
-                actionType,
-                data: s,
-                cleanupIndex: i
-            });
-        }
-    }
-
-    // 4. Notification gaps
-    if (state.allNotificationSuggestions) {
-        for (let i = 0; i < state.allNotificationSuggestions.length; i++) {
-            const s = state.allNotificationSuggestions[i];
-            suggestions.push({
-                id: `notification-${i}`,
-                severity: 'warning',
-                type: 'notification_gap',
-                label: s.type === 'host_no_contacts' ? 'Host no contacts' : 'Service no contacts',
-                name: s.object?.display_name || 'unknown',
-                detail: s.description || 'No contacts or contact_groups defined',
-                actionLabel: 'View',
-                actionType: 'navigate',
-                data: s,
-                notificationIndex: i
-            });
-        }
-    }
-
-    // 5. Template consolidation opportunities
-    if (state.allTemplateSuggestions) {
-        for (let i = 0; i < state.allTemplateSuggestions.length; i++) {
-            const s = state.allTemplateSuggestions[i];
-            suggestions.push({
-                id: `template-opportunity-${i}`,
-                severity: 'info',
-                type: 'template_opportunity',
-                label: 'Template opportunity',
-                name: s.suggestedName || 'common pattern',
-                detail: `${s.count} ${s.type}s share ${s.attrCount || 0} attributes`,
-                actionLabel: 'Create',
-                actionType: 'create_template',
-                data: s,
-                templateIndex: i
-            });
-        }
-    }
-
-    // 6. Hostgroup suggestions
-    if (state.allGroupingSuggestions) {
-        for (let i = 0; i < state.allGroupingSuggestions.length; i++) {
-            const s = state.allGroupingSuggestions[i];
-            suggestions.push({
-                id: `grouping-${i}`,
-                severity: 'info',
-                type: 'hostgroup_suggestion',
-                label: 'Hostgroup pattern',
-                name: s.name || 'unnamed group',
-                detail: `${s.members?.length || s.count || 0} hosts match pattern`,
-                actionLabel: 'Create',
-                actionType: 'create_hostgroup_pattern',
-                data: s,
-                groupingIndex: i
-            });
-        }
-    }
+    collectErrorSuggestions(suggestions);
+    collectHealthWarningSuggestions(suggestions);
+    collectTemplateIssueSuggestions(suggestions);
+    collectCleanupSuggestions(suggestions);
+    collectNotificationSuggestions(suggestions);
+    collectTemplateSuggestions(suggestions);
+    collectGroupingSuggestions(suggestions);
 
     // Sort by severity: error > warning > info (A-01: use shared constant)
     suggestions.sort((a, b) => {
         const aSev = SEVERITY_ORDER[a.severity] ?? 3;
         const bSev = SEVERITY_ORDER[b.severity] ?? 3;
         if (aSev !== bSev) {return aSev - bSev;}
-        // Within same severity, sort by label then name
         if (a.label !== b.label) {return a.label.localeCompare(b.label);}
         return (a.name || '').localeCompare(b.name || '');
     });
@@ -818,6 +804,100 @@ async function loadCleanupSuggestions(forceRefresh = false) {
 // Cleanup Analysis Rendering
 // =============================================================================
 
+const CLEANUP_GROUP_ORDER = ['duplicate', 'empty_group', 'orphan', 'long_host_list',
+    'unused_template', 'unused_command', 'unused_contact', 'unused_contactgroup',
+    'unused_timeperiod', 'missing_hostgroup', 'missing_servicegroup',
+    'missing_contact', 'missing_contactgroup', 'missing_timeperiod'];
+
+const CLEANUP_GROUP_CONFIG = {
+    'duplicate': { icon: '<i class="fa-solid fa-copy"></i>', label: 'Duplicate Definitions', severity: 'error', bulkAction: null },
+    'empty_group': { icon: '<i class="fa-solid fa-folder-open"></i>', label: 'Empty Groups', severity: 'warning', bulkAction: 'deleteAll' },
+    'orphan': { icon: '<i class="fa-solid fa-plug"></i>', label: 'Orphans', severity: 'info', bulkAction: null },
+    'long_host_list': { icon: '<i class="fa-solid fa-list"></i>', label: 'Long Host Lists', severity: 'info', bulkAction: null },
+    'unused_template': { icon: '<i class="fa-solid fa-clipboard"></i>', label: 'Unused Templates', severity: 'info', bulkAction: 'deleteAll' },
+    'unused_command': { icon: '<i class="fa-solid fa-bolt"></i>', label: 'Unused Commands', severity: 'info', bulkAction: 'deleteAll' },
+    'unused_contact': { icon: '<i class="fa-solid fa-user"></i>', label: 'Unused Contacts', severity: 'info', bulkAction: 'deleteAll' },
+    'unused_contactgroup': { icon: '<i class="fa-solid fa-users"></i>', label: 'Unused Contact Groups', severity: 'info', bulkAction: 'deleteAll' },
+    'unused_timeperiod': { icon: '<i class="fa-solid fa-clock"></i>', label: 'Unused Time Periods', severity: 'info', bulkAction: 'deleteAll' },
+    'missing_hostgroup': { icon: '<i class="fa-solid fa-desktop"></i>', label: 'Missing Hostgroups', severity: 'warning', bulkAction: null },
+    'missing_servicegroup': { icon: '<i class="fa-solid fa-gear"></i>', label: 'Missing Servicegroups', severity: 'warning', bulkAction: null },
+    'missing_contact': { icon: '<i class="fa-solid fa-user"></i>', label: 'Missing Contacts', severity: 'warning', bulkAction: null },
+    'missing_contactgroup': { icon: '<i class="fa-solid fa-users"></i>', label: 'Missing Contact Groups', severity: 'warning', bulkAction: null },
+    'missing_timeperiod': { icon: '<i class="fa-solid fa-clock"></i>', label: 'Missing Time Periods', severity: 'warning', bulkAction: null }
+};
+
+function renderCleanupItemButtons(s, i) {
+    if (s.type === 'duplicate') {
+        return `<button class="nbe-btn nbe-btn--dark nbe-btn--xs" onclick="event.stopPropagation(); Explorer.fixDuplicate(${i})">Resolve</button>`;
+    }
+    if (s.type === 'long_host_list') {
+        return `<button class="nbe-btn nbe-btn--dark nbe-btn--xs" onclick="event.stopPropagation(); Explorer.fixLongHostList(${i})">Create Hostgroup</button>`;
+    }
+    if (s.issueData) {
+        const resolveInfo = Explorer.getIssueResolveInfo(s.issueData);
+        if (resolveInfo) {
+            return `<button class="nbe-btn nbe-btn--dark nbe-btn--xs" onclick="event.stopPropagation(); Explorer.resolveCleanupIssue(${i})">Create ${resolveInfo.objectType}</button>`;
+        }
+    }
+    if (s.action === 'delete') {
+        return `<button class="nbe-btn nbe-btn--dark nbe-btn--danger nbe-btn--xs" onclick="event.stopPropagation(); Explorer.stageCleanupDelete(${i})">Delete</button>`;
+    }
+    return '';
+}
+
+function renderCleanupItem(s, i) {
+    const severityClasses = { error: 'cleanup-error', warning: 'cleanup-warning' };
+    const itemSeverityClass = severityClasses[s.severity] || 'cleanup-info';
+
+    const displayTitle = s.title;
+    const displayDesc = s.type === 'empty_group'
+        ? (s.object?.source_file ? `In: ${s.object.source_file.split('/').pop()}` : '')
+        : s.description;
+
+    const buttons = renderCleanupItemButtons(s, i);
+
+    return `
+        <div class="cleanup-suggestion ${itemSeverityClass}" data-index="${i}" onclick="Explorer.showCleanupDetail(${i})">
+            <div class="cleanup-info">
+                <div class="cleanup-title">${Explorer.escapeHtml(displayTitle)}</div>
+                ${displayDesc ? `<div class="cleanup-desc">${Explorer.escapeHtml(displayDesc)}</div>` : ''}
+            </div>
+            ${buttons}
+        </div>
+    `;
+}
+
+function renderCleanupGroup(groupType, items) {
+    const config = CLEANUP_GROUP_CONFIG[groupType] || { icon: '?', label: groupType, severity: 'info', bulkAction: null };
+    const severityClass = `section-${config.severity}`;
+
+    let bulkActionBtn = '';
+    if (config.bulkAction === 'deleteAll' && items.length > 1) {
+        bulkActionBtn = `<button class="nbe-btn nbe-btn--dark nbe-btn--danger nbe-btn--sm" onclick="event.stopPropagation(); Explorer.bulkDeleteCleanupGroup('${groupType}')">Delete All</button>`;
+    }
+
+    const itemsHtml = items.map(({ suggestion: s, index: i }) => renderCleanupItem(s, i)).join('');
+
+    return `
+        <div class="cleanup-section collapsed ${severityClass}" data-group="${groupType}">
+            <div class="cleanup-section-header" onclick="Explorer.toggleCleanupSection(this)">
+                <div class="cleanup-section-title">
+                    <span class="cleanup-section-icon">${config.icon}</span>
+                    <span>${config.label}</span>
+                    <span class="cleanup-section-count">${items.length}</span>
+                </div>
+                <div class="cleanup-section-actions">
+                    ${bulkActionBtn}
+                    <span class="cleanup-section-toggle"><i class="fa-solid fa-chevron-right"></i></span>
+                </div>
+            </div>
+            <div class="cleanup-section-items">
+                ${itemsHtml}
+            </div>
+        </div>
+    `;
+}
+
 function renderCleanupSuggestions() {
     const container = document.getElementById('cleanupContent');
     if (!container) {return;}
@@ -829,29 +909,6 @@ function renderCleanupSuggestions() {
 
     // Group suggestions by type
     const groups = {};
-    const groupOrder = ['duplicate', 'empty_group', 'orphan', 'long_host_list',
-                        'unused_template', 'unused_command', 'unused_contact', 'unused_contactgroup',
-                        'unused_timeperiod', 'missing_hostgroup', 'missing_servicegroup',
-                        'missing_contact', 'missing_contactgroup', 'missing_timeperiod'];
-
-    const groupConfig = {
-        'duplicate': { icon: '<i class="fa-solid fa-copy"></i>', label: 'Duplicate Definitions', severity: 'error', bulkAction: null },
-        'empty_group': { icon: '<i class="fa-solid fa-folder-open"></i>', label: 'Empty Groups', severity: 'warning', bulkAction: 'deleteAll' },
-        'orphan': { icon: '<i class="fa-solid fa-plug"></i>', label: 'Orphans', severity: 'info', bulkAction: null },
-        'long_host_list': { icon: '<i class="fa-solid fa-list"></i>', label: 'Long Host Lists', severity: 'info', bulkAction: null },
-        'unused_template': { icon: '<i class="fa-solid fa-clipboard"></i>', label: 'Unused Templates', severity: 'info', bulkAction: 'deleteAll' },
-        'unused_command': { icon: '<i class="fa-solid fa-bolt"></i>', label: 'Unused Commands', severity: 'info', bulkAction: 'deleteAll' },
-        'unused_contact': { icon: '<i class="fa-solid fa-user"></i>', label: 'Unused Contacts', severity: 'info', bulkAction: 'deleteAll' },
-        'unused_contactgroup': { icon: '<i class="fa-solid fa-users"></i>', label: 'Unused Contact Groups', severity: 'info', bulkAction: 'deleteAll' },
-        'unused_timeperiod': { icon: '<i class="fa-solid fa-clock"></i>', label: 'Unused Time Periods', severity: 'info', bulkAction: 'deleteAll' },
-        'missing_hostgroup': { icon: '<i class="fa-solid fa-desktop"></i>', label: 'Missing Hostgroups', severity: 'warning', bulkAction: null },
-        'missing_servicegroup': { icon: '<i class="fa-solid fa-gear"></i>', label: 'Missing Servicegroups', severity: 'warning', bulkAction: null },
-        'missing_contact': { icon: '<i class="fa-solid fa-user"></i>', label: 'Missing Contacts', severity: 'warning', bulkAction: null },
-        'missing_contactgroup': { icon: '<i class="fa-solid fa-users"></i>', label: 'Missing Contact Groups', severity: 'warning', bulkAction: null },
-        'missing_timeperiod': { icon: '<i class="fa-solid fa-clock"></i>', label: 'Missing Time Periods', severity: 'warning', bulkAction: null }
-    };
-
-    // Group suggestions
     for (let i = 0; i < state.allCleanupSuggestions.length; i++) {
         const s = state.allCleanupSuggestions[i];
         if (!groups[s.type]) {groups[s.type] = [];}
@@ -859,88 +916,9 @@ function renderCleanupSuggestions() {
     }
 
     let html = '';
-
-    // Render each group in order
-    for (const groupType of groupOrder) {
+    for (const groupType of CLEANUP_GROUP_ORDER) {
         if (!groups[groupType] || groups[groupType].length === 0) {continue;}
-
-        const config = groupConfig[groupType] || { icon: '❓', label: groupType, severity: 'info', bulkAction: null };
-        const items = groups[groupType];
-        const severityClass = `section-${config.severity}`;
-
-        // Build bulk action button if applicable
-        let bulkActionBtn = '';
-        if (config.bulkAction === 'deleteAll' && items.length > 1) {
-            bulkActionBtn = `<button class="nbe-btn nbe-btn--dark nbe-btn--danger nbe-btn--sm" onclick="event.stopPropagation(); Explorer.bulkDeleteCleanupGroup('${groupType}')">Delete All</button>`;
-        }
-
-        html += `
-            <div class="cleanup-section collapsed ${severityClass}" data-group="${groupType}">
-                <div class="cleanup-section-header" onclick="Explorer.toggleCleanupSection(this)">
-                    <div class="cleanup-section-title">
-                        <span class="cleanup-section-icon">${config.icon}</span>
-                        <span>${config.label}</span>
-                        <span class="cleanup-section-count">${items.length}</span>
-                    </div>
-                    <div class="cleanup-section-actions">
-                        ${bulkActionBtn}
-                        <span class="cleanup-section-toggle"><i class="fa-solid fa-chevron-right"></i></span>
-                    </div>
-                </div>
-                <div class="cleanup-section-items">
-        `;
-
-        // Render items within this group
-        for (const { suggestion: s, index: i } of items) {
-            let itemSeverityClass;
-            if (s.severity === 'error') {
-                itemSeverityClass = 'cleanup-error';
-            } else if (s.severity === 'warning') {
-                itemSeverityClass = 'cleanup-warning';
-            } else {
-                itemSeverityClass = 'cleanup-info';
-            }
-
-            // Simplify description for grouped items
-            let displayTitle = s.title;
-            let displayDesc = s.description;
-
-            // For empty groups, show just the name since the section header explains the issue
-            if (s.type === 'empty_group') {
-                // Extract just the group name from title like "Empty hostgroup: windows-hosts"
-                displayDesc = s.object?.source_file ? `In: ${s.object.source_file.split('/').pop()}` : '';
-            }
-
-            // Determine which buttons to show
-            let buttons = '';
-            if (s.type === 'duplicate') {
-                buttons = `<button class="nbe-btn nbe-btn--dark nbe-btn--xs" onclick="event.stopPropagation(); Explorer.fixDuplicate(${i})">Resolve</button>`;
-            } else if (s.type === 'long_host_list') {
-                buttons = `<button class="nbe-btn nbe-btn--dark nbe-btn--xs" onclick="event.stopPropagation(); Explorer.fixLongHostList(${i})">Create Hostgroup</button>`;
-            } else if (s.issueData) {
-                const resolveInfo = Explorer.getIssueResolveInfo(s.issueData);
-                if (resolveInfo) {
-                    buttons = `<button class="nbe-btn nbe-btn--dark nbe-btn--xs" onclick="event.stopPropagation(); Explorer.resolveCleanupIssue(${i})">Create ${resolveInfo.objectType}</button>`;
-                }
-            } else if (s.action === 'delete') {
-                buttons = `<button class="nbe-btn nbe-btn--dark nbe-btn--danger nbe-btn--xs" onclick="event.stopPropagation(); Explorer.stageCleanupDelete(${i})">Delete</button>`;
-            }
-
-            html += `
-                <div class="cleanup-suggestion ${itemSeverityClass}" data-index="${i}" onclick="Explorer.showCleanupDetail(${i})">
-                    <div class="cleanup-info">
-                        <div class="cleanup-title">${Explorer.escapeHtml(displayTitle)}</div>
-                        ${displayDesc ? `<div class="cleanup-desc">${Explorer.escapeHtml(displayDesc)}</div>` : ''}
-                    </div>
-                    ${buttons}
-                </div>
-            `;
-        }
-
-        html += `
-                </div>
-            </div>
-        `;
+        html += renderCleanupGroup(groupType, groups[groupType]);
     }
 
     container.innerHTML = html;
