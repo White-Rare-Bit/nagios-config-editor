@@ -15,16 +15,20 @@
         <div class="sidebar-section">
             <div class="sidebar-section-title">Log Type</div>
             <div class="sidebar-section-content">
-                <div class="logs-tabs">
-                    <button class="logs-tab active" data-tab="audit">Audit Log</button>
-                    <button class="logs-tab" data-tab="app">Application Log</button>
-                </div>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--tonal nbe-btn--full logs-type-btn active" data-tab="audit">
+                    <i class="fa-solid fa-shield-halved"></i> Audit Log
+                </button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--full logs-type-btn" data-tab="app">
+                    <i class="fa-solid fa-terminal"></i> Application Log
+                </button>
             </div>
         </div>
         <div class="sidebar-section">
-            <div class="sidebar-section-title">Filter</div>
+            <div class="sidebar-section-title">Search</div>
             <div class="sidebar-section-content">
-                <input type="text" class="form-input" id="logsSearch" placeholder="Search logs..." />
+                <div class="form-field">
+                    <input type="text" class="form-input" id="logsSearch" placeholder="Filter log entries..." />
+                </div>
                 <div class="logs-filters" id="logsFilters">
                     <!-- Filter chips injected by JS based on active tab -->
                 </div>
@@ -33,24 +37,42 @@
         <div class="sidebar-section">
             <div class="sidebar-section-title">Actions</div>
             <div class="sidebar-section-content">
-                <button class="btn btn-secondary btn-sm btn-block" data-action="downloadLog">
-                    <i class="fa-solid fa-download"></i> Download
-                </button>
-                <button class="btn btn-danger-outline btn-sm btn-block" data-action="clearLog">
-                    <i class="fa-solid fa-trash"></i> Clear Log
+                <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--full" data-action="downloadLog">
+                    <i class="fa-solid fa-download"></i> Download Log
                 </button>
             </div>
+        </div>
+        <div class="sidebar-section sidebar-section-bottom">
+            <details class="danger-zone">
+                <summary class="danger-zone-toggle">
+                    <i class="fa-solid fa-triangle-exclamation"></i> Danger Zone
+                </summary>
+                <div class="danger-zone-content">
+                    <p class="danger-zone-warning">Permanently delete all entries from the current log file.</p>
+                    <button class="nbe-btn nbe-btn--dark nbe-btn--danger nbe-btn--full" data-action="clearLog">
+                        <i class="fa-solid fa-trash"></i> Clear Log
+                    </button>
+                </div>
+            </details>
         </div>
     </div>
 
     <!-- Main Content -->
-    <div class="page-main">
-        <div class="panel-header">
-            <span class="panel-header-title" id="logsTitle">Audit Log</span>
-            <span class="logs-count" id="logsCount"></span>
+    <div class="page-main logs-main">
+        <div class="page-header logs-header">
+            <h2 class="page-title" id="logsTitle">Audit Log</h2>
+            <div class="page-tabs" id="logsTabs" role="tablist">
+                <button class="page-tab active" data-action="switchTab" data-tab="audit">
+                    Audit
+                </button>
+                <button class="page-tab" data-action="switchTab" data-tab="app">
+                    Application
+                </button>
+            </div>
+            <span class="badge-count" id="logsCount"></span>
         </div>
         <div class="logs-table-container">
-            <table class="logs-table" id="logsTable">
+            <table class="logs-table" id="logsTable" role="grid" aria-label="Log entries">
                 <thead id="logsTableHead">
                     <!-- Column headers injected by JS based on active tab -->
                 </thead>
@@ -59,15 +81,14 @@
                 </tbody>
             </table>
             <div class="logs-empty" id="logsEmpty" style="display:none;">
-                <i class="fa-solid fa-file-lines"></i>
-                <p>No log entries found.</p>
+                <div class="empty-state empty-state--dark empty-state--flex">
+                    <div class="empty-icon"><i class="fa-solid fa-file-lines"></i></div>
+                    <h3>No log entries</h3>
+                    <p>Log entries will appear here as actions are performed.</p>
+                </div>
             </div>
         </div>
-        <div class="logs-footer">
-            <button class="btn btn-secondary btn-sm" id="loadMoreBtn" style="display:none;" data-action="loadMore">
-                Load More
-            </button>
-        </div>
+        <div id="logsPagination"></div>
     </div>
 </div>
 {% endblock %}

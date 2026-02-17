@@ -1,46 +1,24 @@
-/* Logs page styles — unified audit + application log viewer */
+/* Logs page — unified audit + application log viewer
+   Extends shared dark-page.css layout (page-container, page-sidebar, page-main) */
 
-/* ── Tabs ── */
-.logs-tabs {
-    display: flex;
-    flex-direction: column;
-    gap: var(--nbe-space-xs);
-}
-
-.logs-tab {
-    display: block;
-    width: 100%;
-    padding: var(--nbe-space-sm) var(--nbe-space-md);
-    font-size: var(--nbe-font-size-sm);
-    font-weight: 500;
-    color: var(--nbe-dark-text-secondary);
-    background: transparent;
-    border: 1px solid var(--nbe-dark-border-secondary);
-    border-radius: var(--nbe-radius-md);
-    cursor: pointer;
+/* ── Sidebar: log type buttons ── */
+.logs-container .logs-type-btn {
+    margin-bottom: var(--nbe-space-xs);
     text-align: left;
-    transition: background-color var(--nbe-transition-normal),
-                color var(--nbe-transition-normal),
-                border-color var(--nbe-transition-normal);
+    justify-content: flex-start;
 }
 
-.logs-tab:hover {
-    background: var(--nbe-dark-bg-hover);
-    color: var(--nbe-dark-text-primary);
-}
-
-.logs-tab.active {
+.logs-container .logs-type-btn.active {
     background: var(--nbe-dark-accent-alpha-20);
     color: var(--nbe-dark-accent-primary);
     border-color: var(--nbe-dark-accent-primary);
 }
 
-/* ── Filters ── */
+/* ── Sidebar: filter chips ── */
 .logs-filters {
     display: flex;
     flex-wrap: wrap;
     gap: var(--nbe-space-xs);
-    margin-top: var(--nbe-space-sm);
 }
 
 .logs-filter-chip {
@@ -69,11 +47,93 @@
     border-color: var(--nbe-dark-accent-primary);
 }
 
+/* ── Header: tabs + count ── */
+.logs-container .page-tabs {
+    display: flex;
+    gap: var(--nbe-space-xs);
+    background: var(--nbe-dark-bg-tertiary);
+    padding: var(--nbe-space-2xs);
+    border-radius: var(--nbe-radius-md);
+}
+
+.logs-container .page-tab {
+    padding: var(--nbe-space-xs) var(--nbe-space-sm);
+    background: transparent;
+    border: none;
+    border-radius: var(--nbe-radius-sm, 3px);
+    font-size: var(--nbe-font-size-sm);
+    font-weight: 500;
+    color: var(--nbe-dark-text-secondary);
+    cursor: pointer;
+    transition: all var(--nbe-transition-fast);
+}
+
+.logs-container .page-tab:hover {
+    background: var(--nbe-dark-bg-hover);
+}
+
+.logs-container .page-tab.active {
+    background: var(--nbe-dark-accent-alpha-20);
+    color: var(--nbe-dark-accent-primary);
+}
+
+.logs-header .badge-count {
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-dark-text-secondary);
+    background: var(--nbe-dark-bg-tertiary);
+    padding: var(--nbe-space-xs) var(--nbe-space-sm);
+    border-radius: var(--nbe-radius-md);
+    margin-left: auto;
+}
+
+/* ── Danger zone (reuses shared pattern from dark-page.css) ── */
+.logs-container .danger-zone {
+    background: transparent;
+}
+
+.logs-container .danger-zone-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--nbe-space-sm);
+    padding: var(--nbe-space-sm) var(--nbe-space-md);
+    font-size: var(--nbe-font-size-sm);
+    font-weight: 500;
+    color: var(--nbe-dark-accent-danger);
+    cursor: pointer;
+    list-style: none;
+}
+
+.logs-container .danger-zone-toggle::-webkit-details-marker {
+    display: none;
+}
+
+.logs-container .danger-zone-toggle::after {
+    content: '\f078';
+    font-family: 'Font Awesome 6 Free', sans-serif;
+    font-weight: 900;
+    font-size: var(--nbe-typography-muted-size);
+    margin-left: auto;
+    transition: transform var(--nbe-transition-slow);
+}
+
+.logs-container .danger-zone[open] .danger-zone-toggle::after {
+    transform: rotate(180deg);
+}
+
+.logs-container .danger-zone-content {
+    padding: var(--nbe-space-sm) var(--nbe-space-md) var(--nbe-space-md);
+}
+
+.logs-container .danger-zone-warning {
+    font-size: var(--nbe-font-size-xs);
+    color: var(--nbe-dark-text-secondary);
+    margin: 0 0 var(--nbe-space-sm);
+}
+
 /* ── Table container ── */
 .logs-table-container {
     flex: 1;
     overflow-y: auto;
-    padding: 0;
 }
 
 .logs-table-container::-webkit-scrollbar {
@@ -102,7 +162,7 @@
 
 .logs-table th {
     background: var(--nbe-dark-bg-secondary);
-    color: var(--nbe-dark-text-secondary);
+    color: var(--nbe-dark-text-primary);
     font-weight: 600;
     text-align: left;
     padding: var(--nbe-space-sm) var(--nbe-space-md);
@@ -115,7 +175,7 @@
 
 .logs-table tbody tr {
     border-bottom: 1px solid var(--nbe-dark-border-secondary);
-    transition: background-color var(--nbe-transition-normal);
+    transition: background-color 0.15s;
 }
 
 .logs-table tbody tr:nth-child(even) {
@@ -132,12 +192,12 @@
     color: var(--nbe-dark-text-primary);
 }
 
-/* Column widths */
+/* ── Column widths ── */
 .logs-col-timestamp {
     width: 120px;
     font-family: var(--nbe-font-mono);
-    font-size: var(--nbe-font-size-xs);
-    color: var(--nbe-dark-text-muted);
+    font-size: var(--nbe-typography-secondary-size);
+    color: var(--nbe-dark-text-secondary);
     white-space: nowrap;
 }
 
@@ -167,7 +227,7 @@
 .logs-col-source {
     width: 160px;
     font-family: var(--nbe-font-mono);
-    font-size: var(--nbe-font-size-xs);
+    font-size: var(--nbe-typography-secondary-size);
 }
 
 /* ── Badges ── */
@@ -181,7 +241,6 @@
     letter-spacing: 0.03em;
 }
 
-/* Action badges (audit tab) */
 .logs-badge-apply {
     background: var(--nbe-dark-validation-success-bg);
     color: var(--nbe-dark-validation-success-text);
@@ -202,7 +261,6 @@
     color: var(--nbe-dark-validation-error-text);
 }
 
-/* Level badges (app tab) */
 .logs-badge-debug {
     background: var(--nbe-dark-bg-tertiary);
     color: var(--nbe-dark-text-muted);
@@ -233,39 +291,9 @@
 /* ── Empty state ── */
 .logs-empty {
     display: flex;
-    flex-direction: column;
+    justify-content: center;
     align-items: center;
-    justify-content: center;
-    padding: var(--nbe-space-xl) var(--nbe-space-lg);
-    color: var(--nbe-dark-text-muted);
-    text-align: center;
     min-height: 200px;
-}
-
-.logs-empty i {
-    font-size: 48px;
-    margin-bottom: var(--nbe-space-md);
-    opacity: 0.3;
-}
-
-.logs-empty p {
-    margin: 0;
-    font-size: var(--nbe-font-size-md);
-}
-
-/* ── Footer ── */
-.logs-footer {
-    display: flex;
-    justify-content: center;
-    padding: var(--nbe-space-md);
-    border-top: 1px solid var(--nbe-dark-border-secondary);
-}
-
-/* ── Count badge in header ── */
-.logs-count {
-    font-size: var(--nbe-font-size-sm);
-    color: var(--nbe-dark-text-secondary);
-    margin-left: var(--nbe-space-sm);
 }
 
 /* ── Details cell content ── */

@@ -3,18 +3,20 @@
  *
  * Tabs switch between audit and app logs. Each tab has its own column layout,
  * filter chips, and API endpoint. Audit tab groups rows by transaction ID.
+ * Client-side pagination via shared renderPagination component.
  */
 
-/* global ApiClient, showToast, showConfirmDialog, escapeHtml */
+/* global ApiClient, showToast, showConfirmDialog, escapeHtml, renderPagination */
 
 // ── State ──────────────────────────────────────────────────────────────────
 let activeTab = 'audit';
 let entries = [];
-let offset = 0;
 let searchQuery = '';
 let activeFilters = new Set();
 
-const PAGE_SIZE = 100;
+// Pagination state
+let logCurrentPage = 1;
+let logPageSize = 25;
 
 // ── Tab config ─────────────────────────────────────────────────────────────
 const TAB_CONFIG = {
@@ -59,9 +61,10 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initTabs() {
-    document.querySelectorAll('.logs-tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-            const tabName = tab.dataset.tab;
+    // Sidebar type buttons
+    document.querySelectorAll('.logs-type-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tabName = btn.dataset.tab;
             if (tabName === activeTab) {return;}
             switchTab(tabName);
         });
@@ -76,6 +79,7 @@ function initSearch() {
         clearTimeout(timeout);
         timeout = setTimeout(() => {
             searchQuery = input.value.trim().toLowerCase();
+            logCurrentPage = 1;
             renderTable();
         }, 300);
     });
@@ -84,12 +88,21 @@ function initSearch() {
 function switchTab(tabName) {
     activeTab = tabName;
     entries = [];
-    offset = 0;
+    logCurrentPage = 1;
     searchQuery = '';
     activeFilters.clear();
 
-    // Update tab buttons
-    document.querySelectorAll('.logs-tab').forEach(t => {
+    // Update sidebar type buttons
+    document.querySelectorAll('.logs-type-btn').forEach(btn => {
+        const isActive = btn.dataset.tab === tabName;
+        btn.classList.toggle('active', isActive);
+        // Switch between tonal (active) and outlined (inactive)
+        btn.classList.toggle('nbe-btn--tonal', isActive);
+        btn.classList.toggle('nbe-btn--outlined', !isActive);
+    });
+
+    // Update header tabs
+    document.querySelectorAll('.page-tab[data-tab]').forEach(t => {
         t.classList.toggle('active', t.dataset.tab === tabName);
     });
 
@@ -125,18 +138,16 @@ function renderFilters() {
                 activeFilters.add(key);
                 chip.classList.add('active');
             }
+            logCurrentPage = 1;
             renderTable();
         });
     });
 }
 
 // ── Data loading ───────────────────────────────────────────────────────────
-async function loadEntries(append) {
+async function loadEntries() {
     const config = TAB_CONFIG[activeTab];
-    const params = new URLSearchParams({
-        limit: String(PAGE_SIZE),
-        offset: String(append ? offset : 0),
-    });
+    const params = new URLSearchParams({ limit: '10000' });
 
     const result = await ApiClient.get(`${config.endpoint}?${params}`, { silent: true });
     if (!result.success) {
@@ -145,23 +156,9 @@ async function loadEntries(append) {
     }
 
     const data = result.data.data || result.data;
-    const newEntries = data.entries || [];
-
-    if (append) {
-        entries = entries.concat(newEntries);
-    } else {
-        entries = newEntries;
-        offset = 0;
-    }
-    offset = entries.length;
-
+    entries = data.entries || [];
+    logCurrentPage = 1;
     renderTable();
-
-    // Show/hide load more button
-    const loadMore = document.getElementById('loadMoreBtn');
-    if (loadMore) {
-        loadMore.style.display = data.has_more ? '' : 'none';
-    }
 }
 
 // ── Table rendering ────────────────────────────────────────────────────────
@@ -201,21 +198,53 @@ function renderTable() {
         if (tbody) {tbody.innerHTML = '';}
         if (empty) {empty.style.display = '';}
         if (countEl) {countEl.textContent = '';}
+        renderLogPagination(0);
         return;
     }
 
     if (empty) {empty.style.display = 'none';}
     if (countEl) {countEl.textContent = `(${filtered.length} entries)`;}
 
+    // Paginate
+    const totalItems = filtered.length;
+    const totalPages = Math.ceil(totalItems / logPageSize);
+    logCurrentPage = Math.min(logCurrentPage, Math.max(1, totalPages));
+    const startIdx = (logCurrentPage - 1) * logPageSize;
+    const endIdx = Math.min(startIdx + logPageSize, totalItems);
+    const pageEntries = filtered.slice(startIdx, endIdx);
+
     if (!tbody) {return;}
     tbody.innerHTML = '';
 
     if (activeTab === 'audit') {
-        renderAuditRows(tbody, filtered);
+        renderAuditRows(tbody, pageEntries);
     } else {
-        filtered.forEach(entry => {
+        pageEntries.forEach(entry => {
             tbody.insertAdjacentHTML('beforeend', config.renderRow(entry));
         });
+    }
+
+    renderLogPagination(totalItems);
+}
+
+function renderLogPagination(totalItems) {
+    const container = document.getElementById('logsPagination');
+    if (!container) {return;}
+
+    const existingPagination = container.querySelector('.nbe-pagination');
+    if (existingPagination) {
+        existingPagination.remove();
+    }
+
+    const paginationHtml = renderPagination({
+        currentPage: logCurrentPage,
+        totalItems,
+        pageSize: logPageSize,
+        actionPrefix: 'log',
+    });
+
+    if (paginationHtml) {
+        container.insertAdjacentHTML('beforeend', paginationHtml);
     }
 }
 
@@ -226,10 +255,10 @@ function renderTableHead(columns) {
 }
 
 // ── Audit row rendering with transaction grouping ──────────────────────────
-function renderAuditRows(tbody, filtered) {
+function renderAuditRows(tbody, pageEntries) {
     let lastTxn = null;
 
-    filtered.forEach(entry => {
+    pageEntries.forEach(entry => {
         const txn = entry.txn || '';
         const isContinuation = txn && txn === lastTxn;
         const isGroupStart = txn && txn !== lastTxn;
@@ -340,17 +369,44 @@ document.addEventListener('click', function(e) {
 
     const action = actionEl.dataset.action;
     switch (action) {
+        case 'switchTab': {
+            const tabName = actionEl.dataset.tab;
+            if (tabName && tabName !== activeTab) {switchTab(tabName);}
+            break;
+        }
         case 'downloadLog':
             downloadLog();
             break;
         case 'clearLog':
             clearLog();
             break;
-        case 'loadMore':
-            loadEntries(true);
+        case 'log-page': {
+            const page = parseInt(actionEl.dataset.page, 10);
+            if (page) {setLogPage(page);}
             break;
+        }
     }
 });
+
+// Page size change (select element)
+document.addEventListener('change', function(e) {
+    const actionEl = e.target.closest('[data-action]');
+    if (actionEl && actionEl.dataset.action === 'log-page-size') {
+        const size = parseInt(actionEl.value, 10);
+        if (size) {setLogPageSize(size);}
+    }
+});
+
+function setLogPage(page) {
+    logCurrentPage = page;
+    renderTable();
+}
+
+function setLogPageSize(size) {
+    logPageSize = size;
+    logCurrentPage = 1;
+    renderTable();
+}
 
 function downloadLog() {
     const config = TAB_CONFIG[activeTab];
@@ -371,7 +427,7 @@ async function clearLog() {
     const result = await ApiClient.post(config.clearUrl);
     if (result.success) {
         entries = [];
-        offset = 0;
+        logCurrentPage = 1;
         renderTable();
         showToast(`${config.title} cleared`, 'success');
     } else {
