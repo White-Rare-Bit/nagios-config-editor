@@ -40,49 +40,6 @@ class TestStagingSaveAtomic:
             assert loaded["pendingEdits"]["file.cfg|host|web-01"]["address"] == "10.0.0.1"
 
 
-class TestAuditWriteAtomic:
-    """Verify audit_service uses atomic write pattern."""
-
-    def test_audit_write_uses_atomic_replace(self, app):
-        """write_audit_log() must use os.replace for atomic writes."""
-        from audit_service import write_audit_log
-
-        replace_calls = []
-        original_replace = os.replace
-
-        def tracking_replace(src, dst):
-            replace_calls.append((src, dst))
-            return original_replace(src, dst)
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("audit_service.get_audit_log_path", return_value=os.path.join(tmpdir, "audit.json")):
-                with patch("audit_service.get_audit_log_dir", return_value=tmpdir):
-                    with patch("os.replace", side_effect=tracking_replace):
-                        write_audit_log({"action": "test", "timestamp": "2025-01-01"}, tmpdir)
-
-            assert len(replace_calls) > 0, "os.replace was not called (no atomic write)"
-
-    def test_audit_rotate_uses_atomic_replace(self, app):
-        """rotate_audit_log() must use os.replace for atomic writes."""
-        from audit_service import AUDIT_LOG_MAX_ENTRIES, rotate_audit_log
-
-        replace_calls = []
-        original_replace = os.replace
-
-        def tracking_replace(src, dst):
-            replace_calls.append((src, dst))
-            return original_replace(src, dst)
-
-        entries = [{"action": f"test-{i}"} for i in range(AUDIT_LOG_MAX_ENTRIES + 1)]
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("audit_service.get_audit_log_dir", return_value=tmpdir):
-                with patch("os.replace", side_effect=tracking_replace):
-                    result = rotate_audit_log(entries)
-
-            assert result == [], "rotate_audit_log should return empty list"
-            assert len(replace_calls) > 0, "os.replace was not called during rotation"
-
 
 class TestServerConfigSaveAtomic:
     """Verify server_config.save_config() uses atomic write pattern."""

@@ -48,9 +48,9 @@
                 <td>D3/Cytoscape dependency graph</td>
             </tr>
             <tr>
-                <td><code>/audit-log</code></td>
+                <td><code>/logs</code></td>
                 <td>GET</td>
-                <td>Audit log viewer</td>
+                <td>Unified log viewer (audit + application)</td>
             </tr>
             <tr>
                 <td><code>/settings</code></td>
@@ -597,29 +597,39 @@
                 <td>Write frontend error logs to server</td>
             </tr>
             <tr>
-                <td><code>/api/audit-log</code></td>
+                <td><code>/api/logs/audit</code></td>
                 <td>GET</td>
-                <td>Get audit log entries</td>
+                <td>Get parsed audit log entries</td>
             </tr>
             <tr>
-                <td><code>/api/audit-log</code></td>
+                <td><code>/api/logs/audit/download</code></td>
+                <td>GET</td>
+                <td>Download raw audit.log file</td>
+            </tr>
+            <tr>
+                <td><code>/api/logs/audit/clear</code></td>
                 <td>POST</td>
-                <td>Write a custom audit log entry</td>
+                <td>Truncate audit log</td>
             </tr>
             <tr>
-                <td><code>/api/audit-log/clear</code></td>
+                <td><code>/api/logs/app</code></td>
+                <td>GET</td>
+                <td>Get parsed application log entries</td>
+            </tr>
+            <tr>
+                <td><code>/api/logs/app/download</code></td>
+                <td>GET</td>
+                <td>Download raw app.log file</td>
+            </tr>
+            <tr>
+                <td><code>/api/logs/app/clear</code></td>
                 <td>POST</td>
-                <td>Clear current audit log (archives old)</td>
+                <td>Truncate application log</td>
             </tr>
             <tr>
-                <td><code>/api/audit-log/archives</code></td>
+                <td><code>/api/logs/archives</code></td>
                 <td>GET</td>
-                <td>List archived audit logs</td>
-            </tr>
-            <tr>
-                <td><code>/api/audit-log/archives/&lt;filename&gt;</code></td>
-                <td>GET</td>
-                <td>Download a specific audit log archive</td>
+                <td>List rotated log archives</td>
             </tr>
         </tbody>
     </table>

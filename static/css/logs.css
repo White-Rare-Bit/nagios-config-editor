@@ -1,0 +1,336 @@
+/* Logs page — unified audit + application log viewer
+   Extends shared dark-page.css layout (page-container, page-sidebar, page-main) */
+
+/* ── Sidebar: filter chips ── */
+.logs-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nbe-space-xs);
+}
+
+.logs-filter-chip {
+    display: inline-block;
+    padding: var(--nbe-space-2xs) var(--nbe-space-sm);
+    font-size: var(--nbe-font-size-xs);
+    font-weight: 500;
+    color: var(--nbe-dark-text-secondary);
+    background: var(--nbe-dark-bg-tertiary);
+    border: 1px solid var(--nbe-dark-border-secondary);
+    border-radius: var(--nbe-radius-md);
+    cursor: pointer;
+    transition: background-color var(--nbe-transition-normal),
+                color var(--nbe-transition-normal),
+                border-color var(--nbe-transition-normal);
+}
+
+.logs-filter-chip:hover {
+    background: var(--nbe-dark-bg-hover);
+    color: var(--nbe-dark-text-primary);
+}
+
+.logs-filter-chip.active {
+    background: var(--nbe-dark-accent-alpha-20);
+    color: var(--nbe-dark-accent-primary);
+    border-color: var(--nbe-dark-accent-primary);
+}
+
+/* ── Main content area ── */
+.logs-container .page-main,
+.logs-container .logs-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--nbe-dark-bg-primary);
+}
+
+/* ── Header ── */
+.logs-container .page-header,
+.logs-container .logs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 36px;
+    padding: 0 var(--nbe-space-lg);
+    background: var(--nbe-dark-bg-secondary);
+    border-bottom: 1px solid var(--nbe-dark-border-primary);
+}
+
+.logs-container .page-title {
+    margin: 0;
+    font-size: var(--nbe-font-size-lg);
+    font-weight: 600;
+    color: var(--nbe-dark-text-primary);
+}
+
+/* Tabs */
+.logs-container .page-tabs {
+    display: flex;
+    gap: var(--nbe-space-xs);
+    background: var(--nbe-dark-bg-tertiary);
+    padding: var(--nbe-space-2xs);
+    border-radius: var(--nbe-radius-md);
+}
+
+.logs-container .page-tab {
+    padding: var(--nbe-space-xs) var(--nbe-space-lg);
+    background: transparent;
+    border: none;
+    border-radius: var(--nbe-radius-sm, 3px);
+    font-size: var(--nbe-font-size-sm);
+    font-weight: 500;
+    color: var(--nbe-dark-text-secondary);
+    cursor: pointer;
+    transition: all var(--nbe-transition-fast);
+    position: relative;
+    overflow: hidden;
+}
+
+.logs-container .page-tab::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: currentcolor;
+    opacity: 0;
+    transition: opacity var(--nbe-transition-fast);
+    pointer-events: none;
+}
+
+.logs-container .page-tab:hover::before {
+    opacity: var(--nbe-state-hover-opacity);
+}
+
+.logs-container .page-tab:hover {
+    color: var(--nbe-dark-accent-primary);
+}
+
+.logs-container .page-tab.active {
+    background: var(--nbe-dark-accent-alpha-20);
+    color: var(--nbe-dark-accent-primary);
+}
+
+/* ── Danger zone (reuses shared pattern from dark-page.css) ── */
+.logs-container .danger-zone {
+    background: transparent;
+}
+
+.logs-container .danger-zone-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--nbe-space-sm);
+    padding: var(--nbe-space-sm) var(--nbe-space-md);
+    font-size: var(--nbe-font-size-sm);
+    font-weight: 500;
+    color: var(--nbe-dark-accent-danger);
+    cursor: pointer;
+    list-style: none;
+}
+
+.logs-container .danger-zone-toggle::-webkit-details-marker {
+    display: none;
+}
+
+.logs-container .danger-zone-toggle::after {
+    content: '\f078';
+    font-family: 'Font Awesome 6 Free', sans-serif;
+    font-weight: 900;
+    font-size: var(--nbe-typography-muted-size);
+    margin-left: auto;
+    transition: transform var(--nbe-transition-slow);
+}
+
+.logs-container .danger-zone[open] .danger-zone-toggle::after {
+    transform: rotate(180deg);
+}
+
+.logs-container .danger-zone-content {
+    padding: var(--nbe-space-sm) var(--nbe-space-md) var(--nbe-space-md);
+}
+
+.logs-container .danger-zone-warning {
+    font-size: var(--nbe-font-size-xs);
+    color: var(--nbe-dark-text-secondary);
+    margin: 0 0 var(--nbe-space-sm);
+}
+
+/* ── Table container ── */
+.logs-table-container {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.logs-table-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.logs-table-container::-webkit-scrollbar-track {
+    background: var(--nbe-dark-bg-primary);
+}
+
+.logs-table-container::-webkit-scrollbar-thumb {
+    background: var(--nbe-dark-border-primary);
+    border-radius: var(--nbe-radius-md);
+}
+
+.logs-table-container::-webkit-scrollbar-thumb:hover {
+    background: var(--nbe-dark-text-muted);
+}
+
+/* ── Table ── */
+.logs-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-typography-secondary-size);
+}
+
+.logs-table th {
+    background: var(--nbe-dark-bg-secondary);
+    color: var(--nbe-dark-text-primary);
+    font-weight: 600;
+    text-align: left;
+    padding: var(--nbe-space-sm) var(--nbe-space-md);
+    border-bottom: 2px solid var(--nbe-dark-border-primary);
+    border-right: 1px solid rgba(255, 255, 255, 0.15);
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.logs-table th:last-child {
+    border-right: none;
+}
+
+.logs-table tbody tr {
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    transition: background-color 0.15s;
+}
+
+.logs-table tbody tr:nth-child(even) {
+    background: var(--nbe-dark-bg-tertiary);
+}
+
+.logs-table tbody tr:hover {
+    background: var(--nbe-dark-bg-hover);
+}
+
+.logs-table td {
+    padding: var(--nbe-space-sm) var(--nbe-space-md);
+    vertical-align: top;
+    color: var(--nbe-dark-text-primary);
+    border-right: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.logs-table td:last-child {
+    border-right: none;
+}
+
+/* ── Column widths ── */
+.logs-col-timestamp {
+    width: 150px;
+    color: var(--nbe-dark-text-secondary);
+    white-space: nowrap;
+}
+
+.logs-col-user {
+    width: 180px;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.logs-user-email {
+    color: var(--nbe-dark-text-muted);
+}
+
+.logs-col-action {
+    width: 100px;
+    white-space: nowrap;
+}
+
+.logs-col-level {
+    width: 80px;
+    white-space: nowrap;
+}
+
+.logs-col-object {
+    width: 200px;
+}
+
+.logs-col-details,
+.logs-col-message {
+    width: auto;
+    word-break: break-word;
+}
+
+.logs-col-source {
+    width: 180px;
+}
+
+/* ── Empty value placeholder ── */
+.logs-empty-value {
+    color: var(--nbe-dark-text-muted);
+}
+
+/* ── Empty state ── */
+.logs-empty {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+}
+
+/* ── Details cell content ── */
+.logs-detail-field {
+    color: var(--nbe-dark-accent-secondary);
+}
+
+.logs-detail-op {
+    font-weight: 600;
+}
+
+.logs-detail-from {
+    color: var(--nbe-dark-validation-error-text);
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+
+.logs-detail-to {
+    color: var(--nbe-dark-validation-success-text);
+}
+
+.logs-detail-arrow {
+    color: var(--nbe-dark-text-muted);
+    margin: 0 var(--nbe-space-xs);
+}
+
+.logs-detail-sep {
+    color: var(--nbe-dark-text-muted);
+    margin: 0 var(--nbe-space-2xs);
+}
+
+/* ── Object type badges (matches dep-type-badge from dependencies page) ── */
+.logs-type-badge {
+    display: inline-block;
+    font-size: var(--nbe-font-size-2xs);
+    padding: var(--nbe-space-2xs) var(--nbe-space-xs);
+    border-radius: var(--nbe-radius-sm);
+    color: var(--nbe-dark-text-primary);
+    margin-right: var(--nbe-space-sm);
+    text-transform: uppercase;
+    background: var(--nbe-dark-bg-tertiary);
+    vertical-align: middle;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.logs-type-badge--host { background: var(--nbe-dark-type-host-bg); color: var(--nbe-dark-type-host-text); }
+.logs-type-badge--hostgroup { background: var(--nbe-dark-type-hostgroup-bg); color: var(--nbe-dark-type-hostgroup-text); }
+.logs-type-badge--service { background: var(--nbe-dark-type-service-bg); color: var(--nbe-dark-type-service-text); }
+.logs-type-badge--servicegroup { background: var(--nbe-dark-type-servicegroup-bg); color: var(--nbe-dark-type-servicegroup-text); }
+.logs-type-badge--contact { background: var(--nbe-dark-type-contact-bg); color: var(--nbe-dark-type-contact-text); }
+.logs-type-badge--contactgroup { background: var(--nbe-dark-type-contactgroup-bg); color: var(--nbe-dark-type-contactgroup-text); }
+.logs-type-badge--command { background: var(--nbe-dark-type-command-bg); color: var(--nbe-dark-type-command-text); }
+.logs-type-badge--timeperiod { background: var(--nbe-dark-type-timeperiod-bg); color: var(--nbe-dark-type-timeperiod-text); }

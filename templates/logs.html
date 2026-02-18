@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Logs - Nagios Bulk Editor{% endblock %}
+{% block body_class %} nbe-dark-page{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('static', filename='css/logs.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="page-container logs-container">
+    <!-- Left Sidebar -->
+    <div class="page-sidebar">
+        <div class="panel-header"><span class="panel-header-title">Logs</span></div>
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Search</div>
+            <div class="sidebar-section-content">
+                <div class="form-field">
+                    <input type="text" class="form-input" id="logsSearch" placeholder="Filter log entries..." />
+                </div>
+                <div class="logs-filters" id="logsFilters">
+                    <!-- Filter chips injected by JS based on active tab -->
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-section sidebar-section-info">
+            <div class="sidebar-section-title">Info</div>
+            <div class="sidebar-section-content">
+                <p class="sidebar-info-text">
+                    The audit log records all changes applied to Nagios configuration files, grouped by transaction.
+                </p>
+                <p class="sidebar-info-text">
+                    The application log captures internal events like backups, git operations, and parser warnings.
+                </p>
+            </div>
+        </div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Actions</div>
+            <div class="sidebar-section-content">
+                <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--full" data-action="downloadLog">
+                    <i class="fa-solid fa-download"></i> Download Log
+                </button>
+            </div>
+        </div>
+        <div class="sidebar-section sidebar-section-bottom">
+            <details class="danger-zone">
+                <summary class="danger-zone-toggle">
+                    <i class="fa-solid fa-triangle-exclamation"></i> Danger Zone
+                </summary>
+                <div class="danger-zone-content">
+                    <p class="danger-zone-warning">Permanently delete all entries from the current log file.</p>
+                    <button class="nbe-btn nbe-btn--dark nbe-btn--danger nbe-btn--full" data-action="clearLog">
+                        <i class="fa-solid fa-trash"></i> Clear Log
+                    </button>
+                </div>
+            </details>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="page-main logs-main">
+        <div class="page-header logs-header">
+            <h2 class="page-title">Log Entries</h2>
+            <div class="page-tabs" id="logsTabs" role="tablist" aria-label="Log type tabs">
+                <button class="page-tab active" data-action="switchTab" data-tab="audit"
+                        role="tab" aria-selected="true">
+                    Audit
+                </button>
+                <button class="page-tab" data-action="switchTab" data-tab="app"
+                        role="tab" aria-selected="false">
+                    Application
+                </button>
+            </div>
+        </div>
+        <div class="logs-table-container">
+            <table class="logs-table" id="logsTable" role="grid" aria-label="Log entries">
+                <thead id="logsTableHead">
+                    <!-- Column headers injected by JS based on active tab -->
+                </thead>
+                <tbody id="logsTableBody">
+                    <!-- Rows injected by JS -->
+                </tbody>
+            </table>
+            <div class="logs-empty" id="logsEmpty" style="display:none;">
+                <div class="empty-state empty-state--dark empty-state--flex">
+                    <div class="empty-icon"><i class="fa-solid fa-file-lines"></i></div>
+                    <h3>No log entries</h3>
+                    <p>Log entries will appear here as actions are performed.</p>
+                </div>
+            </div>
+        </div>
+        <div id="logsPagination"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/logs.js') }}"></script>
+{% endblock %}

@@ -9,6 +9,7 @@ def register_blueprints(app):
     from .debug import debug_bp
     from .files import bp as files_bp
     from .git import bp as git_bp
+    from .logs import bp as logs_bp
     from .metadata import bp as metadata_bp
     from .objects import bp as objects_bp
     from .pages import bp as pages_bp
@@ -30,3 +31,4 @@ def register_blueprints(app):
     app.register_blueprint(bulk_ops_bp)
     app.register_blueprint(debug_bp)
     app.register_blueprint(metadata_bp)
+    app.register_blueprint(logs_bp)

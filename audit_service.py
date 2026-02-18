@@ -1,137 +1,69 @@
-"""Audit Log Service
+"""Audit logging service — writes key=value lines to audit.log via stdlib logging.
 
-Manages audit log persistence, rotation, and retrieval.
+Each audit event is a single log line in the format:
+    AUDIT txn=<id> user="<email>" action=<type> key1=value1 key2="value with spaces"
+
+Transaction IDs (txn) group related changes from a single Apply operation.
 """
 
-import contextlib
-import json
-import multiprocessing
-import os
-import tempfile
-from datetime import datetime
-
-# C-09: Module-level lock for process-safe audit log writes
-# Uses multiprocessing.Lock because WSGI servers may use multiple processes
-_audit_lock = multiprocessing.Lock()
+import logging
+import uuid
 
 
-AUDIT_LOG_MAX_ENTRIES = 1000  # Rotate after this many entries
-
-# Default audit log directory - set once at module load to project root
-# This ensures consistent paths regardless of which module calls first
-_DEFAULT_AUDIT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+audit_logger = logging.getLogger("audit")
 
 
-def get_audit_log_dir(config_dir: str = None):
-    """Get the path to the audit log directory, creating it if needed.
+def format_audit_line(action, txn=None, user=None, **kwargs):
+    """Format an audit event as a key=value log line.
 
     Args:
-        config_dir: Configuration directory path. If None, uses the project root
-            (directory containing audit_service.py) to ensure consistent paths.
+        action: The action type (apply, backup_created, git_commit, etc.)
+        txn: Transaction ID for grouping related changes. Auto-generated if None.
+        user: User email address.
+        **kwargs: Additional key=value pairs. Use from_val/to_val for
+                  from/to fields (since 'from' is a Python keyword).
 
     Returns:
-        Path to audit log directory (config_dir/logs/ or project_root/logs/).
+        Formatted string like: AUDIT txn=abc123 user="a@b.com" action=apply ...
 
     """
-    if config_dir is None:
-        log_dir = _DEFAULT_AUDIT_DIR
-    else:
-        log_dir = os.path.join(config_dir, "logs")
-    os.makedirs(log_dir, exist_ok=True)
-    return log_dir
+    if txn is None:
+        txn = uuid.uuid4().hex[:8]
+
+    parts = [f"AUDIT txn={txn} user=\"{user or ''}\" action={action}"]
+
+    # Rename from_val/to_val to from/to in output
+    renamed = {}
+    for k, v in kwargs.items():
+        if k == "from_val":
+            renamed["from"] = v
+        elif k == "to_val":
+            renamed["to"] = v
+        else:
+            renamed[k] = v
+
+    for k, v in renamed.items():
+        v_str = str(v) if v is not None else ""
+        if '"' in v_str:
+            v_str = v_str.replace('"', '\\"')
+            parts.append(f'{k}="{v_str}"')
+        elif not v_str or " " in v_str:
+            parts.append(f'{k}="{v_str}"')
+        else:
+            parts.append(f"{k}={v_str}")
+
+    return " ".join(parts)
 
 
-def get_audit_log_path(config_dir: str = None):
-    """Get the path to the current audit log file.
+def log_audit(action, user=None, txn=None, **kwargs):
+    """Write an audit log line.
 
     Args:
-        config_dir: Configuration directory path. If None, uses the project root
-            (directory containing audit_service.py) to ensure consistent paths.
-
-    Returns:
-        Path to audit log file.
-
-    """
-    return os.path.join(get_audit_log_dir(config_dir), "audit_log.json")
-
-
-def rotate_audit_log(entries: list) -> list:
-    """Rotate audit log to archive file, returning empty list for new log.
-
-    Archives are named: audit_log_YYYYMMDD_HHMMSS.json
-
-    Args:
-        entries: List of audit log entries.
-
-    Returns:
-        Empty list if rotated, original list if not.
+        action: The action type.
+        user: User email address.
+        txn: Transaction ID. Auto-generated if None.
+        **kwargs: Additional key=value pairs for the log line.
 
     """
-    if len(entries) < AUDIT_LOG_MAX_ENTRIES:
-        return entries
-
-    log_dir = get_audit_log_dir()
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    archive_path = os.path.join(log_dir, f"audit_log_{timestamp}.json")
-
-    # Atomic write: temp file → flush → fsync → rename
-    fd, tmp_path = tempfile.mkstemp(dir=log_dir, suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump({"entries": entries, "archived_at": datetime.now().isoformat()}, f, indent=2)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp_path, archive_path)
-    except:
-        with contextlib.suppress(OSError):
-            os.unlink(tmp_path)
-        raise
-
-    # Return empty list to start fresh
-    return []
-
-
-def write_audit_log(audit_entry: dict, config_dir: str = None):
-    """Write an audit log entry to the audit log file.
-
-    C-09: Uses threading lock to prevent concurrent write race condition.
-    The read-modify-write pattern requires atomicity to avoid lost updates.
-
-    Args:
-        audit_entry: Audit entry dictionary to log.
-        config_dir: Configuration directory path. If None, uses current directory.
-
-    """
-    audit_path = get_audit_log_path(config_dir)
-
-    # C-09: Acquire lock for thread-safe read-modify-write
-    with _audit_lock:
-        # Load existing entries
-        entries = []
-        if os.path.exists(audit_path):
-            try:
-                with open(audit_path, encoding="utf-8") as f:
-                    data = json.load(f)
-                    entries = data.get("entries", [])
-            except (OSError, json.JSONDecodeError):
-                entries = []
-
-        # Append new entry
-        entries.append(audit_entry)
-
-        # Rotate if needed
-        entries = rotate_audit_log(entries)
-
-        # Atomic save: temp file → flush → fsync → rename
-        audit_dir = os.path.dirname(audit_path)
-        fd, tmp_path = tempfile.mkstemp(dir=audit_dir, suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump({"entries": entries}, f, indent=2)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp_path, audit_path)
-        except:
-            with contextlib.suppress(OSError):
-                os.unlink(tmp_path)
-            raise
+    line = format_audit_line(action, txn=txn, user=user, **kwargs)
+    audit_logger.info(line)

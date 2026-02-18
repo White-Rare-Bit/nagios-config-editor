@@ -6,14 +6,13 @@ A web interface for bulk editing Nagios configuration files.
 import logging
 import os
 import warnings
+from logging.handlers import RotatingFileHandler
 
 from flask import Flask, current_app
 
-import file_operations
 from backup_manager import BackupManager
 from git_service import GitService
 from nagios_service import NagiosService
-from operation_logger import LogConfig, OperationLogger
 from server_config import ServerConfig
 from server_config import load_config as load_server_config
 from staging_manager import StagingManager
@@ -41,7 +40,61 @@ else:
     )
 
 
-def create_app(config_path: str | None = None) -> Flask:
+def _setup_logging(server_config, log_dir_override=None):
+    """Configure stdlib logging with file handlers for app and audit logs."""
+    log_cfg = server_config.logging
+    log_dir = log_dir_override or log_cfg.log_dir or "logs"
+    os.makedirs(log_dir, exist_ok=True)
+
+    max_bytes = int((log_cfg.max_file_size_mb or 10) * 1024 * 1024)
+    backup_count = log_cfg.max_backup_files or 5
+    level = getattr(logging, (log_cfg.log_level or "INFO").upper(), logging.INFO)
+
+    # App log — syslog-style format
+    app_handler = RotatingFileHandler(
+        os.path.join(log_dir, "app.log"),
+        maxBytes=max_bytes, backupCount=backup_count,
+    )
+    app_formatter = logging.Formatter(
+        fmt="%(asctime)s nagios-editor [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%b %d %H:%M:%S",
+    )
+    app_handler.setFormatter(app_formatter)
+    app_handler.setLevel(level)
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level)
+    root_logger.addHandler(app_handler)
+
+    # Audit log — minimal format (timestamp + raw message)
+    audit_handler = RotatingFileHandler(
+        os.path.join(log_dir, "audit.log"),
+        maxBytes=max_bytes, backupCount=backup_count,
+    )
+    audit_formatter = logging.Formatter(
+        fmt="%(asctime)s %(message)s",
+        datefmt="%b %d %H:%M:%S",
+    )
+    audit_handler.setFormatter(audit_formatter)
+    audit_handler.setLevel(logging.INFO)
+
+    audit_logger = logging.getLogger("audit")
+    audit_logger.addHandler(audit_handler)
+    audit_logger.propagate = False  # Don't duplicate audit lines into app.log
+
+    # Suppress werkzeug request logs from app.log (floods with GET /api/... lines)
+    logging.getLogger("werkzeug").propagate = False
+
+    # Store config for settings page and log viewer
+    app.extensions["log_dir"] = log_dir
+    app.extensions["log_config"] = {
+        "level": log_cfg.log_level or "INFO",
+        "max_size_mb": log_cfg.max_file_size_mb or 10,
+        "backup_count": log_cfg.max_backup_files or 5,
+    }
+
+
+def create_app(config_path: str | None = None, log_dir_override: str | None = None) -> Flask:
     """Initialize or reinitialize Flask application services.
 
     This function initializes the module-level app's extensions with the given
@@ -50,6 +103,7 @@ def create_app(config_path: str | None = None) -> Flask:
 
     Args:
         config_path: Optional override for Nagios config path
+        log_dir_override: Optional override for log directory (used by tests)
 
     Returns:
         The module-level Flask application instance with reinitialized services
@@ -67,32 +121,21 @@ def create_app(config_path: str | None = None) -> Flask:
         _server_config.paths.nagios_config_path = os.path.abspath(config_path)
     backup_path = _server_config.backup_path
 
-    # Initialize operation logger from server config
-    log_cfg = _server_config.logging
-    log_config = LogConfig(
-        level=log_cfg.log_level,
-        log_dir=log_cfg.log_dir,
-        filename=log_cfg.log_filename,
-        max_size_mb=log_cfg.max_file_size_mb,
-        max_backup_files=log_cfg.max_backup_files,
-        enabled=log_cfg.enabled,
-    )
-    op_logger = OperationLogger(log_config)
+    # Configure stdlib logging
+    _setup_logging(_server_config, log_dir_override)
 
-    # Initialize service instances with logger
-    staging_manager = StagingManager(nagios_config_path, op_logger=op_logger)
-    service = NagiosService(nagios_config_path, staging_manager, op_logger=op_logger)
-    backup_manager = BackupManager(nagios_config_path, backup_path, op_logger=op_logger)
-    file_operations.set_logger(op_logger)
+    # Initialize service instances
+    staging_manager = StagingManager(nagios_config_path)
+    service = NagiosService(nagios_config_path, staging_manager)
+    backup_manager = BackupManager(nagios_config_path, backup_path)
 
     # Initialize git service
-    git_service = GitService(nagios_config_path, op_logger=op_logger)
+    git_service = GitService(nagios_config_path)
 
     # Store in app.extensions for access via current_app
     app.extensions["service"] = service
     app.extensions["staging"] = staging_manager
     app.extensions["backup"] = backup_manager
-    app.extensions["op_logger"] = op_logger
     app.extensions["git"] = git_service
     app.extensions["server_config"] = _server_config
 
@@ -126,10 +169,6 @@ def get_staging_manager() -> StagingManager:
     """Get the staging manager."""
     return current_app.extensions["staging"]
 
-
-def get_op_logger() -> OperationLogger:
-    """Get the operation logger."""
-    return current_app.extensions.get("op_logger")
 
 
 # Initialize app services with default config

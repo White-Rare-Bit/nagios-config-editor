@@ -1,26 +1,20 @@
 """Settings and logging management routes."""
 
 import json
+import logging
 import os
-from datetime import datetime
 
 from flask import Blueprint, current_app, jsonify, request, send_file
 
-from audit_service import (
-    get_audit_log_dir,
-    get_audit_log_path,
-    rotate_audit_log,
-)
-from operation_logger import LogConfig
 from server_config import save_config as save_server_config
 from validator import verify_nagios_binary
 
 from .helpers import (
-    get_op_logger,
     get_server_config,
 )
 
 bp = Blueprint("settings", __name__)
+logger = logging.getLogger(__name__)
 
 
 @bp.route("/api/settings", methods=["GET"])
@@ -88,7 +82,6 @@ def _update_config_path(server_config, path, updated, errors):
         errors.append(f"Invalid directory: {path}")
         return
 
-    op_logger = get_op_logger()
     import file_operations
     from backup_manager import BackupManager
     from git_service import GitService
@@ -98,14 +91,13 @@ def _update_config_path(server_config, path, updated, errors):
     normalized_path = os.path.abspath(path)
 
     try:
-        new_staging = StagingManager(normalized_path, op_logger=op_logger)
-        new_service = NagiosService(normalized_path, new_staging, op_logger=op_logger)
+        new_staging = StagingManager(normalized_path)
+        new_service = NagiosService(normalized_path, new_staging)
         _ = new_service.parser  # Force init to catch config errors early
-        new_backup = BackupManager(normalized_path, server_config.backup_path, op_logger=op_logger)
-        new_git = GitService(normalized_path, op_logger=op_logger)
+        new_backup = BackupManager(normalized_path, server_config.backup_path)
+        new_git = GitService(normalized_path)
 
         server_config.paths.nagios_config_path = normalized_path
-        file_operations.set_logger(op_logger)
         current_app.extensions["service"] = new_service
         current_app.extensions["staging"] = new_staging
         current_app.extensions["backup"] = new_backup
@@ -126,10 +118,9 @@ def _update_backup_path(server_config, path, updated, errors):
 
     server_config.paths.backup_path = path or None
 
-    op_logger = get_op_logger()
     from backup_manager import BackupManager
     backup_manager = BackupManager(
-        server_config.nagios_config_path, server_config.backup_path, op_logger=op_logger,
+        server_config.nagios_config_path, server_config.backup_path,
     )
     current_app.extensions["backup"] = backup_manager
     updated.append("backup_path")
@@ -200,78 +191,79 @@ def api_browse_directory():
 
 @bp.route("/api/settings/logging", methods=["GET"])
 def api_get_logging_settings():
-    """Get logging configuration and file info."""
-    op_logger = get_op_logger()
-    if not op_logger:
-        return jsonify({"error": "Logger not initialized"}), 500
+    """Get logging configuration and file info.
 
-    cfg = op_logger.config
+    TODO: Reimplement using stdlib logging configuration after logging overhaul.
+    """
+    server_config = get_server_config()
+    if not server_config:
+        return jsonify({"error": "Server config not initialized"}), 500
+
+    log_cfg = server_config.logging
     return jsonify({
-        "enabled": cfg.enabled,
-        "log_level": cfg.level,
-        "log_dir": cfg.log_dir,
-        "log_filename": cfg.filename,
-        "max_file_size_mb": cfg.max_size_mb,
-        "max_backup_files": cfg.max_backup_files,
-        "log_file_path": str(op_logger.get_log_file_path()),
-        "log_file_size": op_logger.get_log_file_size(),
-        "rotated_files": [str(f) for f in op_logger.get_rotated_files()],
+        "enabled": log_cfg.enabled,
+        "log_level": log_cfg.log_level,
+        "log_dir": log_cfg.log_dir,
+        "log_filename": log_cfg.log_filename,
+        "max_file_size_mb": log_cfg.max_file_size_mb,
+        "max_backup_files": log_cfg.max_backup_files,
     })
 
 
 @bp.route("/api/settings/logging", methods=["POST"])
 def api_update_logging_settings():
-    """Update logging configuration, persist, and reconfigure."""
-    op_logger = get_op_logger()
-    if not op_logger:
-        return jsonify({"error": "Logger not initialized"}), 500
+    """Update logging configuration, persist, and reconfigure.
+
+    TODO: Reimplement runtime log level changes using stdlib logging after logging overhaul.
+    """
+    server_config = get_server_config()
+    if not server_config:
+        return jsonify({"error": "Server config not initialized"}), 500
 
     data = request.get_json() or {}
-    new_config = LogConfig(
-        level=data.get("log_level", op_logger.config.level),
-        log_dir=data.get("log_dir", op_logger.config.log_dir),
-        filename=data.get("log_filename", op_logger.config.filename),
-        max_size_mb=data.get("max_file_size_mb", op_logger.config.max_size_mb),
-        max_backup_files=data.get("max_backup_files", op_logger.config.max_backup_files),
-        enabled=data.get("enabled", op_logger.config.enabled),
-    )
+    log_cfg = server_config.logging
 
-    # Update in-memory server config
-    server_config = get_server_config()
-    if server_config:
-        server_config.logging.enabled = new_config.enabled
-        server_config.logging.log_level = new_config.level
-        server_config.logging.log_dir = new_config.log_dir
-        server_config.logging.log_filename = new_config.filename
-        server_config.logging.max_file_size_mb = new_config.max_size_mb
-        server_config.logging.max_backup_files = new_config.max_backup_files
+    # Update in-memory server config with provided values (or keep existing)
+    log_cfg.enabled = data.get("enabled", log_cfg.enabled)
+    log_cfg.log_level = data.get("log_level", log_cfg.log_level)
+    log_cfg.log_dir = data.get("log_dir", log_cfg.log_dir)
+    log_cfg.log_filename = data.get("log_filename", log_cfg.log_filename)
+    log_cfg.max_file_size_mb = data.get("max_file_size_mb", log_cfg.max_file_size_mb)
+    log_cfg.max_backup_files = data.get("max_backup_files", log_cfg.max_backup_files)
 
     # Persist to config/settings.json
     save_server_config(server_config)
-    op_logger.reconfigure(new_config)
 
     return jsonify({"success": True, "config": {
-        "enabled": new_config.enabled,
-        "log_level": new_config.level,
-        "log_dir": new_config.log_dir,
-        "log_filename": new_config.filename,
-        "max_file_size_mb": new_config.max_size_mb,
-        "max_backup_files": new_config.max_backup_files,
+        "enabled": log_cfg.enabled,
+        "log_level": log_cfg.log_level,
+        "log_dir": log_cfg.log_dir,
+        "log_filename": log_cfg.log_filename,
+        "max_file_size_mb": log_cfg.max_file_size_mb,
+        "max_backup_files": log_cfg.max_backup_files,
     }})
 
 
 @bp.route("/api/logs/operations", methods=["GET"])
 def api_get_operation_logs():
-    """Read recent log entries with optional filtering."""
-    op_logger = get_op_logger()
-    if not op_logger:
-        return jsonify({"error": "Logger not initialized"}), 500
+    """Read recent log entries with optional filtering.
+
+    TODO: Reimplement to read from stdlib logging file after logging overhaul.
+    """
+    server_config = get_server_config()
+    if not server_config:
+        return jsonify({"error": "Server config not initialized"}), 500
 
     limit = request.args.get("limit", 100, type=int)
     level_filter = request.args.get("level", "").upper()
 
-    log_path = op_logger.get_log_file_path()
-    if not log_path.exists():
+    log_dir = server_config.logging.log_dir
+    log_filename = server_config.logging.log_filename
+    if not log_dir or not log_filename:
+        return jsonify({"entries": [], "total": 0})
+
+    log_path = os.path.join(log_dir, log_filename)
+    if not os.path.exists(log_path):
         return jsonify({"entries": [], "total": 0})
 
     entries = []
@@ -300,24 +292,31 @@ def api_get_operation_logs():
 
 @bp.route("/api/logs/operations/download", methods=["GET"])
 def api_download_operation_logs():
-    """Download the full log file."""
-    op_logger = get_op_logger()
-    if not op_logger:
-        return jsonify({"error": "Logger not initialized"}), 500
+    """Download the full log file.
 
-    log_path = op_logger.get_log_file_path()
-    if not log_path.exists():
+    TODO: Reimplement to locate stdlib logging file after logging overhaul.
+    """
+    server_config = get_server_config()
+    if not server_config:
+        return jsonify({"error": "Server config not initialized"}), 500
+
+    log_dir = server_config.logging.log_dir
+    log_filename = server_config.logging.log_filename
+    if not log_dir or not log_filename:
+        return jsonify({"error": "Log file path not configured"}), 404
+
+    log_path = os.path.join(log_dir, log_filename)
+    if not os.path.exists(log_path):
         return jsonify({"error": "Log file not found"}), 404
 
-    return send_file(str(log_path), mimetype="application/x-ndjson",
-                     as_attachment=True, download_name=log_path.name)
+    return send_file(log_path, mimetype="application/x-ndjson",
+                     as_attachment=True, download_name=log_filename)
 
 
 @bp.route("/api/logs/frontend", methods=["POST"])
 def api_frontend_log():
     """Receive debug logs from frontend and write to file."""
-    import logging
-    logger = logging.getLogger("nagios_bulk_editor.frontend")
+    frontend_logger = logging.getLogger("nagios_bulk_editor.frontend")
 
     data = request.json
     if not data:
@@ -339,115 +338,14 @@ def api_frontend_log():
             log_message += f" | context: {json.dumps(context)}"
 
         if level == "error":
-            logger.error(log_message)
+            frontend_logger.error(log_message)
         elif level == "warning":
-            logger.warning(log_message)
+            frontend_logger.warning(log_message)
         elif level == "info":
-            logger.info(log_message)
+            frontend_logger.info(log_message)
         else:
-            logger.debug(log_message)
+            frontend_logger.debug(log_message)
 
     return jsonify({"success": True})
 
 
-@bp.route("/api/audit-log", methods=["GET"])
-def api_get_audit_log():
-    """Get the audit log."""
-    # Use None to get default project root path, ensuring consistency with write_audit_log()
-    audit_path = get_audit_log_path(None)
-    if not os.path.exists(audit_path):
-        return jsonify({"entries": []})
-
-    try:
-        with open(audit_path) as f:
-            data = json.load(f)
-        return jsonify(data)
-    except (OSError, json.JSONDecodeError) as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@bp.route("/api/audit-log", methods=["POST"])
-def api_save_audit_log():
-    """Save an audit log entry."""
-    # Use None to get default project root path, ensuring consistency with write_audit_log()
-    audit_path = get_audit_log_path(None)
-
-    try:
-        entries = []
-        if os.path.exists(audit_path):
-            with open(audit_path) as f:
-                data = json.load(f)
-                entries = data.get("entries", [])
-
-        new_entry = request.json
-        entries.append(new_entry)
-
-        entries = rotate_audit_log(entries)
-
-        with open(audit_path, "w") as f:
-            json.dump({"entries": entries}, f, indent=2)
-
-        return jsonify({"success": True})
-    except (OSError, json.JSONDecodeError) as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@bp.route("/api/audit-log/clear", methods=["POST"])
-def api_clear_audit_log():
-    """Clear the audit log."""
-    # Use None to get default project root path, ensuring consistency with write_audit_log()
-    audit_path = get_audit_log_path(None)
-
-    try:
-        with open(audit_path, "w") as f:
-            json.dump({"entries": []}, f)
-        return jsonify({"success": True})
-    except OSError as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@bp.route("/api/audit-log/archives", methods=["GET"])
-def api_list_audit_archives():
-    """List all archived audit log files."""
-    # Use None to get default project root path, ensuring consistency with write_audit_log()
-    log_dir = get_audit_log_dir(None)
-
-    archives = []
-    try:
-        for filename in os.listdir(log_dir):
-            if filename.startswith("audit_log_") and filename.endswith(".json"):
-                filepath = os.path.join(log_dir, filename)
-                stat = os.stat(filepath)
-                archives.append({
-                    "filename": filename,
-                    "size": stat.st_size,
-                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                })
-
-        archives.sort(key=lambda x: x["filename"], reverse=True)
-
-        return jsonify({"archives": archives})
-    except OSError as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@bp.route("/api/audit-log/archives/<filename>", methods=["GET"])
-def api_get_audit_archive(filename):
-    """Get a specific archived audit log."""
-    if not filename.startswith("audit_log_") or not filename.endswith(".json"):
-        return jsonify({"error": "Invalid archive filename"}), 400
-    if "/" in filename or "\\" in filename or ".." in filename:
-        return jsonify({"error": "Invalid archive filename"}), 400
-
-    log_dir = get_audit_log_dir()
-    filepath = os.path.join(log_dir, filename)
-
-    if not os.path.exists(filepath):
-        return jsonify({"error": "Archive not found"}), 404
-
-    try:
-        with open(filepath, encoding="utf-8") as f:
-            data = json.load(f)
-        return jsonify(data)
-    except (OSError, json.JSONDecodeError) as e:
-        return jsonify({"error": str(e)}), 500

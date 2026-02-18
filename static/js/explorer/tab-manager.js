@@ -64,6 +64,15 @@
     }
 
     // =========================================================================
+    // Badge Refresh
+    // =========================================================================
+
+    function refreshBadgesForActiveTab() {
+        if (Explorer.computeStagedIssues) Explorer.computeStagedIssues();
+        if (Explorer.updateSuggestionsBadge) Explorer.updateSuggestionsBadge();
+    }
+
+    // =========================================================================
     // Core Tab Operations
     // =========================================================================
 
@@ -92,6 +101,7 @@
             state.activeTabKey = key;
         }
 
+        refreshBadgesForActiveTab();
         Explorer.showCenterPaneObject(obj);
         syncTreeSelection(obj);
         renderTabBar();
@@ -121,6 +131,7 @@
 
                 const obj = Explorer.findObjectByKey(newTab.key);
                 if (obj) {
+                    refreshBadgesForActiveTab();
                     Explorer.showCenterPaneObject(obj);
                     syncTreeSelection(obj);
                 }
@@ -144,6 +155,7 @@
 
         const obj = Explorer.findObjectByKey(key);
         if (obj) {
+            refreshBadgesForActiveTab();
             Explorer.showCenterPaneObject(obj);
             syncTreeSelection(obj);
         }

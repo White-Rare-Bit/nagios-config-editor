@@ -13,7 +13,7 @@ Design tokens in `tokens.css`, component styles, and page-specific CSS.
 | `git.css` | Git page: file list, diff viewer |
 | `backups.css` | Backup list, restore modal |
 | `dependencies.css` | Graph view: legend, zoom, node/edge styles |
-| `audit_log.css` | Audit log table, filter chips |
+| `logs.css` | Logs page: table, filter chips, badges |
 | `inheritance.css` | Inheritance tree visualization |
 | `settings.css` | Settings page forms |
 | `bulk-rename.css` | Bulk rename page |
@@ -32,7 +32,7 @@ Token-based. Dark pages use `{% block body_class %} nbe-dark-page{% endblock %}`
 
 **Naming**: `--nbe-dark-{category}-{variant}` — categories: `bg`, `text`, `border`, `accent`, `input`, `btn`, `tab`, `validation`, `prose`.
 
-**Dark pages**: Explorer, Git, Backups, Audit Log, Settings, Validate, Dependencies, Docs
+**Dark pages**: Explorer, Git, Backups, Logs, Settings, Validate, Dependencies, Docs
 
 ## Button System
 

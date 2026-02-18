@@ -15,10 +15,10 @@ def index():
 
 
 
-@bp.route("/audit-log")
-def audit_log():
-    """Audit log interface."""
-    return render_template("audit_log.html", config_path=get_config_path())
+@bp.route("/logs")
+def logs():
+    """Unified log viewer page."""
+    return render_template("logs.html")
 
 
 @bp.route("/docs")

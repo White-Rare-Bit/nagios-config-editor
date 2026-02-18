@@ -5,21 +5,20 @@ import multiprocessing
 import os
 import time
 import uuid
-from datetime import datetime
 
 from flask import Blueprint, current_app, jsonify, request
 
 import file_operations
-from audit_service import write_audit_log
+from audit_service import log_audit
 from nagios_model import NAME_FIELDS
 from staging_manager import UNDO_HANDLERS, OperationType, UndoKeyError
 
 from .helpers import (
+    format_audit_user,
     get_backup_manager,
     get_config,
     get_config_path,
     get_git_service,
-    get_op_logger,
     get_service,
     get_staging_manager,
 )
@@ -618,16 +617,12 @@ def api_break_lock():
     """
     sm = get_staging_manager()
     git_svc = get_git_service()
-    op_log = get_op_logger()
 
     session_id = request.headers.get("X-Session-Id")
 
     # Log the break attempt
-    if op_log:
-        owner = sm.get_lock_owner()
-        op_log.warning("staging", "break_lock",
-                      params={"owner": owner, "breaker": session_id},
-                      result="attempted")
+    owner = sm.get_lock_owner()
+    logger.warning("Break lock attempted: owner=%s, breaker=%s", owner, session_id)
 
     # Check if there are uncommitted git changes to discard
     git_discarded = False
@@ -641,10 +636,7 @@ def api_break_lock():
     # Clear staging
     sm.clear_staging()
 
-    if op_log:
-        op_log.info("staging", "break_lock",
-                   params={"git_discarded": git_discarded},
-                   result="success")
+    logger.info("Break lock succeeded: git_discarded=%s", git_discarded)
 
     return jsonify({
         "success": True,
@@ -736,13 +728,12 @@ def api_save_staging():
     return jsonify({"error": save_result.error or "Failed to save staging"}), 500
 
 
-def _validate_apply_preconditions(sm, session_id, op_log):
+def _validate_apply_preconditions(sm, session_id):
     """Validate preconditions for staging apply.
 
     Args:
         sm: StagingManager instance
         session_id: Session ID from request
-        op_log: Operation logger
 
     Returns:
         Tuple of (error_response, staging_data) - error_response is None if valid
@@ -752,8 +743,7 @@ def _validate_apply_preconditions(sm, session_id, op_log):
         return (jsonify({"error": "X-Session-Id header required"}), 400), None
 
     if not sm.can_modify(session_id):
-        if op_log:
-            op_log.warning("app", "staging_apply", session_id=session_id, result="lock_conflict")
+        logger.warning("Staging apply lock conflict: session_id=%s", session_id)
         return (jsonify({"error": "Staging is locked by another user", "locked": True}), 423), None
 
     staging_data = sm.get_staging()
@@ -762,8 +752,7 @@ def _validate_apply_preconditions(sm, session_id, op_log):
 
     conflicts = sm.detect_conflicts()
     if conflicts:
-        if op_log:
-            op_log.warning("app", "staging_apply", session_id=session_id, result="conflicts_detected")
+        logger.warning("Staging apply conflicts detected: session_id=%s", session_id)
         return (jsonify({
             "error": "Conflicts detected - files have been modified externally",
             "conflicts": conflicts, "requiresResolution": True,
@@ -818,56 +807,24 @@ def _execute_apply_phases(service, staging_data):
     return applied_summary, all_details, phase_errors, None
 
 
-def _build_audit_entry(staging_data, session_id, all_details, errors):
-    """Build an audit log entry dict from apply operation results.
-
-    Args:
-        staging_data: Staging data dict
-        session_id: Session ID
-        all_details: Details from each phase
-        errors: List of errors encountered
-
-    Returns:
-        Audit entry dict ready for write_audit_log()
-
-    """
-    audit_entry = {
-        "timestamp": datetime.now().isoformat(),
-        "userName": staging_data.get("userName", ""),
-        "userEmail": staging_data.get("userEmail", ""),
-        "sessionId": session_id,
-    }
-
-    # Map phase detail keys to audit entry keys
-    _PHASE_TO_AUDIT_KEY = {
-        "objectEdits": "object_edits",
-        "objectMoves": "object_moves",
-        "objectCreations": "object_creations",
-        "objectDeletions": "object_deletions",
-        "folderCreations": "folder_creations",
-        "fileMoves": "file_moves",
-        "folderMoves": "folder_moves",
-    }
-    for phase_key, audit_key in _PHASE_TO_AUDIT_KEY.items():
-        if all_details.get(phase_key):
-            audit_entry[audit_key] = all_details[phase_key]
-
-    # Combine file and folder deletions into a single audit field
-    file_deletions = all_details.get("fileDeletions", []) + all_details.get("folderDeletions", [])
-    if file_deletions:
-        audit_entry["file_deletions"] = file_deletions
-
-    if errors:
-        audit_entry["errors"] = errors
-
-    return audit_entry
+_PHASE_TO_AUDIT_KEY = {
+    "objectEdits": "object_edits",
+    "objectMoves": "object_moves",
+    "objectCreations": "object_creations",
+    "objectDeletions": "object_deletions",
+    "folderCreations": "folder_creations",
+    "fileCreations": "file_creations",
+    "fileMoves": "file_moves",
+    "folderMoves": "folder_moves",
+    "fileDeletions": "file_deletions",
+    "folderDeletions": "folder_deletions",
+}
 
 
 def _write_apply_audit_log(staging_data, session_id, all_details, errors, log):
-    """Write audit log entry for apply operation.
+    """Write audit log entries for an apply operation.
 
-    C-10: Returns success status and error message if write fails.
-    Caller should include audit failure in response warnings.
+    Emits one log_audit() call per individual change, all sharing the same txn ID.
 
     Args:
         staging_data: Staging data dict
@@ -880,13 +837,69 @@ def _write_apply_audit_log(staging_data, session_id, all_details, errors, log):
         Tuple of (success: bool, error_message: Optional[str])
 
     """
+    txn = uuid.uuid4().hex[:8]
+    user = format_audit_user(
+        name=staging_data.get("userName", ""),
+        email=staging_data.get("userEmail", ""),
+    )
+
     try:
-        audit_entry = _build_audit_entry(staging_data, session_id, all_details, errors)
-        write_audit_log(audit_entry)
+        for phase_key, audit_key in _PHASE_TO_AUDIT_KEY.items():
+            details = all_details.get(phase_key, [])
+            for detail in details:
+                if audit_key == "object_edits":
+                    obj_type = detail.get("object_type", "")
+                    obj_name = detail.get("object_name", "")
+                    for change in detail.get("changes", []):
+                        log_audit(
+                            action="edit", user=user, txn=txn,
+                            type=obj_type, name=obj_name,
+                            field=change.get("key", ""),
+                            op=change.get("type", "modify"),
+                            from_val=change.get("from", ""),
+                            to_val=change.get("to", change.get("value", "")),
+                        )
+                elif audit_key == "object_creations":
+                    log_audit(
+                        action="edit", user=user, txn=txn,
+                        type=detail.get("object_type", ""),
+                        name=detail.get("object_name", ""),
+                        op="create",
+                    )
+                elif audit_key == "object_deletions":
+                    log_audit(
+                        action="edit", user=user, txn=txn,
+                        type=detail.get("object_type", ""),
+                        name=detail.get("object_name", ""),
+                        op="delete",
+                    )
+                elif audit_key == "object_moves":
+                    log_audit(
+                        action="edit", user=user, txn=txn,
+                        type=detail.get("object_type", ""),
+                        name=detail.get("object_name", ""),
+                        op="move",
+                        from_val=detail.get("from_file", ""),
+                        to_val=detail.get("to_file", ""),
+                    )
+                elif audit_key in ("file_creations", "file_deletions", "file_moves",
+                                   "folder_creations", "folder_deletions", "folder_moves"):
+                    op_type = audit_key.rstrip("s").split("_")[-1]
+                    prefix = "file" if "file" in audit_key else "folder"
+                    log_audit(
+                        action="edit", user=user, txn=txn,
+                        op=f"{prefix}_{op_type}",
+                        path=detail.get("path", detail.get("from", "")),
+                    )
+
+        if errors:
+            for error in errors:
+                log_audit(action="apply_error", user=user, txn=txn, error=str(error))
+
         return True, None
-    except (OSError, ValueError) as e:
+    except Exception as e:
         error_msg = f"Failed to write audit log: {e}"
-        log.exception(error_msg)  # C-10: Elevated from warning to error
+        log.exception(error_msg)
         return False, error_msg
 
 
@@ -1002,7 +1015,7 @@ def _handle_apply_failure(service, failed_phase, apply_ctx):
     Args:
         service: NagiosService instance
         failed_phase: Name of the phase that failed
-        apply_ctx: Dict with 'applied_summary', 'errors', 'session_id', 'op_log', 'log'
+        apply_ctx: Dict with 'applied_summary', 'errors', 'session_id', 'log'
 
     Returns:
         Flask response tuple (jsonify, status_code)
@@ -1010,13 +1023,10 @@ def _handle_apply_failure(service, failed_phase, apply_ctx):
     """
     errors = apply_ctx["errors"]
     session_id = apply_ctx["session_id"]
-    op_log = apply_ctx["op_log"]
     log = apply_ctx["log"]
 
-    log.error("Staging apply failed at phase '%s': %s", failed_phase, errors)
-    if op_log:
-        op_log.error("app", "staging_apply", session_id=session_id,
-                     error=f"Failed at phase {failed_phase}: {errors}")
+    log.error("Staging apply failed at phase '%s': session_id=%s, errors=%s",
+              failed_phase, session_id, errors)
 
     # Still reload parser to reflect partial changes
     service.reload()
@@ -1173,7 +1183,6 @@ def api_apply_staging():
     log = logging.getLogger("nagios_bulk_editor.staging")
     sm = get_staging_manager()
     session_id = request.headers.get("X-Session-Id")
-    op_log = get_op_logger()
 
     # C-06: Read updateReferences flag from request body (use silent=True to handle missing body)
     # C-10: Read deferClear flag - if true, don't clear staging on success (for atomic apply+commit)
@@ -1183,19 +1192,16 @@ def api_apply_staging():
     validate_after = request_data.get("validate", False)
 
     # Validate preconditions
-    error_response, staging_data = _validate_apply_preconditions(sm, session_id, op_log)
+    error_response, staging_data = _validate_apply_preconditions(sm, session_id)
     if error_response:
         return error_response
 
     # C-06: Extract name changes BEFORE applying phases (needed for reference updates)
     name_changes = _extract_name_changes(staging_data) if update_references_flag else []
 
-    if op_log:
-        op_log.info("app", "staging_apply", session_id=session_id,
-                    user_name=staging_data.get("userName", ""),
-                    user_email=staging_data.get("userEmail", ""),
-                    update_references=update_references_flag,
-                    name_changes_count=len(name_changes))
+    log.info("Staging apply: session_id=%s, user=%s, update_references=%s, name_changes=%d",
+             session_id, staging_data.get("userName", ""),
+             update_references_flag, len(name_changes))
 
     service = get_service()
     _create_pre_apply_backup(staging_data, log)
@@ -1208,7 +1214,7 @@ def api_apply_staging():
         if failed_phase:
             apply_ctx = {
                 "applied_summary": applied_summary, "errors": errors,
-                "session_id": session_id, "op_log": op_log, "log": log,
+                "session_id": session_id, "log": log,
             }
             return _handle_apply_failure(service, failed_phase, apply_ctx)
 
@@ -1236,8 +1242,6 @@ def api_apply_staging():
     except Exception as e:  # noqa: BLE001
         # Unexpected exception - do NOT clear staging
         log.exception("Error applying staging: %s", e)
-        if op_log:
-            op_log.error("app", "staging_apply", session_id=session_id, error=str(e))
         return jsonify({
             "error": f"Failed to apply staging: {e}",
             "stagingPreserved": True,
@@ -1833,12 +1837,6 @@ def api_staging_commit():
 
     # Note: Backup is created in /api/staging/apply BEFORE changes are written to disk
 
-    audit_log = {
-        "timestamp": datetime.now().isoformat(),
-        "userName": user_name,
-        "userEmail": user_email,
-    }
-
     try:
         # Clear staging (releases lock)
         sm.clear_staging()
@@ -1847,20 +1845,13 @@ def api_staging_commit():
         get_service().reload()
 
         # Log to audit file
-        try:
-            write_audit_log(audit_log)
-        except (OSError, ValueError) as e:
-            logger.warning("Failed to write audit log: %s", e)
+        log_audit(action="staging_commit", user=format_audit_user(name=user_name, email=user_email))
 
-        return jsonify({
-            "success": True,
-            "auditLog": audit_log,
-        })
+        return jsonify({"success": True})
 
     except Exception as e:  # noqa: BLE001
         logger.exception("Commit failed: %s", e)
         return jsonify({
             "success": False,
             "error": str(e),
-            "auditLog": audit_log,
         }), 500
