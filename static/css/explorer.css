@@ -3385,8 +3385,8 @@
 }
 
 .attr-name {
-    min-width: 160px;
-    width: 160px;
+    min-width: 200px;
+    width: 200px;
     flex-shrink: 0;
     font-family: var(--nbe-font-mono);
     font-size: var(--nbe-typography-body-size);

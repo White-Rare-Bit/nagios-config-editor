@@ -181,7 +181,8 @@
 .logs-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: var(--nbe-font-size-sm);
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-typography-secondary-size);
 }
 
 .logs-table th {
@@ -229,8 +230,6 @@
 /* ── Column widths ── */
 .logs-col-timestamp {
     width: 150px;
-    font-family: var(--nbe-font-mono);
-    font-size: var(--nbe-typography-secondary-size);
     color: var(--nbe-dark-text-secondary);
     white-space: nowrap;
 }
@@ -245,15 +244,16 @@
 
 .logs-user-email {
     color: var(--nbe-dark-text-muted);
-    font-size: var(--nbe-typography-muted-size);
 }
 
 .logs-col-action {
     width: 100px;
+    white-space: nowrap;
 }
 
 .logs-col-level {
     width: 80px;
+    white-space: nowrap;
 }
 
 .logs-col-object {
@@ -268,55 +268,6 @@
 
 .logs-col-source {
     width: 180px;
-    font-family: var(--nbe-font-mono);
-    font-size: var(--nbe-typography-secondary-size);
-}
-
-/* ── Badges ── */
-.logs-badge {
-    display: inline-block;
-    padding: var(--nbe-space-2xs) var(--nbe-space-sm);
-    border-radius: var(--nbe-radius-md);
-    font-weight: 500;
-    font-size: var(--nbe-font-size-xs);
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-}
-
-.logs-badge-apply {
-    background: var(--nbe-dark-validation-success-bg);
-    color: var(--nbe-dark-validation-success-text);
-}
-
-.logs-badge-git {
-    background: var(--nbe-dark-validation-info-bg);
-    color: var(--nbe-dark-validation-info-text);
-}
-
-.logs-badge-backup {
-    background: var(--nbe-dark-accent-alpha-20);
-    color: var(--nbe-dark-accent-primary);
-}
-
-.logs-badge-error {
-    background: var(--nbe-dark-validation-error-bg);
-    color: var(--nbe-dark-validation-error-text);
-}
-
-.logs-badge-debug {
-    background: var(--nbe-dark-bg-tertiary);
-    color: var(--nbe-dark-text-muted);
-}
-
-.logs-badge-info {
-    background: var(--nbe-dark-validation-info-bg);
-    color: var(--nbe-dark-validation-info-text);
-}
-
-.logs-badge-warning {
-    background: var(--nbe-dark-validation-warning-bg);
-    color: var(--nbe-dark-validation-warning-text);
 }
 
 /* ── Empty value placeholder ── */
@@ -334,8 +285,6 @@
 
 /* ── Details cell content ── */
 .logs-detail-field {
-    font-family: var(--nbe-font-mono);
-    font-size: var(--nbe-font-size-xs);
     color: var(--nbe-dark-accent-secondary);
 }
 
