@@ -852,7 +852,7 @@ def _write_apply_audit_log(staging_data, session_id, all_details, errors, log):
                     obj_name = detail.get("object_name", "")
                     for change in detail.get("changes", []):
                         log_audit(
-                            action="apply", user=user, txn=txn,
+                            action="edit", user=user, txn=txn,
                             type=obj_type, name=obj_name,
                             field=change.get("key", ""),
                             op=change.get("type", "modify"),
@@ -861,21 +861,21 @@ def _write_apply_audit_log(staging_data, session_id, all_details, errors, log):
                         )
                 elif audit_key == "object_creations":
                     log_audit(
-                        action="apply", user=user, txn=txn,
+                        action="edit", user=user, txn=txn,
                         type=detail.get("object_type", ""),
                         name=detail.get("object_name", ""),
                         op="create",
                     )
                 elif audit_key == "object_deletions":
                     log_audit(
-                        action="apply", user=user, txn=txn,
+                        action="edit", user=user, txn=txn,
                         type=detail.get("object_type", ""),
                         name=detail.get("object_name", ""),
                         op="delete",
                     )
                 elif audit_key == "object_moves":
                     log_audit(
-                        action="apply", user=user, txn=txn,
+                        action="edit", user=user, txn=txn,
                         type=detail.get("object_type", ""),
                         name=detail.get("object_name", ""),
                         op="move",
@@ -887,7 +887,7 @@ def _write_apply_audit_log(staging_data, session_id, all_details, errors, log):
                     op_type = audit_key.rstrip("s").split("_")[-1]
                     prefix = "file" if "file" in audit_key else "folder"
                     log_audit(
-                        action="apply", user=user, txn=txn,
+                        action="edit", user=user, txn=txn,
                         op=f"{prefix}_{op_type}",
                         path=detail.get("path", detail.get("from", "")),
                     )

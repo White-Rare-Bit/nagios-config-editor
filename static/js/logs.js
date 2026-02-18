@@ -241,7 +241,6 @@ function renderAuditRows(tbody, pageEntries) {
 
 function renderAuditRow(entry) {
     const action = entry.action || '';
-    const badgeClass = getActionBadgeClass(action);
 
     // Build object cell with type badge
     let objectCell = '';
@@ -262,7 +261,7 @@ function renderAuditRow(entry) {
     return `<tr>
         <td class="logs-col-timestamp">${escapeHtml(entry.timestamp || '')}</td>
         <td class="logs-col-user">${userCell}</td>
-        <td class="logs-col-action"><span class="logs-badge ${badgeClass}">${escapeHtml(action)}</span></td>
+        <td class="logs-col-action">${escapeHtml(action)}</td>
         <td class="logs-col-object">${objectCell}</td>
         <td class="logs-col-details">${detailsCell}</td>
     </tr>`;
@@ -315,7 +314,7 @@ function truncatePath(str) {
     // Only truncate strings that look like absolute paths with 4+ segments
     if (!str.startsWith('/') || str.split('/').length < 5) {return str;}
     const parts = str.split('/');
-    return '…/' + parts.slice(-3).join('/');
+    return parts.slice(-2).join('/');
 }
 
 function formatUserCell(user) {
@@ -327,35 +326,16 @@ function formatUserCell(user) {
     return escapeHtml(user);
 }
 
-function getActionBadgeClass(action) {
-    if (action.startsWith('apply')) {return 'logs-badge-apply';}
-    if (action.startsWith('git')) {return 'logs-badge-git';}
-    if (action.startsWith('backup')) {return 'logs-badge-backup';}
-    if (action.includes('error')) {return 'logs-badge-error';}
-    return '';
-}
-
 // ── App row rendering ──────────────────────────────────────────────────────
 function renderAppRow(entry) {
     const level = (entry.level || '').toUpperCase();
-    const badgeClass = getAppLevelBadgeClass(level);
 
     return `<tr>
         <td class="logs-col-timestamp">${escapeHtml(entry.timestamp || '')}</td>
-        <td class="logs-col-level"><span class="logs-badge ${badgeClass}">${escapeHtml(level)}</span></td>
+        <td class="logs-col-level">${escapeHtml(level)}</td>
         <td class="logs-col-source">${escapeHtml(entry.source || '')}</td>
         <td class="logs-col-message">${escapeHtml(entry.message || '')}</td>
     </tr>`;
-}
-
-function getAppLevelBadgeClass(level) {
-    switch (level) {
-        case 'ERROR': return 'logs-badge-error';
-        case 'WARNING': return 'logs-badge-warning';
-        case 'INFO': return 'logs-badge-info';
-        case 'DEBUG': return 'logs-badge-debug';
-        default: return '';
-    }
 }
 
 // ── Actions (event delegation) ─────────────────────────────────────────────
