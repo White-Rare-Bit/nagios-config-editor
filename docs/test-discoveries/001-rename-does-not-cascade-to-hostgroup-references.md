@@ -1,62 +1,46 @@
-# BUG-001: Renaming a Hostgroup Does Not Update Service References
+# BUG-001 (REVISED): Rename Broken References Not Explained During Staging
 
 **Phase:** Phase 10 — Bulk Rename with References
-**Severity:** Critical
+**Severity:** Minor (UX / discoverability)
 **Date:** 2026-02-18
+**Status:** Original severity downgraded — reference cascade DOES happen at commit time
 
 ## Summary
 
-Renaming a hostgroup via "Rename..." only updates the hostgroup object itself. Services that
-reference the hostgroup by name via `hostgroup_name` (or `host_name`) are **not** updated,
-leaving them with broken references.
+Renaming a hostgroup stages only the object itself. During staging, all services referencing
+the old name show a red **BROKEN REFERENCE** badge with no explanation. The reference cascade
+is deferred to commit time — the commit dialog shows **"✓ Update references (27 references
+in other objects)"** — but the user has no indication of this during staging.
 
-## Steps to Reproduce
+## What Actually Happens (Correct Behavior)
 
-1. Open Explorer at `http://localhost:8080/explorer`
-2. Right-click `linux-hosts` (HOSTGROUP in `hostgroups.cfg`)
-3. Select "Rename..."
-4. Enter new name: `linux-hosts-renamed`
-5. Click "Rename"
-6. Click any service that uses `hostgroup_name: linux-hosts` (e.g., "PING on linux-hosts")
+1. User renames `linux-hosts` → `linux-hosts-renamed` via "Rename..."
+2. Only the hostgroup's own `hostgroup_name` is staged (1 pending edit)
+3. Services using `hostgroup_name: linux-hosts` show **BROKEN REFERENCE** badges ← alarming
+4. User opens commit dialog → sees **"3 files changed, ~1 modified, 27 ref updates"**
+5. Commit dialog has **"✓ Update references (27 references in other objects)"** checkbox (checked by default)
+6. Applying changes updates all 27 references atomically ✓
 
-## Actual Behavior
+## The UX Problem
 
-- The hostgroup object's `hostgroup_name` is updated to `linux-hosts-renamed` ✓
-- **9 services** using `hostgroup_name: linux-hosts` are NOT updated ✗
-- Those services display a red **BROKEN REFERENCE** badge
-- Staging shows only 1 pending edit (the hostgroup itself); zero service edits
+The staging phase creates alarm without context:
+- Broken reference badges appear on 9+ services immediately after rename
+- No tooltip, banner, or inline message explains "these will be fixed on commit"
+- A user who sees BROKEN REFERENCE might undo the rename thinking something went wrong
+- The resolution mechanism (commit dialog checkbox) is only discoverable by opening commit
 
-Affected services (all in `services.cfg`):
-- PING on linux-hosts
-- SSH on linux-hosts
-- Disk Usage - Root on linux-hosts
-- CPU Load on linux-hosts
-- Memory Usage on linux-hosts
-- Total Processes on linux-hosts
-- Zombie Processes on linux-hosts
-- Swap Usage on linux-hosts
-- Security Updates on linux-hosts
+## What Would Be Better
 
-## Expected Behavior
+Either of:
+1. **During rename**: A preview in the Rename dialog showing "This will affect N references — they will be updated on commit"
+2. **During staging**: A dismissible notice on the broken-reference badges: "These references will be updated when you Apply Changes"
+3. **Both**: Show affected count in the rename dialog AND clarify the staging badge
 
-Renaming a hostgroup should either:
-1. Automatically cascade the rename to all objects referencing it by name, OR
-2. Show a warning/preview of affected references and let the user choose to update them
+## Screenshot
 
-The Rename dialog has no "update references" option and no warning about breakage.
+- `screenshots/phase10-commit-dialog-27-ref-updates.png` — commit dialog showing 27 ref updates checkbox
 
-## Impact
+## Note on BUG-003
 
-Any hostgroup rename immediately breaks all services using that hostgroup, creating an
-inconsistent configuration that would fail Nagios validation. The user has no in-dialog
-warning that this will happen.
-
-## Screenshots
-
-- `screenshots/phase10-bug-rename-no-cascade.png` — after rename, shows updated hostgroup
-- `screenshots/phase10-bug-broken-reference.png` — PING service with BROKEN REFERENCE badge and stale `hostgroup_name: linux-hosts`
-
-## API Evidence
-
-`GET /api/staging` after rename shows `pendingEdits` with only 1 entry (global_index `4`,
-the hostgroup itself). No service edits present.
+The "Bulk rename..." feature (single-object scope) also does not show a reference update
+count in the commit dialog — this needs separate verification. See BUG-003.
