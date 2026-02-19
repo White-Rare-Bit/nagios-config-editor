@@ -1,0 +1,166 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]:
+      - link "Nagios Bulk Editor" [ref=e4] [cursor=pointer]:
+        - /url: /explorer
+      - generic [ref=e5]:
+        - list [ref=e6]:
+          - listitem [ref=e7]:
+            - link "Object Explorer" [ref=e8] [cursor=pointer]:
+              - /url: /explorer
+          - listitem [ref=e9]:
+            - link "Graph View" [ref=e10] [cursor=pointer]:
+              - /url: /dependencies
+          - listitem [ref=e11]:
+            - link "Logs" [ref=e12] [cursor=pointer]:
+              - /url: /logs
+          - listitem [ref=e13]:
+            - link "Docs" [ref=e14] [cursor=pointer]:
+              - /url: /docs
+          - listitem [ref=e15]:
+            - link "Backups" [ref=e16] [cursor=pointer]:
+              - /url: /backups
+          - listitem [ref=e17]:
+            - link "Git" [ref=e18] [cursor=pointer]:
+              - /url: /git
+        - list [ref=e19]:
+          - listitem [ref=e20]:
+            - button " Undo Ctrl+Z" [disabled] [ref=e21]:
+              - generic [ref=e22]: 
+              - generic [ref=e23]: Undo
+              - generic [ref=e24]: Ctrl+Z
+          - listitem [ref=e25]:
+            - button "Commit" [disabled] [ref=e26]:
+              - generic [ref=e172]: Commit
+          - listitem [ref=e28]:
+            - link "Settings" [ref=e29] [cursor=pointer]:
+              - /url: /settings
+          - listitem [ref=e30]:
+            - button "" [ref=e31] [cursor=pointer]:
+              - generic [ref=e32]: 
+          - listitem [ref=e33]:
+            - button "Reload" [ref=e34] [cursor=pointer]
+  - text: 
+  - generic [ref=e36]:
+    - generic [ref=e37]:
+      - generic [ref=e39]: Graph View
+      - generic [ref=e40]:
+        - generic [ref=e41]: Find & Add
+        - generic [ref=e42]:
+          - generic [ref=e43]:
+            - generic:
+              - generic: 
+            - textbox "Search for objects to add to graph" [ref=e44]:
+              - /placeholder: Search objects...
+              - text: linux-server
+            - listbox "Search results" [ref=e122]:
+              - generic [ref=e134] [cursor=pointer]:
+                - generic [ref=e135]: host
+                - generic [ref=e136]: linux-server
+                - generic [ref=e137]: (added)
+          - button "Fit to View" [ref=e45] [cursor=pointer]
+          - button "Hide Connection Labels" [ref=e46] [cursor=pointer]
+      - generic [ref=e47]:
+        - generic [ref=e48]:
+          - text: Quick Views
+          - generic [ref=e138]: for host
+        - generic [ref=e49]:
+          - generic [ref=e50]:
+            - button " Inheritance" [ref=e139] [cursor=pointer]:
+              - generic [ref=e140]: 
+              - generic [ref=e141]: Inheritance
+            - button " Network" [ref=e142] [cursor=pointer]:
+              - generic [ref=e143]: 
+              - generic [ref=e144]: Network
+            - button " Notifications" [ref=e145] [cursor=pointer]:
+              - generic [ref=e146]: 
+              - generic [ref=e147]: Notifications
+            - button " Services" [ref=e148] [cursor=pointer]:
+              - generic [ref=e149]: 
+              - generic [ref=e150]: Services
+            - button " Monitoring" [ref=e151] [cursor=pointer]:
+              - generic [ref=e152]: 
+              - generic [ref=e153]: Monitoring
+            - button " Escalations" [ref=e154] [cursor=pointer]:
+              - generic [ref=e155]: 
+              - generic [ref=e156]: Escalations
+            - button " Dependencies" [ref=e157] [cursor=pointer]:
+              - generic [ref=e158]: 
+              - generic [ref=e159]: Dependencies
+            - button " Full Graph" [ref=e160] [cursor=pointer]:
+              - generic [ref=e161]: 
+              - generic [ref=e162]: Full Graph
+          - group [ref=e57]:
+            - generic "  Custom Filters" [ref=e58] [cursor=pointer]:
+              - text: 
+              - generic [ref=e59]: 
+              - text: Custom Filters
+            - option "Force-Directed" [selected]
+            - option "Hierarchical TB"
+            - option "Hierarchical LR"
+      - generic [ref=e60]:
+        - generic [ref=e62]: Nodes 1
+        - list "Nodes in graph" [ref=e63]:
+          - generic [ref=e163] [cursor=pointer]:
+            - generic [ref=e164]:
+              - generic [ref=e165]: host
+              - text: linux-server
+            - generic [ref=e166]: ×
+    - generic [ref=e65]:
+      - text: 
+      - group [ref=e83]:
+        - generic " Legend" [ref=e84] [cursor=pointer]:
+          - generic [ref=e85]: 
+          - text: Legend
+        - generic [ref=e86]:
+          - generic [ref=e87]:
+            - generic [ref=e88]: 
+            - text: host
+          - generic [ref=e89]:
+            - generic [ref=e90]: 
+            - text: host template
+          - generic [ref=e91]:
+            - generic [ref=e92]: 
+            - text: service
+          - generic [ref=e93]:
+            - generic [ref=e94]: 
+            - text: service template
+          - generic [ref=e95]:
+            - generic [ref=e96]: 
+            - text: hostgroup
+          - generic [ref=e97]:
+            - generic [ref=e98]: 
+            - text: servicegroup
+          - generic [ref=e99]:
+            - generic [ref=e100]: 
+            - text: contact
+          - generic [ref=e101]:
+            - generic [ref=e102]: 
+            - text: contactgroup
+          - generic [ref=e103]:
+            - generic [ref=e104]: 
+            - text: command
+          - generic [ref=e105]:
+            - generic [ref=e106]: 
+            - text: timeperiod
+          - generic [ref=e107]:
+            - generic [ref=e108]: 
+            - text: svc dependency
+          - generic [ref=e109]:
+            - generic [ref=e110]: 
+            - text: host dependency
+          - generic [ref=e111]:
+            - generic [ref=e112]: 
+            - text: svc escalation
+          - generic [ref=e113]:
+            - generic [ref=e114]: 
+            - text: host escalation
+      - generic:
+        - strong: Right-click
+        - text: node actions ·
+        - strong: Shift+Drag
+        - text: box select ·
+        - strong: Delete
+        - text: remove selected
+    - text:       
+  - text:  

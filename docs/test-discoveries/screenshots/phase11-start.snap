@@ -1,0 +1,1330 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]:
+      - link "Nagios Bulk Editor" [ref=e4] [cursor=pointer]:
+        - /url: /explorer
+      - generic [ref=e5]:
+        - list [ref=e6]:
+          - listitem [ref=e7]:
+            - link "Object Explorer" [ref=e8] [cursor=pointer]:
+              - /url: /explorer
+          - listitem [ref=e9]:
+            - link "Graph View" [ref=e10] [cursor=pointer]:
+              - /url: /dependencies
+          - listitem [ref=e11]:
+            - link "Logs" [ref=e12] [cursor=pointer]:
+              - /url: /logs
+          - listitem [ref=e13]:
+            - link "Docs" [ref=e14] [cursor=pointer]:
+              - /url: /docs
+          - listitem [ref=e15]:
+            - link "Backups" [ref=e16] [cursor=pointer]:
+              - /url: /backups
+          - listitem [ref=e17]:
+            - link "Git" [ref=e18] [cursor=pointer]:
+              - /url: /git
+        - list [ref=e19]:
+          - listitem [ref=e20]:
+            - button " Undo Ctrl+Z" [ref=e21] [cursor=pointer]:
+              - generic [ref=e22]: 
+              - generic [ref=e23]: Undo
+              - generic [ref=e24]: Ctrl+Z
+          - listitem [ref=e25]:
+            - button "Commit" [disabled] [ref=e26]:
+              - generic [ref=e3743]: Commit
+          - listitem [ref=e28]:
+            - link "Settings" [ref=e29] [cursor=pointer]:
+              - /url: /settings
+          - listitem [ref=e30]:
+            - button "" [ref=e31] [cursor=pointer]:
+              - generic [ref=e32]: 
+          - listitem [ref=e33]:
+            - button "Reload" [ref=e34] [cursor=pointer]
+  - text: 
+  - generic [ref=e35]:
+    - application "Nagios Object Explorer" [ref=e36]:
+      - region "Objects panel" [ref=e37]:
+        - generic [ref=e39]: Objects
+        - tablist "View mode" [ref=e41]:
+          - tab " By File" [selected] [ref=e42] [cursor=pointer]:
+            - generic [ref=e43]: 
+            - text: By File
+          - tab " By Type" [ref=e44] [cursor=pointer]:
+            - generic [ref=e45]: 
+            - text: By Type
+        - toolbar "Object filters" [ref=e46]:
+          - generic [ref=e47]:
+            - generic:
+              - generic: 
+            - searchbox "Search objects" [ref=e48]
+          - group "Filter options" [ref=e49]:
+            - generic [ref=e50]: "Show:"
+            - generic "Show only objects not referenced by any other object (orphaned definitions)" [ref=e51] [cursor=pointer]:
+              - checkbox "Orphans" [ref=e52]
+              - generic [ref=e53]: Orphans
+            - generic "Show only objects with configuration errors or missing required fields" [ref=e54] [cursor=pointer]:
+              - checkbox "Issues" [ref=e55]
+              - generic [ref=e56]: Issues
+            - button "Select" [ref=e58] [cursor=pointer]:
+              - generic [ref=e59]: 
+              - text: Select
+              - generic [ref=e60]: 
+        - tree "Object tree" [ref=e61]:
+          - generic [ref=e2702]:
+            - generic [ref=e2703] [cursor=pointer]:
+              - generic [ref=e2705]: 
+              - generic [ref=e2706]: commands.cfg
+              - button "+" [ref=e2707]
+              - generic [ref=e2708]: "35"
+            - text:                                   
+          - generic [ref=e2709]:
+            - generic [ref=e2710] [cursor=pointer]:
+              - generic [ref=e2712]: 
+              - generic [ref=e2713]: contacts.cfg
+              - button "+" [ref=e2714]
+              - generic [ref=e2715]: "20"
+            - text:            
+          - generic [ref=e2716]:
+            - generic [ref=e2717] [cursor=pointer]:
+              - generic [ref=e2719]: 
+              - generic [ref=e2720]: dependencies.cfg
+              - button "+" [ref=e2721]
+              - generic [ref=e2722]: "12"
+            - generic [ref=e2723]:
+              - generic [ref=e2724] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2725]:
+                  - img [ref=e2726]
+                - generic "Command 'check_vpn_tunnels' uses $USER1$ which is not defined in resource.cfg":
+                  - generic: 
+                - generic "check_vpn_tunnels"
+                - generic "command": CMD
+              - generic [ref=e2733] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2734]:
+                  - img [ref=e2735]
+                - generic "[critical-infrastructure] (esc 2+)"
+                - generic "hostescalation": HOSTESC
+              - generic [ref=e2742] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2743]:
+                  - img [ref=e2744]
+                - generic "MySQL on database-servers → MySQL Slave Status"
+                - generic "servicedependency": SVCDEP
+              - generic [ref=e2751] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2752]:
+                  - img [ref=e2753]
+                - generic "Duplicate hostdependency definition (also in hosts.cfg)":
+                  - generic: 
+                - generic "db-prod-master"
+                - generic "hostdependency": HOSTDEP
+              - generic [ref=e2760] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2761]:
+                  - img [ref=e2762]
+                - generic "Command 'check_http_health' uses $USER1$ which is not defined in resource.cfg":
+                  - generic: 
+                - generic "check_http_health"
+                - generic "command": CMD
+              - generic [ref=e2769] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2770]:
+                  - img [ref=e2771]
+                - generic "Apache Status on web-servers → HTTP"
+                - generic "servicedependency": SVCDEP
+              - generic [ref=e2778] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2779]:
+                  - img [ref=e2780]
+                - generic "HTTP on web-prod-01,web-prod-02,web-prod-03 → Application Health Check"
+                - generic "servicedependency": SVCDEP
+              - generic [ref=e2787] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2788]:
+                  - img [ref=e2789]
+                - generic "HTTPS on web-servers → HTTPS Certificate"
+                - generic "servicedependency": SVCDEP
+              - generic [ref=e2796] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2797]:
+                  - img [ref=e2798]
+                - generic "MySQL on database-servers (esc 6+)"
+                - generic "serviceescalation": SVCESC
+              - generic [ref=e2805] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2806]:
+                  - img [ref=e2807]
+                - generic "MySQL on database-servers (esc 3-5)"
+                - generic "serviceescalation": SVCESC
+              - generic [ref=e2814] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2815]:
+                  - img [ref=e2816]
+                - generic "HTTP on web-servers (esc 2-4)"
+                - generic "serviceescalation": SVCESC
+              - generic [ref=e2823] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2824]:
+                  - img [ref=e2825]
+                - generic "[production] (esc 3-5)"
+                - generic "hostescalation": HOSTESC
+          - generic [ref=e2832]:
+            - generic [ref=e2833] [cursor=pointer]:
+              - generic [ref=e2835]: 
+              - generic [ref=e2836]: hostgroups.cfg
+              - button "+" [ref=e2837]
+              - generic [ref=e2838]: "22"
+            - text:      
+          - generic [ref=e2839]:
+            - generic [ref=e2840] [cursor=pointer]:
+              - generic [ref=e2842]: 
+              - generic [ref=e2843]: hosts.cfg
+              - button "+" [ref=e2844]
+              - generic [ref=e2845]: "31"
+            - generic [ref=e2846]:
+              - generic [ref=e2847] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2848]:
+                  - img [ref=e2849]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "web-prod-01"
+                - generic "host": HOST
+              - generic [ref=e2856] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2857]:
+                  - img [ref=e2858]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "web-prod-02"
+                - generic "host": HOST
+              - generic [ref=e2865] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2866]:
+                  - img [ref=e2867]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "web-prod-03"
+                - generic "host": HOST
+              - generic [ref=e2874] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2875]:
+                  - img [ref=e2876]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "web-dev-01"
+                - generic "host": HOST
+              - generic [ref=e2883] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2884]:
+                  - img [ref=e2885]
+                - generic "All 8 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "db-prod-master"
+                - generic "host": HOST
+              - generic [ref=e2892] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2893]:
+                  - img [ref=e2894]
+                - generic "All 8 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "db-prod-slave-01"
+                - generic "host": HOST
+              - generic [ref=e2901] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2902]:
+                  - img [ref=e2903]
+                - generic "All 8 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "db-prod-slave-02"
+                - generic "host": HOST
+              - generic [ref=e2910] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2911]:
+                  - img [ref=e2912]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "db-staging-01"
+                - generic "host": HOST
+              - generic [ref=e2919] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2920]:
+                  - img [ref=e2921]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "app-prod-01"
+                - generic "host": HOST
+              - generic [ref=e2928] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2929]:
+                  - img [ref=e2930]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "app-prod-02"
+                - generic "host": HOST
+              - generic [ref=e2937] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2938]:
+                  - img [ref=e2939]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "app-prod-03"
+                - generic "host": HOST
+              - generic [ref=e2946] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2947]:
+                  - img [ref=e2948]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "app-prod-04"
+                - generic "host": HOST
+              - generic [ref=e2955] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2956]:
+                  - img [ref=e2957]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "api-prod-01"
+                - generic "host": HOST
+              - generic [ref=e2964] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2965]:
+                  - img [ref=e2966]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "api-prod-02"
+                - generic "host": HOST
+              - generic [ref=e2973] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2974]:
+                  - img [ref=e2975]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "redis-prod-01"
+                - generic "host": HOST
+              - generic [ref=e2982] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2983]:
+                  - img [ref=e2984]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "redis-prod-02"
+                - generic "host": HOST
+              - generic [ref=e2991] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e2992]:
+                  - img [ref=e2993]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "memcached-prod-01"
+                - generic "host": HOST
+              - generic [ref=e3000] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3001]:
+                  - img [ref=e3002]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "core-switch-02"
+                - generic "host": HOST
+              - generic [ref=e3009] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3010]:
+                  - img [ref=e3011]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "router-main"
+                - generic "host": HOST
+              - generic [ref=e3018] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3019]:
+                  - img [ref=e3020]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "vpn-gateway"
+                - generic "host": HOST
+              - generic [ref=e3027] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3028]:
+                  - img [ref=e3029]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "old-server-decommissioned"
+                - generic "host": HOST
+              - generic [ref=e3036] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3037]:
+                  - img [ref=e3038]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "special-web-01"
+                - generic "host": HOST
+              - generic [ref=e3045] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3046]:
+                  - img [ref=e3047]
+                - generic "All 8 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "special-db-01"
+                - generic "host": HOST
+              - generic [ref=e3054] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3055]:
+                  - img [ref=e3056]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "hybrid-server-01"
+                - generic "host": HOST
+              - generic [ref=e3063] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3064]:
+                  - img [ref=e3065]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "test-additive-host"
+                - generic "host": HOST
+              - generic [ref=e3072] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3073]:
+                  - img [ref=e3074]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "web-staging-01"
+                - generic "host": HOST
+              - generic [ref=e3081] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3082]:
+                  - img [ref=e3083]
+                - generic "All 6 contact(s) have broken notification chains":
+                  - generic: 
+                - generic "firewall-02"
+                - generic "host": HOST
+              - generic [ref=e3090] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3091]:
+                  - img [ref=e3092]
+                - generic "Duplicate hostgroup definition (also in hostgroups.cfg)":
+                  - generic: 
+                - generic "production"
+                - generic "hostgroup": HOSTGRP
+              - generic [ref=e3099] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3100]:
+                  - img [ref=e3101]
+                - generic "redis-prod-01"
+                - generic "hostdependency": HOSTDEP
+              - generic [ref=e3108] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3109]:
+                  - img [ref=e3110]
+                - generic "Duplicate hostdependency definition (also in hosts.cfg)":
+                  - generic: 
+                - generic "db-prod-master"
+                - generic "hostdependency": HOSTDEP
+              - generic [ref=e3117] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3118]:
+                  - img [ref=e3119]
+                - generic "Host has no contacts or contact_groups (after template and implied inheritance)":
+                  - generic: 
+                - generic "grafana-01"
+                - generic "host": HOST
+          - generic [ref=e3126]:
+            - generic [ref=e3127] [cursor=pointer]:
+              - generic [ref=e3129]: 
+              - generic [ref=e3130]: servicegroups.cfg
+              - button "+" [ref=e3131]
+              - generic [ref=e3132]: "9"
+            - text:       
+          - generic [ref=e3133]:
+            - generic [ref=e3134] [cursor=pointer]:
+              - generic [ref=e3136]: 
+              - generic [ref=e3137]: services.cfg
+              - button "+" [ref=e3138]
+              - generic [ref=e3139]: "50"
+            - generic [ref=e3140]:
+              - generic [ref=e3141] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3142]:
+                  - img [ref=e3143]
+                - generic "PING on linux-hosts"
+                - generic "service": SVC
+              - generic [ref=e3150] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3151]:
+                  - img [ref=e3152]
+                - generic "SSH on linux-hosts"
+                - generic "service": SVC
+              - generic [ref=e3159] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3160]:
+                  - img [ref=e3161]
+                - generic "Disk Usage - Root on linux-hosts"
+                - generic "service": SVC
+              - generic [ref=e3168] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3169]:
+                  - img [ref=e3170]
+                - generic "CPU Load on linux-hosts"
+                - generic "service": SVC
+              - generic [ref=e3177] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3178]:
+                  - img [ref=e3179]
+                - generic "Memory Usage on linux-hosts"
+                - generic "service": SVC
+              - generic [ref=e3186] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3187]:
+                  - img [ref=e3188]
+                - generic "Total Processes on linux-hosts"
+                - generic "service": SVC
+              - generic [ref=e3195] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3196]:
+                  - img [ref=e3197]
+                - generic "Zombie Processes on linux-hosts"
+                - generic "service": SVC
+              - generic [ref=e3204] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3205]:
+                  - img [ref=e3206]
+                - generic "Swap Usage on linux-hosts"
+                - generic "service": SVC
+              - generic [ref=e3213] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3214]:
+                  - img [ref=e3215]
+                - generic "HTTP on web-servers"
+                - generic "service": SVC
+              - generic [ref=e3222] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3223]:
+                  - img [ref=e3224]
+                - generic "HTTPS on web-servers"
+                - generic "service": SVC
+              - generic [ref=e3231] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3232]:
+                  - img [ref=e3233]
+                - generic "HTTPS Certificate on web-servers"
+                - generic "service": SVC
+              - generic [ref=e3240] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3241]:
+                  - img [ref=e3242]
+                - generic "Apache Status on web-servers"
+                - generic "service": SVC
+              - generic [ref=e3249] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3250]:
+                  - img [ref=e3251]
+                - generic "HTTP Response Time on web-servers"
+                - generic "service": SVC
+              - generic [ref=e3258] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3259]:
+                  - img [ref=e3260]
+                - generic "MySQL on database-servers"
+                - generic "service": SVC
+              - generic [ref=e3267] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3268]:
+                  - img [ref=e3269]
+                - generic "MySQL Connections on database-servers"
+                - generic "service": SVC
+              - generic [ref=e3276] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3277]:
+                  - img [ref=e3278]
+                - generic "MySQL Slave Status on database-servers"
+                - generic "service": SVC
+              - generic [ref=e3285] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3286]:
+                  - img [ref=e3287]
+                - generic "MySQL Query Time on database-servers"
+                - generic "service": SVC
+              - generic [ref=e3294] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3295]:
+                  - img [ref=e3296]
+                - generic "Disk Usage - Data on database-servers"
+                - generic "service": SVC
+              - generic [ref=e3303] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3304]:
+                  - img [ref=e3305]
+                - generic "Consider using a hostgroup (9 hosts)":
+                  - generic: 
+                - generic "Application Health Check on web-prod-01,web-prod-02,web-prod-03,app-prod-01,app-prod-02,app-prod-03,app-prod-04,api-prod-01,api-prod-02"
+                - generic "service": SVC
+              - generic [ref=e3312] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3313]:
+                  - img [ref=e3314]
+                - generic "Consider using a hostgroup (5 hosts)":
+                  - generic: 
+                - generic "Replication Lag on db-prod-master,db-prod-slave-01,db-prod-slave-02,redis-prod-01,redis-prod-02"
+                - generic "service": SVC
+              - generic [ref=e3321] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3322]:
+                  - img [ref=e3323]
+                - generic "Redis on cache-servers"
+                - generic "service": SVC
+              - generic [ref=e3330] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3331]:
+                  - img [ref=e3332]
+                - generic "Redis Memory on cache-servers"
+                - generic "service": SVC
+              - generic [ref=e3339] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3340]:
+                  - img [ref=e3341]
+                - generic "Memcached on memcached-prod-01"
+                - generic "service": SVC
+              - generic [ref=e3348] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3349]:
+                  - img [ref=e3350]
+                - generic "PING on windows-hosts"
+                - generic "service": SVC
+              - generic [ref=e3357] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3358]:
+                  - img [ref=e3359]
+                - generic "CPU Load on windows-hosts"
+                - generic "service": SVC
+              - generic [ref=e3366] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3367]:
+                  - img [ref=e3368]
+                - generic "Memory Usage on windows-hosts"
+                - generic "service": SVC
+              - generic [ref=e3375] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3376]:
+                  - img [ref=e3377]
+                - 'generic "Disk C: on windows-hosts"'
+                - generic "service": SVC
+              - generic [ref=e3384] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3385]:
+                  - img [ref=e3386]
+                - generic "AD Replication on domain-controllers"
+                - generic "service": SVC
+              - generic [ref=e3393] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3394]:
+                  - img [ref=e3395]
+                - generic "DNS on domain-controllers"
+                - generic "service": SVC
+              - generic [ref=e3402] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3403]:
+                  - img [ref=e3404]
+                - generic "Exchange Services on win-exchange-01"
+                - generic "service": SVC
+              - generic [ref=e3411] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3412]:
+                  - img [ref=e3413]
+                - generic "Exchange Mail Queue on win-exchange-01"
+                - generic "service": SVC
+              - generic [ref=e3420] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3421]:
+                  - img [ref=e3422]
+                - generic "PING on network-devices"
+                - generic "service": SVC
+              - generic [ref=e3429] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3430]:
+                  - img [ref=e3431]
+                - generic "SNMP Uptime on network-devices"
+                - generic "service": SVC
+              - generic [ref=e3438] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3439]:
+                  - img [ref=e3440]
+                - generic "Port Status on switches"
+                - generic "service": SVC
+              - generic [ref=e3447] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3448]:
+                  - img [ref=e3449]
+                - generic "Bandwidth Utilization on switches"
+                - generic "service": SVC
+              - generic [ref=e3456] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3457]:
+                  - img [ref=e3458]
+                - generic "BGP Sessions on routers"
+                - generic "service": SVC
+              - generic [ref=e3465] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3466]:
+                  - img [ref=e3467]
+                - generic "Connection Table on firewalls"
+                - generic "service": SVC
+              - generic [ref=e3474] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3475]:
+                  - img [ref=e3476]
+                - generic "VPN Tunnels on firewalls"
+                - generic "service": SVC
+              - generic [ref=e3483] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3484]:
+                  - img [ref=e3485]
+                - generic "Nagios Process on nagios-01"
+                - generic "service": SVC
+              - generic [ref=e3492] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3493]:
+                  - img [ref=e3494]
+                - generic "Nagios Latency on nagios-01"
+                - generic "service": SVC
+              - generic [ref=e3501] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3502]:
+                  - img [ref=e3503]
+                - generic "Grafana HTTP on grafana-01"
+                - generic "service": SVC
+              - generic [ref=e3510] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3511]:
+                  - img [ref=e3512]
+                - generic "Elasticsearch on log-server-01"
+                - generic "service": SVC
+              - generic [ref=e3519] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3520]:
+                  - img [ref=e3521]
+                - generic "Service has no check_command (directly or through template inheritance)":
+                  - generic: 
+                - generic "Elasticsearch Cluster Health on log-server-01"
+                - generic "service": SVC
+              - generic [ref=e3528] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3529]:
+                  - img [ref=e3530]
+                - generic "Orphan Service on nonexistent-server"
+                - generic "service": SVC
+              - generic [ref=e3537] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3538]:
+                  - img [ref=e3539]
+                - generic "Standard Backup Check on production"
+                - generic "service": SVC
+              - generic [ref=e3546] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3547]:
+                  - img [ref=e3548]
+                - generic "Production SSL Cert on web-servers"
+                - generic "service": SVC
+              - generic [ref=e3555] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3556]:
+                  - img [ref=e3557]
+                - generic "Security Updates on linux-hosts"
+                - generic "service": SVC
+              - generic [ref=e3564] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3565]:
+                  - img [ref=e3566]
+                - generic "Redis Cluster Status on cache-servers"
+                - generic "service": SVC
+              - generic [ref=e3573] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3574]:
+                  - img [ref=e3575]
+                - generic "App Pool Health on app-servers"
+                - generic "service": SVC
+              - generic [ref=e3582] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3583]:
+                  - img [ref=e3584]
+                - generic "Replication Monitor on +database-servers,+cache-servers"
+                - generic "service": SVC
+          - generic [ref=e3591]:
+            - generic [ref=e3592] [cursor=pointer]:
+              - generic [ref=e3594]: 
+              - generic [ref=e3595]: templates.cfg
+              - button "+" [ref=e3596]
+              - generic [ref=e3597]: "9"
+            - generic [ref=e3598]:
+              - generic [ref=e3599] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3600]:
+                  - img [ref=e3601]
+                - generic "generic-host"
+                - generic "host": HOSTTMPL
+              - generic [ref=e3608] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3609]:
+                  - img [ref=e3610]
+                - generic "network-device"
+                - generic "host": HOSTTMPL
+              - generic [ref=e3617] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3618]:
+                  - img [ref=e3619]
+                - generic "linux-server"
+                - generic "host": HOSTTMPL
+              - generic [ref=e3626] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3627]:
+                  - img [ref=e3628]
+                - generic "Template is not used by any host":
+                  - generic: 
+                - generic "windows-server"
+                - generic "host": HOSTTMPL
+              - generic [ref=e3635] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3636]:
+                  - img [ref=e3637]
+                - generic "critical-server"
+                - generic "host": HOSTTMPL
+              - generic [ref=e3644] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3645]:
+                  - img [ref=e3646]
+                - generic "generic-service"
+                - generic "service": SVCTMPL
+              - generic [ref=e3653] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3654]:
+                  - img [ref=e3655]
+                - generic "local-service"
+                - generic "service": SVCTMPL
+              - generic [ref=e3662] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3663]:
+                  - img [ref=e3664]
+                - generic "Template is not used by any service":
+                  - generic: 
+                - generic "passive-service"
+                - generic "service": SVCTMPL
+              - generic [ref=e3671] [cursor=pointer]:
+                - generic "Drag to move to another file" [ref=e3672]:
+                  - img [ref=e3673]
+                - generic "critical-service"
+                - generic "service": SVCTMPL
+          - generic [ref=e3680]:
+            - generic [ref=e3681] [cursor=pointer]:
+              - generic [ref=e3683]: 
+              - generic [ref=e3684]: timeperiods.cfg
+              - button "+" [ref=e3685]
+              - generic [ref=e3686]: "10"
+            - text:         
+      - generic [ref=e1047]:
+        - generic [ref=e1048]:
+          - generic [ref=e3738]: 
+          - heading "33 objects selected" [level=3] [ref=e3739]
+          - paragraph [ref=e3740]: Use the Actions menu for bulk operations
+        - text:  
+      - region "Workspace panel" [ref=e1060]:
+        - generic [ref=e1062]: Workspace
+        - tablist "Workspace tabs" [ref=e1064]:
+          - tab " Files" [selected] [ref=e1065] [cursor=pointer]:
+            - generic [ref=e1066]: 
+            - text: Files
+          - tab " Suggestions suggestions count" [ref=e3687] [cursor=pointer]:
+            - generic [ref=e1068]: 
+            - text: Suggestions
+            - generic "suggestions count" [ref=e3688]: "127"
+          - tab " Validation" [ref=e1069] [cursor=pointer]:
+            - generic [ref=e1070]: 
+            - text: Validation
+        - tabpanel [ref=e1071]:
+          - toolbar "Workspace actions" [ref=e1072]:
+            - generic [ref=e1073]:
+              - generic [ref=e1076]: sample-config
+              - generic [ref=e1077]: 198 objects
+            - generic [ref=e1078]:
+              - button "Create new file" [ref=e1079] [cursor=pointer]:
+                - img [ref=e1081]
+              - button "Create new folder" [ref=e1084] [cursor=pointer]:
+                - img [ref=e1086]
+          - generic [ref=e1088]:
+            - generic [ref=e1089] [cursor=pointer]:
+              - button [ref=e1090]:
+                - img [ref=e1091]
+              - img [ref=e1094]
+              - generic [ref=e1096]: sample-config
+              - generic [ref=e1097]: "198"
+            - generic [ref=e1098]:
+              - generic [ref=e1099] [cursor=pointer]:
+                - button [ref=e1100]:
+                  - img [ref=e1101]
+                - img [ref=e1104]
+                - generic [ref=e1107]: commands.cfg
+                - generic [ref=e1108]: "35"
+                - button "Delete file" [ref=e1110]:
+                  - img [ref=e1111]
+              - generic [ref=e1113] [cursor=pointer]:
+                - button [ref=e1114]:
+                  - img [ref=e1115]
+                - img [ref=e1118]
+                - generic [ref=e1121]: contacts.cfg
+                - generic [ref=e1122]: "20"
+                - button "Delete file" [ref=e1124]:
+                  - img [ref=e1125]
+              - generic [ref=e1127]:
+                - generic [ref=e1129]:
+                  - img [ref=e1131]
+                  - generic [ref=e1138]: CONT
+                  - generic "admin" [ref=e1139]
+                - generic [ref=e1141]:
+                  - img [ref=e1143]
+                  - generic [ref=e1150]: CONT
+                  - generic "jsmith" [ref=e1151]
+                - generic [ref=e1153]:
+                  - img [ref=e1155]
+                  - generic [ref=e1162]: CONT
+                  - generic "bwilliams" [ref=e1163]
+                - generic [ref=e1165]:
+                  - img [ref=e1167]
+                  - generic [ref=e1174]: CONT
+                  - generic "sdavis" [ref=e1175]
+                - generic [ref=e1177]:
+                  - img [ref=e1179]
+                  - generic [ref=e1186]: CONT
+                  - generic "tmiller" [ref=e1187]
+                - generic [ref=e1189]:
+                  - img [ref=e1191]
+                  - generic [ref=e1198]: CONT
+                  - generic "agarcia" [ref=e1199]
+                - generic [ref=e1201]:
+                  - img [ref=e1203]
+                  - generic [ref=e1210]: CONT
+                  - generic "clee" [ref=e1211]
+                - generic [ref=e1213]:
+                  - img [ref=e1215]
+                  - generic [ref=e1222]: CONT
+                  - generic "manager1" [ref=e1223]
+                - generic [ref=e1225]:
+                  - img [ref=e1227]
+                  - generic [ref=e1234]: CONT
+                  - generic "director1" [ref=e1235]
+                - generic [ref=e1237]:
+                  - img [ref=e1239]
+                  - generic [ref=e1246]: CONT
+                  - generic "former-employee" [ref=e1247]
+                - generic [ref=e1249]:
+                  - img [ref=e1251]
+                  - generic [ref=e1258]: CONT
+                  - generic "mjohnson" [ref=e1259]
+                - generic [ref=e1261]:
+                  - img [ref=e1263]
+                  - generic [ref=e1270]: CONTGRP
+                  - generic "admins" [ref=e1271]
+                - generic [ref=e1273]:
+                  - img [ref=e1275]
+                  - generic [ref=e1282]: CONTGRP
+                  - generic "linux-admins" [ref=e1283]
+                - generic [ref=e1285]:
+                  - img [ref=e1287]
+                  - generic [ref=e1294]: CONTGRP
+                  - generic "windows-admins" [ref=e1295]
+                - generic [ref=e1297]:
+                  - img [ref=e1299]
+                  - generic [ref=e1306]: CONTGRP
+                  - generic "network-admins" [ref=e1307]
+                - generic [ref=e1309]:
+                  - img [ref=e1311]
+                  - generic [ref=e1318]: CONTGRP
+                  - generic "database-admins" [ref=e1319]
+                - generic [ref=e1321]:
+                  - img [ref=e1323]
+                  - generic [ref=e1330]: CONTGRP
+                  - generic "managers" [ref=e1331]
+                - generic [ref=e1333]:
+                  - img [ref=e1335]
+                  - generic [ref=e1342]: CONTGRP
+                  - generic "oncall" [ref=e1343]
+                - generic [ref=e1345]:
+                  - img [ref=e1347]
+                  - generic [ref=e1354]: CONTGRP
+                  - generic "all-admins" [ref=e1355]
+                - generic [ref=e1357]:
+                  - img [ref=e1359]
+                  - generic [ref=e1366]: CONTTMPL
+                  - generic "generic-contact" [ref=e1367]
+              - generic [ref=e1369] [cursor=pointer]:
+                - button [ref=e1370]:
+                  - img [ref=e1371]
+                - img [ref=e1374]
+                - generic [ref=e1377]: dependencies.cfg
+                - generic [ref=e1378]: "12"
+                - button "Delete file" [ref=e1380]:
+                  - img [ref=e1381]
+              - generic [ref=e1383] [cursor=pointer]:
+                - button [ref=e1384]:
+                  - img [ref=e1385]
+                - img [ref=e1388]
+                - generic [ref=e1391]: hostgroups.cfg
+                - generic [ref=e1392]: "22"
+                - button "Delete file" [ref=e1394]:
+                  - img [ref=e1395]
+              - generic [ref=e1397] [cursor=pointer]:
+                - button [ref=e1398]:
+                  - img [ref=e1399]
+                - img [ref=e1402]
+                - generic [ref=e1405]: hosts.cfg
+                - generic [ref=e1406]: "31"
+                - button "Delete file" [ref=e1408]:
+                  - img [ref=e1409]
+              - generic [ref=e1411]:
+                - generic [ref=e1413]:
+                  - img [ref=e1415]
+                  - generic [ref=e1422]: HOST
+                  - generic "web-prod-01" [ref=e1423]
+                - generic [ref=e1425]:
+                  - img [ref=e1427]
+                  - generic [ref=e1434]: HOST
+                  - generic "web-prod-02" [ref=e1435]
+                - generic [ref=e1437]:
+                  - img [ref=e1439]
+                  - generic [ref=e1446]: HOST
+                  - generic "web-prod-03" [ref=e1447]
+                - generic [ref=e1449]:
+                  - img [ref=e1451]
+                  - generic [ref=e1458]: HOST
+                  - generic "web-dev-01" [ref=e1459]
+                - generic [ref=e1461]:
+                  - img [ref=e1463]
+                  - generic [ref=e1470]: HOST
+                  - generic "db-prod-master" [ref=e1471]
+                - generic [ref=e1473]:
+                  - img [ref=e1475]
+                  - generic [ref=e1482]: HOST
+                  - generic "db-prod-slave-01" [ref=e1483]
+                - generic [ref=e1485]:
+                  - img [ref=e1487]
+                  - generic [ref=e1494]: HOST
+                  - generic "db-prod-slave-02" [ref=e1495]
+                - generic [ref=e1497]:
+                  - img [ref=e1499]
+                  - generic [ref=e1506]: HOST
+                  - generic "db-staging-01" [ref=e1507]
+                - generic [ref=e1509]:
+                  - img [ref=e1511]
+                  - generic [ref=e1518]: HOST
+                  - generic "app-prod-01" [ref=e1519]
+                - generic [ref=e1521]:
+                  - img [ref=e1523]
+                  - generic [ref=e1530]: HOST
+                  - generic "app-prod-02" [ref=e1531]
+                - generic [ref=e1533]:
+                  - img [ref=e1535]
+                  - generic [ref=e1542]: HOST
+                  - generic "app-prod-03" [ref=e1543]
+                - generic [ref=e1545]:
+                  - img [ref=e1547]
+                  - generic [ref=e1554]: HOST
+                  - generic "app-prod-04" [ref=e1555]
+                - generic [ref=e1557]:
+                  - img [ref=e1559]
+                  - generic [ref=e1566]: HOST
+                  - generic "api-prod-01" [ref=e1567]
+                - generic [ref=e1569]:
+                  - img [ref=e1571]
+                  - generic [ref=e1578]: HOST
+                  - generic "api-prod-02" [ref=e1579]
+                - generic [ref=e1581]:
+                  - img [ref=e1583]
+                  - generic [ref=e1590]: HOST
+                  - generic "redis-prod-01" [ref=e1591]
+                - generic [ref=e1593]:
+                  - img [ref=e1595]
+                  - generic [ref=e1602]: HOST
+                  - generic "redis-prod-02" [ref=e1603]
+                - generic [ref=e1605]:
+                  - img [ref=e1607]
+                  - generic [ref=e1614]: HOST
+                  - generic "memcached-prod-01" [ref=e1615]
+                - generic [ref=e1617]:
+                  - img [ref=e1619]
+                  - generic [ref=e1626]: HOST
+                  - generic "core-switch-02" [ref=e1627]
+                - generic [ref=e1629]:
+                  - img [ref=e1631]
+                  - generic [ref=e1638]: HOST
+                  - generic "router-main" [ref=e1639]
+                - generic [ref=e1641]:
+                  - img [ref=e1643]
+                  - generic [ref=e1650]: HOST
+                  - generic "vpn-gateway" [ref=e1651]
+                - generic [ref=e1653]:
+                  - img [ref=e1655]
+                  - generic [ref=e1662]: HOST
+                  - generic "old-server-decommissioned" [ref=e1663]
+                - generic [ref=e1665]:
+                  - img [ref=e1667]
+                  - generic [ref=e1674]: HOST
+                  - generic "special-web-01" [ref=e1675]
+                - generic [ref=e1677]:
+                  - img [ref=e1679]
+                  - generic [ref=e1686]: HOST
+                  - generic "special-db-01" [ref=e1687]
+                - generic [ref=e1689]:
+                  - img [ref=e1691]
+                  - generic [ref=e1698]: HOST
+                  - generic "hybrid-server-01" [ref=e1699]
+                - generic [ref=e1701]:
+                  - img [ref=e1703]
+                  - generic [ref=e1710]: HOST
+                  - generic "test-additive-host" [ref=e1711]
+                - generic [ref=e1713]:
+                  - img [ref=e1715]
+                  - generic [ref=e1722]: HOST
+                  - generic "web-staging-01" [ref=e1723]
+                - generic [ref=e1725]:
+                  - img [ref=e1727]
+                  - generic [ref=e1734]: HOST
+                  - generic "firewall-02" [ref=e1735]
+                - generic [ref=e1737]:
+                  - img [ref=e1739]
+                  - generic [ref=e1746]: HOSTGRP
+                  - generic "production" [ref=e1747]
+                - generic [ref=e1749]:
+                  - img [ref=e1751]
+                  - generic [ref=e1758]: HOSTDEP
+                  - generic "redis-prod-01" [ref=e1759]
+                - generic [ref=e1761]:
+                  - img [ref=e1763]
+                  - generic [ref=e1770]: HOSTDEP
+                  - generic "db-prod-master" [ref=e1771]
+                - generic [ref=e1773]:
+                  - img [ref=e1775]
+                  - generic [ref=e1782]: HOST
+                  - generic "grafana-01" [ref=e1783]
+              - generic [ref=e1785] [cursor=pointer]:
+                - img [ref=e1787]
+                - generic [ref=e1790]: nagios.cfg
+                - generic [ref=e1791]: "0"
+                - button "Delete file" [ref=e1793]:
+                  - img [ref=e1794]
+              - generic [ref=e1796] [cursor=pointer]:
+                - img [ref=e1798]
+                - generic [ref=e1801]: resources.cfg
+                - generic [ref=e1802]: "0"
+                - button "Delete file" [ref=e1804]:
+                  - img [ref=e1805]
+              - generic [ref=e1807] [cursor=pointer]:
+                - button [ref=e1808]:
+                  - img [ref=e1809]
+                - img [ref=e1812]
+                - generic [ref=e1815]: servicegroups.cfg
+                - generic [ref=e1816]: "9"
+                - button "Delete file" [ref=e1818]:
+                  - img [ref=e1819]
+              - generic [ref=e1821] [cursor=pointer]:
+                - button [ref=e1822]:
+                  - img [ref=e1823]
+                - img [ref=e1826]
+                - generic [ref=e1829]: services.cfg
+                - generic [ref=e1830]: "50"
+                - button "Delete file" [ref=e1832]:
+                  - img [ref=e1833]
+              - generic [ref=e1835]:
+                - generic [ref=e1837]:
+                  - img [ref=e1839]
+                  - generic [ref=e1846]: SVC
+                  - generic "PING on linux-hosts" [ref=e1847]
+                - generic [ref=e1849]:
+                  - img [ref=e1851]
+                  - generic [ref=e1858]: SVC
+                  - generic "SSH on linux-hosts" [ref=e1859]
+                - generic [ref=e1861]:
+                  - img [ref=e1863]
+                  - generic [ref=e1870]: SVC
+                  - generic "Disk Usage - Root on linux-hosts" [ref=e1871]
+                - generic [ref=e1873]:
+                  - img [ref=e1875]
+                  - generic [ref=e1882]: SVC
+                  - generic "CPU Load on linux-hosts" [ref=e1883]
+                - generic [ref=e1885]:
+                  - img [ref=e1887]
+                  - generic [ref=e1894]: SVC
+                  - generic "Memory Usage on linux-hosts" [ref=e1895]
+                - generic [ref=e1897]:
+                  - img [ref=e1899]
+                  - generic [ref=e1906]: SVC
+                  - generic "Total Processes on linux-hosts" [ref=e1907]
+                - generic [ref=e1909]:
+                  - img [ref=e1911]
+                  - generic [ref=e1918]: SVC
+                  - generic "Zombie Processes on linux-hosts" [ref=e1919]
+                - generic [ref=e1921]:
+                  - img [ref=e1923]
+                  - generic [ref=e1930]: SVC
+                  - generic "Swap Usage on linux-hosts" [ref=e1931]
+                - generic [ref=e1933]:
+                  - img [ref=e1935]
+                  - generic [ref=e1942]: SVC
+                  - generic "HTTP on web-servers" [ref=e1943]
+                - generic [ref=e1945]:
+                  - img [ref=e1947]
+                  - generic [ref=e1954]: SVC
+                  - generic "HTTPS on web-servers" [ref=e1955]
+                - generic [ref=e1957]:
+                  - img [ref=e1959]
+                  - generic [ref=e1966]: SVC
+                  - generic "HTTPS Certificate on web-servers" [ref=e1967]
+                - generic [ref=e1969]:
+                  - img [ref=e1971]
+                  - generic [ref=e1978]: SVC
+                  - generic "Apache Status on web-servers" [ref=e1979]
+                - generic [ref=e1981]:
+                  - img [ref=e1983]
+                  - generic [ref=e1990]: SVC
+                  - generic "HTTP Response Time on web-servers" [ref=e1991]
+                - generic [ref=e1993]:
+                  - img [ref=e1995]
+                  - generic [ref=e2002]: SVC
+                  - generic "MySQL on database-servers" [ref=e2003]
+                - generic [ref=e2005]:
+                  - img [ref=e2007]
+                  - generic [ref=e2014]: SVC
+                  - generic "MySQL Connections on database-servers" [ref=e2015]
+                - generic [ref=e2017]:
+                  - img [ref=e2019]
+                  - generic [ref=e2026]: SVC
+                  - generic "MySQL Slave Status on database-servers" [ref=e2027]
+                - generic [ref=e2029]:
+                  - img [ref=e2031]
+                  - generic [ref=e2038]: SVC
+                  - generic "MySQL Query Time on database-servers" [ref=e2039]
+                - generic [ref=e2041]:
+                  - img [ref=e2043]
+                  - generic [ref=e2050]: SVC
+                  - generic "Disk Usage - Data on database-servers" [ref=e2051]
+                - generic [ref=e2053]:
+                  - img [ref=e2055]
+                  - generic [ref=e2062]: SVC
+                  - generic "Application Health Check on web-prod-01,web-prod-02,web-prod-03,app-prod-01,app-prod-02,app-prod-03,app-prod-04,api-prod-01,api-prod-02" [ref=e2063]
+                - generic [ref=e2065]:
+                  - img [ref=e2067]
+                  - generic [ref=e2074]: SVC
+                  - generic "Replication Lag on db-prod-master,db-prod-slave-01,db-prod-slave-02,redis-prod-01,redis-prod-02" [ref=e2075]
+                - generic [ref=e2077]:
+                  - img [ref=e2079]
+                  - generic [ref=e2086]: SVC
+                  - generic "Redis on cache-servers" [ref=e2087]
+                - generic [ref=e2089]:
+                  - img [ref=e2091]
+                  - generic [ref=e2098]: SVC
+                  - generic "Redis Memory on cache-servers" [ref=e2099]
+                - generic [ref=e2101]:
+                  - img [ref=e2103]
+                  - generic [ref=e2110]: SVC
+                  - generic "Memcached on memcached-prod-01" [ref=e2111]
+                - generic [ref=e2113]:
+                  - img [ref=e2115]
+                  - generic [ref=e2122]: SVC
+                  - generic "PING on windows-hosts" [ref=e2123]
+                - generic [ref=e2125]:
+                  - img [ref=e2127]
+                  - generic [ref=e2134]: SVC
+                  - generic "CPU Load on windows-hosts" [ref=e2135]
+                - generic [ref=e2137]:
+                  - img [ref=e2139]
+                  - generic [ref=e2146]: SVC
+                  - generic "Memory Usage on windows-hosts" [ref=e2147]
+                - generic [ref=e2149]:
+                  - img [ref=e2151]
+                  - generic [ref=e2158]: SVC
+                  - 'generic "Disk C: on windows-hosts" [ref=e2159]'
+                - generic [ref=e2161]:
+                  - img [ref=e2163]
+                  - generic [ref=e2170]: SVC
+                  - generic "AD Replication on domain-controllers" [ref=e2171]
+                - generic [ref=e2173]:
+                  - img [ref=e2175]
+                  - generic [ref=e2182]: SVC
+                  - generic "DNS on domain-controllers" [ref=e2183]
+                - generic [ref=e2185]:
+                  - img [ref=e2187]
+                  - generic [ref=e2194]: SVC
+                  - generic "Exchange Services on win-exchange-01" [ref=e2195]
+                - generic [ref=e2197]:
+                  - img [ref=e2199]
+                  - generic [ref=e2206]: SVC
+                  - generic "Exchange Mail Queue on win-exchange-01" [ref=e2207]
+                - generic [ref=e2209]:
+                  - img [ref=e2211]
+                  - generic [ref=e2218]: SVC
+                  - generic "PING on network-devices" [ref=e2219]
+                - generic [ref=e2221]:
+                  - img [ref=e2223]
+                  - generic [ref=e2230]: SVC
+                  - generic "SNMP Uptime on network-devices" [ref=e2231]
+                - generic [ref=e2233]:
+                  - img [ref=e2235]
+                  - generic [ref=e2242]: SVC
+                  - generic "Port Status on switches" [ref=e2243]
+                - generic [ref=e2245]:
+                  - img [ref=e2247]
+                  - generic [ref=e2254]: SVC
+                  - generic "Bandwidth Utilization on switches" [ref=e2255]
+                - generic [ref=e2257]:
+                  - img [ref=e2259]
+                  - generic [ref=e2266]: SVC
+                  - generic "BGP Sessions on routers" [ref=e2267]
+                - generic [ref=e2269]:
+                  - img [ref=e2271]
+                  - generic [ref=e2278]: SVC
+                  - generic "Connection Table on firewalls" [ref=e2279]
+                - generic [ref=e2281]:
+                  - img [ref=e2283]
+                  - generic [ref=e2290]: SVC
+                  - generic "VPN Tunnels on firewalls" [ref=e2291]
+                - generic [ref=e2293]:
+                  - img [ref=e2295]
+                  - generic [ref=e2302]: SVC
+                  - generic "Nagios Process on nagios-01" [ref=e2303]
+                - generic [ref=e2305]:
+                  - img [ref=e2307]
+                  - generic [ref=e2314]: SVC
+                  - generic "Nagios Latency on nagios-01" [ref=e2315]
+                - generic [ref=e2317]:
+                  - img [ref=e2319]
+                  - generic [ref=e2326]: SVC
+                  - generic "Grafana HTTP on grafana-01" [ref=e2327]
+                - generic [ref=e2329]:
+                  - img [ref=e2331]
+                  - generic [ref=e2338]: SVC
+                  - generic "Elasticsearch on log-server-01" [ref=e2339]
+                - generic [ref=e2341]:
+                  - img [ref=e2343]
+                  - generic [ref=e2350]: SVC
+                  - generic "Elasticsearch Cluster Health on log-server-01" [ref=e2351]
+                - generic [ref=e2353]:
+                  - img [ref=e2355]
+                  - generic [ref=e2362]: SVC
+                  - generic "Orphan Service on nonexistent-server" [ref=e2363]
+                - generic [ref=e2365]:
+                  - img [ref=e2367]
+                  - generic [ref=e2374]: SVC
+                  - generic "Standard Backup Check on production" [ref=e2375]
+                - generic [ref=e2377]:
+                  - img [ref=e2379]
+                  - generic [ref=e2386]: SVC
+                  - generic "Production SSL Cert on web-servers" [ref=e2387]
+                - generic [ref=e2389]:
+                  - img [ref=e2391]
+                  - generic [ref=e2398]: SVC
+                  - generic "Security Updates on linux-hosts" [ref=e2399]
+                - generic [ref=e2401]:
+                  - img [ref=e2403]
+                  - generic [ref=e2410]: SVC
+                  - generic "Redis Cluster Status on cache-servers" [ref=e2411]
+                - generic [ref=e2413]:
+                  - img [ref=e2415]
+                  - generic [ref=e2422]: SVC
+                  - generic "App Pool Health on app-servers" [ref=e2423]
+                - generic [ref=e2425]:
+                  - img [ref=e2427]
+                  - generic [ref=e2434]: SVC
+                  - generic "Replication Monitor on +database-servers,+cache-servers" [ref=e2435]
+              - generic [ref=e2437] [cursor=pointer]:
+                - button [ref=e2438]:
+                  - img [ref=e2439]
+                - img [ref=e2442]
+                - generic [ref=e2445]: templates.cfg
+                - generic [ref=e2446]: "9"
+                - button "Delete file" [ref=e2448]:
+                  - img [ref=e2449]
+              - generic [ref=e2451]:
+                - generic [ref=e2453]:
+                  - img [ref=e2455]
+                  - generic [ref=e2462]: HOSTTMPL
+                  - generic "generic-host" [ref=e2463]
+                - generic [ref=e2465]:
+                  - img [ref=e2467]
+                  - generic [ref=e2474]: HOSTTMPL
+                  - generic "network-device" [ref=e2475]
+                - generic [ref=e2477]:
+                  - img [ref=e2479]
+                  - generic [ref=e2486]: HOSTTMPL
+                  - generic "linux-server" [ref=e2487]
+                - generic [ref=e2489]:
+                  - img [ref=e2491]
+                  - generic [ref=e2498]: HOSTTMPL
+                  - generic "windows-server" [ref=e2499]
+                - generic [ref=e2501]:
+                  - img [ref=e2503]
+                  - generic [ref=e2510]: HOSTTMPL
+                  - generic "critical-server" [ref=e2511]
+                - generic [ref=e2513]:
+                  - img [ref=e2515]
+                  - generic [ref=e2522]: SVCTMPL
+                  - generic "generic-service" [ref=e2523]
+                - generic [ref=e2525]:
+                  - img [ref=e2527]
+                  - generic [ref=e2534]: SVCTMPL
+                  - generic "local-service" [ref=e2535]
+                - generic [ref=e2537]:
+                  - img [ref=e2539]
+                  - generic [ref=e2546]: SVCTMPL
+                  - generic "passive-service" [ref=e2547]
+                - generic [ref=e2549]:
+                  - img [ref=e2551]
+                  - generic [ref=e2558]: SVCTMPL
+                  - generic "critical-service" [ref=e2559]
+              - generic [ref=e2561] [cursor=pointer]:
+                - button [ref=e2562]:
+                  - img [ref=e2563]
+                - img [ref=e2566]
+                - generic [ref=e2569]: timeperiods.cfg
+                - generic [ref=e2570]: "10"
+                - button "Delete file" [ref=e2572]:
+                  - img [ref=e2573]
+              - generic [ref=e2575]:
+                - generic [ref=e2577]:
+                  - img [ref=e2579]
+                  - generic [ref=e2586]: TP
+                  - generic "24x7" [ref=e2587]
+                - generic [ref=e2589]:
+                  - img [ref=e2591]
+                  - generic [ref=e2598]: TP
+                  - generic "workhours" [ref=e2599]
+                - generic [ref=e2601]:
+                  - img [ref=e2603]
+                  - generic [ref=e2610]: TP
+                  - generic "extended-workhours" [ref=e2611]
+                - generic [ref=e2613]:
+                  - img [ref=e2615]
+                  - generic [ref=e2622]: TP
+                  - generic "nonworkhours" [ref=e2623]
+                - generic [ref=e2625]:
+                  - img [ref=e2627]
+                  - generic [ref=e2634]: TP
+                  - generic "weekends" [ref=e2635]
+                - generic [ref=e2637]:
+                  - img [ref=e2639]
+                  - generic [ref=e2646]: TP
+                  - generic "us-business-hours" [ref=e2647]
+                - generic [ref=e2649]:
+                  - img [ref=e2651]
+                  - generic [ref=e2658]: TP
+                  - generic "eu-business-hours" [ref=e2659]
+                - generic [ref=e2661]:
+                  - img [ref=e2663]
+                  - generic [ref=e2670]: TP
+                  - generic "maintenance-window" [ref=e2671]
+                - generic [ref=e2673]:
+                  - img [ref=e2675]
+                  - generic [ref=e2682]: TP
+                  - generic "never" [ref=e2683]
+                - generic [ref=e2685]:
+                  - img [ref=e2687]
+                  - generic [ref=e2694]: TP
+                  - generic "old-schedule" [ref=e2695]
+        - text: 
+    - text:  
+  - text:  
