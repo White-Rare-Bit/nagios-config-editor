@@ -1067,7 +1067,7 @@
         let maxLine = getMaxLineInFile(targetFile);
 
         const processObject = (objData) => {
-            if (!objData) {return;}
+            if (!objData || !objData.attributes || !objData.source_file) {return;}
             const nameComponent = objData.name ?? objData.display_name ?? `idx:${objData.global_index}`;
             const objKey = `${objData.source_file}|${objData.object_type}|${nameComponent}`;
             const existingMove = state.stagedMoves.get(objKey);
@@ -1476,6 +1476,26 @@
             state.stagedCreations = state.stagedCreations.filter(c => c.targetFile !== filePath);
             afterStagingChange({ tree: false });
             showToast('Removed new file', 'info');
+            return;
+        }
+
+        // G-01: Confirmation dialog with object count before file deletion
+        const fileName = extractFileName(filePath);
+        const objectsInFile = state.allObjects.filter(o => o.source_file === filePath);
+        const objectCount = objectsInFile.length;
+        const objectSummary = objectCount > 0
+            ? `\n\nThis file contains ${objectCount} object${objectCount !== 1 ? 's' : ''} that will also be deleted.`
+            : '';
+
+        const deleteConfirmed = await showConfirmDialog({
+            title: `Delete ${fileName}?`,
+            message: `Are you sure you want to delete "${fileName}"?${objectSummary}`,
+            confirmText: 'Delete File',
+            cancelText: 'Cancel',
+            type: 'danger'
+        });
+
+        if (!deleteConfirmed) {
             return;
         }
 

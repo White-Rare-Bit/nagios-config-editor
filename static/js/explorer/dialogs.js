@@ -397,28 +397,38 @@
         const nameField = getNewObjectNameField(state.editedObject.object_type);
         const name = state.editedObject.attributes[nameField] || '';
 
-        // C-06: Validate for duplicate object names
+        // D-01: Validate for duplicate object names (uses composite key for services)
         if (name) {
-            // Check against existing objects (use attributes directly since frontend objects don't have get_name())
-            const existingObj = state.allObjects.find(obj => {
-                if (obj.object_type !== state.editedObject.object_type) {return false;}
-                const objName = obj.attributes?.[nameField] || obj.attributes?.name || '';
-                return objName === name;
-            });
-            if (existingObj) {
-                showToast(`Error: ${state.editedObject.object_type} "${name}" already exists in ${existingObj.source_file}`, 'error');
+            const dupCheck = Explorer.checkDuplicateName(
+                state.editedObject.object_type,
+                name,
+                state.editedObject.attributes,
+                state.newObjectStagedIndex
+            );
+            if (dupCheck.isDuplicate) {
+                const loc = dupCheck.location === 'staged' ? 'in staged changes' : `in ${dupCheck.location}`;
+                showToast(`Error: ${state.editedObject.object_type} "${name}" already exists ${loc}`, 'error');
+                // D-02: Show inline validation error on name input
+                const nameInput = document.getElementById('newObjectNameInput');
+                if (nameInput) {
+                    nameInput.classList.add('input-error');
+                    let errorEl = document.getElementById('nameInputError');
+                    if (!errorEl) {
+                        errorEl = document.createElement('div');
+                        errorEl.id = 'nameInputError';
+                        errorEl.className = 'input-error-text';
+                        nameInput.parentNode.appendChild(errorEl);
+                    }
+                    errorEl.textContent = `A ${state.editedObject.object_type} named "${name}" already exists ${loc}`;
+                }
                 return;
             }
-
-            // Check against other staged creations (excluding current one being edited)
-            const duplicateStagedIdx = state.stagedCreations.findIndex((c, idx) =>
-                idx !== state.newObjectStagedIndex &&
-                c.object_type === state.editedObject.object_type &&
-                c.displayName === name
-            );
-            if (duplicateStagedIdx !== -1) {
-                showToast(`Error: Another staged ${state.editedObject.object_type} "${name}" already exists`, 'error');
-                return;
+            // Clear any previous inline error
+            const nameInput = document.getElementById('newObjectNameInput');
+            if (nameInput) {
+                nameInput.classList.remove('input-error');
+                const errorEl = document.getElementById('nameInputError');
+                if (errorEl) {errorEl.remove();}
             }
         }
 
@@ -502,7 +512,7 @@
         return dependencies;
     }
 
-    function checkDependenciesAndDelete(stagedCreationDeletedCount = 0) {
+    async function checkDependenciesAndDelete(stagedCreationDeletedCount = 0) {
         // Collect all objects being deleted and their dependencies
         const objectsToDelete = [];
         const allDependencies = [];
@@ -525,12 +535,35 @@
         }
 
         if (allDependencies.length > 0) {
-            // Show warning dialog
+            // Show warning dialog (already has confirmation built in)
             showDeleteDependencyWarning(objectsToDelete, () => {
                 executeObjectDeletions(stagedCreationDeletedCount);
             });
         } else {
-            // No dependencies, proceed directly
+            // G-02: Confirmation dialog before deleting objects with no dependencies
+            const selectedCount = state.selectedKeys.size;
+            let message;
+            if (selectedCount === 1) {
+                const index = Array.from(Explorer.getSelectedIndices())[0];
+                const obj = state.allObjects.find(o => o.global_index === index);
+                const name = obj ? (obj.display_name || obj.name || 'unnamed') : 'this object';
+                message = `Are you sure you want to stage "${name}" for deletion?`;
+            } else {
+                message = `Are you sure you want to stage ${selectedCount} objects for deletion?`;
+            }
+
+            const confirmed = await showConfirmDialog({
+                title: selectedCount === 1 ? 'Delete Object?' : `Delete ${selectedCount} Objects?`,
+                message: message,
+                confirmText: 'Delete',
+                cancelText: 'Cancel',
+                type: 'danger'
+            });
+
+            if (!confirmed) {
+                return;
+            }
+
             executeObjectDeletions(stagedCreationDeletedCount);
         }
     }
@@ -712,6 +745,129 @@
     // Bulk Operations Dialogs
     // ============================================================================
 
+    /**
+     * Stage reference updates for a batch of renames, excluding renamed objects from
+     * each other's reference scans. Uses Explorer.stageReferenceUpdates for individual
+     * renames, but filters out co-renamed objects to avoid circular updates.
+     * @param {Array<{oldName: string, newName: string, idx: number}>} renames
+     * @returns {number} total reference objects updated
+     */
+    function stageBulkReferenceUpdates(renames) {
+        const allRenamedIndices = new Set(renames.map(r => r.idx));
+        let totalRefUpdates = 0;
+
+        for (const { oldName, newName } of renames) {
+            const deps = Explorer.findDependencies(oldName)
+                .filter(d => !allRenamedIndices.has(d.object.global_index));
+
+            for (const dep of deps) {
+                const existingEdit = state.pendingEdits.get(dep.object.global_index);
+                const originalAttrs = existingEdit ? existingEdit.original : {...dep.object.attributes};
+                const editedAttrs = existingEdit ? {...existingEdit.edited} : {...dep.object.attributes};
+                let changed = false;
+
+                for (const fieldName of dep.fields) {
+                    const currentValue = editedAttrs[fieldName] || '';
+                    const updatedValue = Explorer.updateReferenceValue(currentValue, oldName, newName);
+                    if (updatedValue !== currentValue) {
+                        editedAttrs[fieldName] = updatedValue;
+                        changed = true;
+                    }
+                }
+
+                if (changed) {
+                    state.pendingEdits.set(dep.object.global_index, {
+                        original: originalAttrs,
+                        edited: editedAttrs,
+                        object: {
+                            source_file: dep.object.source_file,
+                            line_number: dep.object.line_number,
+                            object_type: dep.object.object_type,
+                            name: dep.object.name,
+                            display_name: dep.object.display_name
+                        }
+                    });
+                    totalRefUpdates++;
+                }
+            }
+        }
+
+        return totalRefUpdates;
+    }
+
+    /**
+     * Apply find/replace to each selected object's name field and stage the edits.
+     * @returns {{renames: Array, centerPaneNeedsRefresh: boolean}}
+     */
+    function applyBulkRenameEdits(find, replace) {
+        const renames = [];
+        let centerPaneNeedsRefresh = false;
+
+        for (const idx of Explorer.getSelectedIndices()) {
+            const obj = state.allObjects.find(o => o.global_index === idx);
+            if (!obj) {continue;}
+
+            const nameField = Explorer.getNameFieldForObject(obj);
+            const existingEdit = state.pendingEdits.get(idx);
+            const currentName = existingEdit ? (existingEdit.edited[nameField] || '') : (obj.attributes[nameField] || '');
+            const newName = currentName.split(find).join(replace);
+
+            if (newName !== currentName) {
+                const originalAttrs = existingEdit ? existingEdit.original : {...obj.attributes};
+                const editedAttrs = existingEdit ? {...existingEdit.edited} : {...obj.attributes};
+                editedAttrs[nameField] = newName;
+
+                state.pendingEdits.set(idx, {
+                    original: originalAttrs,
+                    edited: editedAttrs,
+                    object: {
+                        source_file: obj.source_file,
+                        line_number: obj.line_number,
+                        object_type: obj.object_type,
+                        name: obj.name,
+                        display_name: obj.display_name
+                    }
+                });
+                renames.push({ oldName: currentName, newName, idx });
+
+                if (state.editedObject && state.editedObject.global_index === idx) {
+                    centerPaneNeedsRefresh = true;
+                }
+            }
+        }
+
+        return { renames, centerPaneNeedsRefresh };
+    }
+
+    function executeBulkRename(find, replace, shouldUpdateRefs) {
+        const { renames, centerPaneNeedsRefresh } = applyBulkRenameEdits(find, replace);
+
+        let totalRefUpdates = 0;
+        if (shouldUpdateRefs && renames.length > 0) {
+            totalRefUpdates = stageBulkReferenceUpdates(renames);
+        }
+
+        Explorer.saveStagedChanges();
+        state.healthCheckData = null;
+        Explorer.computeStagedIssues();
+        Explorer.refreshAfterObjectChange();
+        Explorer.closeDialog();
+
+        if (centerPaneNeedsRefresh && state.editedObject) {
+            const obj = state.allObjects.find(o => o.global_index === state.editedObject.global_index);
+            if (obj) {Explorer.showCenterPaneObject(obj);}
+        } else if (state.editedObject && renames.length > 0) {
+            Explorer.loadImpactAndRelationships(state.editedObject);
+        }
+
+        if (renames.length > 0) {
+            const refMsg = totalRefUpdates > 0 ? ` Updated ${totalRefUpdates} reference${totalRefUpdates !== 1 ? 's' : ''}.` : '';
+            showToast(`Staged ${renames.length} rename(s).${refMsg} Commit to apply.`, 'info');
+        } else {
+            showToast('No matches found', 'warning');
+        }
+    }
+
     function showBulkRenameDialog() {
         Explorer.hideContextMenu();
         Explorer.closeActionsMenu();
@@ -720,79 +876,31 @@
             return;
         }
 
+        const count = state.selectedKeys.size;
+
         Explorer.showDialog('Bulk Rename', `
+            <p class="dialog-info-text" style="margin-top:0">${count} object${count !== 1 ? 's' : ''} selected</p>
             <label>Find</label>
             <input type="text" id="renameFind" placeholder="Text to find...">
             <label>Replace with</label>
             <input type="text" id="renameReplace" placeholder="Replacement text...">
+            <div class="dialog-reference-option u-mt-sm">
+                <label class="commit-reference-label">
+                    <input type="checkbox" id="bulkRenameUpdateRefs" checked>
+                    <span><strong>Update references</strong> in other objects</span>
+                </label>
+            </div>
         `, () => {
             const find = document.getElementById('renameFind').value;
             const replace = document.getElementById('renameReplace').value;
+            const shouldUpdateRefs = document.getElementById('bulkRenameUpdateRefs').checked;
 
             if (!find) {
                 showToast('Please enter text to find', 'warning');
                 return;
             }
 
-            let renamedCount = 0;
-            let centerPaneNeedsRefresh = false;
-
-            for (const idx of Explorer.getSelectedIndices()) {
-                const obj = state.allObjects.find(o => o.global_index === idx);
-                if (!obj) {continue;}
-
-                const nameField = Explorer.getNameFieldForObject(obj);
-                // Use pending edit's current name if available
-                const existingEdit = state.pendingEdits.get(idx);
-                const currentName = existingEdit ? (existingEdit.edited[nameField] || '') : (obj.attributes[nameField] || '');
-                const newName = currentName.split(find).join(replace);
-
-                if (newName !== currentName) {
-                    const originalAttrs = existingEdit ? existingEdit.original : {...obj.attributes};
-                    const editedAttrs = existingEdit ? {...existingEdit.edited} : {...obj.attributes};
-                    editedAttrs[nameField] = newName;
-
-                    state.pendingEdits.set(idx, {
-                        original: originalAttrs,
-                        edited: editedAttrs,
-                        object: {
-                            source_file: obj.source_file,
-                            line_number: obj.line_number,
-                            object_type: obj.object_type,
-                            name: obj.name,
-                            display_name: obj.display_name
-                        }
-                    });
-                    renamedCount++;
-
-                    // Check if this is the currently displayed object
-                    if (state.editedObject && state.editedObject.global_index === idx) {
-                        centerPaneNeedsRefresh = true;
-                    }
-                }
-            }
-
-            // Centralized refresh ensures all UI components stay in sync
-            Explorer.saveStagedChanges();
-            state.healthCheckData = null;
-            Explorer.computeStagedIssues();
-            Explorer.refreshAfterObjectChange();
-            Explorer.closeDialog();
-
-            // Refresh center pane if displayed object was renamed
-            if (centerPaneNeedsRefresh && state.editedObject) {
-                const obj = state.allObjects.find(o => o.global_index === state.editedObject.global_index);
-                if (obj) {Explorer.showCenterPaneObject(obj);}
-            } else if (state.editedObject && renamedCount > 0) {
-                // Refresh Impact & Relationships since renames might affect this object
-                Explorer.loadImpactAndRelationships(state.editedObject);
-            }
-
-            if (renamedCount > 0) {
-                showToast(`Staged ${renamedCount} rename(s). Commit to apply.`, 'info');
-            } else {
-                showToast('No matches found', 'warning');
-            }
+            executeBulkRename(find, replace, shouldUpdateRefs);
         });
     }
 
@@ -1144,10 +1252,10 @@
 
         let output = '';
         if (result.errors && result.errors.length > 0) {
-            output += 'ERRORS:\n' + result.errors.join('\n') + '\n\n';
+            output += 'ERRORS:\n' + result.errors.map(e => typeof e === 'object' ? e.message || JSON.stringify(e) : e).join('\n') + '\n\n';
         }
         if (result.warnings && result.warnings.length > 0) {
-            output += 'WARNINGS:\n' + result.warnings.join('\n') + '\n\n';
+            output += 'WARNINGS:\n' + result.warnings.map(w => typeof w === 'object' ? w.message || JSON.stringify(w) : w).join('\n') + '\n\n';
         }
         if (result.raw_output) {
             output += result.raw_output;
