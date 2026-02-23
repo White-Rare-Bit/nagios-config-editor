@@ -314,9 +314,12 @@ console.log('dependencies.js loaded');
         const maxNodes = MAX_NODES;
         const [startType, startName] = parseNodeId(startNodeId);
 
-        // Helper to add a node if not at max
+        // Helper to add a node if not at max. Uses visited (not addedNodeIds) for
+        // cycle detection so re-expansion through already-added nodes works (bug 057).
         function collectNode(nodeId) {
-            if (addedNodeIds.size >= maxNodes || addedNodeIds.has(nodeId)) {return false;}
+            if (addedNodeIds.size >= maxNodes) {return false;}
+            if (visited.has(nodeId)) {return false;}
+            visited.add(nodeId);
             addedNodeIds.add(nodeId);
             return true;
         }
@@ -1328,7 +1331,7 @@ console.log('dependencies.js loaded');
             const displayLabel = getNodeDisplayLabel(node.id, node.type, node.label);
             const exists = node.exists !== false;
             return `
-                <div class="dep-node-item ${!exists ? 'orphan' : ''}" onclick="openNodeInExplorer('${escapeAttr(node.type)}', '${escapeAttr(node.label)}')">
+                <div class="dep-node-item ${!exists ? 'orphan' : ''}" onclick="openNodeInExplorer('${escapeAttr(node.type)}', '${escapeAttr(node.label)}', ${node.exists !== false})">
                     <span>
                         <span class="dep-type-badge dep-type-badge--${escapeAttr(node.type)}">${node.type}</span>
                         ${escapeHtml(displayLabel)}
@@ -2441,11 +2444,16 @@ console.log('dependencies.js loaded');
         // Service IDs may have format "service:target:name"
         const [type, name] = parseNodeId(selectedNodeId);
         if (type && name) {
-            openNodeInExplorer(type, name);
+            const node = allNodes.find(n => n.id === selectedNodeId);
+            openNodeInExplorer(type, name, node ? node.exists !== false : true);
         }
     }
 
-    function openNodeInExplorer(type, name) {
+    function openNodeInExplorer(type, name, exists) {
+        if (exists === false) {
+            showToast(`"${name}" is not defined in any config file`, 'warning');
+            return;
+        }
         window.location.href = `/explorer?search=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}`;
     }
 
