@@ -22,6 +22,7 @@
     let saveInProgress = false;
     let analysisDebounceTimer = null;
     let isPollingInProgress = false;  // C-02: Guard against concurrent polling
+    let undoInProgress = false;  // H-028: Guard against concurrent undo requests
 
     /**
      * Trigger analysis update with debouncing (500ms)
@@ -164,10 +165,13 @@
      */
     function syncStagingFromData(state, data) {
         // Object operations - dict format: {key: entry, ...}
+        // Bug 039: JSON keys are always strings, but pendingEdits uses numeric
+        // global_index keys everywhere else. Convert to numbers so Map lookups
+        // like state.pendingEdits.get(obj.global_index) work after server load.
         if (data.pendingEdits) {
             const validEdits = Object.entries(data.pendingEdits).filter(([key, edit]) => {
                 return edit && edit.object && edit.object.source_file;
-            });
+            }).map(([key, edit]) => [Number(key), edit]);
             state.pendingEdits = new Map(validEdits);
         }
         if (data.stagedMoves) {
@@ -376,31 +380,40 @@
      * @returns {Promise<{success: boolean, undone?: object, message?: string}>}
      */
     Explorer.undoLastAction = async function() {
-        const result = await ApiClient.post('/api/staging/undo', {}, { silent: true });
+        // H-028: Prevent concurrent undo requests (rapid Ctrl+Z / key repeat)
+        if (undoInProgress) {
+            return { success: false, message: 'Undo already in progress' };
+        }
+        undoInProgress = true;
 
-        if (result.success && result.data?.success) {
-            // Reload objects from server to get original values
-            // (staged edits mutate state.allObjects, so we need fresh data)
-            await Explorer.loadObjects();
+        try {
+            const result = await ApiClient.post('/api/staging/undo', {}, { silent: true });
 
-            // Reload staged changes to get updated state
-            await Explorer.loadStagedChanges(false);
+            if (result.success && result.data?.success) {
+                // Reload objects from server to get original values
+                // (staged edits mutate state.allObjects, so we need fresh data)
+                await Explorer.loadObjects();
 
-            // Centralized refresh ensures all UI components stay in sync
-            // Center pane synced via syncCenterPaneAfterUndo which refreshAfterObjectChange calls conditionally
-            Explorer.refreshAfterObjectChange();
+                // Reload staged changes to get updated state
+                await Explorer.loadStagedChanges(false);
 
-            const description = result.data.undone?.description || 'action';
-            Explorer.showToast(`Undone: ${description}`, 'info');
-            return { success: true, undone: result.data.undone };
-        } else if (result.status === 404) {
-            Explorer.showToast('Nothing to undo', 'info');
-            return { success: false, message: 'Nothing to undo' };
-        } 
+                // Centralized refresh ensures all UI components stay in sync
+                // Center pane synced via syncCenterPaneAfterUndo which refreshAfterObjectChange calls conditionally
+                Explorer.refreshAfterObjectChange();
+
+                const description = result.data.undone?.description || 'action';
+                Explorer.showToast(`Undone: ${description}`, 'info');
+                return { success: true, undone: result.data.undone };
+            } else if (result.status === 404) {
+                Explorer.showToast('Nothing to undo', 'info');
+                return { success: false, message: 'Nothing to undo' };
+            }
             const errorMsg = result.data?.error || result.error || 'Failed to undo';
             Explorer.showToast(errorMsg, 'error');
             return { success: false, message: errorMsg };
-        
+        } finally {
+            undoInProgress = false;
+        }
     };
 
     /**

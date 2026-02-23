@@ -419,9 +419,12 @@ function setView(view) {
     buildTree();
 }
 
+let currentSearchTerm = '';
+
 function buildTree() {
     const container = document.getElementById('treeContent');
     const search = document.getElementById('treeSearch').value.toLowerCase();
+    currentSearchTerm = search;
     const orphansOnly = document.getElementById('showOrphansOnly').checked;
     const issuesOnly = document.getElementById('showIssuesOnly').checked;
 
@@ -446,14 +449,24 @@ function buildTree() {
         });
     }
 
-    // Filter by orphans
-    if (orphansOnly) {
+    // Filter by orphans and/or issues (OR logic when both checked)
+    if (orphansOnly && issuesOnly) {
+        filtered = filtered.filter(o =>
+            state.orphanIndices.has(o.global_index) || getObjectIssue(o) !== null
+        );
+    } else if (orphansOnly) {
         filtered = filtered.filter(o => state.orphanIndices.has(o.global_index));
+    } else if (issuesOnly) {
+        filtered = filtered.filter(o => getObjectIssue(o) !== null);
     }
 
-    // Filter by issues
-    if (issuesOnly) {
-        filtered = filtered.filter(o => getObjectIssue(o) !== null);
+    // Show empty state when no results
+    if (filtered.length === 0 && (search || orphansOnly || issuesOnly)) {
+        const msg = search
+            ? `No objects matching "${Explorer.escapeHtml(search)}"`
+            : 'No matching objects';
+        container.innerHTML = `<div class="empty-state"><span class="empty-icon"><i class="fa-solid fa-search"></i></span><div class="empty-title">${msg}</div><div class="empty-desc">${state.allObjects.length} objects in configuration</div></div>`;
+        return;
     }
 
     if (state.currentView === 'file') {
@@ -724,6 +737,7 @@ function renderTreeItem(obj, showType = false) {
     const deletedClass = isDeleted ? 'staged-for-deletion' : '';
     const stagedClass = isStagedMove ? 'staged' : '';
     const typeLabel = Explorer.getTypeBadge(obj.object_type, isTemplate);
+    const matchField = getSearchMatchField(obj);
 
     // Check if there's a staged edit with a new name
     const displayName = getStagedDisplayName(obj);
@@ -752,9 +766,29 @@ function renderTreeItem(obj, showType = false) {
             ${hostListInfo.shouldGroup ? `<span class="tree-item-group-badge" title="Consider using a hostgroup (${hostListInfo.count} hosts)"><i class="fa-solid fa-list"></i></span>` : ''}
             ${isStagedMove ? '<span class="tree-item-staged-badge" title="Pending move - not yet committed">→</span>' : ''}
             <span class="tree-item-name" title="${Explorer.escapeHtml(displayName)}">${Explorer.escapeHtml(displayName)}</span>
+            ${matchField ? `<span class="tree-item-match-field" title="Matched in ${Explorer.escapeHtml(matchField)}">${Explorer.escapeHtml(matchField)}</span>` : ''}
             ${showType ? '' : `<span class="tree-item-type type-${obj.object_type}" title="${obj.object_type}">${typeLabel}</span>`}
         </div>
     `;
+}
+
+// Get which attribute matched the current search term (for attribute-only matches)
+function getSearchMatchField(obj) {
+    if (!currentSearchTerm) {return null;}
+    // If name or type matches, no need to show indicator
+    if (obj.display_name.toLowerCase().includes(currentSearchTerm) ||
+        obj.object_type.toLowerCase().includes(currentSearchTerm)) {
+        return null;
+    }
+    for (const [key, value] of Object.entries(obj.attributes || {})) {
+        if (String(value).toLowerCase().includes(currentSearchTerm)) {
+            return key;
+        }
+        if (key.toLowerCase().includes(currentSearchTerm)) {
+            return key;
+        }
+    }
+    return null;
 }
 
 // Get display name for an object, checking staged edits first

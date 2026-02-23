@@ -152,18 +152,29 @@
             );
         }
 
-        function buildParentChain(parentNames, objType) {
+        function buildParentChain(parentNames, objType, visited = new Set()) {
             const parents = [];
             for (const name of parentNames) {
+                if (visited.has(name)) {
+                    parents.push({
+                        name: name,
+                        object_type: objType,
+                        is_template: true,
+                        error: 'Circular dependency'
+                    });
+                    continue;
+                }
                 const template = findTemplate(name, objType);
                 if (template) {
+                    const nextVisited = new Set(visited);
+                    nextVisited.add(name);
                     const templateUse = Explorer.parseCommaValues(template.attributes.use || '');
                     parents.push({
                         name: getEffectiveName(template),
                         object_type: template.object_type,
                         is_template: true,
                         file: template.source_file,
-                        parents: buildParentChain(templateUse, objType)
+                        parents: buildParentChain(templateUse, objType, nextVisited)
                     });
                 } else {
                     parents.push({
@@ -177,7 +188,11 @@
             return parents;
         }
 
-        chain.parents = buildParentChain(templateNames, obj.object_type);
+        // Seed visited set with the current object's name to detect self-reference
+        const selfNames = new Set();
+        const objName = obj.display_name || obj.name || obj.attributes?.name;
+        if (objName) {selfNames.add(objName);}
+        chain.parents = buildParentChain(templateNames, obj.object_type, selfNames);
         return chain;
     }
 

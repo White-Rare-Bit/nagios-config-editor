@@ -202,26 +202,35 @@ function updateUndoButton(undoCount) {
     }
 }
 
+let _undoInProgress = false;  // H-028: Guard against concurrent undo
+
 async function handleUndoClick() {
     if (typeof Explorer !== 'undefined' && Explorer.undoLastAction) {
+        // Explorer.undoLastAction has its own concurrency guard
         const result = await Explorer.undoLastAction();
         if (result.success) {
             checkPendingChanges();
         }
     } else {
-        // Fallback: call API directly
-        const result = await ApiClient.post('/api/staging/undo', {}, { silent: true });
+        // Fallback: call API directly with concurrency guard
+        if (_undoInProgress) {return;}
+        _undoInProgress = true;
+        try {
+            const result = await ApiClient.post('/api/staging/undo', {}, { silent: true });
 
-        if (result.success && result.data?.success) {
-            const description = result.data.undone?.description || 'action';
-            showToast(`Undone: ${description}`, 'info');
-            checkPendingChanges();
-            // Reload page to reflect changes
-            if (typeof buildTree === 'function') {buildTree();}
-        } else if (result.status === 404) {
-            showToast('Nothing to undo', 'info');
-        } else {
-            showToast(result.data?.error || result.error || 'Failed to undo', 'error');
+            if (result.success && result.data?.success) {
+                const description = result.data.undone?.description || 'action';
+                showToast(`Undone: ${description}`, 'info');
+                checkPendingChanges();
+                // Reload page to reflect changes
+                if (typeof buildTree === 'function') {buildTree();}
+            } else if (result.status === 404) {
+                showToast('Nothing to undo', 'info');
+            } else {
+                showToast(result.data?.error || result.error || 'Failed to undo', 'error');
+            }
+        } finally {
+            _undoInProgress = false;
         }
     }
 }
@@ -375,6 +384,19 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // H-005: Check if undo shortcut should fire (not in text input, no dialogs, button enabled)
+    function canFireUndo() {
+        const activeEl = document.activeElement;
+        if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
+            return false;
+        }
+        const hasOpenModal = document.querySelector('.modal.show') !== null;
+        const hasOpenOverlay = document.querySelector('.confirm-dialog-overlay.visible, .global-commit-overlay.visible, .git-result-panel.visible') !== null;
+        if (hasOpenModal || hasOpenOverlay) {return false;}
+        const undoBtn = document.getElementById('navUndoBtn');
+        return undoBtn && !undoBtn.disabled;
+    }
+
     // Close dialogs on Escape key, Undo on Ctrl+Z, ? for help
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
@@ -383,25 +405,10 @@ document.addEventListener('DOMContentLoaded', () => {
             closeKeyboardShortcuts();
         }
 
-        // Ctrl+Z (or Cmd+Z on Mac) for undo - but not when editing text or in dialogs
-        if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-            const activeEl = document.activeElement;
-            const isTextInput = activeEl && (
-                activeEl.tagName === 'INPUT' ||
-                activeEl.tagName === 'TEXTAREA' ||
-                activeEl.isContentEditable
-            );
-
-            // F-01: Check if any modal dialog is open (Bootstrap modals or custom overlays)
-            const hasOpenModal = document.querySelector('.modal.show') !== null;
-            const hasOpenOverlay = document.querySelector('.confirm-dialog-overlay.visible, .global-commit-overlay.visible, .git-result-panel.visible') !== null;
-            const isDialogOpen = hasOpenModal || hasOpenOverlay;
-
-            // Only handle undo if not in a text input and no dialog is open
-            if (!isTextInput && !isDialogOpen) {
-                e.preventDefault();
-                handleUndoClick();
-            }
+        // Ctrl+Z (or Cmd+Z on Mac) for undo
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey && canFireUndo()) {
+            e.preventDefault();
+            handleUndoClick();
         }
 
         // ? key to show keyboard shortcuts help (not when typing in inputs)

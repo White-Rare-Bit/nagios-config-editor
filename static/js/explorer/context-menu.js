@@ -46,15 +46,88 @@
         };
     }
 
+    /**
+     * Update a comma-separated reference value, replacing oldName with newName.
+     * Preserves Nagios additive (+) and exclusion (!) prefixes.
+     */
+    function updateReferenceValue(value, oldName, newName) {
+        const parts = value.split(',').map(v => v.trim());
+        const updatedParts = parts.map(part => {
+            const stripped = part.replace(/^[+!]+/, '').trim();
+            if (stripped === oldName) {
+                const prefix = part.substring(0, part.indexOf(stripped));
+                return prefix + newName;
+            }
+            return part;
+        });
+        return updatedParts.join(',');
+    }
+
+    /**
+     * Stage reference updates for all objects that reference the old name.
+     * Creates/updates pending edits to replace oldName with newName in reference fields.
+     * @param {string} oldName - The old name being replaced
+     * @param {string} newName - The new name to replace with
+     * @param {number} excludeIndex - global_index of the renamed object (to exclude)
+     * @returns {number} count of objects updated
+     */
+    function stageReferenceUpdates(oldName, newName, excludeIndex) {
+        const deps = Explorer.findDependencies(oldName);
+        let updatedCount = 0;
+
+        for (const dep of deps) {
+            const obj = dep.object;
+            if (obj.global_index === excludeIndex) {continue;}
+
+            const { original: originalAttrs, edited: editedAttrs } = getOrCreatePendingEdit(obj);
+            let changed = false;
+
+            for (const fieldName of dep.fields) {
+                const currentValue = editedAttrs[fieldName] || '';
+                const updatedValue = updateReferenceValue(currentValue, oldName, newName);
+                if (updatedValue !== currentValue) {
+                    editedAttrs[fieldName] = updatedValue;
+                    changed = true;
+                }
+            }
+
+            if (changed) {
+                state.pendingEdits.set(obj.global_index, {
+                    original: originalAttrs,
+                    edited: editedAttrs,
+                    object: {
+                        source_file: obj.source_file,
+                        line_number: obj.line_number,
+                        object_type: obj.object_type,
+                        name: obj.name,
+                        display_name: obj.display_name
+                    }
+                });
+                updatedCount++;
+            }
+        }
+
+        return updatedCount;
+    }
+
     // Context Menu
     function handleContextMenu(event, index) {
         event.preventDefault();
         event.stopPropagation();
 
         if (!Explorer.isSelectedByIndex(index)) {
-            Explorer.clearSelection();
-            Explorer.selectObjectByIndex(index);
-            Explorer.updateSelection();
+            // If multi-select is active, preserve the selection instead of
+            // clearing it and navigating to the right-clicked item (Bug 031)
+            if (state.selectedKeys.size > 1) {
+                // Don't change selection — show context menu for current selection
+            } else {
+                Explorer.clearSelection();
+                Explorer.selectObjectByIndex(index);
+                // Update visual highlighting only — don't open a tab on right-click
+                state.isTabSwitch = true;
+                Explorer.updateSelection();
+                state.isTabSwitch = false;
+            }
         }
 
         state.contextTarget = index;
@@ -133,6 +206,11 @@
     function contextAction(action) {
         hideContextMenu();
 
+        if (baseState.isEditingLocked) {
+            showToast('Editing is locked by another user', 'warning');
+            return;
+        }
+
         // Helper to get current name (respecting pending edits and templates)
         function getCurrentName(obj) {
             const nameField = Explorer.getNameFieldForObject(obj);
@@ -146,16 +224,45 @@
         if (action === 'rename') {
             const obj = state.allObjects.find(o => o.global_index === state.contextTarget);
             const currentName = getCurrentName(obj);
+
+            // Count references to this object's current name (exclude self)
+            const deps = Explorer.findDependencies(currentName)
+                .filter(d => d.object.global_index !== state.contextTarget);
+            const refCount = deps.length;
+
+            let refHtml = '';
+            if (refCount > 0) {
+                refHtml = `
+                    <div class="dialog-reference-option u-mt-sm">
+                        <label class="commit-reference-label">
+                            <input type="checkbox" id="renameUpdateRefs" checked>
+                            <span><strong>Update references</strong> (${refCount} reference${refCount !== 1 ? 's' : ''} in other objects)</span>
+                        </label>
+                    </div>`;
+            }
+
             showDialog('Rename', `
                 <label>New name</label>
                 <input type="text" id="renameValue" value="${Explorer.escapeHtml(currentName)}">
+                ${refHtml}
             `, applyRename);
         } else if (action === 'clone') {
             const obj = state.allObjects.find(o => o.global_index === state.contextTarget);
             const currentName = getCurrentName(obj);
+            const currentFile = obj ? obj.source_file : '';
+            // Build file options from known files
+            const filesFromObjects = state.allObjects.map(o => o.source_file);
+            const allFiles = [...new Set([...filesFromObjects, ...state.allFiles])].sort();
+            const fileOptions = allFiles.map(f => {
+                const displayName = f.split('/').pop();
+                const selected = f === currentFile ? ' selected' : '';
+                return `<option value="${Explorer.escapeHtml(f)}"${selected}>${Explorer.escapeHtml(displayName)}</option>`;
+            }).join('');
             showDialog('Clone', `
                 <label>New name</label>
                 <input type="text" id="cloneNewName" value="${Explorer.escapeHtml(currentName + '-copy')}">
+                <label>Target file</label>
+                <select id="cloneTargetFile">${fileOptions}</select>
             `, applyClone);
         } else if (action === 'delete') {
             showBulkAction('delete');
@@ -174,10 +281,15 @@
         // Use pending edit attributes if available
         const pendingEdit = state.pendingEdits.get(obj.global_index);
         const attrs = pendingEdit ? pendingEdit.edited : obj.attributes;
+        const comments = obj.inline_comments || {};
 
         let code = `define ${obj.object_type} {\n`;
         for (const [k, v] of Object.entries(attrs)) {
-            code += `    ${k.padEnd(30)} ${v}\n`;
+            let line = `    ${k.padEnd(30)} ${v}`;
+            if (comments[k]) {
+                line += ` ; ${comments[k]}`;
+            }
+            code += line + '\n';
         }
         code += '}';
 
@@ -237,12 +349,14 @@
 
         // Focus first input and position cursor at end
         setTimeout(() => {
-            const input = document.querySelector('#dialogBody input');
+            const input = document.querySelector('#dialogBody input:not([type="hidden"])');
             if (input) {
                 input.focus();
-                // Move cursor to end of text
-                const len = input.value.length;
-                input.setSelectionRange(len, len);
+                // Move cursor to end of text (only for text-like inputs)
+                if (input.type === 'text' || input.type === 'search' || input.type === '' || !input.type) {
+                    const len = input.value.length;
+                    input.setSelectionRange(len, len);
+                }
             }
         }, 100);
     }
@@ -274,16 +388,62 @@
     function showBulkAction(action) {
         hideContextMenu();
 
+        if (baseState.isEditingLocked) {
+            showToast('Editing is locked by another user', 'warning');
+            return;
+        }
+
         if (action === 'delete') {
             // Stage deletions instead of immediate delete
             Explorer.stageObjectDeletions();
         } else if (action === 'move') {
+            // J-021: Prioritize type-compatible files in move dialog
             const files = [...new Set(state.allObjects.map(o => o.source_file))];
+            const selectedIndices = Array.from(Explorer.getSelectedIndices());
+            const selectedTypes = new Set(
+                selectedIndices
+                    .map(idx => state.allObjects.find(o => o.global_index === idx))
+                    .filter(Boolean)
+                    .map(o => o.object_type)
+            );
+            // Find which files contain matching object types
+            const fileTypes = new Map();
+            for (const obj of state.allObjects) {
+                if (!fileTypes.has(obj.source_file)) {
+                    fileTypes.set(obj.source_file, new Set());
+                }
+                fileTypes.get(obj.source_file).add(obj.object_type);
+            }
+            const isCompatible = (f) => {
+                const types = fileTypes.get(f);
+                if (!types || types.size === 0) {return true;} // empty files are compatible
+                return [...selectedTypes].some(t => types.has(t));
+            };
+            const compatible = files.filter(f => isCompatible(f)).sort();
+            const incompatible = files.filter(f => !isCompatible(f)).sort();
+            // Pre-select: first compatible file that isn't the source file
+            const sourceFiles = new Set(
+                selectedIndices
+                    .map(idx => state.allObjects.find(o => o.global_index === idx))
+                    .filter(Boolean)
+                    .map(o => o.source_file)
+            );
+            const defaultFile = compatible.find(f => !sourceFiles.has(f)) || compatible[0] || files[0];
+            const buildOption = (f, dimmed) => {
+                const selected = f === defaultFile ? ' selected' : '';
+                const label = f.split('/').pop() + (dimmed ? ' (different types)' : '');
+                return `<option value="${f}"${selected}>${label}</option>`;
+            };
+            const options = [
+                ...compatible.map(f => buildOption(f, false)),
+                ...(incompatible.length > 0 ? [`<option disabled>───────────</option>`] : []),
+                ...incompatible.map(f => buildOption(f, true)),
+                `<option value="__new__">+ Create new file...</option>`
+            ].join('');
             showDialog('Move to File', `
                 <label>Target file</label>
                 <select id="moveTarget" onchange="Explorer.toggleNewFileInput()">
-                    ${files.map(f => `<option value="${f}">${f.split('/').pop()}</option>`).join('')}
-                    <option value="__new__">+ Create new file...</option>
+                    ${options}
                 </select>
                 <div id="newFileInputWrapper" class="u-hidden u-mt-md">
                     <label>New filename</label>
@@ -402,6 +562,14 @@
             }
         });
 
+        // Stage reference updates if checkbox is checked
+        const updateRefsCheckbox = document.getElementById('renameUpdateRefs');
+        const shouldUpdateRefs = updateRefsCheckbox ? updateRefsCheckbox.checked : false;
+        let refUpdates = 0;
+        if (shouldUpdateRefs) {
+            refUpdates = stageReferenceUpdates(currentName, newName, state.contextTarget);
+        }
+
         Explorer.saveStagedChanges();
         Explorer.updateCommitUI();
         state.healthCheckData = null;
@@ -419,13 +587,32 @@
             Explorer.loadImpactAndRelationships(state.editedObject);
         }
 
-        showToast('Rename staged. Commit to apply.', 'info');
+        const refMsg = refUpdates > 0 ? ` Updated ${refUpdates} reference${refUpdates !== 1 ? 's' : ''}.` : '';
+        showToast(`Rename staged.${refMsg} Commit to apply.`, 'info');
+    }
+
+    function buildCloneCreation(obj, newName, targetFile) {
+        const creation = {
+            id: generateUniqueId(),
+            object_type: obj.object_type,
+            attributes: {...(state.pendingEdits.get(obj.global_index)?.edited || obj.attributes)},
+            targetFile: targetFile,
+            displayName: newName,
+            insertPosition: targetFile === obj.source_file ? obj.line_number : null
+        };
+        const nameField = Explorer.getNameFieldForObject(obj);
+        creation.attributes[nameField] = newName;
+        if (obj.inline_comments && Object.keys(obj.inline_comments).length > 0) {
+            creation.inline_comments = {...obj.inline_comments};
+        }
+        return creation;
     }
 
     async function applyClone() {
         // Check if this is a single clone (cloneNewName) or bulk clone (cloneSuffix)
         const newNameInput = document.getElementById('cloneNewName');
         const suffixInput = document.getElementById('cloneSuffix');
+        const targetFileSelect = document.getElementById('cloneTargetFile');
         const isSingleClone = newNameInput !== null;
         const suffix = suffixInput ? (suffixInput.value || '-copy') : '-copy';
 
@@ -436,33 +623,38 @@
         }
 
         let clonedCount = 0;
+        let skippedDuplicates = 0;
         for (const idx of Explorer.getSelectedIndices()) {
             const obj = state.allObjects.find(o => o.global_index === idx);
             if (!obj) {continue;}
 
             const nameField = Explorer.getNameFieldForObject(obj);
-            // Use pending edit attributes if available (clone includes staged changes)
             const pendingEdit = state.pendingEdits.get(idx);
             const sourceAttrs = pendingEdit ? pendingEdit.edited : obj.attributes;
             const currentName = sourceAttrs[nameField] || obj.name || obj.display_name || 'unnamed';
-
-            // For single clone, use the full new name from input; for bulk, append suffix
             const newName = isSingleClone ? newNameInput.value.trim() : currentName + suffix;
 
-            // Clone attributes and update name
+            // D-03: Check for duplicate names before cloning
             const clonedAttrs = {...sourceAttrs};
             clonedAttrs[nameField] = newName;
+            const dupCheck = Explorer.checkDuplicateName(
+                obj.object_type, newName, clonedAttrs, null
+            );
+            if (dupCheck.isDuplicate) {
+                const loc = dupCheck.location === 'staged' ? 'in staged changes' : `in ${dupCheck.location}`;
+                showToast(`Error: ${obj.object_type} "${newName}" already exists ${loc}`, 'error');
+                skippedDuplicates++;
+                continue;
+            }
 
-            // Stage the cloned object - place it right after the source object
-            state.stagedCreations.push({
-                id: generateUniqueId(),
-                object_type: obj.object_type,
-                attributes: clonedAttrs,
-                targetFile: obj.source_file,
-                displayName: newName,
-                insertPosition: obj.line_number
-            });
+            const cloneTargetFile = (targetFileSelect && targetFileSelect.value) || obj.source_file;
+            state.stagedCreations.push(buildCloneCreation(obj, newName, cloneTargetFile));
             clonedCount++;
+        }
+
+        if (clonedCount === 0 && skippedDuplicates > 0) {
+            // Don't close dialog so user can fix the name
+            return;
         }
 
         Explorer.saveStagedChanges();
@@ -553,6 +745,11 @@
 
     function showAddToGroupDialog() {
         hideContextMenu();
+
+        if (baseState.isEditingLocked) {
+            showToast('Editing is locked by another user', 'warning');
+            return;
+        }
 
         if (state.selectedKeys.size === 0) {
             showToast('No objects selected', 'warning');
@@ -947,5 +1144,7 @@
     Explorer.handleDragEnd = handleDragEnd;
     Explorer.handleDragOver = handleDragOver;
     Explorer.handleDrop = handleDrop;
+    Explorer.stageReferenceUpdates = stageReferenceUpdates;
+    Explorer.updateReferenceValue = updateReferenceValue;
 
 })(Explorer);

@@ -280,6 +280,17 @@
         // Re-render the attributes display
         renderCenterAttributes();
 
+        // Bug 002-badge: Refresh breadcrumb name and issue badge after undo.
+        // The undo may have reverted a rename or fixed a broken reference,
+        // so the displayed name and badge must reflect the post-undo state.
+        const nameField = Explorer.getNameFieldForObject(obj);
+        const displayName = state.editedObject.attributes[nameField] || obj.display_name;
+        document.getElementById('centerCardName').textContent = displayName;
+
+        // Recompute staged issues first so issuesByObject is up to date
+        if (Explorer.computeStagedIssues) {Explorer.computeStagedIssues();}
+        if (Explorer.refreshCenterPaneIssueBadge) {Explorer.refreshCenterPaneIssueBadge();}
+
         // Refresh Impact & Relationships section
         Explorer.loadImpactAndRelationships(state.editedObject);
     }
@@ -363,6 +374,18 @@
             if (objectType === 'hostgroup') {refType = 'host';}
             else if (objectType === 'servicegroup') {refType = 'service';}
             else if (objectType === 'contactgroup') {refType = 'contact';}
+        }
+
+        // Bug 058: Fall back to referenceFields for fields excluded from ATTR_REFERENCE_MAP
+        // (e.g., hostgroup_name/service_description are name fields for their own type
+        // but reference fields in escalation/dependency objects).
+        // Use identityFields (not nameFields) — identityFields tracks fields where users
+        // define new names; nameFields is just the display name mapping.
+        if (!refType && constants.referenceFields[attrName]) {
+            const objIdentityFields = identityFields[objectType] || [];
+            if (!objIdentityFields.includes(attrName)) {
+                refType = constants.referenceFields[attrName];
+            }
         }
 
         if (!refType) {return [];}
@@ -627,6 +650,8 @@
         const container = document.getElementById('centerCardAttributes');
         if (!state.editedObject) {return;}
         const objectType = state.editedObject.object_type;
+        const isLocked = baseState.isEditingLocked;
+        const disabledAttr = isLocked ? ' disabled' : '';
 
         container.innerHTML = Object.entries(state.editedObject.attributes || {})
             .map(([key, value]) => {
@@ -636,7 +661,7 @@
                 // First escape for JS context, then escape for HTML attribute context
                 const keyJsEscaped = Explorer.escapeJs(key);
                 const keyHtmlAttr = Explorer.escapeHtml(keyJsEscaped);
-                const inputEvents = hasSuggestions
+                const inputEvents = hasSuggestions && !isLocked
                     ? `oninput="Explorer.showAttrAutocomplete(this, '${keyHtmlAttr}')" onblur="Explorer.hideAttrAutocomplete(event)" onkeydown="Explorer.handleAttrAutocompleteKey(event, '${keyHtmlAttr}')"`
                     : '';
                 const placeholder = hasSuggestions ? ` placeholder="Type for suggestions..."` : '';
@@ -657,11 +682,11 @@
                                    onchange="Explorer.updateAttribute('${keyHtmlAttr}', this.value, this)"
                                    oninput="Explorer.syncHighlight(this)"
                                    spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"
-                                   ${inputEvents}${placeholder}${acTitle}>${Explorer.escapeHtml(value)}</textarea>
+                                   ${inputEvents}${placeholder}${acTitle}${disabledAttr}>${Explorer.escapeHtml(value)}</textarea>
                             <pre class="attr-value-highlight" aria-hidden="true">${highlighted}</pre>
                         </div>
                         <button class="attr-copy" onclick="Explorer.copyAttributeValue('${keyHtmlAttr}')" title="Copy value"><i class="fa-regular fa-copy"></i></button>
-                        <button class="attr-delete" onclick="Explorer.deleteAttribute('${keyHtmlAttr}')">&times;</button>
+                        ${isLocked ? '' : `<button class="attr-delete" onclick="Explorer.deleteAttribute('${keyHtmlAttr}')">&times;</button>`}
                     </div>
                 `}
 
@@ -670,9 +695,9 @@
                     <span class="attr-name">${Explorer.escapeHtml(key)}</span>
                     <input type="text" class="attr-value" value="${escapedValue}"
                            onchange="Explorer.updateAttribute('${keyHtmlAttr}', this.value, this)"
-                           ${inputEvents}${placeholder}${acTitle} autocomplete="off">
+                           ${inputEvents}${placeholder}${acTitle} autocomplete="off"${disabledAttr}>
                     <button class="attr-copy" onclick="Explorer.copyAttributeValue('${keyHtmlAttr}')" title="Copy value"><i class="fa-regular fa-copy"></i></button>
-                    <button class="attr-delete" onclick="Explorer.deleteAttribute('${keyHtmlAttr}')">&times;</button>
+                    ${isLocked ? '' : `<button class="attr-delete" onclick="Explorer.deleteAttribute('${keyHtmlAttr}')">&times;</button>`}
                 </div>
             `}).join('');
 
@@ -731,7 +756,21 @@
         return { filtered, remaining, currentPart, parts };
     }
 
+    const COMMAND_ATTRS = new Set(['check_command', 'event_handler', 'host_notification_commands', 'service_notification_commands']);
+    // Single-value command attrs: commas are part of ! arguments, not value separators
+    const SINGLE_COMMAND_ATTRS = new Set(['check_command', 'event_handler']);
+    // Nagios special values that bypass reference validation
+    const NAGIOS_SPECIAL_VALUES = new Set(['*', 'null']);
+
     function showAttrAutocomplete(input, attrKey) {
+        // Bug 013: For single-value command fields, close autocomplete after !
+        // (user is now typing arguments, not searching for a command name)
+        if (SINGLE_COMMAND_ATTRS.has(attrKey) && input.value.includes('!')) {
+            const existingDropdown = document.querySelector('.attr-autocomplete');
+            if (existingDropdown) {existingDropdown.remove();}
+            return;
+        }
+
         const allSuggestions = getAttributeSuggestions(attrKey, state.editedObject.object_type);
         const { filtered, remaining, currentPart, parts } = filterCommaValueSuggestions(input.value, allSuggestions, attrKey);
 
@@ -759,14 +798,16 @@
         const dropdown = document.createElement('div');
         dropdown.className = 'attr-autocomplete';
         if (dropdownId) {dropdown.id = dropdownId;}
-        dropdown.innerHTML = suggestions.slice(0, 20).map((s, i) => {
+        const maxItems = 50;
+        const truncated = suggestions.length > maxItems;
+        dropdown.innerHTML = suggestions.slice(0, maxItems).map((s, i) => {
             const handler = selectHandler
                 ? selectHandler(s)
                 : `Explorer.selectAttrAutocomplete('${Explorer.escapeJs(attrKey)}', '${Explorer.escapeJs(s)}')`;
             // S-01: HTML-escape the handler for safe insertion into HTML attribute
             // JS-escaped strings like \" would break out of HTML attributes otherwise
             return `<div class="attr-autocomplete-item" data-index="${i}" data-value="${Explorer.escapeHtml(s)}" onmousedown="${Explorer.escapeHtml(handler)}">${Explorer.escapeHtml(s)}</div>`;
-        }).join('');
+        }).join('') + (truncated ? `<div class="attr-autocomplete-more">and ${suggestions.length - maxItems} more\u2026</div>` : '');
 
         if (container) {
             dropdown.style.left = '0';
@@ -833,8 +874,6 @@
         });
     }
 
-    const COMMAND_ATTRS = new Set(['check_command', 'event_handler', 'host_notification_commands', 'service_notification_commands']);
-
     function validateReferenceValue(key, value) {
         const objIdentityFields = identityFields[state.editedObject.object_type] || [];
         if (objIdentityFields.includes(key)) {return true;}
@@ -843,11 +882,15 @@
         if (suggestions.length === 0 || !value) {return true;}
         if (constants.NOTIFICATION_OPTION_ATTRS.includes(key)) {return true;}
 
-        const values = Explorer.parseCommaValues(value);
+        // Bug 014: For single-value command attrs, don't split on commas
+        // (commas in check_ping!100,20%!500,60% are thresholds, not separators)
+        const values = SINGLE_COMMAND_ATTRS.has(key) ? [value] : Explorer.parseCommaValues(value);
         const isCommandAttr = COMMAND_ATTRS.has(key);
         for (const v of values) {
             let checkValue = isCommandAttr ? v.split('!')[0] : v;
             checkValue = Explorer.stripPrefix(checkValue);
+            // Bug 015: Skip validation for Nagios special values (*, null)
+            if (NAGIOS_SPECIAL_VALUES.has(checkValue)) {continue;}
             if (!suggestions.includes(checkValue)) {
                 showToast(`"${checkValue}" does not exist`, 'error');
                 return false;
@@ -950,6 +993,10 @@
     }
 
     function showAddAttribute() {
+        if (baseState.isEditingLocked) {
+            showToast('Editing is locked by another user', 'warning');
+            return;
+        }
         const objectType = state.editedObject.object_type;
         const availableAttrs = constants.NAGIOS_ATTRIBUTES[objectType] || [];
         const existingAttrs = Object.keys(state.editedObject.attributes);
@@ -989,13 +1036,14 @@
                     // Skip validation for notification options (they use short codes like d,r,f)
                     if (!constants.NOTIFICATION_OPTION_ATTRS.includes(name)) {
                         // This attribute references other objects - validate the values
-                        const values = Explorer.parseCommaValues(value);
-                        // For commands, strip arguments (e.g., "check_ping!100!200" -> "check_ping")
-                        const isCommandAttr = ['check_command', 'event_handler', 'host_notification_commands', 'service_notification_commands'].includes(name);
+                        const isSingleCmd = SINGLE_COMMAND_ATTRS.has(name);
+                        const values = isSingleCmd ? [value] : Explorer.parseCommaValues(value);
+                        const isCommandAttr = COMMAND_ATTRS.has(name);
 
                         for (const v of values) {
                             let checkValue = isCommandAttr ? v.split('!')[0] : v;
                             checkValue = Explorer.stripPrefix(checkValue);
+                            if (NAGIOS_SPECIAL_VALUES.has(checkValue)) {continue;}
                             if (!suggestions.includes(checkValue)) {
                                 showToast(`"${checkValue}" does not exist`, 'error');
                                 return;
@@ -1038,10 +1086,12 @@
         dropdown.style.left = '0';
         dropdown.style.right = '0';
         // S-01: Build handler and HTML-escape for safe attribute insertion
-        dropdown.innerHTML = filtered.slice(0, 20).map((s, i) => {
+        const maxNameItems = 50;
+        const namesTruncated = filtered.length > maxNameItems;
+        dropdown.innerHTML = filtered.slice(0, maxNameItems).map((s, i) => {
             const handler = `Explorer.selectAddAttrNameAutocomplete('${Explorer.escapeJs(s)}')`;
             return `<div class="attr-autocomplete-item" data-index="${i}" data-value="${Explorer.escapeHtml(s)}" onmousedown="${Explorer.escapeHtml(handler)}">${Explorer.escapeHtml(s)}</div>`;
-        }).join('');
+        }).join('') + (namesTruncated ? `<div class="attr-autocomplete-more">and ${filtered.length - maxNameItems} more\u2026</div>` : '');
 
         container.appendChild(dropdown);
     }
@@ -1081,6 +1131,13 @@
         const container = document.getElementById('addAttrValueContainer');
 
         if (!attrName || !input || !container) {return;}
+
+        // Bug 013: For single-value command fields, close autocomplete after !
+        if (SINGLE_COMMAND_ATTRS.has(attrName) && input.value.includes('!')) {
+            const existingDropdown = document.getElementById('addAttrDropdown');
+            if (existingDropdown) {existingDropdown.remove();}
+            return;
+        }
 
         const allSuggestions = getAttributeSuggestions(attrName, state.editedObject.object_type);
         if (allSuggestions.length === 0) {return;}
@@ -1495,6 +1552,7 @@
     Explorer.hideAddAttrAutocomplete = hideAddAttrAutocomplete;
     Explorer.selectAddAttrAutocomplete = selectAddAttrAutocomplete;
     Explorer.handleAddAttrAutocompleteKey = handleAddAttrAutocompleteKey;
+    Explorer.updateIssueBadge = updateIssueBadge;
     Explorer.checkForChanges = checkForChanges;
     Explorer.stageCurrentChanges = stageCurrentChanges;
     Explorer.validateRequiredFields = validateRequiredFields;  // C-05: Export for use in dialogs.js

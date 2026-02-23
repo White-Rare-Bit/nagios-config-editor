@@ -140,6 +140,7 @@
      * Shared implementation — do not duplicate in other modules.
      */
     Explorer.isObjectTemplate = function(obj) {
+        if (!obj || !obj.attributes) {return false;}
         if (obj.attributes.register === '0') {return true;}
         const nameField = Explorer.constants.nameFields[obj.object_type];
         return Boolean(obj.attributes.name && nameField && !obj.attributes[nameField]);
@@ -177,6 +178,66 @@
      */
     Explorer.stripPrefix = function(val) {
         return val.trim().replace(/^[+!]+/, '').trim();
+    };
+
+    // D-01: Object types whose identity is scoped by host (composite key).
+    // Mirrors health_checks.py host_scoped_types.
+    const HOST_SCOPED_TYPES = new Set(['service', 'serviceescalation', 'servicedependency']);
+
+    /**
+     * Check whether a name would be a duplicate for the given object type.
+     * For host-scoped types (service, serviceescalation, servicedependency),
+     * uses composite key (name + host_name/hostgroup_name).
+     *
+     * @param {string} objectType - e.g. 'host', 'service'
+     * @param {string} name - the name value to check
+     * @param {Object} attributes - full attributes of the object being checked
+     * @param {number|null} [excludeStagedIndex=null] - staged creation index to skip
+     * @returns {{isDuplicate: boolean, location: string}} result
+     */
+    Explorer.checkDuplicateName = function(objectType, name, attributes, excludeStagedIndex) {
+        if (!name) {return {isDuplicate: false, location: ''};}
+
+        const state = Explorer.state;
+        const c = Explorer.constants;
+        const nameField = c.nameFields[objectType] || 'name';
+        const isHostScoped = HOST_SCOPED_TYPES.has(objectType);
+        const hostScope = isHostScoped
+            ? (attributes.host_name || attributes.hostgroup_name || '')
+            : '';
+
+        // Check against existing on-disk objects
+        const existingObj = state.allObjects.find(obj => {
+            if (obj.object_type !== objectType) {return false;}
+            const objName = obj.attributes?.[nameField] || obj.attributes?.name || '';
+            if (objName !== name) {return false;}
+            if (isHostScoped) {
+                const objHost = obj.attributes?.host_name || obj.attributes?.hostgroup_name || '';
+                return objHost === hostScope;
+            }
+            return true;
+        });
+        if (existingObj) {
+            const file = (existingObj.source_file || '').split('/').pop();
+            return {isDuplicate: true, location: file};
+        }
+
+        // Check against other staged creations
+        const dupStaged = state.stagedCreations.findIndex((sc, idx) => {
+            if (idx === excludeStagedIndex) {return false;}
+            if (sc.object_type !== objectType) {return false;}
+            if (sc.displayName !== name) {return false;}
+            if (isHostScoped) {
+                const scHost = sc.attributes?.host_name || sc.attributes?.hostgroup_name || '';
+                return scHost === hostScope;
+            }
+            return true;
+        });
+        if (dupStaged !== -1) {
+            return {isDuplicate: true, location: 'staged'};
+        }
+
+        return {isDuplicate: false, location: ''};
     };
 
 })(window.Explorer);

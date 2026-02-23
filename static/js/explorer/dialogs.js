@@ -133,8 +133,8 @@
             el.classList.remove('selected');
         });
 
-        // Create a new object stub with default attributes for the type
-        const defaultType = 'host';
+        // Determine default type from file's existing objects
+        const defaultType = getDominantTypeForFile(targetFile);
         const newObj = {
             object_type: defaultType,
             attributes: {...getDefaultAttributes(defaultType)},
@@ -216,8 +216,19 @@
         if (nameEl) {
             nameEl.innerHTML = `
                 <input type="text" id="newObjectNameInput" class="new-object-name-input"
-                       placeholder="Enter name..." onchange="Explorer.updateNewObjectName()" value="${Explorer.escapeHtml(currentName)}">
+                       placeholder="Enter name..." oninput="Explorer.updateNewObjectName()"
+                       value="${Explorer.escapeHtml(currentName)}">
             `;
+            const nameInput = document.getElementById('newObjectNameInput');
+            if (nameInput) {
+                nameInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        discardNewObject();
+                    }
+                });
+            }
         }
 
         const fileEl = document.getElementById('centerCardFile');
@@ -375,6 +386,26 @@
 
     function getDefaultAttributes(objectType) {
         return {...(constants.defaultAttributes[objectType] || {})};
+    }
+
+    function getDominantTypeForFile(filePath) {
+        // Count object types in the target file
+        const typeCounts = {};
+        for (const obj of state.allObjects) {
+            if (obj.source_file === filePath) {
+                typeCounts[obj.object_type] = (typeCounts[obj.object_type] || 0) + 1;
+            }
+        }
+        // Return the most common type, or 'host' as fallback for empty/new files
+        let dominant = 'host';
+        let maxCount = 0;
+        for (const [type, count] of Object.entries(typeCounts)) {
+            if (count > maxCount) {
+                maxCount = count;
+                dominant = type;
+            }
+        }
+        return dominant;
     }
 
     function stageNewObjectChanges() {
@@ -973,6 +1004,41 @@
         return changed;
     }
 
+    // Bug 033: Filter scope to only object types that support the given attribute
+    function filterScopeByAttribute(scope, field, action) {
+        if (!field || (action !== 'set' && action !== 'remove') || !constants.NAGIOS_ATTRIBUTES) {
+            return { filteredScope: scope, skippedIncompatible: 0 };
+        }
+        const filteredScope = scope.filter(idx => {
+            const obj = state.allObjects.find(o => o.global_index === idx);
+            if (!obj) {return false;}
+            const validAttrs = constants.NAGIOS_ATTRIBUTES[obj.object_type];
+            if (!validAttrs) {return true;} // No metadata for type — be permissive
+            return validAttrs.includes(field);
+        });
+        return { filteredScope, skippedIncompatible: scope.length - filteredScope.length };
+    }
+
+    // Bug 032: Build detailed toast message for bulk edit results
+    function showBulkEditResultToast(action, updatedCount, unchangedCount, skippedIncompatible) {
+        const ACTION_LABELS = { findreplace: 'Updated', set: 'Set attribute in', remove: 'Removed attribute from' };
+        if (updatedCount > 0) {
+            let msg = `${ACTION_LABELS[action] || action} ${updatedCount} object(s).`;
+            if (unchangedCount > 0) {msg += ` ${unchangedCount} already had the requested value.`;}
+            if (skippedIncompatible > 0) {msg += ` ${skippedIncompatible} skipped (incompatible type).`;}
+            msg += ' Commit to apply.';
+            showToast(msg, 'info');
+        } else {
+            let msg = 'No changes made';
+            if (skippedIncompatible > 0) {
+                msg += ` (${skippedIncompatible} object(s) skipped — attribute not valid for their type)`;
+            } else if (unchangedCount > 0) {
+                msg += ` (${unchangedCount} already had the requested value)`;
+            }
+            showToast(msg, 'warning');
+        }
+    }
+
     function executeBulkEditAction(scope, sortedFields) {
         const action = document.getElementById('editAttrAction').value;
         const field = document.getElementById('editAttrField').value.trim();
@@ -982,8 +1048,11 @@
         if (!validateBulkActionInputs(action, field, findText, sortedFields)) {return;}
         if (action === 'set' && field && valueText && !validateBulkReferenceValues(field, valueText, scope)) {return;}
 
+        const { filteredScope, skippedIncompatible } = filterScopeByAttribute(scope, field, action);
+
         let updatedCount = 0;
-        for (const idx of scope) {
+        let unchangedCount = 0;
+        for (const idx of filteredScope) {
             const obj = state.allObjects.find(o => o.global_index === idx);
             if (!obj) {continue;}
 
@@ -1004,6 +1073,8 @@
                     }
                 });
                 updatedCount++;
+            } else {
+                unchangedCount++;
             }
         }
 
@@ -1017,12 +1088,7 @@
             Explorer.showCenterPaneObject(state.allObjects.find(o => o.global_index === state.editedObject.global_index));
         }
 
-        const ACTION_LABELS = { findreplace: 'Updated', set: 'Set attribute in', remove: 'Removed attribute from' };
-        if (updatedCount > 0) {
-            showToast(`${ACTION_LABELS[action] || action} ${updatedCount} object(s). Commit to apply.`, 'info');
-        } else {
-            showToast('No changes made', 'warning');
-        }
+        showBulkEditResultToast(action, updatedCount, unchangedCount, skippedIncompatible);
     }
 
     function showEditAttributesDialog() {

@@ -174,6 +174,7 @@ def api_clone_objects():
                     attributes=copy.deepcopy(original.attributes),
                     source_file=target_file or original.source_file,
                     line_number=0,
+                    inline_comments=copy.deepcopy(original.inline_comments),
                 )
 
                 # Modify the name

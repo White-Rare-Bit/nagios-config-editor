@@ -957,6 +957,12 @@
         event.currentTarget.classList.remove('drop-active');
         Explorer.cleanupDragState();
 
+        // J-025: Block drops onto files staged for deletion
+        if (isFileStagedForDeletion(targetFile)) {
+            showToast('Cannot move objects into a file staged for deletion', 'warning');
+            return;
+        }
+
         const dataStr = event.dataTransfer.getData(DATA_TYPES.OBJECTS);
         if (!dataStr) {return;}
 
@@ -1033,10 +1039,20 @@
         return { moved, alreadyInFile };
     }
 
+    function isFileStagedForDeletion(filePath) {
+        return (state.stagedFileDeletions || []).some(d => d.path === filePath);
+    }
+
     function handleFileDrop(event, targetFile) {
         event.preventDefault();
         event.currentTarget.classList.remove('drop-active');
         Explorer.cleanupDragState();
+
+        // J-025: Block drops onto files staged for deletion
+        if (isFileStagedForDeletion(targetFile)) {
+            showToast('Cannot move objects into a file staged for deletion', 'warning');
+            return;
+        }
 
         const dataStr = event.dataTransfer.getData(DATA_TYPES.OBJECTS);
         if (!dataStr) {return;}

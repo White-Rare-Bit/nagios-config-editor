@@ -126,6 +126,10 @@ def create_app(config_path: str | None = None, log_dir_override: str | None = No
 
     # Initialize service instances
     staging_manager = StagingManager(nagios_config_path)
+    # Clear stale locks from previous server session — no active sessions at startup
+    if staging_manager.has_staging():
+        logger.info("Clearing stale staging lock from previous session")
+        staging_manager.clear_staging()
     service = NagiosService(nagios_config_path, staging_manager)
     backup_manager = BackupManager(nagios_config_path, backup_path)
 

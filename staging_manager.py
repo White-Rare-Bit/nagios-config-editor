@@ -57,6 +57,8 @@ class OperationType(Enum):
     BULK_EDIT = "bulk_edit"
     BULK_CREATION = "bulk_creation"
     BULK_DELETION = "bulk_deletion"
+    # Compound type - groups cross-type operations from a single user action
+    COMPOUND = "compound"
 
 
 class StagingStatus(Enum):
@@ -789,6 +791,62 @@ class StagingManager:
         # Legacy fallback: files without 'status' field
         return bool(not data.get("status") and not data.get("sessionId"))
 
+    def _extract_staging_paths(self, data: dict) -> list[str]:
+        """Extract all file/folder paths from staging data for validation."""
+        paths = []
+
+        # pendingEdits: dict values may have object.source_file
+        for edit in (data.get("pendingEdits") or {}).values():
+            obj = edit.get("object", {})
+            if obj.get("source_file"):
+                paths.append(obj["source_file"])
+
+        # stagedMoves: dict values have sourceFile, targetFile
+        for move in (data.get("stagedMoves") or {}).values():
+            if move.get("sourceFile"):
+                paths.append(move["sourceFile"])
+            if move.get("targetFile"):
+                paths.append(move["targetFile"])
+
+        # stagedCreations: list items have targetFile
+        for creation in (data.get("stagedCreations") or []):
+            if creation.get("targetFile"):
+                paths.append(creation["targetFile"])
+
+        # File operations: path, sourcePath, targetPath
+        for field in ("stagedFileCreations", "stagedFileDeletions", "stagedFolderCreations", "stagedFolderDeletions"):
+            for entry in (data.get(field) or []):
+                if entry.get("path"):
+                    paths.append(entry["path"])
+
+        for field in ("stagedFileMoves", "stagedFolderMoves"):
+            for entry in (data.get(field) or []):
+                if entry.get("sourcePath"):
+                    paths.append(entry["sourcePath"])
+                if entry.get("targetPath"):
+                    paths.append(entry["targetPath"])
+
+        # baseFileChecksums: keys are paths
+        paths.extend(data.get("baseFileChecksums", {}).keys())
+
+        return paths
+
+    def _has_stale_paths(self, data: dict) -> bool:
+        """Check if staging data contains paths from a different config directory.
+
+        Returns True if any absolute path in the staging data doesn't belong
+        to the current config_path, indicating the staging file was copied
+        from another environment.
+        """
+        # Resolve symlinks for comparison (e.g., macOS /var -> /private/var)
+        config_prefix = str(self.config_path.resolve())
+        for path in self._extract_staging_paths(data):
+            # Only check absolute paths (relative paths are fine)
+            resolved = str(Path(path).resolve()) if path.startswith("/") else ""
+            if resolved and not resolved.startswith(config_prefix):
+                return True
+        return False
+
     def get_staging(self) -> dict | None:
         """Get the current staging data.
 
@@ -803,10 +861,23 @@ class StagingManager:
             content = self.staging_file.read_text()
             if not content.strip():
                 return None
-            return json.loads(content)
+            data = json.loads(content)
         except (OSError, json.JSONDecodeError) as e:
             logger.warning("Failed to read staging file: %s", e)
             return None
+
+        # J-001: Detect stale staging from copied config directories
+        if data and self._has_stale_paths(data):
+            logger.warning(
+                "Discarding stale staging data: paths reference a different "
+                "config directory (expected %s). This typically happens when "
+                "a config directory is copied between environments.",
+                self.config_path,
+            )
+            self.clear_staging()
+            return None
+
+        return data
 
     def save_staging(self, data: dict) -> OperationResult:
         """Save staging data with metadata."""
@@ -1578,7 +1649,31 @@ def _undo_bulk_deletion(staging, action_data):
     return f"Unstaged bulk deletion: {count} object(s)"
 
 
-UNDO_HANDLERS = {
+def _undo_compound(staging, action_data):
+    """Undo a compound operation containing cross-type sub-entries.
+
+    H-020: When a single user action creates operations of multiple types
+    (e.g., a move + an edit), they are grouped into one compound undo entry
+    so that Ctrl+Z reverses the entire user action at once.
+    """
+    entries = action_data.get("entries", [])
+    count = 0
+    for entry in entries:
+        entry_type = entry.get("type")
+        entry_data = entry.get("data", {})
+        try:
+            op_type = OperationType(entry_type)
+        except ValueError:
+            continue
+        handler = _UNDO_HANDLERS_INNER.get(op_type)
+        if handler:
+            handler(staging, entry_data)
+            count += 1
+    return f"Undone compound operation ({count} action(s))"
+
+
+# Inner handlers map (excludes compound to avoid recursion)
+_UNDO_HANDLERS_INNER = {
     OperationType.FILE_CREATE: _undo_file_create,
     OperationType.FILE_DELETE: _undo_file_delete,
     OperationType.FILE_MOVE: _undo_file_move,
@@ -1590,9 +1685,13 @@ UNDO_HANDLERS = {
     OperationType.CREATION: _undo_creation,
     OperationType.DELETION: _undo_deletion,
     OperationType.NEW_FILE: _undo_new_file,
-    # Bulk operation handlers
     OperationType.BULK_MOVE: _undo_bulk_move,
     OperationType.BULK_EDIT: _undo_bulk_edit,
     OperationType.BULK_CREATION: _undo_bulk_creation,
     OperationType.BULK_DELETION: _undo_bulk_deletion,
+}
+
+UNDO_HANDLERS = {
+    **_UNDO_HANDLERS_INNER,
+    OperationType.COMPOUND: _undo_compound,
 }

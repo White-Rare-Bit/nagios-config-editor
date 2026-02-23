@@ -299,6 +299,12 @@
      * @param {boolean} options.skipCommit - Skip commit UI refresh
      */
     Explorer.refreshAfterObjectChange = function(options = {}) {
+        // Bug 017: Recompute staged issues (broken references, resolved warnings)
+        // before rebuilding the tree so badges are up to date.
+        if (!options.skipTree && Explorer.computeStagedIssues) {
+            Explorer.computeStagedIssues();
+        }
+
         if (!options.skipTree && Explorer.buildTree) {
             Explorer.buildTree();
         }

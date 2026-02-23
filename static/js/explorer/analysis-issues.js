@@ -320,9 +320,10 @@
             }
         });
 
-        // Default to most common file, or first file if no matches
+        // Default to canonical file for this type, then most common source file, then first file
         const existingFiles = [...new Set(state.allObjects.map(o => o.source_file))].sort();
-        const defaultFile = Object.entries(fileCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || existingFiles[0];
+        const fallbackFile = Object.entries(fileCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || existingFiles[0];
+        const defaultFile = preferCanonicalFile(groupType, fallbackFile);
 
         // Build list of items to create
         const itemsList = matchingGroups.map(g => {
@@ -431,6 +432,29 @@
     // ==========================================================================
 
     /**
+     * Prefer a canonical file for a given object type (e.g., hosts.cfg for hosts).
+     * Falls back to the provided targetFile if no canonical match exists.
+     */
+    function preferCanonicalFile(objectType, targetFile) {
+        const canonicalNames = {
+            host: 'hosts.cfg',
+            service: 'services.cfg',
+            command: 'commands.cfg',
+            contact: 'contacts.cfg',
+            contactgroup: 'contactgroups.cfg',
+            hostgroup: 'hostgroups.cfg',
+            servicegroup: 'servicegroups.cfg',
+            timeperiod: 'timeperiods.cfg',
+        };
+        const canonical = canonicalNames[objectType];
+        if (!canonical) {return targetFile;}
+
+        // Check if a file with the canonical name exists
+        const match = state.allObjects.find(o => o.source_file.endsWith('/' + canonical));
+        return match ? match.source_file : targetFile;
+    }
+
+    /**
      * Build default attributes for a new object based on type
      */
     function buildDefaultAttributes(objectType, objectName, isTemplate) {
@@ -466,6 +490,9 @@
         // For templates, use the referencing object's type instead
         const effectiveType = isTemplate ? issue.object_type : objectType;
 
+        // Prefer a canonical file matching the object type (e.g., hosts.cfg for host)
+        const resolvedFile = preferCanonicalFile(effectiveType, targetFile);
+
         // For templates, the name field is 'name' and we need to set register=0
         const nameField = isTemplate ? 'name' : (Explorer.constants.nameFields[effectiveType] || 'name');
 
@@ -492,7 +519,7 @@
         }
 
         // Show dialog to select target file and confirm creation
-        showCreateObjectForIssueDialog(effectiveType, attributes, targetFile, isTemplate);
+        showCreateObjectForIssueDialog(effectiveType, attributes, resolvedFile, isTemplate);
     }
 
     function showCreateObjectForIssueDialog(objectType, attributes, suggestedFile, isTemplate) {

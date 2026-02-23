@@ -31,6 +31,7 @@ async function checkLockStatus() {
     }
 
     const data = result.data;
+    const wasLocked = baseState.isEditingLocked;
     baseState.isEditingLocked = data.locked && !data.isOwner;
     baseState.lockOwner = data.owner;
     baseState.lockUserName = data.userName;
@@ -39,6 +40,14 @@ async function checkLockStatus() {
     window.isEditingLocked = baseState.isEditingLocked;
 
     updateLockBannerUI();
+
+    // When lock state changes, re-render editor to update field editability
+    if (wasLocked !== baseState.isEditingLocked) {
+        if (typeof Explorer !== 'undefined' && typeof Explorer.renderCenterAttributes === 'function') {
+            Explorer.renderCenterAttributes();
+        }
+    }
+
     return data;
 }
 

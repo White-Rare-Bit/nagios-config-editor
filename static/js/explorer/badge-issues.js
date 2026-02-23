@@ -32,9 +32,29 @@
             Explorer.updateBadge('#issuesSectionBadge', state.groupedErrors.length);
             // Re-render tree to show badges
             Explorer.buildTree();
+
+            // Bug 040: Refresh center pane issue badge for the currently displayed object.
+            // On page load, openTab() runs before health-check data is available,
+            // so the badge is empty. Now that issues are loaded, update it.
+            refreshCenterPaneIssueBadge();
         } catch (e) {
             console.error('Failed to load issues for badges:', e);
         }
+    }
+
+    /**
+     * Bug 040 / 002-badge: Refresh the issue badge in the center pane breadcrumb
+     * for the currently displayed object. Call after issue data changes
+     * (health-check load, undo, staging changes) to keep the badge in sync.
+     */
+    function refreshCenterPaneIssueBadge() {
+        if (!state.editedObject) {return;}
+        const issueBtn = document.getElementById('centerCardIssue');
+        if (!issueBtn) {return;}
+        const obj = state.editedObject;
+        const issue = Explorer.getObjectIssue(obj);
+        const hostListInfo = Explorer.getHostListInfo(obj);
+        Explorer.updateIssueBadge(issueBtn, issue, obj, hostListInfo);
     }
 
     async function loadSuggestionsForBadges() {
@@ -91,9 +111,14 @@
         stagedIssues = [];
 
         if (state.pendingEdits.size === 0) {
+            // Bug 017: Even with no pending edits, we need to run
+            // updateStagedIssuesUI to clear any previously resolved warnings.
             updateStagedIssuesUI();
             return;
         }
+
+        // Bug 017: Check if staged template edits resolve existing warnings
+        resolveWarningsFromStagedTemplateEdits();
 
         // Build a map of original names -> new names for renamed objects
         const renames = new Map(); // "type:originalName" -> newName
@@ -206,6 +231,111 @@
     }
 
     // =============================================================================
+    // Bug 017: Resolve warnings when staged template edits provide missing fields
+    // =============================================================================
+
+    /**
+     * Build a map of template names to their staged edit data.
+     * Only includes templates (register=0) that have pending edits.
+     */
+    function buildEditedTemplatesMap() {
+        const editedTemplates = new Map();
+        for (const [idx, edit] of state.pendingEdits) {
+            const obj = state.allObjects.find(o => o.global_index === idx);
+            if (!obj) {continue;}
+            if (obj.attributes.register !== '0' && edit.edited.register !== '0') {continue;}
+            const tmplName = obj.attributes.name || obj.display_name;
+            if (tmplName) {
+                editedTemplates.set(tmplName, { attrs: edit.edited, objType: obj.object_type });
+            }
+        }
+        return editedTemplates;
+    }
+
+    /**
+     * Parse "has no field_name" patterns from a notification_gap message.
+     */
+    function parseMissingFields(message) {
+        const fields = [];
+        const regex = / has no (\w+)/g;
+        let match;
+        while ((match = regex.exec(message)) !== null) {
+            fields.push(match[1]);
+        }
+        return fields;
+    }
+
+    /**
+     * Collect all attribute names provided by an object's template chain,
+     * including any staged edits to those templates.
+     */
+    function collectTemplateChainFields(obj, editedTemplates) {
+        const useAttr = Explorer.getEffectiveAttributes(obj).use;
+        if (!useAttr) {return new Set();}
+
+        const providedFields = new Set();
+        const visited = new Set();
+        const queue = useAttr.split(',').map(t => t.trim());
+
+        while (queue.length > 0) {
+            const tmplName = queue.shift();
+            if (!tmplName || visited.has(tmplName)) {continue;}
+            visited.add(tmplName);
+
+            const editedTmpl = editedTemplates.get(tmplName);
+            if (editedTmpl && editedTmpl.objType === obj.object_type) {
+                Object.keys(editedTmpl.attrs).forEach(a => providedFields.add(a));
+            }
+
+            const tmplObj = state.allObjects.find(o =>
+                o.object_type === obj.object_type &&
+                (o.attributes.name === tmplName || o.display_name === tmplName)
+            );
+            if (!tmplObj) {continue;}
+            const tmplAttrs = Explorer.getEffectiveAttributes(tmplObj);
+            Object.keys(tmplAttrs).forEach(a => providedFields.add(a));
+            if (tmplAttrs.use) {
+                tmplAttrs.use.split(',').map(t => t.trim()).forEach(t => queue.push(t));
+            }
+        }
+        return providedFields;
+    }
+
+    /**
+     * Check if staged template edits resolve existing health-check warnings.
+     * For example, if generic-contact gains host_notification_period through
+     * a staged edit, the "notification chain broken" warning on contacts
+     * that inherit from it should be cleared.
+     */
+    function resolveWarningsFromStagedTemplateEdits() {
+        const editedTemplates = buildEditedTemplatesMap();
+        if (editedTemplates.size === 0) {return;}
+
+        const keysToRemove = [];
+        for (const [key, issue] of state.issuesByObject) {
+            if (issue.staged || issue.type !== 'notification_gap') {continue;}
+
+            const missingFields = parseMissingFields(issue.message);
+            if (missingFields.length === 0) {continue;}
+
+            const obj = state.allObjects.find(o =>
+                o.object_type === issue.object_type &&
+                (o.display_name === issue.object || o.attributes.name === issue.object)
+            );
+            if (!obj) {continue;}
+
+            const providedFields = collectTemplateChainFields(obj, editedTemplates);
+            if (missingFields.every(f => providedFields.has(f))) {
+                keysToRemove.push(key);
+            }
+        }
+
+        for (const key of keysToRemove) {
+            state.issuesByObject.delete(key);
+        }
+    }
+
+    // =============================================================================
     // Export to Explorer namespace
     // =============================================================================
 
@@ -214,6 +344,7 @@
     Explorer.getObjectIdentity = getObjectIdentity;
     Explorer.computeStagedIssues = computeStagedIssues;
     Explorer.updateStagedIssuesUI = updateStagedIssuesUI;
+    Explorer.refreshCenterPaneIssueBadge = refreshCenterPaneIssueBadge;
 
     // Expose stagedIssues as a getter so it always returns the current value
     Object.defineProperty(Explorer, 'stagedIssues', {

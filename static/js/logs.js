@@ -27,10 +27,10 @@ const TAB_CONFIG = {
         clearUrl: '/api/logs/audit/clear',
         columns: ['Timestamp', 'User', 'Action', 'Object', 'Details'],
         filters: [
-            { key: 'create', label: 'Creates', field: 'op' },
+            { key: 'create', label: 'Creates', field: 'op', suffix: true },
             { key: 'modify', label: 'Edits', field: 'op' },
-            { key: 'move', label: 'Moves', field: 'op' },
-            { key: 'delete', label: 'Deletes', field: 'op' },
+            { key: 'move', label: 'Moves', field: 'op', suffix: true },
+            { key: 'delete', label: 'Deletes', field: 'op', suffix: true },
             { key: 'git', label: 'Git', field: 'action', prefix: true },
             { key: 'backup', label: 'Backups', field: 'action', prefix: true },
         ],
@@ -153,11 +153,12 @@ function renderTable() {
         filtered = filtered.filter(e => {
             for (const def of filterDefs) {
                 const val = (e[def.field || config.filterParam] || '').toLowerCase();
+                const key = def.key.toLowerCase();
                 if (def.prefix) {
-                    if (val.startsWith(def.key.toLowerCase())) {return true;}
-                } else {
-                    if (val === def.key.toLowerCase()) {return true;}
-                }
+                    if (val.startsWith(key)) {return true;}
+                } else if (def.suffix) {
+                    if (val === key || val.endsWith('_' + key)) {return true;}
+                } else if (val === key) {return true;}
             }
             return false;
         });

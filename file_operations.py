@@ -289,7 +289,8 @@ def delete_object_from_file(file_path: str, line_number: int,
 def add_object_to_file(file_path: str, obj_type: str, attrs: dict[str, str],
                        after_block_line: int | None = None,
                        expected_checksum: str | None = None,
-                       raw_block: str | None = None) -> OperationResult:
+                       raw_block: str | None = None,
+                       inline_comments: dict | None = None) -> OperationResult:
     """Add a new object to a file, inserting after a specific block.
 
     Args:
@@ -302,6 +303,7 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: dict[str, str],
                           Only applies to existing files.
         raw_block: If provided, use this exact block text instead of formatting from attrs.
                    This preserves original formatting, indentation, and inline comments.
+        inline_comments: If provided, inline comments to include in the formatted block.
 
     Returns:
         OperationResult with success=True on success, or error details on failure
@@ -309,7 +311,7 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: dict[str, str],
     """
     logger.debug("file_op add_object_to_file file_path=%s obj_type=%s", file_path, obj_type)
     path = Path(file_path)
-    new_block = raw_block or format_object_block(obj_type, attrs)
+    new_block = raw_block or format_object_block(obj_type, attrs, inline_comments=inline_comments)
 
     if not path.exists():
         # New file - no checksum validation needed

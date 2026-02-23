@@ -830,6 +830,18 @@
     flex-shrink: 0;
 }
 
+.tree-item-match-field {
+    font-size: var(--nbe-font-size-xs);
+    color: var(--nbe-dark-text-secondary);
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 80px;
+    flex-shrink: 1;
+    margin-left: var(--nbe-space-xs);
+}
+
 /* Object type color coding - semantic categories using design tokens */
 
 /* Infrastructure (green) */
@@ -3294,6 +3306,17 @@
     color: var(--nbe-dark-text-secondary);
 }
 
+/* D-02: Inline duplicate name validation */
+.new-object-name-input.input-error {
+    border-bottom-color: var(--nbe-danger, #ef5350);
+}
+
+.input-error-text {
+    color: var(--nbe-danger, #ef5350);
+    font-size: var(--nbe-font-size-secondary);
+    margin-top: var(--nbe-space-xs);
+}
+
 .card-name {
     margin: 0;
     font-size: var(--nbe-font-size-icon-sm);
@@ -3581,6 +3604,14 @@
 
 .attr-autocomplete-item.selected {
     background: var(--nbe-dark-bg-elevated);
+}
+
+.attr-autocomplete-more {
+    padding: var(--nbe-space-sm) var(--nbe-space-md);
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-dark-text-secondary);
+    font-style: italic;
+    border-top: 1px solid var(--nbe-dark-input-border);
 }
 
 .attr-row {
@@ -4086,6 +4117,25 @@
     font-size: var(--nbe-font-size-sm);
     color: var(--nbe-dark-text-secondary);
     margin: var(--nbe-space-md) 0 0 0;
+}
+
+/* Dialog reference update checkbox */
+.dialog-reference-option {
+    margin-top: var(--nbe-space-md);
+}
+.dialog-reference-option .commit-reference-label {
+    font-size: var(--nbe-font-size-sm);
+}
+
+/* Reference warning in commit dialog */
+.commit-reference-warning {
+    background: rgba(var(--nbe-warning-rgb, 255, 152, 0), 0.15);
+    border: 1px solid var(--nbe-warning);
+    border-radius: var(--nbe-radius-md);
+    padding: var(--nbe-space-sm) var(--nbe-space-md);
+    margin-top: var(--nbe-space-sm);
+    font-size: var(--nbe-font-size-sm);
+    color: var(--nbe-dark-text-primary);
 }
 
 /* Dialog key-value list */

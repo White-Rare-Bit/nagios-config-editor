@@ -157,6 +157,17 @@ const ISSUE_TYPE_HANDLERS = {
             action: 'delete'
         });
     },
+    orphan_service: (issue, obj) => {
+        if (!obj) {return;}
+        state.orphanIndices.add(obj.global_index);
+    },
+    service_on_empty_hostgroup: (issue, obj) => {
+        if (!obj) {return;}
+        state.orphanIndices.add(obj.global_index);
+    },
+    command_arg_mismatch: () => {
+        // Already tracked in issuesByObject — no additional state needed
+    },
     unused_template: (issue, obj) => processSimpleCleanupIssue(issue, obj),
     unused_command: (issue, obj) => processSimpleCleanupIssue(issue, obj),
     unused_contact: (issue, obj) => processSimpleCleanupIssue(issue, obj),

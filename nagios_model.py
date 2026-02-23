@@ -522,7 +522,7 @@ class NagiosObject:
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
-        return {
+        result = {
             "object_type": self.object_type,
             "attributes": self.attributes,
             "source_file": self.source_file,
@@ -530,6 +530,9 @@ class NagiosObject:
             "name": self.get_name(),
             "display_name": self.get_display_name(),
         }
+        if self.inline_comments:
+            result["inline_comments"] = self.inline_comments
+        return result
 
 
 def format_object_block(obj_type: str, attrs: dict[str, str], indent: str = "    ",

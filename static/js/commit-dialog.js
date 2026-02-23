@@ -322,15 +322,25 @@ async function buildGlobalCommitDialogHtml(data, refData = null, isGitConfigured
         injectReferenceChanges(fileChanges, refData, configPath);
     }
 
-    const hasExternalChanges = hasGuiStaging && data.hasGitChanges && gitChanges.length > 0;
+    // Filter external git changes to exclude files already in the staging preview
+    const stagedFilePaths = new Set(fileChanges.keys());
+    const externalOnlyChanges = gitChanges.filter(gc => {
+        const fullPath = gc.path.startsWith('/') ? gc.path : configPath + '/' + gc.path;
+        return !stagedFilePaths.has(fullPath) && !stagedFilePaths.has(gc.path);
+    });
+    const hasExternalChanges = hasGuiStaging && data.hasGitChanges && externalOnlyChanges.length > 0;
     const externalChangesHtml = hasExternalChanges
-        ? await buildExternalChangesHtml(gitChanges, baseState.commitContextLines)
+        ? await buildExternalChangesHtml(externalOnlyChanges, baseState.commitContextLines)
         : '';
+
+    // Include external file count in summary so the header reflects total commit scope
+    const totalFileCount = fileChanges.size + (hasExternalChanges ? externalOnlyChanges.length : 0);
 
     return `
         <div class="commit-header">
             <div class="commit-summary">
-                ${buildSummaryStatsHtml(fileChanges.size, buildCommitSummaryStats(fileChanges))}
+                ${buildSummaryStatsHtml(totalFileCount, buildCommitSummaryStats(fileChanges))}
+                ${hasExternalChanges ? `<div class="commit-stat external"><span class="commit-stat-count">${externalOnlyChanges.length}</span> external</div>` : ''}
             </div>
             ${buildContextControlHtml(baseState.commitContextLines, 'updateGlobalContextLines', 'globalContextLinesValue')}
         </div>
@@ -343,6 +353,26 @@ async function buildGlobalCommitDialogHtml(data, refData = null, isGitConfigured
 }
 
 function toggleReferencePreview(checked) {
+    const optionDiv = document.querySelector('.commit-reference-option');
+    if (!checked && optionDiv) {
+        // Show warning about broken references
+        const refData = baseState.referenceData;
+        if (refData && refData.totalReferences > 0) {
+            // Remove existing warning if any
+            const existing = optionDiv.parentNode.querySelector('.commit-reference-warning');
+            if (existing) {existing.remove();}
+
+            const warning = document.createElement('div');
+            warning.className = 'commit-reference-warning';
+            warning.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <strong>Warning:</strong> Committing without updating references may result in a broken Nagios configuration. ${refData.totalReferences} reference${refData.totalReferences !== 1 ? 's' : ''} will point to renamed objects.`;
+            optionDiv.parentNode.insertBefore(warning, optionDiv.nextSibling);
+        }
+    } else {
+        // Remove warning
+        const warning = document.querySelector('.commit-reference-warning');
+        if (warning) {warning.remove();}
+    }
+
     // Rebuild the file changes view to include/exclude reference updates
     updateGlobalContextLines(
         baseState.commitContextLines > 9 ? 10 : baseState.commitContextLines
@@ -367,6 +397,17 @@ function injectReferenceChanges(fileChanges, refData, configPath) {
             if (!filePath) {continue;}
 
             const file = ensureFileChange(fileChanges, filePath, configPath);
+
+            // Skip if a pending edit already covers this object+field change
+            // (reference was already staged by the rename dialog)
+            const alreadyCovered = file.modifications.some(m =>
+                !m.isReferenceUpdate &&
+                m.object.object_type === ref.objectType &&
+                ref.field in (m.finalAttrs || {}) &&
+                ref.field in (m.originalAttrs || {}) &&
+                m.originalAttrs[ref.field] === ref.oldValue
+            );
+            if (alreadyCovered) {continue;}
 
             // Build original and updated attributes showing just the changed field
             const originalAttrs = {};

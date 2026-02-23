@@ -366,7 +366,8 @@ class NagiosService:
         return None
 
     def create_object(self, target_file: str, obj_type: str, attrs: dict[str, str],
-                      after_block_line: int | None = None) -> OperationResult:
+                      after_block_line: int | None = None,
+                      inline_comments: dict | None = None) -> OperationResult:
         """Create a new object in a file.
 
         Args:
@@ -374,6 +375,7 @@ class NagiosService:
             obj_type: Object type (host, service, etc.)
             attrs: Attribute key-value pairs
             after_block_line: Line number to insert after (None = end)
+            inline_comments: If provided, preserves inline comments on attributes.
 
         Returns:
             OperationResult with success status
@@ -386,7 +388,8 @@ class NagiosService:
                 return corrupted_error
 
             try:
-                result = add_object_to_file(target_file, obj_type, attrs, after_block_line)
+                result = add_object_to_file(target_file, obj_type, attrs, after_block_line,
+                                            inline_comments=inline_comments)
                 if not result.success:
                     logger.error("create_object failed: target_file=%s obj_type=%s error=%s", target_file, obj_type, result.error)
                     return result
@@ -983,12 +986,14 @@ class NagiosService:
             object_type = creation.get("object_type")
             attributes = creation.get("attributes", {})
             target_file = creation.get("targetFile")
+            inline_comments = creation.get("inline_comments")
 
             if object_type and target_file:
                 if not os.path.isabs(target_file):
                     target_file = os.path.join(self._config_path, target_file)
 
-                result = self.create_object(target_file, object_type, attributes)
+                result = self.create_object(target_file, object_type, attributes,
+                                            inline_comments=inline_comments)
                 if result.success:
                     count += 1
                     name_field = NAME_FIELDS.get(object_type)

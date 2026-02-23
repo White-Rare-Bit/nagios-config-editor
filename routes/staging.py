@@ -111,8 +111,15 @@ def _create_undo_entries_for_edits(
         if key and key not in existing_keys:
             obj = edit_data.get("object", {})
             op_id = str(uuid.uuid4())[:8]
-            obj_name = obj.get("name", obj.get("display_name", "Unknown"))
-            obj_type = obj.get("object_type", "object")
+            obj_type = obj.get("object_type") or "object"
+            # Resolve name: try object metadata, then extract from attributes
+            obj_name = obj.get("name") or obj.get("display_name")
+            if not obj_name:
+                name_field = NAME_FIELDS.get(obj_type)
+                attrs = edit_data.get("edited") or edit_data.get("original") or {}
+                obj_name = attrs.get(name_field) if name_field else None
+            if not obj_name:
+                obj_name = "Unknown"
 
             op_data = {
                 "key": key,
@@ -153,8 +160,10 @@ def _create_undo_entries_for_moves(
         if key and key not in existing_keys:
             obj = move_data.get("object", {})
             op_id = str(uuid.uuid4())[:8]
-            obj_name = obj.get("name", obj.get("display_name", "Unknown"))
-            obj_type = obj.get("object_type", "object")
+            obj_type = obj.get("object_type") or "object"
+            obj_name = obj.get("name") or obj.get("display_name")
+            if not obj_name:
+                obj_name = "Unknown"
             target_file = move_data.get("targetFile", "unknown")
 
             op_data = {
@@ -461,44 +470,56 @@ def _build_undo_entries(data, existing, log):
         data.get("stagedObjectDeletions", []), existing_deletion_keys, log,
     )
 
-    # Group multiple operations into single bulk undo entries
-    # D-05: Threshold is >1 (not >5 or >10) because:
-    # - User expectation: Multiple objects selected and edited together should undo together
-    # - UI simplicity: Bulk operations appear as single "Bulk edit N objects" in undo stack
-    # - Single operation stays atomic to allow granular undo when user edits one object at a time
-    _append_undo_group(undo_stack, new_edits, "bulk_edit", "edit")
-    _append_undo_group(undo_stack, new_moves, "bulk_move", "move")
-    _append_undo_group(undo_stack, new_creations, "bulk_creation", "create")
-    _append_undo_group(undo_stack, new_deletions, "bulk_deletion", "delete")
-
-    # Create undo entries for NEW files (newFiles set) - these remain individual
+    # Create undo entries for NEW files (newFiles set)
     existing_new_files = set(existing.get("newFiles", [])) if existing else set()
-    undo_stack.extend(_create_undo_entries_for_new_files(
+    new_files = _create_undo_entries_for_new_files(
         data.get("newFiles", []), existing_new_files, log,
-    ))
+    )
+
+    # Group entries: first group same-type operations, then check for cross-type
+    grouped_entries = []
+    _collect_undo_group(grouped_entries, new_edits, "bulk_edit", "edit")
+    _collect_undo_group(grouped_entries, new_moves, "bulk_move", "move")
+    _collect_undo_group(grouped_entries, new_creations, "bulk_creation", "create")
+    _collect_undo_group(grouped_entries, new_deletions, "bulk_deletion", "delete")
+    grouped_entries.extend(new_files)
+
+    # H-020: If a single POST creates operations of multiple types, group into
+    # one compound entry so Ctrl+Z reverses the entire user action at once
+    if len(grouped_entries) > 1:
+        descriptions = [e.get("description", "") for e in grouped_entries]
+        undo_stack.append({
+            "id": str(uuid.uuid4())[:8],
+            "type": "compound",
+            "data": {"entries": grouped_entries},
+            "description": " + ".join(descriptions),
+            "timestamp": time.time(),
+        })
+    else:
+        undo_stack.extend(grouped_entries)
 
     return undo_stack
 
 
-def _append_undo_group(undo_stack, new_entries, bulk_type, verb):
-    """Append undo entries to stack, grouping multiple entries into a bulk entry.
+def _collect_undo_group(collector, new_entries, bulk_type, verb):
+    """Collect undo entries, grouping multiple same-type entries into a bulk entry.
 
     If there are more than 1 entries, creates a single bulk undo entry.
-    Otherwise, appends individual entries directly.
+    Otherwise, adds individual entries directly.
 
     Args:
-        undo_stack: The undo stack list to append to (modified in place)
+        collector: List to collect entries into (modified in place)
         new_entries: List of individual undo entries
         bulk_type: Bulk operation type string (e.g. 'bulk_edit')
         verb: Verb for description (e.g. 'edit')
 
     """
     if len(new_entries) > 1:
-        undo_stack.append(_create_bulk_undo_entry(
+        collector.append(_create_bulk_undo_entry(
             bulk_type, new_entries, f"Bulk {verb} {len(new_entries)} object(s)",
         ))
     else:
-        undo_stack.extend(new_entries)
+        collector.extend(new_entries)
 
 
 def _build_staging_data(sm, data):
@@ -706,10 +727,19 @@ def api_save_staging():
     existing = sm.get_staging()
     _preserve_existing_session_data(existing, data, session_id)
 
-    # Collect and track files affected by all staging operations
+    # Collect and track files affected by all staging operations.
+    # Compute checksums directly into data (not via sm.update_base_checksums,
+    # which would be overwritten by the subsequent save_staging_atomic call).
     files_to_track = _collect_affected_files(data, get_config_path())
     if files_to_track:
-        sm.update_base_checksums(list(files_to_track))
+        base_checksums = data.get("baseFileChecksums", {})
+        checksum_mgr = sm.checksums
+        for file_path in files_to_track:
+            if file_path not in base_checksums:
+                checksum = checksum_mgr.compute_file_checksum(file_path)
+                if checksum:
+                    base_checksums[file_path] = checksum
+        data["baseFileChecksums"] = base_checksums
 
     # Build undo stack with entries for new operations
     data["undoStack"] = _build_undo_entries(data, existing, log)
@@ -820,6 +850,25 @@ _PHASE_TO_AUDIT_KEY = {
     "folderDeletions": "folder_deletions",
 }
 
+_OP_SUFFIX_TO_VERB = {
+    "creation": "create", "deletion": "delete", "move": "move",
+}
+
+
+def _make_relative_path(path):
+    """Convert an absolute path to a path relative to the config directory's parent.
+
+    For config_path=/etc/nagios/objects and path=/etc/nagios/objects/hosts.cfg,
+    returns "objects/hosts.cfg". This preserves the config dir name while
+    stripping server filesystem structure from audit logs.
+    """
+    if not path:
+        return path
+    config_path = get_config_path()
+    if config_path and path.startswith(config_path):
+        return os.path.relpath(path, os.path.dirname(config_path))
+    return path
+
 
 def _write_apply_audit_log(staging_data, session_id, all_details, errors, log):
     """Write audit log entries for an apply operation.
@@ -861,34 +910,35 @@ def _write_apply_audit_log(staging_data, session_id, all_details, errors, log):
                         )
                 elif audit_key == "object_creations":
                     log_audit(
-                        action="edit", user=user, txn=txn,
+                        action="create", user=user, txn=txn,
                         type=detail.get("object_type", ""),
                         name=detail.get("object_name", ""),
                         op="create",
                     )
                 elif audit_key == "object_deletions":
                     log_audit(
-                        action="edit", user=user, txn=txn,
+                        action="delete", user=user, txn=txn,
                         type=detail.get("object_type", ""),
                         name=detail.get("object_name", ""),
                         op="delete",
                     )
                 elif audit_key == "object_moves":
                     log_audit(
-                        action="edit", user=user, txn=txn,
+                        action="move", user=user, txn=txn,
                         type=detail.get("object_type", ""),
                         name=detail.get("object_name", ""),
                         op="move",
-                        from_val=detail.get("from_file", ""),
-                        to_val=detail.get("to_file", ""),
+                        from_val=_make_relative_path(detail.get("from_file", "")),
+                        to_val=_make_relative_path(detail.get("to_file", "")),
                     )
                 elif audit_key in ("file_creations", "file_deletions", "file_moves",
                                    "folder_creations", "folder_deletions", "folder_moves"):
-                    op_type = audit_key.rstrip("s").split("_")[-1]
+                    raw_suffix = audit_key.rstrip("s").split("_")[-1]
+                    op_verb = _OP_SUFFIX_TO_VERB.get(raw_suffix, raw_suffix)
                     prefix = "file" if "file" in audit_key else "folder"
                     log_audit(
-                        action="edit", user=user, txn=txn,
-                        op=f"{prefix}_{op_type}",
+                        action=op_verb, user=user, txn=txn,
+                        op=f"{prefix}_{op_verb}",
                         path=detail.get("path", detail.get("from", "")),
                     )
 
