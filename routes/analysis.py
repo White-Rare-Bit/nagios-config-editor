@@ -269,6 +269,17 @@ def _process_obj_relationships(obj, node_id, resolved_attrs, graph_state):
 
         raw_value = resolved_attrs[field]
 
+        # Determine which targets are additive by checking the raw object attribute.
+        # resolve_inherited_attrs consumes the leading + prefix during merge, so we
+        # must compare against the raw attribute to detect additive references.
+        additive_targets = set()
+        raw_obj_value = obj.attributes.get(field, "")
+        if raw_obj_value.startswith("+") and field not in ("use", "name", "register"):
+            for t in raw_obj_value.split(","):
+                t = t.strip()
+                if t.startswith("+"):
+                    additive_targets.add(t.lstrip("+").strip())
+
         # Servicegroup members use Nagios alternating-pair format: host1,svc1,host2,svc2
         if obj.object_type == "servicegroup" and field == "members":
             parts = [t.strip() for t in raw_value.split(",") if t.strip()]
@@ -295,8 +306,8 @@ def _process_obj_relationships(obj, node_id, resolved_attrs, graph_state):
         for target in targets:
             if not target:
                 continue
-            is_additive = target.startswith("+")
-            clean_target = target.lstrip("+").strip() if is_additive else target
+            is_additive = target.startswith("+") or target.strip() in additive_targets
+            clean_target = target.lstrip("+").strip() if target.startswith("+") else target
             target_id, t_type = _compute_target_node_id(field, target_type, clean_target, obj, resolved_attrs)
             if target_id == node_id:
                 continue
