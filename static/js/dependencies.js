@@ -1165,7 +1165,15 @@ console.log('dependencies.js loaded');
         const results = [];
 
         for (const node of allNodes) {
-            if (node.label.toLowerCase().includes(search)) {
+            const displayLabel = getNodeDisplayLabel(node.id, node.type, node.label);
+            const searchTargets = [
+                node.label.toLowerCase(),
+                displayLabel.toLowerCase(),
+            ];
+            if (node.search_label) {
+                searchTargets.push(node.search_label.toLowerCase());
+            }
+            if (searchTargets.some(t => t.includes(search))) {
                 results.push(node);
                 if (results.length >= 30) {break;}
             }
