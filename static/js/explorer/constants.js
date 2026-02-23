@@ -48,6 +48,37 @@
         timeperiod: 'TPTMPL'
     };
 
+    // Progressive badge tiers: compact (narrowest) → medium → full (widest)
+    const TYPE_BADGE_TIERS = {
+        host:               { compact: 'HOST',     medium: 'HOST',        full: 'HOST' },
+        hostgroup:          { compact: 'HOSTGRP',  medium: 'HOSTGROUP',   full: 'HOSTGROUP' },
+        service:            { compact: 'SVC',      medium: 'SERVICE',     full: 'SERVICE' },
+        servicegroup:       { compact: 'SVCGRP',   medium: 'SERVICEGRP',  full: 'SERVICEGROUP' },
+        contact:            { compact: 'CONT',     medium: 'CONTACT',     full: 'CONTACT' },
+        contactgroup:       { compact: 'CONTGRP',  medium: 'CONTACTGRP',  full: 'CONTACTGROUP' },
+        command:            { compact: 'CMD',      medium: 'COMMAND',     full: 'COMMAND' },
+        timeperiod:         { compact: 'TP',       medium: 'TIMEPERIOD',  full: 'TIMEPERIOD' },
+        servicedependency:  { compact: 'SVCDEP',   medium: 'SVCDEP',      full: 'SERVICEDEPENDENCY' },
+        hostdependency:     { compact: 'HOSTDEP',  medium: 'HOSTDEP',     full: 'HOSTDEPENDENCY' },
+        serviceescalation:  { compact: 'SVCESC',   medium: 'SVCESC',      full: 'SERVICEESCALATION' },
+        hostescalation:     { compact: 'HOSTESC',  medium: 'HOSTESC',     full: 'HOSTESCALATION' }
+    };
+
+    const TEMPLATE_BADGE_TIERS = {
+        host:       { compact: 'HOSTTMPL',  medium: 'HOSTTMPL',  full: 'HOST TEMPLATE' },
+        service:    { compact: 'SVCTMPL',   medium: 'SVCTMPL',   full: 'SERVICE TEMPLATE' },
+        contact:    { compact: 'CONTTMPL',  medium: 'CONTTMPL',  full: 'CONTACT TEMPLATE' },
+        command:    { compact: 'CMDTMPL',   medium: 'CMDTMPL',   full: 'COMMAND TEMPLATE' },
+        timeperiod: { compact: 'TPTMPL',    medium: 'TPTMPL',    full: 'TIMEPERIOD TEMPLATE' }
+    };
+
+    // Right panel tab label tiers
+    const TAB_LABEL_TIERS = {
+        files:       { compact: 'Files', medium: 'Files',       full: 'Files' },
+        suggestions: { compact: 'Sugg',  medium: 'Suggestions', full: 'Suggestions' },
+        validation:  { compact: 'Valid', medium: 'Validation',  full: 'Validation' }
+    };
+
     // Attributes that affect inheritance/reference sections (UI behavior)
     const INHERITANCE_ATTRS = ['use', 'parents'];
     const REFERENCE_TRIGGER_ATTRS = [
@@ -72,6 +103,9 @@
         identityFields: IDENTITY_FIELDS,
         typeBadges: TYPE_BADGES,
         templateBadges: TEMPLATE_BADGES,
+        typeBadgeTiers: TYPE_BADGE_TIERS,
+        templateBadgeTiers: TEMPLATE_BADGE_TIERS,
+        tabLabelTiers: TAB_LABEL_TIERS,
         inheritanceAttrs: INHERITANCE_ATTRS,
         referenceAttrs: REFERENCE_TRIGGER_ATTRS,
 
@@ -158,6 +192,24 @@
             return c.templateBadges[objectType];
         }
         return c.typeBadges[objectType] || objectType;
+    };
+
+    /**
+     * Get badge text for a specific tier.
+     * @param {string} objectType - e.g. 'host', 'service'
+     * @param {boolean} isTemplate - whether this is a template
+     * @param {'compact'|'medium'|'full'} tier - the display tier
+     * @returns {string} badge text for the given tier
+     */
+    Explorer.getTypeBadgeTier = function(objectType, isTemplate, tier) {
+        const c = Explorer.constants;
+        if (isTemplate && c.templateBadgeTiers[objectType]) {
+            return c.templateBadgeTiers[objectType][tier] || c.templateBadges[objectType] || objectType;
+        }
+        if (c.typeBadgeTiers[objectType]) {
+            return c.typeBadgeTiers[objectType][tier] || c.typeBadges[objectType] || objectType;
+        }
+        return objectType;
     };
 
     /**
