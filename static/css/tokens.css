@@ -220,6 +220,12 @@
     /* ---- Layout ---- */
     --nbe-navbar-height: 56px;
     --nbe-panel-width: 320px;
+    --nbe-panel-width-right: 440px;
+    --nbe-panel-min-width: 200px;
+    --nbe-panel-max-width-pct: 50;
+    --nbe-resize-handle-width: 6px;
+    --nbe-panel-tier-compact: 280;
+    --nbe-panel-tier-medium: 400;
     --nbe-tree-width: 240px;
 
     /* ---- Breakpoints (used with media queries) ----
