@@ -28,6 +28,7 @@ console.log('dependencies.js loaded');
     let allNodes = [];
     let allEdges = [];
     let addedNodeIds = new Set();
+    let manuallyAddedNodeIds = new Set();
     let searchTimeout = null;
     let showEdgeLabels = true;
     let selectedNodeId = null;
@@ -41,17 +42,15 @@ console.log('dependencies.js loaded');
         host: ['inheritance', 'network', 'notifications', 'services', 'monitoring', 'escalations', 'dependencies', 'full'],
         hostgroup: ['inheritance', 'notifications', 'services', 'members', 'escalations', 'dependencies', 'full'],
         service: ['inheritance', 'network', 'notifications', 'monitoring', 'escalations', 'dependencies', 'full'],
-        servicegroup: ['inheritance', 'network', 'notifications', 'members', 'escalations', 'dependencies', 'full'],
+        servicegroup: ['inheritance', 'members', 'full'],
         contact: ['inheritance', 'notifiedBy', 'full'],
         contactgroup: ['inheritance', 'members', 'notifiedBy', 'full'],
         command: ['usedBy', 'full'],
         timeperiod: ['usedBy', 'full'],
-        // Dependency/escalation types
-        hostdependency: ['inheritance', 'network', 'monitoring', 'full'],
-        servicedependency: ['inheritance', 'network', 'monitoring', 'full'],
-        hostescalation: ['inheritance', 'notifications', 'network', 'full'],
-        serviceescalation: ['inheritance', 'notifications', 'network', 'full'],
-        // Default for unknown types
+        hostdependency: ['inheritance', 'dependencies', 'full'],
+        servicedependency: ['inheritance', 'dependencies', 'full'],
+        hostescalation: ['inheritance', 'escalations', 'full'],
+        serviceescalation: ['inheritance', 'escalations', 'full'],
         default: ['inheritance', 'full']
     };
 
@@ -1064,6 +1063,7 @@ console.log('dependencies.js loaded');
     function saveGraphState() {
         const state = {
             addedNodeIds: Array.from(addedNodeIds),
+            manuallyAddedNodeIds: Array.from(manuallyAddedNodeIds),
             layoutType: document.getElementById('layoutType').value,
             showEdgeLabels: showEdgeLabels,
             focusNodeId: focusNodeId,
@@ -1089,6 +1089,11 @@ console.log('dependencies.js loaded');
                         addedNodeIds.add(id);
                     }
                 }
+            }
+
+            // Restore manually added node IDs
+            if (state.manuallyAddedNodeIds && Array.isArray(state.manuallyAddedNodeIds)) {
+                manuallyAddedNodeIds = new Set(state.manuallyAddedNodeIds);
             }
 
             // Restore layout type
@@ -1231,6 +1236,7 @@ console.log('dependencies.js loaded');
         }
 
         addedNodeIds.add(nodeId);
+        manuallyAddedNodeIds.add(nodeId);
         updateGraph();
         updateAddedNodesList();
         saveGraphState();
@@ -1283,6 +1289,7 @@ console.log('dependencies.js loaded');
 
     function clearGraph() {
         addedNodeIds.clear();
+        manuallyAddedNodeIds.clear();
         focusNodeId = null;  // Clear the focus node as well
         activeQuickView = null;  // Clear active quick view
         renderQuickViewButtons();  // Re-render buttons (will show default set)
@@ -1489,6 +1496,7 @@ console.log('dependencies.js loaded');
 
         // Clear all expanded nodes and start fresh from root
         addedNodeIds.clear();
+        manuallyAddedNodeIds.clear();  // Quick view is programmatic, not manual
         addedNodeIds.add(rootNode);  // Always include the root node
 
         if (config.useSmartExpansion) {
@@ -1573,11 +1581,12 @@ console.log('dependencies.js loaded');
         const rules = expansionRules[startNode.type]?.[preset];
         if (!rules) {return;}
 
+        const maxBackwardDepth = rules.maxBackwardDepth ?? Infinity;
         const visited = new Set();
-        const toVisit = [startNodeId];
+        const toVisit = [{nodeId: startNodeId, backwardDepth: 0}];
 
         while (toVisit.length > 0) {
-            const nodeId = toVisit.pop();
+            const {nodeId, backwardDepth} = toVisit.pop();
             if (visited.has(nodeId)) {continue;}
             visited.add(nodeId);
 
@@ -1595,8 +1604,18 @@ console.log('dependencies.js loaded');
             resultSet.add(nodeId);
 
             const { forward, backward } = resolveApplicableRules(rules, currentNode.type);
-            toVisit.push(...collectForwardTargets(edges, nodeId, forward, visited, nodes));
-            toVisit.push(...collectBackwardTargets(edges, nodeId, backward, visited, nodes));
+
+            // Forward targets: always follow (these are ancestors)
+            for (const targetId of collectForwardTargets(edges, nodeId, forward, visited, nodes)) {
+                toVisit.push({nodeId: targetId, backwardDepth: 0});
+            }
+
+            // Backward targets: respect depth limit
+            if (backwardDepth < maxBackwardDepth) {
+                for (const targetId of collectBackwardTargets(edges, nodeId, backward, visited, nodes)) {
+                    toVisit.push({nodeId: targetId, backwardDepth: backwardDepth + 1});
+                }
+            }
         }
     }
 
@@ -1734,6 +1753,8 @@ console.log('dependencies.js loaded');
             if (n.id === focusNodeId) {return true;}
             // Always show selected node in Cytoscape
             if (cy && cy.$id(n.id).selected()) {return true;}
+            // Always show user-added nodes (Bug 054)
+            if (manuallyAddedNodeIds.has(n.id)) {return true;}
             // Always show if only one node added
             if (typeFilteredNodeIds.size === 1) {return true;}
             // Otherwise, must have visible edges
