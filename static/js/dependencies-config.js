@@ -209,6 +209,7 @@
                 // Template inheritance chains
                 forward: ['use'],
                 backward: ['use'],
+                maxBackwardDepth: 1,
                 stopAt: []
             },
             services: {
@@ -267,6 +268,7 @@
                 // Template inheritance chains
                 forward: ['use'],
                 backward: ['use'],
+                maxBackwardDepth: 1,
                 stopAt: []
             },
             services: {
@@ -315,6 +317,7 @@
                 // Template inheritance chains
                 forward: ['use'],
                 backward: ['use'],
+                maxBackwardDepth: 1,
                 stopAt: []
             },
             network: {
@@ -362,6 +365,7 @@
                 // Template inheritance chains
                 forward: ['use'],
                 backward: ['use'],
+                maxBackwardDepth: 1,
                 stopAt: []
             },
             network: {
@@ -409,6 +413,7 @@
                 // Template inheritance chains
                 forward: ['use'],
                 backward: ['use'],
+                maxBackwardDepth: 1,
                 stopAt: []
             },
             notifiedBy: {
@@ -426,6 +431,7 @@
                 // Template inheritance chains
                 forward: ['use'],
                 backward: ['use'],
+                maxBackwardDepth: 1,
                 stopAt: []
             },
             members: {
@@ -461,6 +467,7 @@
             inheritance: {
                 forward: ['use'],
                 backward: ['use'],
+                maxBackwardDepth: 1,
                 stopAt: []
             },
             network: {
@@ -480,6 +487,7 @@
             inheritance: {
                 forward: ['use'],
                 backward: ['use'],
+                maxBackwardDepth: 1,
                 stopAt: []
             },
             network: {
@@ -502,6 +510,7 @@
                 // Template inheritance chains
                 forward: ['use'],
                 backward: ['use'],
+                maxBackwardDepth: 1,
                 stopAt: []
             },
             notifications: {
@@ -525,6 +534,7 @@
                 // Template inheritance chains
                 forward: ['use'],
                 backward: ['use'],
+                maxBackwardDepth: 1,
                 stopAt: []
             },
             notifications: {
