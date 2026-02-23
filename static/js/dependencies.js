@@ -2181,6 +2181,8 @@ console.log('dependencies.js loaded');
     // Get display label for a node, including context for services
     function getNodeDisplayLabel(nodeId, nodeType, nodeLabel) {
         if (nodeType === 'service' && nodeId && nodeId.startsWith('service:')) {
+            // Label already includes host context from backend (e.g., "HTTP / web-servers")
+            if (nodeLabel.includes(' / ')) {return nodeLabel;}
             const parts = nodeId.split(':');
             if (parts.length >= 3) {
                 // Has context: service:context:name

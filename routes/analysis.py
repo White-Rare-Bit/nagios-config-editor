@@ -313,6 +313,12 @@ def _process_obj_relationships(obj, node_id, resolved_attrs, graph_state):
                     node_data["additive"] = True
                 nodes.append(node_data)
                 node_ids.add(target_id)
+            elif is_additive:
+                # Mark existing node as additive if reached via + reference
+                for existing_node in nodes:
+                    if existing_node["id"] == target_id:
+                        existing_node["additive"] = True
+                        break
 
             edge_data = {"from": node_id, "to": target_id, "label": field, "arrows": "to",
                          "category": _FIELD_TO_CATEGORY.get(field, "dependencies")}
