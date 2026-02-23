@@ -411,9 +411,25 @@
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
-/* Collapsed panel state — pill always visible */
+/* Collapsed panel state — wider handle with pill always visible */
+.panel-resize-handle.panel-collapsed {
+    width: 20px;
+}
+
 .panel-resize-handle.panel-collapsed .panel-collapse-pill {
     opacity: 1;
+}
+
+/* Shift pill inward when collapsed so it doesn't clip off-screen */
+.panel-resize-handle--left.panel-collapsed .panel-collapse-pill {
+    left: auto;
+    right: 0;
+    transform: translate(0, -50%);
+}
+
+.panel-resize-handle--right.panel-collapsed .panel-collapse-pill {
+    left: 0;
+    transform: translate(0, -50%);
 }
 
 /* Drag overlay to prevent selection during resize */
@@ -923,10 +939,21 @@
     text-transform: uppercase;
     letter-spacing: 0.3px;
     pointer-events: none;
-    min-width: 44px;
+    width: 66px;
     text-align: center;
     flex-shrink: 0;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Tier-driven uniform badge widths */
+.panel-tier-medium .tree-item-type {
+    width: 90px;
+}
+
+.panel-tier-full .tree-item-type {
+    width: 140px;
 }
 
 .tree-item-match-field {
