@@ -89,7 +89,7 @@ console.log('dependencies.js loaded');
 
     // Generate SVG data URL with white background circle
     // Templates get a dashed border and unique icons to distinguish them from regular objects
-    function getNodeImageUrl(type, color, isTemplate = false, exists = true) {
+    function getNodeImageUrl(type, color, isTemplate = false, exists = true, isAdditive = false) {
         // Use template-specific icons for host and service templates
         let iconType = type;
         if (isTemplate && (type === 'host' || type === 'service')) {
@@ -104,6 +104,10 @@ console.log('dependencies.js loaded');
             <line x1="10" y1="10" x2="40" y2="40" stroke="#f14c4c" stroke-width="4" stroke-linecap="round"/>
             <line x1="40" y1="10" x2="10" y2="40" stroke="#f14c4c" stroke-width="4" stroke-linecap="round"/>
         ` : '';
+        const additiveOverlay = isAdditive ? `
+            <circle cx="40" cy="10" r="7" fill="#4CAF50"/>
+            <text x="40" y="14" text-anchor="middle" fill="white" font-size="12" font-weight="bold">+</text>
+        ` : '';
 
         const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50">
             <circle cx="25" cy="25" r="23" fill="white" stroke="${color}" stroke-width="${strokeWidth}" ${strokeDasharray}/>
@@ -111,6 +115,7 @@ console.log('dependencies.js loaded');
                 <path fill="${exists ? color : '#999'}" d="${iconData.path}"/>
             </svg>
             ${orphanOverlay}
+            ${additiveOverlay}
         </svg>`;
         return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
     }
@@ -1863,9 +1868,10 @@ console.log('dependencies.js loaded');
             // Get or create cached image URL for this type/color/template/exists combo
             const isTemplate = n.is_template || false;
             const exists = n.exists !== false;
-            const cacheKey = `${n.type}:${n.color}:${isTemplate}:${exists}`;
+            const isAdditive = n.additive || false;
+            const cacheKey = `${n.type}:${n.color}:${isTemplate}:${exists}:${isAdditive}`;
             if (!nodeImageCache[cacheKey]) {
-                nodeImageCache[cacheKey] = getNodeImageUrl(n.type, n.color, isTemplate, exists);
+                nodeImageCache[cacheKey] = getNodeImageUrl(n.type, n.color, isTemplate, exists, isAdditive);
             }
             const isFocusNode = n.id === focusNodeId;
 

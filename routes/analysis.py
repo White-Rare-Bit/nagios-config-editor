@@ -164,7 +164,7 @@ def _make_service_node_id(obj):
     """Compute the node ID for a service object."""
     target = obj.attributes.get("hostgroup_name") or obj.attributes.get("host_name", "")
     target = ",".join([t.strip().lstrip("+").strip() for t in target.split(",")
-                       if not t.strip().startswith("!")])
+                       if t.strip() and not t.strip().startswith("!")])
     if target:
         return f"service:{target}:{obj.get_name()}"
     return f"service:{obj.get_name()}"
@@ -206,7 +206,7 @@ def _parse_relationship_targets(field, target_type, raw_value):
     if target_type == "command":
         command_name = raw_value.split("!")[0].strip()
         return [command_name] if command_name else []
-    return [t.strip().lstrip("+").strip() for t in raw_value.split(",")
+    return [t.strip() for t in raw_value.split(",")
             if t.strip() and not t.strip().startswith("!")]
 
 
@@ -224,7 +224,7 @@ def _compute_target_node_id(field, target_type, target, obj, resolved_attrs):
         t_type = "service"
         svc_context = resolved_attrs.get("host_name", "")
         svc_context = ",".join([t.strip().lstrip("+").strip() for t in svc_context.split(",")
-                                if not t.strip().startswith("!")])
+                                if t.strip() and not t.strip().startswith("!")])
         if svc_context:
             return f"service:{svc_context}:{target}", t_type
         return f"service:{target}", t_type
@@ -235,7 +235,7 @@ def _compute_target_node_id(field, target_type, target, obj, resolved_attrs):
         else:
             svc_context = resolved_attrs.get("hostgroup_name") or resolved_attrs.get("host_name", "")
         svc_context = ",".join([t.strip().lstrip("+").strip() for t in svc_context.split(",")
-                                if not t.strip().startswith("!")])
+                                if t.strip() and not t.strip().startswith("!")])
         if svc_context:
             return f"service:{svc_context}:{target}", t_type
         return f"service:{target}", t_type
@@ -286,26 +286,32 @@ def _process_obj_relationships(obj, node_id, resolved_attrs, graph_state):
         for target in targets:
             if not target:
                 continue
-            target_id, t_type = _compute_target_node_id(field, target_type, target, obj, resolved_attrs)
+            is_additive = target.startswith("+")
+            clean_target = target.lstrip("+").strip() if is_additive else target
+            target_id, t_type = _compute_target_node_id(field, target_type, clean_target, obj, resolved_attrs)
             if target_id == node_id:
                 continue
 
             if target_id not in node_ids:
-                nodes.append({
+                node_data = {
                     "id": target_id,
-                    "label": target,
+                    "label": clean_target,
                     "type": t_type,
                     "color": _TYPE_COLORS.get(t_type, "#999999"),
                     "exists": False,
-                })
+                }
+                if is_additive:
+                    node_data["additive"] = True
+                nodes.append(node_data)
                 node_ids.add(target_id)
 
+            edge_data = {"from": node_id, "to": target_id, "label": field, "arrows": "to",
+                         "category": _FIELD_TO_CATEGORY.get(field, "dependencies")}
+            if is_additive:
+                edge_data["additive"] = True
             if field in _REVERSE_EDGE_FIELDS:
-                edges.append({"from": target_id, "to": node_id, "label": field, "arrows": "to",
-                              "category": _FIELD_TO_CATEGORY.get(field, "dependencies")})
-            else:
-                edges.append({"from": node_id, "to": target_id, "label": field, "arrows": "to",
-                              "category": _FIELD_TO_CATEGORY.get(field, "dependencies")})
+                edge_data["from"], edge_data["to"] = target_id, node_id
+            edges.append(edge_data)
 
 
 # ─────────────────────────────────────────────────────────────────────
