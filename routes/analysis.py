@@ -259,6 +259,28 @@ def _process_obj_relationships(obj, node_id, resolved_attrs, graph_state):
             continue
 
         raw_value = resolved_attrs[field]
+
+        # Servicegroup members use Nagios alternating-pair format: host1,svc1,host2,svc2
+        if obj.object_type == "servicegroup" and field == "members":
+            parts = [t.strip() for t in raw_value.split(",") if t.strip()]
+            for i in range(0, len(parts) - 1, 2):
+                host, svc = parts[i], parts[i + 1]
+                target_id = f"service:{host}:{svc}"
+                if target_id == node_id:
+                    continue
+                if target_id not in node_ids:
+                    nodes.append({
+                        "id": target_id,
+                        "label": svc,
+                        "type": "service",
+                        "color": _TYPE_COLORS.get("service", "#999999"),
+                        "exists": False,
+                    })
+                    node_ids.add(target_id)
+                edges.append({"from": node_id, "to": target_id, "label": field, "arrows": "to",
+                              "category": _FIELD_TO_CATEGORY.get(field, "groups")})
+            continue
+
         targets = _parse_relationship_targets(field, target_type, raw_value)
 
         for target in targets:
