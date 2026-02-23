@@ -357,6 +357,76 @@
     overflow: hidden;
 }
 
+/* ---- Panel Resize Handles ---- */
+.panel-resize-handle {
+    width: var(--nbe-resize-handle-width);
+    cursor: col-resize;
+    position: relative;
+    flex-shrink: 0;
+    z-index: 10;
+    background: transparent;
+    transition: background 0.15s ease;
+}
+
+.panel-resize-handle:hover {
+    background: var(--nbe-dark-accent-primary);
+}
+
+.panel-resize-handle.is-dragging {
+    background: var(--nbe-dark-accent-primary);
+}
+
+/* Collapse pill toggle */
+.panel-collapse-pill {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 16px;
+    height: 32px;
+    border: 1px solid var(--nbe-dark-border-secondary);
+    border-radius: 8px;
+    background: var(--nbe-dark-bg-elevated);
+    color: var(--nbe-dark-text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 8px;
+    z-index: 11;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    opacity: 0;
+}
+
+.panel-resize-handle:hover .panel-collapse-pill,
+.panel-collapse-pill:focus-visible {
+    opacity: 1;
+}
+
+.panel-collapse-pill:hover {
+    background: var(--nbe-dark-accent-primary);
+    color: var(--nbe-dark-text-primary);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* Collapsed panel state — pill always visible */
+.panel-resize-handle.panel-collapsed .panel-collapse-pill {
+    opacity: 1;
+}
+
+/* Drag overlay to prevent selection during resize */
+.panel-resize-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9999;
+    cursor: col-resize;
+}
+
 /* Tree Panel - Enterprise Style */
 .tree-panel {
     --nbe-panel-bg: var(--nbe-dark-surface-at-1);
@@ -366,6 +436,34 @@
     border-right: 1px solid var(--nbe-dark-border-primary);
     display: flex;
     flex-direction: column;
+}
+
+/* Panel collapse transition */
+.tree-panel,
+.right-pane {
+    transition: width 0.2s ease;
+    overflow: hidden;
+}
+
+.tree-panel.is-collapsing,
+.right-pane.is-collapsing {
+    transition: width 0.2s ease;
+}
+
+.tree-panel.is-dragging,
+.right-pane.is-dragging {
+    transition: none;
+}
+
+.tree-panel.is-collapsed,
+.right-pane.is-collapsed {
+    width: 0 !important;
+    border-width: 0;
+}
+
+.tree-panel.is-collapsed > :not(.panel-resize-handle),
+.right-pane.is-collapsed > :not(.panel-resize-handle) {
+    visibility: hidden;
 }
 
 /* Panel Header */
@@ -825,9 +923,10 @@
     text-transform: uppercase;
     letter-spacing: 0.3px;
     pointer-events: none;
-    width: 66px;
+    min-width: 44px;
     text-align: center;
     flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .tree-item-match-field {
@@ -1192,7 +1291,7 @@
     --nbe-panel-bg: var(--nbe-dark-surface-at-1);
 
     position: relative;
-    width: 440px;
+    width: var(--nbe-panel-width-right);
     display: flex;
     flex-direction: column;
     background: var(--nbe-panel-bg);
