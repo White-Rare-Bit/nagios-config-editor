@@ -180,15 +180,24 @@ def _add_or_update_node(obj, node_id, template_names, graph_state):
 
     if node_id not in node_ids:
         is_template = (obj.object_type, obj.get_name()) in template_names
+        label = obj.get_name()
+        if obj.object_type == "service":
+            target = obj.attributes.get("hostgroup_name") or obj.attributes.get("host_name", "")
+            target = ",".join([t.strip().lstrip("+").strip() for t in target.split(",")
+                               if t.strip() and not t.strip().startswith("!")])
+            if target:
+                label = f"{label} / {target}"
         node_data = {
             "id": node_id,
-            "label": obj.get_name(),
+            "label": label,
             "type": obj.object_type,
             "color": _TYPE_COLORS.get(obj.object_type, "#999999"),
             "exists": True,
         }
         if is_template:
             node_data["is_template"] = True
+        if "\u2192" in label:
+            node_data["search_label"] = label.replace("\u2192", "->")
         nodes.append(node_data)
         node_ids.add(node_id)
     else:
