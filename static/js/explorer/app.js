@@ -556,7 +556,7 @@ function renderStagedCreationTreeItem(creation, idx) {
              ondragend="Explorer.handleDragEnd(event)">
             <span class="tree-item-staged-badge" title="Pending - not yet committed">+</span>
             <span class="tree-item-name">${Explorer.escapeHtml(displayName)}</span>
-            <span class="tree-item-type type-${creation.object_type}" title="${Explorer.escapeHtml(creation.object_type)}">${Explorer.getTypeBadge(creation.object_type)}</span>
+            <span class="tree-item-type type-${creation.object_type}" title="${Explorer.escapeHtml(creation.object_type)}" data-badge-compact="${Explorer.getTypeBadgeTier(creation.object_type, false, 'compact')}" data-badge-medium="${Explorer.getTypeBadgeTier(creation.object_type, false, 'medium')}" data-badge-full="${Explorer.getTypeBadgeTier(creation.object_type, false, 'full')}">${Explorer.getTypeBadge(creation.object_type)}</span>
         </div>
     `;
 }
@@ -737,6 +737,9 @@ function renderTreeItem(obj, showType = false) {
     const deletedClass = isDeleted ? 'staged-for-deletion' : '';
     const stagedClass = isStagedMove ? 'staged' : '';
     const typeLabel = Explorer.getTypeBadge(obj.object_type, isTemplate);
+    const badgeCompact = Explorer.getTypeBadgeTier(obj.object_type, isTemplate, 'compact');
+    const badgeMedium = Explorer.getTypeBadgeTier(obj.object_type, isTemplate, 'medium');
+    const badgeFull = Explorer.getTypeBadgeTier(obj.object_type, isTemplate, 'full');
     const matchField = getSearchMatchField(obj);
 
     // Check if there's a staged edit with a new name
@@ -749,7 +752,7 @@ function renderTreeItem(obj, showType = false) {
              data-index="${obj.global_index}">
             <span class="tree-item-delete-badge" title="Staged for deletion">−</span>
             <span class="tree-item-name" title="${Explorer.escapeHtml(displayName)}">${Explorer.escapeHtml(displayName)}</span>
-            ${showType ? '' : `<span class="tree-item-type type-${obj.object_type}" title="${obj.object_type}">${typeLabel}</span>`}
+            ${showType ? '' : `<span class="tree-item-type type-${obj.object_type}" title="${obj.object_type}" data-badge-compact="${badgeCompact}" data-badge-medium="${badgeMedium}" data-badge-full="${badgeFull}">${typeLabel}</span>`}
             <button class="tree-item-undo-btn" onclick="event.stopPropagation(); Explorer.unstageObjectDeletion(${obj.global_index})" title="Undo deletion">Undo</button>
         </div>
     `;
@@ -767,7 +770,7 @@ function renderTreeItem(obj, showType = false) {
             ${isStagedMove ? '<span class="tree-item-staged-badge" title="Pending move - not yet committed">→</span>' : ''}
             <span class="tree-item-name" title="${Explorer.escapeHtml(displayName)}">${Explorer.escapeHtml(displayName)}</span>
             ${matchField ? `<span class="tree-item-match-field" title="Matched in ${Explorer.escapeHtml(matchField)}">${Explorer.escapeHtml(matchField)}</span>` : ''}
-            ${showType ? '' : `<span class="tree-item-type type-${obj.object_type}" title="${obj.object_type}">${typeLabel}</span>`}
+            ${showType ? '' : `<span class="tree-item-type type-${obj.object_type}" title="${obj.object_type}" data-badge-compact="${badgeCompact}" data-badge-medium="${badgeMedium}" data-badge-full="${badgeFull}">${typeLabel}</span>`}
         </div>
     `;
 }
