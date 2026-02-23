@@ -10,7 +10,7 @@
 {% block content %}
 <div class="explorer" id="explorerContainer" role="application" aria-label="Nagios Object Explorer">
     <!-- Left: Tree View -->
-    <div class="tree-panel" role="region" aria-label="Objects panel">
+    <div class="tree-panel" id="treePanel" role="region" aria-label="Objects panel">
         <div class="panel-header">
             <span class="panel-header-title" id="objectsPanelTitle">Objects</span>
         </div>
@@ -51,6 +51,14 @@
             </div>
         </div>
         <div class="tree-content" id="treeContent" role="tree" aria-label="Object tree" tabindex="0"></div>
+    </div>
+
+    <!-- Left Resize Handle -->
+    <div class="panel-resize-handle panel-resize-handle--left" id="leftResizeHandle">
+        <button class="panel-collapse-pill" id="leftCollapsePill"
+                aria-label="Collapse left panel" title="Collapse panel">
+            <i class="fa-solid fa-chevron-left"></i>
+        </button>
     </div>
 
     <!-- Center: Object Detail/Editor -->
@@ -103,6 +111,14 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Right Resize Handle -->
+    <div class="panel-resize-handle panel-resize-handle--right" id="rightResizeHandle">
+        <button class="panel-collapse-pill" id="rightCollapsePill"
+                aria-label="Collapse right panel" title="Collapse panel">
+            <i class="fa-solid fa-chevron-right"></i>
+        </button>
     </div>
 
     <!-- Right: Workspace Panel -->
@@ -279,6 +295,7 @@
 <!-- Explorer Modules (load order matters: namespace first, then utilities, then core, then features) -->
 <script src="{{ url_for('static', filename='js/explorer/main.js') }}"></script>
 <script src="{{ url_for('static', filename='js/explorer/constants.js') }}"></script>
+<script src="{{ url_for('static', filename='js/explorer/panel-resizer.js') }}"></script>
 <script src="{{ url_for('static', filename='js/explorer/state-management.js') }}"></script>
 <script src="{{ url_for('static', filename='js/explorer/tab-manager.js') }}"></script>
 <script src="{{ url_for('static', filename='js/explorer/ui-utils.js') }}"></script>
