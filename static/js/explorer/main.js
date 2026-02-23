@@ -209,6 +209,9 @@ Explorer.init = function(configPath) {
     // Initialize event delegation
     Explorer.initEventDelegation();
 
+    // Initialize panel resizer (must happen after DOM ready, before data load)
+    Explorer.initPanelResizer();
+
     DebugLogger.info('Explorer initialized', { sessionId: Explorer.state.sessionId });
 };
 

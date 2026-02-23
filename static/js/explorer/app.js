@@ -474,6 +474,11 @@ function buildTree() {
     } else {
         buildTypeTree(container, filtered);
     }
+
+    // Update badge tiers after tree re-render
+    if (Explorer.refreshPanelTiers) {
+        Explorer.refreshPanelTiers();
+    }
 }
 
 function buildFileTree(container, objects) {
