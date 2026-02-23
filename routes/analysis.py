@@ -73,6 +73,46 @@ _RELATIONSHIP_FIELDS = {
     "exclude": "timeperiod",
 }
 
+_FIELD_TO_CATEGORY = {
+    "host_name": "dependencies",
+    "hostgroup_name": "groups",
+    "hostgroups": "groups",
+    "hostgroup_members": "groups",
+    "service_description": "dependencies",
+    "dependent_service_description": "dependencies",
+    "dependent_host_name": "dependencies",
+    "dependent_hostgroup_name": "dependencies",
+    "master_host_name": "dependencies",
+    "master_hostgroup_name": "dependencies",
+    "master_service_description": "dependencies",
+    "servicegroup_name": "groups",
+    "servicegroups": "groups",
+    "servicegroup_members": "groups",
+    "dependent_servicegroup_name": "dependencies",
+    "contact_name": "contacts",
+    "contacts": "contacts",
+    "contact_groups": "contacts",
+    "contactgroup_name": "contacts",
+    "contactgroup_members": "contacts",
+    "contactgroups": "contacts",
+    "escalation_contacts": "contacts",
+    "escalation_contact_groups": "contacts",
+    "use": "templates",
+    "members": "groups",
+    "parents": "dependencies",
+    "check_command": "commands",
+    "event_handler": "commands",
+    "host_notification_commands": "commands",
+    "service_notification_commands": "commands",
+    "check_period": "schedules",
+    "notification_period": "schedules",
+    "host_notification_period": "schedules",
+    "service_notification_period": "schedules",
+    "escalation_period": "schedules",
+    "dependency_period": "schedules",
+    "exclude": "schedules",
+}
+
 _TYPE_COLORS = {
     "host": "#4CAF50",
     "hostgroup": "#8BC34A",
@@ -239,9 +279,11 @@ def _process_obj_relationships(obj, node_id, resolved_attrs, graph_state):
                 node_ids.add(target_id)
 
             if field in _REVERSE_EDGE_FIELDS:
-                edges.append({"from": target_id, "to": node_id, "label": field, "arrows": "to"})
+                edges.append({"from": target_id, "to": node_id, "label": field, "arrows": "to",
+                              "category": _FIELD_TO_CATEGORY.get(field, "dependencies")})
             else:
-                edges.append({"from": node_id, "to": target_id, "label": field, "arrows": "to"})
+                edges.append({"from": node_id, "to": target_id, "label": field, "arrows": "to",
+                              "category": _FIELD_TO_CATEGORY.get(field, "dependencies")})
 
 
 # ─────────────────────────────────────────────────────────────────────
