@@ -502,8 +502,15 @@ console.log('dependencies.js loaded');
 
         function expandHostgroup() {
             addTemplates(startNodeId);
+            // Forward members edges (hostgroup.members = host1,host2)
             const memberEdges = findEdges(startNodeId, null, 'members');
             for (const edge of memberEdges) { collectNode(edge.to); }
+            // Forward hostgroup_members edges (hostgroup.hostgroup_members = nested groups)
+            const hgMemberEdges = findEdges(startNodeId, null, 'hostgroup_members');
+            for (const edge of hgMemberEdges) { collectNode(edge.to); }
+            // Backward hostgroups edges (host.hostgroups = this_hostgroup)
+            const backwardMemberEdges = findEdges(null, startNodeId, 'hostgroups');
+            for (const edge of backwardMemberEdges) { collectNode(edge.from); }
             const serviceEdges = findEdges(null, startNodeId, 'hostgroup_name');
             for (const edge of serviceEdges) {
                 if (collectNode(edge.from)) {
@@ -517,6 +524,19 @@ console.log('dependencies.js loaded');
             addTemplates(startNodeId);
             const memberEdges = findEdges(startNodeId, null, 'members');
             for (const edge of memberEdges) { collectNode(edge.to); }
+        }
+
+        function expandServicegroup() {
+            addTemplates(startNodeId);
+            // Forward members edges (servicegroup.members = svc1,svc2)
+            const memberEdges = findEdges(startNodeId, null, 'members');
+            for (const edge of memberEdges) { collectNode(edge.to); }
+            // Forward servicegroup_members edges (servicegroup.servicegroup_members = nested groups)
+            const sgMemberEdges = findEdges(startNodeId, null, 'servicegroup_members');
+            for (const edge of sgMemberEdges) { collectNode(edge.to); }
+            // Backward servicegroups edges (service.servicegroups = this_servicegroup)
+            const backwardMemberEdges = findEdges(null, startNodeId, 'servicegroups');
+            for (const edge of backwardMemberEdges) { collectNode(edge.from); }
         }
 
         function expandContact() {
@@ -540,7 +560,7 @@ console.log('dependencies.js loaded');
             host: expandHost,
             service: expandService,
             hostgroup: expandHostgroup,
-            servicegroup: expandMemberGroup,
+            servicegroup: expandServicegroup,
             contact: expandContact,
             contactgroup: expandMemberGroup,
             servicedependency: () => expandEdgePattern(

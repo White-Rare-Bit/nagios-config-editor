@@ -64,11 +64,13 @@
             'host_name',                  // Service -> Host binding (followed backward from hosts)
             'hostgroups'                  // Host -> Hostgroup membership (followed forward from hosts)
         ],
-        // Membership: group -> members only (for notifications view - no reverse edges)
+        // Membership: group <-> members (includes reverse edges for host/service group membership)
         membership: [
             'members',                    // Group -> Members
             'hostgroup_members',          // Hostgroup -> Members
-            'servicegroup_members'        // Servicegroup -> Members
+            'servicegroup_members',       // Servicegroup -> Members
+            'hostgroups',                 // Host -> Hostgroup (backward membership)
+            'servicegroups'               // Service -> Servicegroup (backward membership)
         ],
         // Contacts: notification routing (includes escalation contacts)
         contacts: [
@@ -245,10 +247,11 @@
                 stopAt: []
             },
             escalations: {
-                // Find hostescalations targeting this host
-                forward: [],
+                // Find hostescalations targeting this host (directly or via hostgroups)
+                forward: ['hostgroups'],
                 backward: ['host_name'],
                 atType: {
+                    hostgroup: { backward: ['hostgroup_name'] },
                     hostescalation: { forward: ['contacts', 'contact_groups', 'escalation_period'] }
                 },
                 stopAt: []
