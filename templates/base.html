@@ -12,7 +12,7 @@
     <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
     {% block extra_css %}{% endblock %}
     <!-- Critical layout + hide rules - must be in <head> to prevent FOUC on elements rendered before the body inline <style> block -->
-    <style>.u-hidden{display:none!important}.global-dialog-overlay,.confirm-dialog-overlay,.git-result-overlay,.identity-required-overlay,.keyboard-shortcuts-overlay{display:none}.page-container{display:flex;height:calc(100vh - var(--nbe-navbar-height));margin:-1.5rem;background:var(--nbe-bg-page)}</style>
+    <style>.u-hidden{display:none!important}.global-dialog-overlay,.confirm-dialog-overlay,.git-result-overlay,.identity-required-overlay,.keyboard-shortcuts-overlay{display:none}.page-container{display:flex;height:calc(100vh - var(--nbe-navbar-height));margin:-1.5rem -12px;background:var(--nbe-bg-page)}</style>
 </head>
 <body class="u-overflow-x-hidden{% block body_class %}{% endblock %}">
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
@@ -1160,7 +1160,7 @@
     .page-container {
         display: flex;
         height: calc(100vh - var(--nbe-navbar-height));
-        margin: -1.5rem;
+        margin: -1.5rem -12px;
         background: var(--nbe-bg-page);
     }
 
@@ -1958,12 +1958,6 @@
     .toast-success { background: var(--nbe-success); }
     .toast-info { background: var(--nbe-info); }
     </style>
-
-    {% if config.DEBUG %}
-    <!-- Console shim must load FIRST to capture all console output -->
-    <script>window.__CONSOLE_SHIM_ENABLED__ = true;</script>
-    <script src="{{ url_for('static', filename='js/console-shim.js') }}"></script>
-    {% endif %}
 
     <script src="{{ url_for('static', filename='vendor/js/bootstrap.bundle.min.js') }}"></script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>

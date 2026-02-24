@@ -352,7 +352,7 @@
 .explorer {
     display: flex;
     height: calc(100vh - var(--nbe-navbar-height));
-    margin: -1.5rem;
+    margin: -1.5rem -12px;
     background: var(--nbe-dark-bg-primary);
     overflow: hidden;
 }
@@ -704,8 +704,36 @@
     flex: 1;
     overflow-y: auto;
     padding: 0;
+    scrollbar-color: var(--nbe-dark-border-primary) var(--nbe-dark-bg-primary);
+    scrollbar-width: thin;
 }
 
+.workspace-tree-container {
+    scrollbar-color: var(--nbe-dark-border-primary) var(--nbe-dark-bg-primary);
+    scrollbar-width: thin;
+}
+
+/* Fallback for older browsers */
+.tree-content::-webkit-scrollbar,
+.workspace-tree-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.tree-content::-webkit-scrollbar-track,
+.workspace-tree-container::-webkit-scrollbar-track {
+    background: var(--nbe-dark-bg-primary);
+}
+
+.tree-content::-webkit-scrollbar-thumb,
+.workspace-tree-container::-webkit-scrollbar-thumb {
+    background: var(--nbe-dark-border-primary);
+    border-radius: var(--nbe-radius-md);
+}
+
+.tree-content::-webkit-scrollbar-thumb:hover,
+.workspace-tree-container::-webkit-scrollbar-thumb:hover {
+    background: var(--nbe-dark-text-muted);
+}
 
 .tree-shortcuts-bar {
     display: flex;
@@ -1651,6 +1679,7 @@
 
 .workspace-tree-container {
     flex: 1;
+    min-height: 0;
     overflow: hidden auto;
     padding: var(--nbe-space-sm) 0;
 }

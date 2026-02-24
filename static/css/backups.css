@@ -118,6 +118,7 @@
 
 .backup-table-container {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding: var(--nbe-space-lg) var(--nbe-space-xl);
 }

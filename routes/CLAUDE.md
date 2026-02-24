@@ -19,7 +19,6 @@ Flask blueprints registered in `__init__.py`. Service access via `helpers.py`.
 | `validation.py` | POST /api/reload, /validate, GET /api/summary, /health-check |
 | `settings.py` | GET/POST /api/settings, /logging |
 | `logs.py` | GET /api/logs/audit, /app, POST /clear, GET /download |
-| `debug.py` | Debug/diagnostic endpoints |
 
 ## Key Helpers (helpers.py)
 

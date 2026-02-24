@@ -179,6 +179,7 @@
 /* Content area */
 .git-content-area {
     flex: 1;
+    min-height: 0;
     display: flex;
     overflow: hidden;
     background: var(--nbe-dark-bg-primary);
@@ -212,6 +213,7 @@
     padding: 0;
     overflow-y: auto;
     flex: 1;
+    min-height: 0;
 }
 
 .git-file-item {
@@ -552,6 +554,7 @@
 
 .git-history-table-container {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding: var(--nbe-space-lg) var(--nbe-space-xl);
 }

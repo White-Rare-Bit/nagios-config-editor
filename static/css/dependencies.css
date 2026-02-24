@@ -7,7 +7,7 @@
 .dep-container {
     display: flex;
     height: calc(100vh - var(--nbe-navbar-height));
-    margin: -1.5rem;
+    margin: -1.5rem -12px;
 }
 
 .dep-container .dep-sidebar,
