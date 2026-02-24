@@ -129,7 +129,7 @@
      */
     function updateBadgesInPanel(panel, tier) {
         const attr = 'data-badge-' + tier;
-        const badges = panel.querySelectorAll('.tree-item-type[' + attr + ']');
+        const badges = panel.querySelectorAll('.tree-item-type[' + attr + '], .tree-object-type[' + attr + ']');
         for (let i = 0; i < badges.length; i++) {
             const newText = badges[i].getAttribute(attr);
             if (newText && badges[i].textContent !== newText) {

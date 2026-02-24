@@ -1949,6 +1949,17 @@
     color: var(--nbe-type-neutral-text);
     width: 66px;
     text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.panel-tier-medium .tree-object-type {
+    width: 82px;
+}
+
+.panel-tier-full .tree-object-type {
+    width: 128px;
 }
 
 /* Type-specific colors - using design tokens */

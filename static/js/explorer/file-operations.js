@@ -626,6 +626,11 @@
         html += '</div>';
 
         container.innerHTML = html;
+
+        // Update badge tiers after right-pane re-render
+        if (Explorer.refreshPanelTiers) {
+            Explorer.refreshPanelTiers();
+        }
     }
 
     function toggleFolderExpand(folderPath) {
@@ -659,7 +664,7 @@
                  ondragstart="Explorer.handleTargetObjectDragStart(event, ${item.obj.global_index}, 'existing', '${Explorer.escapeJs(filePath)}')"
                  ondragend="Explorer.handleTargetObjectDragEnd(event)">
                 <span class="tree-drag-handle">${gripIcon}</span>
-                <span class="tree-object-type type-${item.obj.object_type}">${typeLabel}</span>
+                <span class="tree-object-type type-${item.obj.object_type}" data-badge-compact="${Explorer.getTypeBadgeTier(item.obj.object_type, isTemplate, 'compact')}" data-badge-medium="${Explorer.getTypeBadgeTier(item.obj.object_type, isTemplate, 'medium')}" data-badge-full="${Explorer.getTypeBadgeTier(item.obj.object_type, isTemplate, 'full')}">${typeLabel}</span>
                 <span class="tree-object-name" title="${Explorer.escapeHtml(displayName)}">${Explorer.escapeHtml(displayName)}</span>
             </div>`;
     }
@@ -675,7 +680,7 @@
                  ondragstart="Explorer.handleTargetObjectDragStart(event, '${escapedKey}', 'pending', '${Explorer.escapeJs(filePath)}')"
                  ondragend="Explorer.handleTargetObjectDragEnd(event)">
                 <span class="tree-drag-handle">${gripIcon}</span>
-                <span class="tree-object-type type-${item.move.object.object_type}">${typeLabel}</span>
+                <span class="tree-object-type type-${item.move.object.object_type}" data-badge-compact="${Explorer.getTypeBadgeTier(item.move.object.object_type, isTemplate, 'compact')}" data-badge-medium="${Explorer.getTypeBadgeTier(item.move.object.object_type, isTemplate, 'medium')}" data-badge-full="${Explorer.getTypeBadgeTier(item.move.object.object_type, isTemplate, 'full')}">${typeLabel}</span>
                 <span class="tree-object-name" title="${Explorer.escapeHtml(pendingDisplayName)}">${Explorer.escapeHtml(pendingDisplayName)}</span>
                 <button class="tree-object-action" onclick="event.stopPropagation(); Explorer.undoObjectMove('${escapedKey}')" title="Undo move">${xIcon}</button>
             </div>`;
@@ -691,7 +696,7 @@
                  ondragstart="Explorer.handleTargetObjectDragStart(event, ${item.idx}, 'creation', '${Explorer.escapeJs(filePath)}')"
                  ondragend="Explorer.handleTargetObjectDragEnd(event)">
                 <span class="tree-drag-handle">${gripIcon}</span>
-                <span class="tree-object-type type-${item.creation.object_type}">${typeLabel}</span>
+                <span class="tree-object-type type-${item.creation.object_type}" data-badge-compact="${Explorer.getTypeBadgeTier(item.creation.object_type, isTemplate, 'compact')}" data-badge-medium="${Explorer.getTypeBadgeTier(item.creation.object_type, isTemplate, 'medium')}" data-badge-full="${Explorer.getTypeBadgeTier(item.creation.object_type, isTemplate, 'full')}">${typeLabel}</span>
                 <span class="tree-object-name" title="${Explorer.escapeHtml(creationDisplayName)}">${Explorer.escapeHtml(creationDisplayName)}</span>
                 <button class="tree-object-action" onclick="event.stopPropagation(); Explorer.removeStagedCreation(${item.idx})" title="Remove">${xIcon}</button>
             </div>`;
