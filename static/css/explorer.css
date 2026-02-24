@@ -947,13 +947,17 @@
     text-overflow: ellipsis;
 }
 
-/* Tier-driven uniform badge widths */
+/* Tier-driven uniform badge widths — sized so the longest label at each
+   tier has the same left/right padding as HOSTTMPL has in the 66px compact box.
+   Compact longest: HOSTTMPL (8ch) → 66px
+   Medium longest:  CONTACTGRP / TIMEPERIOD (10ch) → 82px
+   Full longest:    SERVICEESCALATION (17ch) → 128px */
 .panel-tier-medium .tree-item-type {
-    width: 90px;
+    width: 82px;
 }
 
 .panel-tier-full .tree-item-type {
-    width: 140px;
+    width: 128px;
 }
 
 .tree-item-match-field {
