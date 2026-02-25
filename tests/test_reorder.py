@@ -15,12 +15,10 @@ import sys
 import json
 import tempfile
 import shutil
-from pathlib import Path
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nagios_parser import NagiosConfigParser
 from nagios_service import NagiosService
 from staging_manager import StagingManager
 
@@ -67,7 +65,7 @@ define hostgroup {
     alias             Group G - Seventh
 }
 """
-    with open(config_file, 'w') as f:
+    with open(config_file, "w") as f:
         f.write(content)
 
     return config_file
@@ -84,13 +82,19 @@ def get_object_order(service: NagiosService, config_file: str) -> list:
 
     # Normalize paths for comparison
     config_file_real = os.path.realpath(config_file)
-    objects = [o for o in all_objects
-               if os.path.realpath(o.source_file) == config_file_real and o.object_type == 'hostgroup']
+    objects = [
+        o
+        for o in all_objects
+        if os.path.realpath(o.source_file) == config_file_real
+        and o.object_type == "hostgroup"
+    ]
     objects.sort(key=lambda o: o.line_number)
-    return [o.attributes.get('hostgroup_name') for o in objects]
+    return [o.attributes.get("hostgroup_name") for o in objects]
 
 
-def build_staged_moves(service: NagiosService, config_file: str, new_order: list) -> list:
+def build_staged_moves(
+    service: NagiosService, config_file: str, new_order: list
+) -> list:
     """
     Build staged moves array to reorder objects into new_order.
 
@@ -98,11 +102,15 @@ def build_staged_moves(service: NagiosService, config_file: str, new_order: list
     """
     service.reload()
     config_file_real = os.path.realpath(config_file)
-    objects = [o for o in service.get_objects()
-               if os.path.realpath(o.source_file) == config_file_real and o.object_type == 'hostgroup']
+    objects = [
+        o
+        for o in service.get_objects()
+        if os.path.realpath(o.source_file) == config_file_real
+        and o.object_type == "hostgroup"
+    ]
 
     # Build a lookup by name
-    obj_by_name = {o.attributes.get('hostgroup_name'): o for o in objects}
+    obj_by_name = {o.attributes.get("hostgroup_name"): o for o in objects}
 
     moves = []
     for i, name in enumerate(new_order):
@@ -119,36 +127,36 @@ def build_staged_moves(service: NagiosService, config_file: str, new_order: list
         insert_position = (i + 1) * 10  # 10, 20, 30, ...
 
         move = {
-            'stableKey': stable_key,
-            'targetFile': config_file,
-            'originalFile': obj.source_file,
-            'insertPosition': insert_position,
-            'object': {
-                'source_file': obj.source_file,
-                'object_type': obj.object_type,
-                'line_number': obj.line_number,
-                'attributes': dict(obj.attributes),
-                'name': name,
-                'display_name': name
-            }
+            "stableKey": stable_key,
+            "targetFile": config_file,
+            "originalFile": obj.source_file,
+            "insertPosition": insert_position,
+            "object": {
+                "source_file": obj.source_file,
+                "object_type": obj.object_type,
+                "line_number": obj.line_number,
+                "attributes": dict(obj.attributes),
+                "name": name,
+                "display_name": name,
+            },
         }
         moves.append(move)
 
     # Sort by insertPosition (frontend does this before sending)
-    moves.sort(key=lambda m: m.get('insertPosition', 0))
+    moves.sort(key=lambda m: m.get("insertPosition", 0))
 
     return moves
 
 
 def print_separator(title: str):
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  {title}")
-    print('='*60)
+    print("=" * 60)
 
 
 def print_config_content(config_file: str):
     """Print the actual config file content."""
-    with open(config_file, 'r') as f:
+    with open(config_file, "r") as f:
         content = f.read()
     print(content)
 
@@ -157,7 +165,7 @@ def run_test():
     """Run the reordering test."""
 
     # Create temp directory for test
-    test_dir = tempfile.mkdtemp(prefix='nagios_reorder_test_')
+    test_dir = tempfile.mkdtemp(prefix="nagios_reorder_test_")
     print(f"Test directory: {test_dir}")
 
     try:
@@ -165,13 +173,15 @@ def run_test():
         print_separator("1. SETUP: Creating test config")
         config_file = create_test_config(test_dir)
 
-        staging_file = os.path.join(test_dir, 'staging.json')
+        staging_file = os.path.join(test_dir, "staging.json")
         sm = StagingManager(staging_file)
         service = NagiosService(test_dir, staging_manager=sm)
 
         initial_order = get_object_order(service, config_file)
         print(f"Initial order: {initial_order}")
-        print(f"Expected: ['group-A', 'group-B', 'group-C', 'group-D', 'group-E', 'group-F', 'group-G']")
+        print(
+            "Expected: ['group-A', 'group-B', 'group-C', 'group-D', 'group-E', 'group-F', 'group-G']"
+        )
 
         print("\nInitial config file content:")
         print_config_content(config_file)
@@ -179,7 +189,15 @@ def run_test():
         # Define new order - move things around significantly
         # Original: A, B, C, D, E, F, G
         # New:      E, C, G, A, F, B, D  (significant reordering)
-        new_order = ['group-E', 'group-C', 'group-G', 'group-A', 'group-F', 'group-B', 'group-D']
+        new_order = [
+            "group-E",
+            "group-C",
+            "group-G",
+            "group-A",
+            "group-F",
+            "group-B",
+            "group-D",
+        ]
 
         print_separator("2. STAGING: Building staged moves")
         print(f"Target order: {new_order}")
@@ -188,9 +206,9 @@ def run_test():
 
         print(f"\nStaged moves ({len(staged_moves)} moves):")
         for i, move in enumerate(staged_moves):
-            obj_name = move['object']['name']
-            insert_pos = move['insertPosition']
-            print(f"  {i+1}. {obj_name} (insertPosition={insert_pos})")
+            obj_name = move["object"]["name"]
+            insert_pos = move["insertPosition"]
+            print(f"  {i + 1}. {obj_name} (insertPosition={insert_pos})")
 
         print("\nFull staged moves data:")
         print(json.dumps(staged_moves, indent=2, default=str))
@@ -198,29 +216,29 @@ def run_test():
         # Convert list of moves to dict keyed by stable key (composite format)
         staged_moves_dict = {}
         for move in staged_moves:
-            key = move['stableKey']
+            key = move["stableKey"]
             staged_moves_dict[key] = {
-                'targetFile': move['targetFile'],
-                'insertPosition': move['insertPosition'],
-                'object': move['object'],
+                "targetFile": move["targetFile"],
+                "insertPosition": move["insertPosition"],
+                "object": move["object"],
             }
 
         # Build staging data like the frontend sends
         staging_data = {
-            'sessionId': 'test-session',
-            'userName': 'test-user',
-            'userEmail': 'test@example.com',
-            'pendingEdits': {},
-            'stagedMoves': staged_moves_dict,
-            'stagedCreations': [],
-            'stagedObjectDeletions': [],
-            'newFiles': [],
-            'stagedFileCreations': [],
-            'stagedFileDeletions': [],
-            'stagedFileMoves': [],
-            'stagedFolderCreations': [],
-            'stagedFolderDeletions': [],
-            'stagedFolderMoves': []
+            "sessionId": "test-session",
+            "userName": "test-user",
+            "userEmail": "test@example.com",
+            "pendingEdits": {},
+            "stagedMoves": staged_moves_dict,
+            "stagedCreations": [],
+            "stagedObjectDeletions": [],
+            "newFiles": [],
+            "stagedFileCreations": [],
+            "stagedFileDeletions": [],
+            "stagedFileMoves": [],
+            "stagedFolderCreations": [],
+            "stagedFolderDeletions": [],
+            "stagedFolderMoves": [],
         }
 
         print_separator("3. APPLYING: Calling apply_object_composite")
@@ -231,9 +249,9 @@ def run_test():
         print(f"Result success: {result.success}")
         print(f"Result data: {json.dumps(result.data, indent=2, default=str)}")
 
-        if result.data.get('errors'):
-            print(f"\nERRORS:")
-            for err in result.data['errors']:
+        if result.data.get("errors"):
+            print("\nERRORS:")
+            for err in result.data["errors"]:
                 print(f"  - {err}")
 
         print_separator("4. VERIFICATION: Checking final order")
@@ -250,14 +268,18 @@ def run_test():
             print("\nDifferences:")
             for i, (expected, actual) in enumerate(zip(new_order, final_order)):
                 status = "✓" if expected == actual else "✗"
-                print(f"  Position {i+1}: expected={expected}, actual={actual} {status}")
+                print(
+                    f"  Position {i + 1}: expected={expected}, actual={actual} {status}"
+                )
 
         print_separator("5. FINAL CONFIG FILE CONTENT")
         print_config_content(config_file)
 
         # Extract just the hostgroup_name lines for easy comparison
         print_separator("6. SUMMARY: Order comparison")
-        print(f"Initial: {['group-A', 'group-B', 'group-C', 'group-D', 'group-E', 'group-F', 'group-G']}")
+        print(
+            f"Initial: {['group-A', 'group-B', 'group-C', 'group-D', 'group-E', 'group-F', 'group-G']}"
+        )
         print(f"Target:  {new_order}")
         print(f"Result:  {final_order}")
 
@@ -269,6 +291,6 @@ def run_test():
         shutil.rmtree(test_dir)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     success = run_test()
     sys.exit(0 if success else 1)

@@ -245,12 +245,16 @@ def verify_objects(staging_data, parsed_objects, pre_objects=None):
         name_field = NAME_FIELDS.get(obj_type)
         obj_name = attrs.get(name_field, "") if name_field else ""
 
-        found = _find_object(parsed_objects, obj_type, obj_name, source_file=target_file)
+        found = _find_object(
+            parsed_objects, obj_type, obj_name, source_file=target_file
+        )
         if found:
             creations_verified += 1
         else:
             creations_failed += 1
-            failures.append(f"Creation: {obj_type} '{obj_name}' not found in {target_file}")
+            failures.append(
+                f"Creation: {obj_type} '{obj_name}' not found in {target_file}"
+            )
 
     # Verify deletions (need pre_objects to know what was deleted)
     if pre_objects:
@@ -261,13 +265,18 @@ def verify_objects(staging_data, parsed_objects, pre_objects=None):
             obj_type = old_obj.get("object_type")
             source_file = old_obj.get("source_file")
             name_field = NAME_FIELDS.get(obj_type)
-            obj_name = old_obj.get("attributes", {}).get(name_field, "") if name_field else ""
+            obj_name = (
+                old_obj.get("attributes", {}).get(name_field, "") if name_field else ""
+            )
 
-            still_exists = _find_object(parsed_objects, obj_type, obj_name,
-                                        source_file=source_file)
+            still_exists = _find_object(
+                parsed_objects, obj_type, obj_name, source_file=source_file
+            )
             if still_exists:
                 deletions_failed += 1
-                failures.append(f"Deletion: {obj_type} '{obj_name}' still exists in {source_file}")
+                failures.append(
+                    f"Deletion: {obj_type} '{obj_name}' still exists in {source_file}"
+                )
             else:
                 deletions_verified += 1
 
@@ -287,15 +296,21 @@ def verify_objects(staging_data, parsed_objects, pre_objects=None):
             obj_type = obj_meta.get("object_type")
             obj_name = obj_meta.get("name")
 
-        found = _find_object(parsed_objects, obj_type, obj_name, source_file=target_file)
+        found = _find_object(
+            parsed_objects, obj_type, obj_name, source_file=target_file
+        )
         if found:
             moves_verified += 1
         else:
             moves_failed += 1
             failures.append(f"Move: {obj_type} '{obj_name}' not found in {target_file}")
 
-    passed = (edits_failed == 0 and creations_failed == 0
-              and deletions_failed == 0 and moves_failed == 0)
+    passed = (
+        edits_failed == 0
+        and creations_failed == 0
+        and deletions_failed == 0
+        and moves_failed == 0
+    )
 
     return {
         "passed": passed,
@@ -311,9 +326,14 @@ def verify_objects(staging_data, parsed_objects, pre_objects=None):
     }
 
 
-def verify_apply_integrity(staging_data, parsed_objects, pre_git_files=None,
-                           post_git_files=None, config_path=None,
-                           pre_parser_objects=None):
+def verify_apply_integrity(
+    staging_data,
+    parsed_objects,
+    pre_git_files=None,
+    post_git_files=None,
+    config_path=None,
+    pre_parser_objects=None,
+):
     """Top-level verification: compare apply results against staging intent.
 
     Args:
@@ -334,14 +354,17 @@ def verify_apply_integrity(staging_data, parsed_objects, pre_git_files=None,
     # File-level verification (git-based)
     file_report = None
     if pre_git_files is not None and post_git_files is not None and config_path:
-        expected = build_expected_changeset(staging_data,
-                                           parser_objects=pre_parser_objects)
-        file_report = compare_file_changes(expected, pre_git_files,
-                                           post_git_files, config_path)
+        expected = build_expected_changeset(
+            staging_data, parser_objects=pre_parser_objects
+        )
+        file_report = compare_file_changes(
+            expected, pre_git_files, post_git_files, config_path
+        )
 
     # Object-level verification (parser-based)
-    object_report = verify_objects(staging_data, parsed_objects,
-                                  pre_objects=pre_parser_objects)
+    object_report = verify_objects(
+        staging_data, parsed_objects, pre_objects=pre_parser_objects
+    )
 
     file_passed = file_report["passed"] if file_report else True
     passed = file_passed and object_report["passed"]

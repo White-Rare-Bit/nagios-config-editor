@@ -4,7 +4,7 @@ import os
 import tempfile
 import shutil
 import pytest
-from nagios_service import NagiosService, CompositeAction
+from nagios_service import NagiosService
 
 
 @pytest.fixture
@@ -54,12 +54,24 @@ class TestBuildCompositeActions:
         staging = {
             "pendingEdits": {
                 "0": {
-                    "original": {"host_name": "web-01", "alias": "Web Server 1",
-                                 "address": "10.0.0.1", "use": "linux-server"},
-                    "edited": {"host_name": "web-01", "alias": "Edited Alias",
-                               "address": "10.0.0.1", "use": "linux-server"},
-                    "object": {"source_file": hosts, "object_type": "host",
-                               "display_name": "web-01", "global_index": 0},
+                    "original": {
+                        "host_name": "web-01",
+                        "alias": "Web Server 1",
+                        "address": "10.0.0.1",
+                        "use": "linux-server",
+                    },
+                    "edited": {
+                        "host_name": "web-01",
+                        "alias": "Edited Alias",
+                        "address": "10.0.0.1",
+                        "use": "linux-server",
+                    },
+                    "object": {
+                        "source_file": hosts,
+                        "object_type": "host",
+                        "display_name": "web-01",
+                        "global_index": 0,
+                    },
                 }
             },
             "stagedMoves": {},
@@ -108,11 +120,17 @@ class TestBuildCompositeActions:
         staging = {
             "pendingEdits": {},
             "stagedMoves": {},
-            "stagedCreations": [{
-                "object_type": "host",
-                "attributes": {"host_name": "new-host", "alias": "New", "address": "10.0.0.50"},
-                "targetFile": hosts,
-            }],
+            "stagedCreations": [
+                {
+                    "object_type": "host",
+                    "attributes": {
+                        "host_name": "new-host",
+                        "alias": "New",
+                        "address": "10.0.0.50",
+                    },
+                    "targetFile": hosts,
+                }
+            ],
             "stagedObjectDeletions": [],
         }
         actions = service._build_composite_actions(staging)
@@ -128,12 +146,24 @@ class TestBuildCompositeActions:
         staging = {
             "pendingEdits": {
                 "0": {
-                    "original": {"host_name": "web-01", "alias": "Web Server 1",
-                                 "address": "10.0.0.1", "use": "linux-server"},
-                    "edited": {"host_name": "web-01", "alias": "Edited",
-                               "address": "10.0.0.1", "use": "linux-server"},
-                    "object": {"source_file": hosts, "object_type": "host",
-                               "display_name": "web-01", "global_index": 0},
+                    "original": {
+                        "host_name": "web-01",
+                        "alias": "Web Server 1",
+                        "address": "10.0.0.1",
+                        "use": "linux-server",
+                    },
+                    "edited": {
+                        "host_name": "web-01",
+                        "alias": "Edited",
+                        "address": "10.0.0.1",
+                        "use": "linux-server",
+                    },
+                    "object": {
+                        "source_file": hosts,
+                        "object_type": "host",
+                        "display_name": "web-01",
+                        "global_index": 0,
+                    },
                 }
             },
             "stagedMoves": {
@@ -158,12 +188,24 @@ class TestBuildCompositeActions:
         staging = {
             "pendingEdits": {
                 "2": {
-                    "original": {"host_name": "old-host", "alias": "Old Host",
-                                 "address": "10.0.0.99", "use": "linux-server"},
-                    "edited": {"host_name": "old-host", "alias": "Should Not Apply",
-                               "address": "10.0.0.99", "use": "linux-server"},
-                    "object": {"source_file": hosts, "object_type": "host",
-                               "display_name": "old-host", "global_index": 2},
+                    "original": {
+                        "host_name": "old-host",
+                        "alias": "Old Host",
+                        "address": "10.0.0.99",
+                        "use": "linux-server",
+                    },
+                    "edited": {
+                        "host_name": "old-host",
+                        "alias": "Should Not Apply",
+                        "address": "10.0.0.99",
+                        "use": "linux-server",
+                    },
+                    "object": {
+                        "source_file": hosts,
+                        "object_type": "host",
+                        "display_name": "old-host",
+                        "global_index": 2,
+                    },
                 }
             },
             "stagedMoves": {},
@@ -216,12 +258,24 @@ class TestBuildCompositeActions:
         staging = {
             "pendingEdits": {
                 "0": {
-                    "original": {"host_name": "web-01", "alias": "Web Server 1",
-                                 "address": "10.0.0.1", "use": "linux-server"},
-                    "edited": {"host_name": "web-01", "alias": "Edited",
-                               "address": "10.0.0.1", "use": "linux-server"},
-                    "object": {"source_file": hosts, "object_type": "host",
-                               "display_name": "web-01", "global_index": 0},
+                    "original": {
+                        "host_name": "web-01",
+                        "alias": "Web Server 1",
+                        "address": "10.0.0.1",
+                        "use": "linux-server",
+                    },
+                    "edited": {
+                        "host_name": "web-01",
+                        "alias": "Edited",
+                        "address": "10.0.0.1",
+                        "use": "linux-server",
+                    },
+                    "object": {
+                        "source_file": hosts,
+                        "object_type": "host",
+                        "display_name": "web-01",
+                        "global_index": 0,
+                    },
                 }
             },
             "stagedMoves": {
@@ -248,12 +302,24 @@ class TestApplyObjectComposite:
         staging = {
             "pendingEdits": {
                 "0": {
-                    "original": {"host_name": "web-01", "alias": "Web Server 1",
-                                 "address": "10.0.0.1", "use": "linux-server"},
-                    "edited": {"host_name": "web-01", "alias": "New Alias",
-                               "address": "10.0.0.1", "use": "linux-server"},
-                    "object": {"source_file": hosts, "object_type": "host",
-                               "display_name": "web-01", "global_index": 0},
+                    "original": {
+                        "host_name": "web-01",
+                        "alias": "Web Server 1",
+                        "address": "10.0.0.1",
+                        "use": "linux-server",
+                    },
+                    "edited": {
+                        "host_name": "web-01",
+                        "alias": "New Alias",
+                        "address": "10.0.0.1",
+                        "use": "linux-server",
+                    },
+                    "object": {
+                        "source_file": hosts,
+                        "object_type": "host",
+                        "display_name": "web-01",
+                        "global_index": 0,
+                    },
                 }
             },
             "stagedMoves": {},
@@ -265,8 +331,11 @@ class TestApplyObjectComposite:
         assert result.data["counts"]["edits"] == 1
         # Verify on disk
         service._parser.parse_all()
-        obj = next(o for o in service._parser.objects
-                   if o.attributes.get("host_name") == "web-01")
+        obj = next(
+            o
+            for o in service._parser.objects
+            if o.attributes.get("host_name") == "web-01"
+        )
         assert obj.attributes["alias"] == "New Alias"
 
     def test_move_relocates_object(self, service, config_dir):
@@ -289,8 +358,11 @@ class TestApplyObjectComposite:
         assert result.data["counts"]["moves"] == 1
         # Verify on disk
         service._parser.parse_all()
-        files = {os.path.realpath(o.source_file) for o in service._parser.objects
-                 if o.attributes.get("host_name") == "web-02"}
+        files = {
+            os.path.realpath(o.source_file)
+            for o in service._parser.objects
+            if o.attributes.get("host_name") == "web-02"
+        }
         assert os.path.realpath(services) in files
         assert os.path.realpath(hosts) not in files
 
@@ -313,12 +385,18 @@ class TestApplyObjectComposite:
         staging = {
             "pendingEdits": {},
             "stagedMoves": {},
-            "stagedCreations": [{
-                "object_type": "host",
-                "attributes": {"host_name": "new-host", "alias": "New",
-                                "address": "10.0.0.50", "use": "linux-server"},
-                "targetFile": hosts,
-            }],
+            "stagedCreations": [
+                {
+                    "object_type": "host",
+                    "attributes": {
+                        "host_name": "new-host",
+                        "alias": "New",
+                        "address": "10.0.0.50",
+                        "use": "linux-server",
+                    },
+                    "targetFile": hosts,
+                }
+            ],
             "stagedObjectDeletions": [],
         }
         result = service.apply_object_composite(staging)
@@ -336,12 +414,24 @@ class TestApplyObjectComposite:
         staging = {
             "pendingEdits": {
                 "0": {
-                    "original": {"host_name": "web-01", "alias": "Web Server 1",
-                                 "address": "10.0.0.1", "use": "linux-server"},
-                    "edited": {"host_name": "web-01", "alias": "Moved And Edited",
-                               "address": "10.0.0.1", "use": "linux-server"},
-                    "object": {"source_file": hosts, "object_type": "host",
-                               "display_name": "web-01", "global_index": 0},
+                    "original": {
+                        "host_name": "web-01",
+                        "alias": "Web Server 1",
+                        "address": "10.0.0.1",
+                        "use": "linux-server",
+                    },
+                    "edited": {
+                        "host_name": "web-01",
+                        "alias": "Moved And Edited",
+                        "address": "10.0.0.1",
+                        "use": "linux-server",
+                    },
+                    "object": {
+                        "source_file": hosts,
+                        "object_type": "host",
+                        "display_name": "web-01",
+                        "global_index": 0,
+                    },
                 }
             },
             "stagedMoves": {
@@ -359,8 +449,11 @@ class TestApplyObjectComposite:
         assert result.data["counts"]["move_edits"] == 1
         # Verify: exactly ONE web-01, in services.cfg, with edited alias
         service._parser.parse_all()
-        web01s = [o for o in service._parser.objects
-                  if o.attributes.get("host_name") == "web-01"]
+        web01s = [
+            o
+            for o in service._parser.objects
+            if o.attributes.get("host_name") == "web-01"
+        ]
         assert len(web01s) == 1, f"Expected 1 web-01, found {len(web01s)}"
         assert os.path.realpath(web01s[0].source_file) == os.path.realpath(services)
         assert web01s[0].attributes["alias"] == "Moved And Edited"
@@ -372,12 +465,24 @@ class TestApplyObjectComposite:
         staging = {
             "pendingEdits": {
                 "0": {
-                    "original": {"host_name": "web-01", "alias": "Web Server 1",
-                                 "address": "10.0.0.1", "use": "linux-server"},
-                    "edited": {"host_name": "web-01", "alias": "Edited",
-                               "address": "10.0.0.1", "use": "linux-server"},
-                    "object": {"source_file": hosts, "object_type": "host",
-                               "display_name": "web-01", "global_index": 0},
+                    "original": {
+                        "host_name": "web-01",
+                        "alias": "Web Server 1",
+                        "address": "10.0.0.1",
+                        "use": "linux-server",
+                    },
+                    "edited": {
+                        "host_name": "web-01",
+                        "alias": "Edited",
+                        "address": "10.0.0.1",
+                        "use": "linux-server",
+                    },
+                    "object": {
+                        "source_file": hosts,
+                        "object_type": "host",
+                        "display_name": "web-01",
+                        "global_index": 0,
+                    },
                 }
             },
             "stagedMoves": {
@@ -420,12 +525,24 @@ class TestApplyObjectComposite:
         staging = {
             "pendingEdits": {
                 "0": {
-                    "original": {"host_name": "web-01", "alias": "Web Server 1",
-                                 "address": "10.0.0.1", "use": "linux-server"},
-                    "edited": {"host_name": "web-01", "alias": "X",
-                               "address": "10.0.0.1", "use": "linux-server"},
-                    "object": {"source_file": hosts, "object_type": "host",
-                               "display_name": "web-01", "global_index": 0},
+                    "original": {
+                        "host_name": "web-01",
+                        "alias": "Web Server 1",
+                        "address": "10.0.0.1",
+                        "use": "linux-server",
+                    },
+                    "edited": {
+                        "host_name": "web-01",
+                        "alias": "X",
+                        "address": "10.0.0.1",
+                        "use": "linux-server",
+                    },
+                    "object": {
+                        "source_file": hosts,
+                        "object_type": "host",
+                        "display_name": "web-01",
+                        "global_index": 0,
+                    },
                 }
             },
             "stagedMoves": {},
