@@ -1366,6 +1366,28 @@ def api_apply_staging():
             pre_parser_objects=pre_parser_objects,
         )
 
+        # Log verification result to audit trail
+        if verification:
+            v_status = "passed" if verification["passed"] else "warnings"
+            ol = verification.get("objectLevel", {})
+            log_audit(
+                action="verify",
+                user=staging_data.get("userEmail"),
+                txn=None,
+                status=v_status,
+                edits_ok=ol.get("editsVerified", 0),
+                edits_fail=ol.get("editsFailed", 0),
+                creates_ok=ol.get("creationsVerified", 0),
+                creates_fail=ol.get("creationsFailed", 0),
+                deletes_ok=ol.get("deletionsVerified", 0),
+                deletes_fail=ol.get("deletionsFailed", 0),
+                moves_ok=ol.get("movesVerified", 0),
+                moves_fail=ol.get("movesFailed", 0),
+            )
+            if not verification["passed"]:
+                for failure in ol.get("failures", []):
+                    log_audit(action="verify_warning", user=staging_data.get("userEmail"), detail=failure)
+
         # C-10: Only clear staging if deferClear is not requested
         staging_cleared = not defer_clear
         if staging_cleared:
