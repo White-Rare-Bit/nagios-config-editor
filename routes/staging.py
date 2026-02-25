@@ -860,10 +860,7 @@ def _execute_apply_phases(service, staging_data):
     phases = [
         ("folderCreations", lambda: service.apply_folder_creations(staging_data)),
         ("fileCreations", lambda: service.apply_file_creations(staging_data)),
-        ("objectDeletions", lambda: service.apply_object_deletions(staging_data)),
-        ("objectMoves", lambda: service.apply_object_moves(staging_data)),
-        ("objectEdits", lambda: service.apply_object_edits(staging_data)),
-        ("objectCreations", lambda: service.apply_object_creations(staging_data)),
+        ("objectComposite", lambda: service.apply_object_composite(staging_data)),
         ("fileMoves", lambda: service.apply_file_moves(staging_data)),
         ("folderMoves", lambda: service.apply_folder_moves(staging_data)),
         ("fileDeletions", lambda: service.apply_file_deletions(staging_data)),
@@ -876,7 +873,18 @@ def _execute_apply_phases(service, staging_data):
 
     for key, apply_fn in phases:
         result = apply_fn()
-        applied_summary[key] = result.data.get("count", 0)
+
+        if key == "objectComposite":
+            # Flatten composite counts into summary
+            composite_counts = result.data.get("counts", {})
+            applied_summary["objectDeletions"] = composite_counts.get("deletes", 0)
+            applied_summary["objectMoves"] = composite_counts.get("moves", 0)
+            applied_summary["objectEdits"] = composite_counts.get("edits", 0)
+            applied_summary["objectMoveEdits"] = composite_counts.get("move_edits", 0)
+            applied_summary["objectCreations"] = composite_counts.get("creates", 0)
+        else:
+            applied_summary[key] = result.data.get("count", 0)
+
         errors = result.data.get("errors", [])
         details = result.data.get("details", [])
 
@@ -892,10 +900,7 @@ def _execute_apply_phases(service, staging_data):
 
 
 _PHASE_TO_AUDIT_KEY = {
-    "objectEdits": "object_edits",
-    "objectMoves": "object_moves",
-    "objectCreations": "object_creations",
-    "objectDeletions": "object_deletions",
+    "objectComposite": "object_composite",
     "folderCreations": "folder_creations",
     "fileCreations": "file_creations",
     "fileMoves": "file_moves",
@@ -950,41 +955,41 @@ def _write_apply_audit_log(staging_data, session_id, all_details, errors, log):
         for phase_key, audit_key in _PHASE_TO_AUDIT_KEY.items():
             details = all_details.get(phase_key, [])
             for detail in details:
-                if audit_key == "object_edits":
+                if audit_key == "object_composite":
+                    action_type = detail.get("action", "")
                     obj_type = detail.get("object_type", "")
                     obj_name = detail.get("object_name", "")
-                    for change in detail.get("changes", []):
+
+                    if action_type in ("edit", "move_edit"):
+                        for change in detail.get("changes", []):
+                            log_audit(
+                                action="edit", user=user, txn=txn,
+                                type=obj_type, name=obj_name,
+                                field=change.get("key", ""),
+                                op=change.get("type", "modify"),
+                                from_val=change.get("from", ""),
+                                to_val=change.get("to", change.get("value", "")),
+                            )
+                    if action_type in ("move", "move_edit"):
                         log_audit(
-                            action="edit", user=user, txn=txn,
+                            action="move", user=user, txn=txn,
                             type=obj_type, name=obj_name,
-                            field=change.get("key", ""),
-                            op=change.get("type", "modify"),
-                            from_val=change.get("from", ""),
-                            to_val=change.get("to", change.get("value", "")),
+                            op="move",
+                            from_val=_make_relative_path(detail.get("from_file", "")),
+                            to_val=_make_relative_path(detail.get("to_file", "")),
                         )
-                elif audit_key == "object_creations":
-                    log_audit(
-                        action="create", user=user, txn=txn,
-                        type=detail.get("object_type", ""),
-                        name=detail.get("object_name", ""),
-                        op="create",
-                    )
-                elif audit_key == "object_deletions":
-                    log_audit(
-                        action="delete", user=user, txn=txn,
-                        type=detail.get("object_type", ""),
-                        name=detail.get("object_name", ""),
-                        op="delete",
-                    )
-                elif audit_key == "object_moves":
-                    log_audit(
-                        action="move", user=user, txn=txn,
-                        type=detail.get("object_type", ""),
-                        name=detail.get("object_name", ""),
-                        op="move",
-                        from_val=_make_relative_path(detail.get("from_file", "")),
-                        to_val=_make_relative_path(detail.get("to_file", "")),
-                    )
+                    if action_type == "create":
+                        log_audit(
+                            action="create", user=user, txn=txn,
+                            type=obj_type, name=obj_name,
+                            op="create",
+                        )
+                    if action_type == "delete":
+                        log_audit(
+                            action="delete", user=user, txn=txn,
+                            type=obj_type, name=obj_name,
+                            op="delete",
+                        )
                 elif audit_key in ("file_creations", "file_deletions", "file_moves",
                                    "folder_creations", "folder_deletions", "folder_moves"):
                     raw_suffix = audit_key.rstrip("s").split("_")[-1]
@@ -1282,14 +1287,11 @@ def api_apply_staging():
     Changes are applied in the correct order to avoid conflicts:
     1. Create folders (parent -> child)
     2. Create files
-    3. Delete objects (surgical)
-    4. Move objects (sorted by line desc)
-    5. Edit objects (surgical)
-    6. Create objects
-    7. Move files
-    8. Move folders
-    9. Delete files
-    10. Delete folders (child -> parent)
+    3. Object composite (per-entity merged: deletes, moves/edits/move_edits, creates)
+    4. Move files
+    5. Move folders
+    6. Delete files
+    7. Delete folders (child -> parent)
 
     ATOMIC BEHAVIOR:
     - Phases execute sequentially
