@@ -607,3 +607,54 @@ def test_apply_includes_verification(client, app):
     v = data["verification"]
     assert v["objectLevel"]["passed"] is True
     assert v["objectLevel"]["editsVerified"] == 1
+
+
+def test_apply_verification_multi_operation(client, app):
+    """Verification works with create + edit together."""
+    session_id = "test-session"
+    headers = {"X-Session-Id": session_id}
+
+    resp = client.get("/api/objects")
+    objects = resp.json
+    obj = objects[0]
+
+    # Use the same absolute source_file path so verification can match
+    target_file = obj["source_file"]
+
+    staging_data = {
+        "sessionId": session_id,
+        "stagedCreations": [{
+            "id": "create-v1",
+            "object_type": "host",
+            "targetFile": target_file,
+            "attributes": {
+                "host_name": "verified-host",
+                "alias": "Verified",
+                "address": "10.0.0.99",
+            },
+        }],
+        "pendingEdits": {
+            str(obj["global_index"]): {
+                "object": obj,
+                "original": obj["attributes"],
+                "edited": {**obj["attributes"], "alias": "Also Verified"},
+            },
+        },
+    }
+
+    client.post("/api/staging",
+                data=json.dumps(staging_data),
+                content_type="application/json",
+                headers=headers)
+
+    resp = client.post("/api/staging/apply",
+                       data=json.dumps({}),
+                       content_type="application/json",
+                       headers=headers)
+    assert resp.status_code == 200
+
+    data = resp.json
+    v = data["verification"]
+    assert v["objectLevel"]["passed"] is True
+    assert v["objectLevel"]["editsVerified"] == 1
+    assert v["objectLevel"]["creationsVerified"] == 1
