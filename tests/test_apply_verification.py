@@ -1,10 +1,7 @@
 """Tests for apply verification module."""
 
-import os
-
 from apply_verification import (build_expected_changeset, compare_file_changes,
                                 verify_objects, verify_apply_integrity)
-from nagios_model import NAME_FIELDS
 
 
 def test_empty_staging_returns_empty_changeset():

@@ -1530,52 +1530,42 @@ async function autoGitCommitGlobal(message, clearStagingOnSuccess = false, apply
     showGitResultPanel(message, result.success, result.data || { error: result.error }, clearStagingOnSuccess && !isSuccess, verification);
 }
 
+function _verificationOpLine(verified, failed, label) {
+    if (verified === 0 && failed === 0) {return null;}
+    return failed > 0
+        ? `<span class="warning-text">\u26a0\ufe0f ${failed} ${label}(s) NOT verified</span>`
+        : `<span class="success-text">\u2705 ${verified} ${label}(s) verified</span>`;
+}
+
+function _verificationFileLines(fl) {
+    const fileCount = fl.actualFiles?.length || 0;
+    if (fl.passed) {
+        return `<span class="success-text">\u2705 File changes match (${fileCount} file${fileCount !== 1 ? 's' : ''})</span>\n`;
+    }
+    let html = `<span class="warning-text">\u26a0\ufe0f File changes mismatch</span>\n`;
+    for (const msg of [...(fl.unexpected || []), ...(fl.missing || [])]) {
+        html += `<span class="warning-text">   ${msg}</span>\n`;
+    }
+    return html;
+}
+
 function buildVerificationHtml(verification) {
     const ol = verification.objectLevel;
     const fl = verification.fileLevel;
     let html = '\n<span class="info-text">--- Verification ---</span>\n';
 
-    // Object-level lines: only show categories that have counts
-    const objectLines = [];
-    if (ol.editsVerified > 0 || ol.editsFailed > 0) {
-        objectLines.push(ol.editsFailed > 0
-            ? `<span class="warning-text">\u26a0\ufe0f ${ol.editsFailed} edit(s) NOT verified</span>`
-            : `<span class="success-text">\u2705 ${ol.editsVerified} edit(s) verified</span>`);
-    }
-    if (ol.creationsVerified > 0 || ol.creationsFailed > 0) {
-        objectLines.push(ol.creationsFailed > 0
-            ? `<span class="warning-text">\u26a0\ufe0f ${ol.creationsFailed} creation(s) NOT verified</span>`
-            : `<span class="success-text">\u2705 ${ol.creationsVerified} creation(s) verified</span>`);
-    }
-    if (ol.deletionsVerified > 0 || ol.deletionsFailed > 0) {
-        objectLines.push(ol.deletionsFailed > 0
-            ? `<span class="warning-text">\u26a0\ufe0f ${ol.deletionsFailed} deletion(s) NOT verified</span>`
-            : `<span class="success-text">\u2705 ${ol.deletionsVerified} deletion(s) verified</span>`);
-    }
-    if (ol.movesVerified > 0 || ol.movesFailed > 0) {
-        objectLines.push(ol.movesFailed > 0
-            ? `<span class="warning-text">\u26a0\ufe0f ${ol.movesFailed} move(s) NOT verified</span>`
-            : `<span class="success-text">\u2705 ${ol.movesVerified} move(s) verified</span>`);
-    }
+    const objectLines = [
+        _verificationOpLine(ol.editsVerified, ol.editsFailed, 'edit'),
+        _verificationOpLine(ol.creationsVerified, ol.creationsFailed, 'creation'),
+        _verificationOpLine(ol.deletionsVerified, ol.deletionsFailed, 'deletion'),
+        _verificationOpLine(ol.movesVerified, ol.movesFailed, 'move'),
+    ].filter(Boolean);
     html += objectLines.join('\n') + '\n';
 
-    // File-level line
     if (fl) {
-        const fileCount = fl.actualFiles?.length || 0;
-        if (fl.passed) {
-            html += `<span class="success-text">\u2705 File changes match (${fileCount} file${fileCount !== 1 ? 's' : ''})</span>\n`;
-        } else {
-            html += `<span class="warning-text">\u26a0\ufe0f File changes mismatch</span>\n`;
-            for (const msg of (fl.unexpected || [])) {
-                html += `<span class="warning-text">   ${msg}</span>\n`;
-            }
-            for (const msg of (fl.missing || [])) {
-                html += `<span class="warning-text">   ${msg}</span>\n`;
-            }
-        }
+        html += _verificationFileLines(fl);
     }
 
-    // Failure details
     if (ol.failures?.length > 0) {
         html += '\n';
         for (const f of ol.failures) {
