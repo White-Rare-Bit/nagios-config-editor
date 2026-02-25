@@ -298,3 +298,45 @@ def verify_objects(staging_data, parsed_objects, pre_objects=None):
         "movesFailed": moves_failed,
         "failures": failures,
     }
+
+
+def verify_apply_integrity(staging_data, parsed_objects, pre_git_files=None,
+                           post_git_files=None, config_path=None,
+                           pre_parser_objects=None):
+    """Top-level verification: compare apply results against staging intent.
+
+    Args:
+        staging_data: Staging data dict.
+        parsed_objects: List of re-parsed object dicts (post-apply).
+        pre_git_files: List of git status file dicts before apply, or None
+            if git is unavailable. Each: {"path": str, "status_code": str}
+        post_git_files: List of git status file dicts after apply, or None.
+        config_path: Absolute path to config directory.
+        pre_parser_objects: Optional list of object dicts from before apply
+            (for deletion verification).
+
+    Returns:
+        Dict with 'passed' (bool), 'fileLevel' (dict or None),
+        'objectLevel' (dict).
+
+    """
+    # File-level verification (git-based)
+    file_report = None
+    if pre_git_files is not None and post_git_files is not None and config_path:
+        expected = build_expected_changeset(staging_data,
+                                           parser_objects=pre_parser_objects)
+        file_report = compare_file_changes(expected, pre_git_files,
+                                           post_git_files, config_path)
+
+    # Object-level verification (parser-based)
+    object_report = verify_objects(staging_data, parsed_objects,
+                                  pre_objects=pre_parser_objects)
+
+    file_passed = file_report["passed"] if file_report else True
+    passed = file_passed and object_report["passed"]
+
+    return {
+        "passed": passed,
+        "fileLevel": file_report,
+        "objectLevel": object_report,
+    }

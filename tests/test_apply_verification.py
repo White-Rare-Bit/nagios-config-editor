@@ -2,7 +2,8 @@
 
 import os
 
-from apply_verification import build_expected_changeset, compare_file_changes, verify_objects
+from apply_verification import (build_expected_changeset, compare_file_changes,
+                                verify_objects, verify_apply_integrity)
 from nagios_model import NAME_FIELDS
 
 
@@ -309,3 +310,96 @@ def test_verify_move_relocated():
     report = verify_objects(staging, parsed)
     assert report["passed"] is True
     assert report["movesVerified"] == 1
+
+
+def test_orchestrator_full_pass():
+    """Full verification passes when git and objects both match."""
+    staging = {
+        "pendingEdits": {
+            "0": {
+                "object": {"source_file": "/cfg/hosts.cfg",
+                           "object_type": "host", "name": "web01"},
+                "edited": {"alias": "New"},
+            },
+        },
+    }
+    parsed = [
+        {"object_type": "host", "source_file": "/cfg/hosts.cfg",
+         "attributes": {"host_name": "web01", "alias": "New"}},
+    ]
+
+    pre_files = []
+    post_files = [{"path": "hosts.cfg", "status_code": " M"}]
+
+    report = verify_apply_integrity(
+        staging_data=staging,
+        parsed_objects=parsed,
+        pre_git_files=pre_files,
+        post_git_files=post_files,
+        config_path="/cfg",
+    )
+    assert report["passed"] is True
+    assert report["fileLevel"]["passed"] is True
+    assert report["objectLevel"]["passed"] is True
+
+
+def test_orchestrator_file_mismatch():
+    staging = {
+        "pendingEdits": {
+            "0": {
+                "object": {"source_file": "/cfg/hosts.cfg",
+                           "object_type": "host", "name": "web01"},
+                "edited": {"alias": "New"},
+            },
+        },
+    }
+    parsed = [
+        {"object_type": "host", "source_file": "/cfg/hosts.cfg",
+         "attributes": {"host_name": "web01", "alias": "New"}},
+    ]
+
+    pre_files = []
+    # Unexpected extra file changed
+    post_files = [
+        {"path": "hosts.cfg", "status_code": " M"},
+        {"path": "rogue.cfg", "status_code": " M"},
+    ]
+
+    report = verify_apply_integrity(
+        staging_data=staging,
+        parsed_objects=parsed,
+        pre_git_files=pre_files,
+        post_git_files=post_files,
+        config_path="/cfg",
+    )
+    assert report["passed"] is False
+    assert report["fileLevel"]["passed"] is False
+    assert report["objectLevel"]["passed"] is True
+
+
+def test_orchestrator_no_git_graceful():
+    """When git data is not provided, file-level is skipped, object-level still runs."""
+    staging = {
+        "pendingEdits": {
+            "0": {
+                "object": {"source_file": "/cfg/hosts.cfg",
+                           "object_type": "host", "name": "web01"},
+                "edited": {"alias": "New"},
+            },
+        },
+    }
+    parsed = [
+        {"object_type": "host", "source_file": "/cfg/hosts.cfg",
+         "attributes": {"host_name": "web01", "alias": "New"}},
+    ]
+
+    report = verify_apply_integrity(
+        staging_data=staging,
+        parsed_objects=parsed,
+        pre_git_files=None,
+        post_git_files=None,
+        config_path="/cfg",
+    )
+    assert report["passed"] is True
+    assert report["fileLevel"] is None
+    assert report["objectLevel"]["passed"] is True
