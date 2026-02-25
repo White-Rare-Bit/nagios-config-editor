@@ -84,7 +84,7 @@
             <!-- Step 6: Apply -->
             <rect x="692" y="66" width="100" height="52" rx="5" fill="#2d2d2d" stroke="#569cd6"/>
             <text x="742" y="89" text-anchor="middle" fill="#569cd6" font-family="Inter, sans-serif" font-size="12" font-weight="600">Apply</text>
-            <text x="742" y="106" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">10 phases</text>
+            <text x="742" y="106" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">7 phases</text>
             <text x="742" y="134" text-anchor="middle" fill="#666" font-family="Inter, sans-serif" font-size="10">6</text>
 
             <line x1="792" y1="92" x2="814" y2="92" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#flow-arrow)"/>
@@ -333,7 +333,7 @@ if not sm.can_modify(request.headers.get('X-Session-Id')):
 
     <p>
         When <code>POST /api/staging/apply</code> is called, all staged changes are written
-        to disk in a carefully ordered 10-phase process. The order prevents conflicts — for
+        to disk in a carefully ordered 7-phase process. The order prevents conflicts — for
         example, folders must be created before files can be placed in them, and objects must
         be deleted before the files containing them are removed.
     </p>
@@ -341,10 +341,13 @@ if not sm.can_modify(request.headers.get('X-Session-Id')):
     <ol>
         <li><strong>Folder creations</strong> — Create new folders, sorted parent-first so parent directories exist before child directories</li>
         <li><strong>File creations</strong> — Create new <code>.cfg</code> files</li>
-        <li><strong>Object deletions</strong> — Delete objects in reverse line order per file (so line numbers of earlier objects remain valid)</li>
-        <li><strong>Object moves</strong> — Move objects between files using file-based rewrite, computing final positions</li>
-        <li><strong>Object edits</strong> — Surgical replace of attribute blocks within files</li>
-        <li><strong>Object creations</strong> — Append new objects to their target files</li>
+        <li><strong>Object composite</strong> — Per-entity merged actions:
+            <ul>
+                <li>Deletions first (reverse line order per file)</li>
+                <li>Moves, edits, and combined move+edits</li>
+                <li>Creations last (appended to target files)</li>
+            </ul>
+        </li>
         <li><strong>File moves</strong> — Rename or relocate files</li>
         <li><strong>Folder moves</strong> — Rename or relocate folders</li>
         <li><strong>File deletions</strong> — Delete files from disk</li>
@@ -352,10 +355,15 @@ if not sm.can_modify(request.headers.get('X-Session-Id')):
     </ol>
 
     <p>
-        Each phase is implemented as a method on <code>NagiosService</code>:
-        <code>apply_folder_creations()</code>, <code>apply_file_creations()</code>, etc.
-        The <code>is_safe</code> callback is passed to file/folder phases to validate path
-        safety before each operation.
+        Object operations on the same entity (e.g., edit + move) are merged into a single
+        composite action before executing. This prevents phase-ordering bugs where one
+        phase's assumptions about object state are violated by a prior phase.
+    </p>
+
+    <p>
+        The composite phase is implemented as <code>NagiosService.apply_object_composite()</code>.
+        File and folder phases are still separate methods: <code>apply_folder_creations()</code>,
+        <code>apply_file_creations()</code>, etc.
     </p>
 
     <div class="docs-note">

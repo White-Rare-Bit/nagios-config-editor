@@ -275,36 +275,24 @@
                 <td>2. Create files</td>
             </tr>
             <tr>
-                <td><code>apply_object_deletions(staging_data)</code></td>
-                <td>3. Delete objects (reverse line order)</td>
-            </tr>
-            <tr>
-                <td><code>apply_object_moves(staging_data)</code></td>
-                <td>4. Move objects between files</td>
-            </tr>
-            <tr>
-                <td><code>apply_object_edits(staging_data)</code></td>
-                <td>5. Edit object attributes</td>
-            </tr>
-            <tr>
-                <td><code>apply_object_creations(staging_data)</code></td>
-                <td>6. Create new objects</td>
+                <td><code>apply_object_composite(staging_data)</code></td>
+                <td>3. Object composite (deletes, moves/edits/move_edits, creates)</td>
             </tr>
             <tr>
                 <td><code>apply_file_moves(staging_data, is_safe)</code></td>
-                <td>7. Move/rename files</td>
+                <td>4. Move/rename files</td>
             </tr>
             <tr>
                 <td><code>apply_folder_moves(staging_data, is_safe)</code></td>
-                <td>8. Move/rename folders</td>
+                <td>5. Move/rename folders</td>
             </tr>
             <tr>
                 <td><code>apply_file_deletions(staging_data, is_safe)</code></td>
-                <td>9. Delete files</td>
+                <td>6. Delete files</td>
             </tr>
             <tr>
                 <td><code>apply_folder_deletions(staging_data, is_safe)</code></td>
-                <td>10. Delete folders (child-first)</td>
+                <td>7. Delete folders (child-first)</td>
             </tr>
         </tbody>
     </table>
