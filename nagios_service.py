@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 from file_operations import (
@@ -28,6 +29,28 @@ from staging_manager import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class CompositeAction:
+    """A merged per-entity action for the apply phase.
+
+    Collapses separate staging operations (edit, move, delete, create) on the
+    same object into a single composite action. This eliminates phase-ordering
+    bugs where the same object appears in multiple phases.
+    """
+
+    action_type: str          # "delete" | "edit" | "move" | "move_edit" | "create"
+    stable_key: str           # "source_file|object_type|name"
+    object_type: str
+    object_name: str
+    source_file: str | None = None
+    original_attrs: dict | None = None
+    final_attrs: dict | None = None
+    target_file: str | None = None
+    insert_position: float | None = None
+    inline_comments: dict | None = None
+    global_index: int | None = None
 
 
 class NagiosService:
@@ -114,6 +137,420 @@ class NagiosService:
         if details is not None:
             result["details"] = details
         return result
+
+    def _resolve_on_disk_attrs(self, source_file: str, obj_type: str,
+                                obj_name: str) -> dict | None:
+        """Look up the on-disk attributes for an object by identity.
+
+        Args:
+            source_file: Source file path
+            obj_type: Object type
+            obj_name: Object name
+
+        Returns:
+            Attribute dict from parser, or None if not found.
+
+        """
+        source_real = os.path.realpath(source_file)
+        name_field = NAME_FIELDS.get(obj_type)
+        for obj in self.parser.objects:
+            if (os.path.realpath(obj.source_file) == source_real
+                    and obj.object_type == obj_type):
+                if name_field and obj.attributes.get(name_field) == obj_name:
+                    return dict(obj.attributes)
+                if not name_field and obj.get_name() == obj_name:
+                    return dict(obj.attributes)
+        return None
+
+    def _build_composite_actions(self, staging_data: dict) -> list[CompositeAction]:
+        """Merge staging operations into per-entity composite actions.
+
+        Indexes pendingEdits, stagedMoves, stagedObjectDeletions, and
+        stagedCreations by stable key, then merges overlapping operations
+        into a single CompositeAction per entity.
+
+        Args:
+            staging_data: Full staging data dict from staging manager.
+
+        Returns:
+            List of CompositeAction sorted: deletes first, then moves/edits, then creates.
+
+        """
+        p = self.parser
+        edits_by_key = {}
+        moves_by_key = {}
+        deletes_by_key = {}
+
+        # Index pendingEdits by stable key
+        for gi_str, entry in staging_data.get("pendingEdits", {}).items():
+            if not isinstance(entry, dict):
+                continue
+            obj_meta = entry.get("object", {})
+            source_file = obj_meta.get("source_file")
+            obj_type = obj_meta.get("object_type")
+            obj_name = obj_meta.get("display_name") or obj_meta.get("name")
+            if source_file and obj_type and obj_name is not None:
+                key = f"{source_file}|{obj_type}|{obj_name}"
+                edits_by_key[key] = {
+                    "entry": entry,
+                    "global_index": int(gi_str) if gi_str is not None else None,
+                }
+
+        # Index stagedMoves by stable key (already keyed this way)
+        for key, move_entry in staging_data.get("stagedMoves", {}).items():
+            if isinstance(move_entry, dict):
+                moves_by_key[key] = move_entry
+
+        # Index stagedObjectDeletions by stable key (resolve via parser)
+        for deletion_idx in staging_data.get("stagedObjectDeletions", []):
+            if isinstance(deletion_idx, int) and 0 <= deletion_idx < len(p.objects):
+                obj = p.objects[deletion_idx]
+                name = get_object_name(obj.object_type, obj.attributes)
+                key = f"{obj.source_file}|{obj.object_type}|{name}"
+                deletes_by_key[key] = {
+                    "global_index": deletion_idx,
+                    "obj": obj,
+                }
+
+        # Collect creation actions (no merging needed)
+        create_actions = []
+        for creation in staging_data.get("stagedCreations", []):
+            obj_type = creation.get("object_type")
+            attrs = creation.get("attributes", {})
+            target_file = creation.get("targetFile")
+            if not (obj_type and target_file):
+                continue
+            name_field = NAME_FIELDS.get(obj_type)
+            obj_name = attrs.get(name_field, "") if name_field else ""
+            if not os.path.isabs(target_file):
+                target_file = os.path.join(self._config_path, target_file)
+            create_actions.append(CompositeAction(
+                action_type="create",
+                stable_key=f"{target_file}|{obj_type}|{obj_name}",
+                object_type=obj_type,
+                object_name=obj_name,
+                target_file=target_file,
+                final_attrs=attrs,
+                inline_comments=creation.get("inline_comments"),
+            ))
+
+        # Merge edits, moves, deletes by stable key
+        all_keys = set(edits_by_key) | set(moves_by_key) | set(deletes_by_key)
+        delete_actions = []
+        modify_actions = []
+
+        for key in all_keys:
+            has_edit = key in edits_by_key
+            has_move = key in moves_by_key
+            has_delete = key in deletes_by_key
+            parsed = parse_stable_key(key)
+            if not parsed:
+                continue
+            obj_type = parsed["object_type"]
+            obj_name = parsed["name"]
+            source_file = parsed["source_file"]
+
+            if has_delete:
+                del_info = deletes_by_key[key]
+                delete_actions.append(CompositeAction(
+                    action_type="delete",
+                    stable_key=key,
+                    object_type=obj_type,
+                    object_name=obj_name,
+                    source_file=source_file,
+                    global_index=del_info["global_index"],
+                ))
+
+            elif has_edit and has_move:
+                edit_info = edits_by_key[key]
+                move_info = moves_by_key[key]
+                original_attrs = edit_info["entry"].get("original", {})
+                final_attrs = edit_info["entry"].get("edited", {})
+                target_file = move_info.get("targetFile")
+                insert_position = move_info.get("insertPosition")
+                modify_actions.append(CompositeAction(
+                    action_type="move_edit",
+                    stable_key=key,
+                    object_type=obj_type,
+                    object_name=obj_name,
+                    source_file=source_file,
+                    original_attrs=original_attrs,
+                    final_attrs=final_attrs,
+                    target_file=target_file,
+                    insert_position=insert_position,
+                ))
+
+            elif has_move:
+                move_info = moves_by_key[key]
+                target_file = move_info.get("targetFile")
+                insert_position = move_info.get("insertPosition")
+                # Resolve original attrs from parser (on-disk truth)
+                original_attrs = self._resolve_on_disk_attrs(source_file, obj_type, obj_name)
+                if original_attrs is None:
+                    # Fallback to snapshot
+                    obj_meta = move_info.get("object", {})
+                    original_attrs = obj_meta.get("attributes", {})
+                modify_actions.append(CompositeAction(
+                    action_type="move",
+                    stable_key=key,
+                    object_type=obj_type,
+                    object_name=obj_name,
+                    source_file=source_file,
+                    original_attrs=original_attrs,
+                    target_file=target_file,
+                    insert_position=insert_position,
+                ))
+
+            elif has_edit:
+                edit_info = edits_by_key[key]
+                final_attrs = edit_info["entry"].get("edited", {})
+                gi = edit_info["global_index"]
+                modify_actions.append(CompositeAction(
+                    action_type="edit",
+                    stable_key=key,
+                    object_type=obj_type,
+                    object_name=obj_name,
+                    source_file=source_file,
+                    final_attrs=final_attrs,
+                    global_index=gi,
+                ))
+
+        # Sort deletes by reverse line order within same file (same as current)
+        delete_actions.sort(key=lambda a: (a.source_file or "", -(a.global_index or 0)))
+
+        return delete_actions + modify_actions + create_actions
+
+    def apply_object_composite(self, staging_data: dict) -> OperationResult:
+        """Apply all object operations as per-entity composite actions.
+
+        Replaces the separate apply_object_deletions, apply_object_moves,
+        apply_object_edits, and apply_object_creations methods. Merges
+        operations on the same entity into a single action before executing.
+
+        Returns:
+            OperationResult with data containing per-type counts, errors, details.
+
+        """
+        logger.debug("apply_object_composite: result=started")
+        actions = self._build_composite_actions(staging_data)
+
+        counts = {"deletes": 0, "moves": 0, "edits": 0, "move_edits": 0, "creates": 0}
+        errors = []
+        details = []
+
+        for action in actions:
+            result, detail = self._execute_composite_action(action)
+            if result.success:
+                count_key = action.action_type + "s" if action.action_type != "move_edit" else "move_edits"
+                counts[count_key] = counts.get(count_key, 0) + 1
+                if detail:
+                    details.append(detail)
+            else:
+                errors.append(result.error or f"Failed {action.action_type} on {action.stable_key}")
+
+        total = sum(counts.values())
+        if errors:
+            result_str = "partial" if total > 0 else "failed"
+            logger.warning(
+                "apply_object_composite: %s errors=%d result=%s",
+                " ".join(f"{k}={v}" for k, v in counts.items()),
+                len(errors), result_str,
+            )
+        elif total > 0:
+            logger.info(
+                "apply_object_composite: %s result=success",
+                " ".join(f"{k}={v}" for k, v in counts.items()),
+            )
+        else:
+            logger.debug("apply_object_composite: total=0 result=noop")
+
+        return OperationResult(True, data={
+            "count": total,
+            "errors": errors,
+            "details": details,
+            "counts": counts,
+        })
+
+    def _execute_composite_action(self, action: CompositeAction) -> tuple[OperationResult, dict | None]:
+        """Execute a single composite action and return result + detail entry.
+
+        Each action triggers a parser reload after modifying files so
+        subsequent actions see the updated state.
+
+        Args:
+            action: The CompositeAction to execute.
+
+        Returns:
+            Tuple of (OperationResult, detail_dict or None).
+
+        """
+        if action.action_type == "delete":
+            return self._exec_delete(action)
+        if action.action_type == "edit":
+            return self._exec_edit(action)
+        if action.action_type == "move":
+            return self._exec_move(action)
+        if action.action_type == "move_edit":
+            return self._exec_move_edit(action)
+        if action.action_type == "create":
+            return self._exec_create(action)
+        return OperationResult(False, f"Unknown action type: {action.action_type}"), None
+
+    def _exec_delete(self, action: CompositeAction) -> tuple[OperationResult, dict | None]:
+        """Execute a delete composite action."""
+        p = self.parser
+        if action.global_index is None or action.global_index >= len(p.objects):
+            return OperationResult(False, f"Invalid index for delete: {action.stable_key}"), None
+        obj = p.objects[action.global_index]
+        result = self.delete_object(obj.source_file, obj.line_number)
+        if result.success:
+            detail = {
+                "action": "delete",
+                "object_type": action.object_type,
+                "object_name": action.object_name,
+                "file": obj.source_file,
+            }
+            return result, detail
+        return result, None
+
+    def _exec_edit(self, action: CompositeAction) -> tuple[OperationResult, dict | None]:
+        """Execute an edit composite action."""
+        self._parser = NagiosConfigParser(self._config_path)
+        self._parser.parse_all()
+        target_obj = self._find_by_identity(action.source_file, action.object_type, action.object_name)
+        if not target_obj:
+            return OperationResult(False, f"Edit: object not found: {action.stable_key}"), None
+        old_attrs = dict(target_obj.attributes)
+        merged_attrs = dict(target_obj.attributes)
+        merged_attrs.update(action.final_attrs)
+        result = self.update_object(
+            target_obj.source_file, target_obj.line_number,
+            merged_attrs, target_obj.object_type,
+            inline_comments=target_obj.inline_comments,
+        )
+        if result.success:
+            detail = self._build_edit_detail(target_obj, old_attrs, action.final_attrs)
+            detail["action"] = "edit"
+            return result, detail
+        return result, None
+
+    def _exec_move(self, action: CompositeAction) -> tuple[OperationResult, dict | None]:
+        """Execute a move composite action."""
+        self._parser = NagiosConfigParser(self._config_path)
+        self._parser.parse_all()
+        target_obj = self._find_by_attrs(action.source_file, action.object_type, action.original_attrs)
+        if not target_obj:
+            return OperationResult(False, f"Move: object not found: {action.stable_key}"), None
+        insert_line = self._resolve_insert_position(
+            action.target_file, action.insert_position, self._parser.objects,
+            exclude_obj=target_obj,
+        )
+        result = move_object_between_files(
+            target_obj.source_file, target_obj.line_number,
+            action.target_file, action.object_type,
+            action.original_attrs, insert_line,
+        )
+        if result.success:
+            detail = {
+                "action": "move",
+                "object_type": action.object_type,
+                "object_name": action.object_name,
+                "from_file": action.source_file,
+                "to_file": action.target_file,
+            }
+            return result, detail
+        return result, None
+
+    def _exec_move_edit(self, action: CompositeAction) -> tuple[OperationResult, dict | None]:
+        """Execute a move+edit composite action.
+
+        Step 1: Move using original on-disk attrs for matching.
+        Step 2: Edit in new location with final attrs.
+        """
+        # Move phase
+        self._parser = NagiosConfigParser(self._config_path)
+        self._parser.parse_all()
+        target_obj = self._find_by_attrs(action.source_file, action.object_type, action.original_attrs)
+        if not target_obj:
+            return OperationResult(False, f"MoveEdit move: object not found: {action.stable_key}"), None
+        insert_line = self._resolve_insert_position(
+            action.target_file, action.insert_position, self._parser.objects,
+            exclude_obj=target_obj,
+        )
+        move_result = move_object_between_files(
+            target_obj.source_file, target_obj.line_number,
+            action.target_file, action.object_type,
+            action.original_attrs, insert_line,
+        )
+        if not move_result.success:
+            return move_result, None
+
+        # Edit phase — find the moved object in target file
+        self._parser = NagiosConfigParser(self._config_path)
+        self._parser.parse_all()
+        moved_obj = self._find_by_identity(action.target_file, action.object_type, action.object_name)
+        if not moved_obj:
+            return OperationResult(False, f"MoveEdit edit: object not found after move: {action.stable_key}"), None
+        old_attrs = dict(moved_obj.attributes)
+        merged_attrs = dict(moved_obj.attributes)
+        merged_attrs.update(action.final_attrs)
+        edit_result = self.update_object(
+            moved_obj.source_file, moved_obj.line_number,
+            merged_attrs, moved_obj.object_type,
+            inline_comments=moved_obj.inline_comments,
+        )
+        if edit_result.success:
+            detail = {
+                "action": "move_edit",
+                "object_type": action.object_type,
+                "object_name": action.object_name,
+                "from_file": action.source_file,
+                "to_file": action.target_file,
+                "changes": self._build_edit_detail(moved_obj, old_attrs, action.final_attrs).get("changes", []),
+            }
+            return edit_result, detail
+        return edit_result, None
+
+    def _exec_create(self, action: CompositeAction) -> tuple[OperationResult, dict | None]:
+        """Execute a create composite action."""
+        result = self.create_object(
+            action.target_file, action.object_type, action.final_attrs,
+            inline_comments=action.inline_comments,
+        )
+        if result.success:
+            detail = {
+                "action": "create",
+                "object_type": action.object_type,
+                "object_name": action.object_name,
+                "file": action.target_file,
+            }
+            return result, detail
+        return result, None
+
+    def _find_by_identity(self, source_file: str, obj_type: str,
+                           obj_name: str) -> NagiosObject | None:
+        """Find object by stable identity: source_file + type + name."""
+        source_real = os.path.realpath(source_file)
+        name_field = NAME_FIELDS.get(obj_type)
+        for obj in self.parser.objects:
+            if (os.path.realpath(obj.source_file) == source_real
+                    and obj.object_type == obj_type):
+                if name_field and obj.attributes.get(name_field) == obj_name:
+                    return obj
+                if not name_field and obj.get_name() == obj_name:
+                    return obj
+        return None
+
+    def _find_by_attrs(self, source_file: str, obj_type: str,
+                        attrs: dict) -> NagiosObject | None:
+        """Find object by exact attribute match (for moves)."""
+        source_real = os.path.realpath(source_file)
+        for obj in self.parser.objects:
+            if (os.path.realpath(obj.source_file) == source_real
+                    and obj.object_type == obj_type
+                    and obj.attributes == attrs):
+                return obj
+        return None
 
     def _find_object_by_entry(self, entry: dict, lookup_type: str) -> NagiosObject | None:
         """Find object by globalIndex from entry dict.
