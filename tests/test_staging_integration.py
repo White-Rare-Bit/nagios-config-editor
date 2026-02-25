@@ -572,3 +572,38 @@ define service {
 
         assert "myhost" in ref["oldValue"]
         assert "myhost-renamed" in ref["newValue"]
+
+
+def test_apply_includes_verification(client, app):
+    """Apply response includes verification report."""
+    resp = client.get("/api/objects")
+    objects = resp.json
+    obj = objects[0]
+
+    edit_data = {
+        "sessionId": "test-session",
+        "pendingEdits": {
+            str(obj["global_index"]): {
+                "object": obj,
+                "original": obj["attributes"],
+                "edited": {**obj["attributes"], "alias": "Verified Alias"},
+            },
+        },
+    }
+
+    client.post("/api/staging",
+                data=json.dumps(edit_data),
+                content_type="application/json",
+                headers={"X-Session-Id": "test-session"})
+
+    resp = client.post("/api/staging/apply",
+                       data=json.dumps({}),
+                       content_type="application/json",
+                       headers={"X-Session-Id": "test-session"})
+    assert resp.status_code == 200
+
+    data = resp.json
+    assert "verification" in data
+    v = data["verification"]
+    assert v["objectLevel"]["passed"] is True
+    assert v["objectLevel"]["editsVerified"] == 1

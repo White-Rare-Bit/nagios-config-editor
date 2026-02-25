@@ -9,6 +9,7 @@ import uuid
 from flask import Blueprint, current_app, jsonify, request
 
 import file_operations
+from apply_verification import verify_apply_integrity
 from audit_service import log_audit
 from nagios_model import NAME_FIELDS
 from staging_manager import UNDO_HANDLERS, OperationType, UndoKeyError
@@ -1112,6 +1113,23 @@ def _create_pre_apply_backup(staging_data, log):
             log.warning("Failed to create pre-apply backup: %s", e)
 
 
+def _capture_git_file_list():
+    """Capture current git status file list for verification.
+
+    Returns list of dicts with 'path' and 'status_code', or None if git
+    is unavailable.
+    """
+    try:
+        git_svc = get_git_service()
+        result = git_svc.get_status()
+        if result.success and result.data and result.data.is_repo:
+            return [{"path": f.path, "status_code": f.status_code}
+                    for f in result.data.files]
+        return None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _handle_apply_failure(service, failed_phase, apply_ctx):
     """Handle a failed apply phase: log, reload parser, return error response.
 
@@ -1246,6 +1264,10 @@ def _build_apply_success_response(result_ctx, audit_ctx):
     if audit_failed:
         response_data["warnings"] = ["Audit log write failed - changes applied but not logged"]
 
+    verification = result_ctx.get("verification")
+    if verification:
+        response_data["verification"] = verification
+
     if result_ctx["validate_after"]:
         response_data["validation"] = _run_post_apply_validation()
 
@@ -1309,6 +1331,10 @@ def api_apply_staging():
     service = get_service()
     _create_pre_apply_backup(staging_data, log)
 
+    # Capture pre-apply state for verification
+    pre_git_files = _capture_git_file_list()
+    pre_parser_objects = [obj.to_dict() for obj in service.parser.objects]
+
     try:
         applied_summary, all_details, errors, failed_phase = _execute_apply_phases(
             service, staging_data,
@@ -1328,6 +1354,18 @@ def api_apply_staging():
             service, name_changes, all_details, errors, log,
         ) if update_references_flag else 0
 
+        # Post-apply verification
+        post_git_files = _capture_git_file_list()
+        parsed_objects = [obj.to_dict() for obj in service.parser.objects]
+        verification = verify_apply_integrity(
+            staging_data=staging_data,
+            parsed_objects=parsed_objects,
+            pre_git_files=pre_git_files,
+            post_git_files=post_git_files,
+            config_path=get_config_path(),
+            pre_parser_objects=pre_parser_objects,
+        )
+
         # C-10: Only clear staging if deferClear is not requested
         staging_cleared = not defer_clear
         if staging_cleared:
@@ -1337,7 +1375,7 @@ def api_apply_staging():
             "applied_summary": applied_summary, "all_details": all_details,
             "errors": errors, "refs_updated": refs_updated,
             "staging_cleared": staging_cleared, "defer_clear": defer_clear,
-            "validate_after": validate_after,
+            "validate_after": validate_after, "verification": verification,
         }
         audit_ctx = {"staging_data": staging_data, "session_id": session_id, "log": log}
         return _build_apply_success_response(result_ctx, audit_ctx)
