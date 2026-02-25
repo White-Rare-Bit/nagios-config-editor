@@ -10,3 +10,5 @@ config/
 
 .claude/
 .worktrees/
+.playwright-mcp/
+node_modules/
