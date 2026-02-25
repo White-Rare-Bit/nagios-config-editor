@@ -197,23 +197,28 @@ class NagiosService:
             obj_type = obj_meta.get("object_type")
             obj_name = obj_meta.get("display_name") or obj_meta.get("name")
             if source_file and obj_type and obj_name is not None:
-                key = f"{source_file}|{obj_type}|{obj_name}"
+                key = f"{os.path.realpath(source_file)}|{obj_type}|{obj_name}"
                 edits_by_key[key] = {
                     "entry": entry,
                     "global_index": int(gi_str) if gi_str is not None else None,
                 }
 
-        # Index stagedMoves by stable key (already keyed this way)
+        # Index stagedMoves by stable key (normalize path portion)
         for key, move_entry in staging_data.get("stagedMoves", {}).items():
             if isinstance(move_entry, dict):
-                moves_by_key[key] = move_entry
+                parsed_key = parse_stable_key(key)
+                if parsed_key:
+                    norm_key = f"{os.path.realpath(parsed_key['source_file'])}|{parsed_key['object_type']}|{parsed_key['name']}"
+                else:
+                    norm_key = key
+                moves_by_key[norm_key] = move_entry
 
         # Index stagedObjectDeletions by stable key (resolve via parser)
         for deletion_idx in staging_data.get("stagedObjectDeletions", []):
             if isinstance(deletion_idx, int) and 0 <= deletion_idx < len(p.objects):
                 obj = p.objects[deletion_idx]
                 name = get_object_name(obj.object_type, obj.attributes)
-                key = f"{obj.source_file}|{obj.object_type}|{name}"
+                key = f"{os.path.realpath(obj.source_file)}|{obj.object_type}|{name}"
                 deletes_by_key[key] = {
                     "global_index": deletion_idx,
                     "obj": obj,
