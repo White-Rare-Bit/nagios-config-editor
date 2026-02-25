@@ -128,7 +128,7 @@ def build_staged_moves(
 
         move = {
             "stableKey": stable_key,
-            "targetFile": config_file,
+            "targetFile": os.path.realpath(config_file),
             "originalFile": obj.source_file,
             "insertPosition": insert_position,
             "object": {

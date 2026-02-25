@@ -7,6 +7,8 @@ Two-layer verification:
 
 import logging
 
+import os
+
 from nagios_model import NAME_FIELDS
 from staging_manager import parse_stable_key
 
@@ -109,8 +111,6 @@ def compare_file_changes(expected, pre_files, post_files, config_path):
         'actualFiles' (list).
 
     """
-    import os
-
     # Build sets of relative paths that were dirty before apply (pre-existing noise)
     pre_dirty = {f["path"] for f in pre_files}
 
@@ -167,7 +167,7 @@ def _find_object(parsed_objects, obj_type, name, source_file=None):
     for obj in parsed_objects:
         if obj.get("object_type") != obj_type:
             continue
-        if source_file and obj.get("source_file") != source_file:
+        if source_file and os.path.realpath(obj.get("source_file", "")) != os.path.realpath(source_file):
             continue
         obj_name = obj.get("attributes", {}).get(name_field, "") if name_field else ""
         if obj_name == name:
