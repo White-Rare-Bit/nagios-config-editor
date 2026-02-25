@@ -7,6 +7,7 @@
             <li>The 10 categories of staged changes</li>
             <li>Reviewing diffs and reference analysis</li>
             <li>Undo, apply, and conflict detection</li>
+            <li>Post-apply verification</li>
             <li>Session-based lock system</li>
         </ul>
     </div>
@@ -280,6 +281,49 @@
         you can commit them to Git in the same step. The result is shown in a terminal-style
         output panel.
     </p>
+
+    <h4>Post-Apply Verification</h4>
+
+    <p>
+        After changes are written to disk, the app automatically verifies that the apply
+        succeeded. Verification runs at two levels:
+    </p>
+
+    <ul>
+        <li><strong>File-level:</strong> Compares git status (which files actually changed on disk)
+            against the set of files that staging intended to modify. Detects unexpected changes
+            or missing writes.</li>
+        <li><strong>Object-level:</strong> Re-parses the configuration and checks each staged
+            operation against the result:
+            <ul>
+                <li>Edited objects have the expected attribute values</li>
+                <li>Created objects exist in their target files</li>
+                <li>Deleted objects are gone</li>
+                <li>Moved objects are in their target files</li>
+            </ul>
+        </li>
+    </ul>
+
+    <p>
+        The verification result appears in the commit result panel after the git commit hash:
+    </p>
+
+    <ul>
+        <li><span style="color: var(--nbe-terminal-success);">&#x2705;</span> Green lines indicate verified operations.</li>
+        <li><span style="color: var(--nbe-dark-validation-warning-text);">&#x26a0;&#xfe0f;</span> Amber lines indicate operations that could not be verified.</li>
+    </ul>
+
+    <p>
+        If all operations are verified, the panel title reads <strong>Git Commit Successful</strong>.
+        If any operation could not be verified, the title changes to <strong>Committed with
+        Warnings</strong>. The commit still succeeds — the warning means you should inspect the
+        configuration to confirm the changes are correct.
+    </p>
+
+    <div class="docs-note">
+        Verification results are also recorded in the <a href="#app/audit-log">audit log</a>
+        for traceability.
+    </div>
 
     <h3>Lock System</h3>
 
