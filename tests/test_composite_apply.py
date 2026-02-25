@@ -238,3 +238,203 @@ class TestBuildCompositeActions:
         types = {a.action_type for a in actions}
         assert types == {"edit", "move", "delete"}
         assert len(actions) == 3
+
+
+class TestApplyObjectComposite:
+    """Tests for apply_object_composite end-to-end execution."""
+
+    def test_edit_changes_attribute(self, service, config_dir):
+        hosts = os.path.join(config_dir, "hosts.cfg")
+        staging = {
+            "pendingEdits": {
+                "0": {
+                    "original": {"host_name": "web-01", "alias": "Web Server 1",
+                                 "address": "10.0.0.1", "use": "linux-server"},
+                    "edited": {"host_name": "web-01", "alias": "New Alias",
+                               "address": "10.0.0.1", "use": "linux-server"},
+                    "object": {"source_file": hosts, "object_type": "host",
+                               "display_name": "web-01", "global_index": 0},
+                }
+            },
+            "stagedMoves": {},
+            "stagedCreations": [],
+            "stagedObjectDeletions": [],
+        }
+        result = service.apply_object_composite(staging)
+        assert result.success
+        assert result.data["counts"]["edits"] == 1
+        # Verify on disk
+        service._parser.parse_all()
+        obj = next(o for o in service._parser.objects
+                   if o.attributes.get("host_name") == "web-01")
+        assert obj.attributes["alias"] == "New Alias"
+
+    def test_move_relocates_object(self, service, config_dir):
+        hosts = os.path.join(config_dir, "hosts.cfg")
+        services = os.path.join(config_dir, "services.cfg")
+        staging = {
+            "pendingEdits": {},
+            "stagedMoves": {
+                f"{hosts}|host|web-02": {
+                    "global_index": 1,
+                    "targetFile": services,
+                    "insertPosition": None,
+                }
+            },
+            "stagedCreations": [],
+            "stagedObjectDeletions": [],
+        }
+        result = service.apply_object_composite(staging)
+        assert result.success
+        assert result.data["counts"]["moves"] == 1
+        # Verify on disk
+        service._parser.parse_all()
+        files = {os.path.realpath(o.source_file) for o in service._parser.objects
+                 if o.attributes.get("host_name") == "web-02"}
+        assert os.path.realpath(services) in files
+        assert os.path.realpath(hosts) not in files
+
+    def test_delete_removes_object(self, service, config_dir):
+        staging = {
+            "pendingEdits": {},
+            "stagedMoves": {},
+            "stagedCreations": [],
+            "stagedObjectDeletions": [2],  # old-host
+        }
+        result = service.apply_object_composite(staging)
+        assert result.success
+        assert result.data["counts"]["deletes"] == 1
+        service._parser.parse_all()
+        names = [o.attributes.get("host_name") for o in service._parser.objects]
+        assert "old-host" not in names
+
+    def test_create_adds_object(self, service, config_dir):
+        hosts = os.path.join(config_dir, "hosts.cfg")
+        staging = {
+            "pendingEdits": {},
+            "stagedMoves": {},
+            "stagedCreations": [{
+                "object_type": "host",
+                "attributes": {"host_name": "new-host", "alias": "New",
+                                "address": "10.0.0.50", "use": "linux-server"},
+                "targetFile": hosts,
+            }],
+            "stagedObjectDeletions": [],
+        }
+        result = service.apply_object_composite(staging)
+        assert result.success
+        assert result.data["counts"]["creates"] == 1
+        service._parser.parse_all()
+        names = [o.attributes.get("host_name") for o in service._parser.objects]
+        assert "new-host" in names
+
+    def test_move_edit_no_duplicate(self, service, config_dir):
+        """The critical test: edit+move must not create duplicates."""
+        hosts = os.path.join(config_dir, "hosts.cfg")
+        services = os.path.join(config_dir, "services.cfg")
+        stable_key = f"{hosts}|host|web-01"
+        staging = {
+            "pendingEdits": {
+                "0": {
+                    "original": {"host_name": "web-01", "alias": "Web Server 1",
+                                 "address": "10.0.0.1", "use": "linux-server"},
+                    "edited": {"host_name": "web-01", "alias": "Moved And Edited",
+                               "address": "10.0.0.1", "use": "linux-server"},
+                    "object": {"source_file": hosts, "object_type": "host",
+                               "display_name": "web-01", "global_index": 0},
+                }
+            },
+            "stagedMoves": {
+                stable_key: {
+                    "global_index": 0,
+                    "targetFile": services,
+                    "insertPosition": None,
+                }
+            },
+            "stagedCreations": [],
+            "stagedObjectDeletions": [],
+        }
+        result = service.apply_object_composite(staging)
+        assert result.success
+        assert result.data["counts"]["move_edits"] == 1
+        # Verify: exactly ONE web-01, in services.cfg, with edited alias
+        service._parser.parse_all()
+        web01s = [o for o in service._parser.objects
+                  if o.attributes.get("host_name") == "web-01"]
+        assert len(web01s) == 1, f"Expected 1 web-01, found {len(web01s)}"
+        assert os.path.realpath(web01s[0].source_file) == os.path.realpath(services)
+        assert web01s[0].attributes["alias"] == "Moved And Edited"
+
+    def test_multiple_independent_ops(self, service, config_dir):
+        """Edit one + move another + delete third in single apply."""
+        hosts = os.path.join(config_dir, "hosts.cfg")
+        services = os.path.join(config_dir, "services.cfg")
+        staging = {
+            "pendingEdits": {
+                "0": {
+                    "original": {"host_name": "web-01", "alias": "Web Server 1",
+                                 "address": "10.0.0.1", "use": "linux-server"},
+                    "edited": {"host_name": "web-01", "alias": "Edited",
+                               "address": "10.0.0.1", "use": "linux-server"},
+                    "object": {"source_file": hosts, "object_type": "host",
+                               "display_name": "web-01", "global_index": 0},
+                }
+            },
+            "stagedMoves": {
+                f"{hosts}|host|web-02": {
+                    "global_index": 1,
+                    "targetFile": services,
+                    "insertPosition": None,
+                }
+            },
+            "stagedCreations": [],
+            "stagedObjectDeletions": [2],  # old-host
+        }
+        result = service.apply_object_composite(staging)
+        assert result.success
+        counts = result.data["counts"]
+        assert counts["edits"] == 1
+        assert counts["moves"] == 1
+        assert counts["deletes"] == 1
+        # Verify on disk
+        service._parser.parse_all()
+        names = {o.attributes.get("host_name") for o in service._parser.objects}
+        assert "web-01" in names
+        assert "web-02" in names
+        assert "old-host" not in names
+
+    def test_empty_staging_is_noop(self, service):
+        staging = {
+            "pendingEdits": {},
+            "stagedMoves": {},
+            "stagedCreations": [],
+            "stagedObjectDeletions": [],
+        }
+        result = service.apply_object_composite(staging)
+        assert result.success
+        assert all(v == 0 for v in result.data["counts"].values())
+
+    def test_details_include_action_type(self, service, config_dir):
+        """Each detail dict must include 'action' for audit trail."""
+        hosts = os.path.join(config_dir, "hosts.cfg")
+        staging = {
+            "pendingEdits": {
+                "0": {
+                    "original": {"host_name": "web-01", "alias": "Web Server 1",
+                                 "address": "10.0.0.1", "use": "linux-server"},
+                    "edited": {"host_name": "web-01", "alias": "X",
+                               "address": "10.0.0.1", "use": "linux-server"},
+                    "object": {"source_file": hosts, "object_type": "host",
+                               "display_name": "web-01", "global_index": 0},
+                }
+            },
+            "stagedMoves": {},
+            "stagedCreations": [],
+            "stagedObjectDeletions": [2],
+        }
+        result = service.apply_object_composite(staging)
+        assert result.success
+        for detail in result.data["details"]:
+            assert "action" in detail
+            assert "object_type" in detail
+            assert "object_name" in detail
