@@ -248,9 +248,9 @@ async function applyGuiStagingChanges() {
     }, { silent: true });
     if (!applyResult.success || !applyResult.data?.success) {
         showStagingResultPanel(false, applyResult.data?.error || applyResult.error || 'Failed to apply staged changes');
-        return false;
+        return null;
     }
-    return true;
+    return applyResult.data;
 }
 
 /**
@@ -1475,15 +1475,16 @@ async function applyGlobalCommit() {
 
     const hasGuiStaging = diffDataHasGuiStaging();
 
+    let applyData = null;
     if (hasGuiStaging) {
-        const applied = await applyGuiStagingChanges();
-        if (!applied) {return;}
+        applyData = await applyGuiStagingChanges();
+        if (!applyData) {return;}
     } else {
         showGitRunningPanel('Git Commit', 'Committing changes...');
     }
 
     updateNavCommitButton(0);
-    await autoGitCommitGlobal(commitMessage, hasGuiStaging);
+    await autoGitCommitGlobal(commitMessage, hasGuiStaging, applyData);
 }
 
 function showStagingResultPanel(success, message) {
@@ -1496,7 +1497,7 @@ function showStagingResultPanel(success, message) {
     });
 }
 
-async function autoGitCommitGlobal(message, clearStagingOnSuccess = false) {
+async function autoGitCommitGlobal(message, clearStagingOnSuccess = false, applyData = null) {
     if (!message) {return;}
 
     const identity = getUserIdentity();
@@ -1525,10 +1526,67 @@ async function autoGitCommitGlobal(message, clearStagingOnSuccess = false) {
         await ApiClient.del('/api/staging', { silent: true });
     }
 
-    showGitResultPanel(message, result.success, result.data || { error: result.error }, clearStagingOnSuccess && !isSuccess);
+    const verification = applyData?.verification || null;
+    showGitResultPanel(message, result.success, result.data || { error: result.error }, clearStagingOnSuccess && !isSuccess, verification);
 }
 
-function showGitResultPanel(message, success, result, showRetryOption = false) {
+function buildVerificationHtml(verification) {
+    const ol = verification.objectLevel;
+    const fl = verification.fileLevel;
+    let html = '\n<span class="info-text">--- Verification ---</span>\n';
+
+    // Object-level lines: only show categories that have counts
+    const objectLines = [];
+    if (ol.editsVerified > 0 || ol.editsFailed > 0) {
+        objectLines.push(ol.editsFailed > 0
+            ? `<span class="warning-text">\u26a0\ufe0f ${ol.editsFailed} edit(s) NOT verified</span>`
+            : `<span class="success-text">\u2705 ${ol.editsVerified} edit(s) verified</span>`);
+    }
+    if (ol.creationsVerified > 0 || ol.creationsFailed > 0) {
+        objectLines.push(ol.creationsFailed > 0
+            ? `<span class="warning-text">\u26a0\ufe0f ${ol.creationsFailed} creation(s) NOT verified</span>`
+            : `<span class="success-text">\u2705 ${ol.creationsVerified} creation(s) verified</span>`);
+    }
+    if (ol.deletionsVerified > 0 || ol.deletionsFailed > 0) {
+        objectLines.push(ol.deletionsFailed > 0
+            ? `<span class="warning-text">\u26a0\ufe0f ${ol.deletionsFailed} deletion(s) NOT verified</span>`
+            : `<span class="success-text">\u2705 ${ol.deletionsVerified} deletion(s) verified</span>`);
+    }
+    if (ol.movesVerified > 0 || ol.movesFailed > 0) {
+        objectLines.push(ol.movesFailed > 0
+            ? `<span class="warning-text">\u26a0\ufe0f ${ol.movesFailed} move(s) NOT verified</span>`
+            : `<span class="success-text">\u2705 ${ol.movesVerified} move(s) verified</span>`);
+    }
+    html += objectLines.join('\n') + '\n';
+
+    // File-level line
+    if (fl) {
+        const fileCount = fl.actualFiles?.length || 0;
+        if (fl.passed) {
+            html += `<span class="success-text">\u2705 File changes match (${fileCount} file${fileCount !== 1 ? 's' : ''})</span>\n`;
+        } else {
+            html += `<span class="warning-text">\u26a0\ufe0f File changes mismatch</span>\n`;
+            for (const msg of (fl.unexpected || [])) {
+                html += `<span class="warning-text">   ${msg}</span>\n`;
+            }
+            for (const msg of (fl.missing || [])) {
+                html += `<span class="warning-text">   ${msg}</span>\n`;
+            }
+        }
+    }
+
+    // Failure details
+    if (ol.failures?.length > 0) {
+        html += '\n';
+        for (const f of ol.failures) {
+            html += `<span class="warning-text">   ${f}</span>\n`;
+        }
+    }
+
+    return html;
+}
+
+function showGitResultPanel(message, success, result, showRetryOption = false, verification = null) {
     const identity = getUserIdentity();
     const displayMessage = message.length > 60 ? message.substring(0, 60) + '...' : message;
     const command = `git -c user.name="${identity.userName || '?'}" -c user.email="${identity.userEmail || '?'}" commit -m "${displayMessage}"`;
@@ -1556,10 +1614,21 @@ function showGitResultPanel(message, success, result, showRetryOption = false) {
         }
     }
 
+    // Append verification summary if available
+    if (verification) {
+        outputHtml += '\n' + buildVerificationHtml(verification);
+    }
+
+    // Downgrade title if commit succeeded but verification has warnings
+    let title = isSuccess ? 'Git Commit Successful' : 'Git Commit Failed';
+    if (isSuccess && verification && !verification.passed) {
+        title = 'Committed with Warnings';
+    }
+
     showResultPanel({
         command,
         success: isSuccess,
-        title: isSuccess ? 'Git Commit Successful' : 'Git Commit Failed',
+        title,
         outputHtml,
         showRetryCommit: showRetryOption && !isSuccess
     });
