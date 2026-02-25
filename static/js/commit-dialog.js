@@ -1533,16 +1533,16 @@ async function autoGitCommitGlobal(message, clearStagingOnSuccess = false, apply
 function _verificationOpLine(verified, failed, label) {
     if (verified === 0 && failed === 0) {return null;}
     return failed > 0
-        ? `<span class="warning-text">\u26a0\ufe0f ${failed} ${label}(s) NOT verified</span>`
-        : `<span class="success-text">\u2705 ${verified} ${label}(s) verified</span>`;
+        ? `<span class="warning-text">\u26a0 ${failed} ${label}(s) NOT verified</span>`
+        : `<span class="success-text">\u2714 ${verified} ${label}(s) verified</span>`;
 }
 
 function _verificationFileLines(fl) {
     const fileCount = fl.actualFiles?.length || 0;
     if (fl.passed) {
-        return `<span class="success-text">\u2705 File changes match (${fileCount} file${fileCount !== 1 ? 's' : ''})</span>\n`;
+        return `<span class="success-text">\u2714 File changes match (${fileCount} file${fileCount !== 1 ? 's' : ''})</span>\n`;
     }
-    let html = `<span class="warning-text">\u26a0\ufe0f File changes mismatch</span>\n`;
+    let html = `<span class="warning-text">\u26a0 File changes mismatch</span>\n`;
     for (const msg of [...(fl.unexpected || []), ...(fl.missing || [])]) {
         html += `<span class="warning-text">   ${msg}</span>\n`;
     }
