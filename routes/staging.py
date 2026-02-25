@@ -434,11 +434,57 @@ def _get_existing_operation_keys(existing):
     return edit_keys, move_keys, creation_ids, deletion_keys
 
 
+def _filter_orphaned_undo_entries(undo_stack, current_edit_keys, current_move_keys):
+    """Remove undo entries for operations no longer present in staging data.
+
+    When a user manually reverts an edit (editing back to original value),
+    the pending edit is removed but the undo entry persists. This cleans
+    up those orphaned entries so the undo stack reflects actual changes.
+
+    Args:
+        undo_stack: List of undo entry dicts
+        current_edit_keys: Set of string keys currently in pendingEdits
+        current_move_keys: Set of string keys currently in stagedMoves
+
+    Returns:
+        Filtered list of undo entries
+
+    """
+    result = []
+    for entry in undo_stack:
+        etype = entry.get("type", "")
+        edata = entry.get("data", {})
+
+        if etype == "edit":
+            if str(edata.get("key", "")) not in current_edit_keys:
+                continue
+        elif etype == "move":
+            if str(edata.get("key", "")) not in current_move_keys:
+                continue
+        elif etype in ("bulk_edit", "bulk_move"):
+            keys = current_edit_keys if etype == "bulk_edit" else current_move_keys
+            items = [i for i in edata.get("items", []) if str(i.get("key", "")) in keys]
+            if not items:
+                continue
+            entry = {**entry, "data": {**edata, "items": items, "count": len(items)}}
+        elif etype == "compound":
+            subs = _filter_orphaned_undo_entries(
+                edata.get("entries", []), current_edit_keys, current_move_keys,
+            )
+            if not subs:
+                continue
+            entry = {**entry, "data": {**edata, "entries": subs}}
+
+        result.append(entry)
+    return result
+
+
 def _build_undo_entries(data, existing, log):
     """Build the complete undo stack including new entries for new operations.
 
     Creates undo entries for new edits, moves, creations, deletions, and new files.
     Groups multiple operations of the same type into bulk undo entries.
+    Removes orphaned entries for operations that have been manually reverted.
 
     Args:
         data: New staging data dict
@@ -455,6 +501,13 @@ def _build_undo_entries(data, existing, log):
 
     # Initialize undo stack from existing data
     undo_stack = list(existing.get("undoStack", [])) if existing else []
+
+    # Remove undo entries for operations that were manually reverted
+    current_edit_keys = set(str(k) for k in data.get("pendingEdits", {}))
+    current_move_keys = set(str(k) for k in data.get("stagedMoves", {}))
+    undo_stack = _filter_orphaned_undo_entries(
+        undo_stack, current_edit_keys, current_move_keys,
+    )
 
     # Create undo entries for new operations
     new_edits = _create_undo_entries_for_edits(

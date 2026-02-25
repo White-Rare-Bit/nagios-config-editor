@@ -1216,7 +1216,22 @@
             stageCurrentChanges();
         } else {
             // If reverted to original, remove from pending
-            state.pendingEdits.delete(state.editedObject.global_index);
+            const globalIndex = state.editedObject.global_index;
+
+            // Restore allObjects to original state before deleting pending edit
+            const existingEdit = state.pendingEdits.get(globalIndex);
+            if (existingEdit) {
+                const idx = state.allObjects.findIndex(o => o.global_index === globalIndex);
+                if (idx >= 0) {
+                    state.allObjects[idx].attributes = {...existingEdit.original};
+                }
+            }
+
+            state.pendingEdits.delete(globalIndex);
+
+            // Persist the removal to backend
+            Explorer.saveStagedChanges();
+
             // Centralized refresh ensures all UI components stay in sync
             Explorer.refreshAfterObjectChange();
         }
