@@ -18,7 +18,7 @@ import shutil
 from pathlib import Path
 
 # Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from nagios_parser import NagiosConfigParser
 from nagios_service import NagiosService
@@ -195,13 +195,23 @@ def run_test():
         print("\nFull staged moves data:")
         print(json.dumps(staged_moves, indent=2, default=str))
 
+        # Convert list of moves to dict keyed by stable key (composite format)
+        staged_moves_dict = {}
+        for move in staged_moves:
+            key = move['stableKey']
+            staged_moves_dict[key] = {
+                'targetFile': move['targetFile'],
+                'insertPosition': move['insertPosition'],
+                'object': move['object'],
+            }
+
         # Build staging data like the frontend sends
         staging_data = {
             'sessionId': 'test-session',
             'userName': 'test-user',
             'userEmail': 'test@example.com',
-            'pendingEdits': [],
-            'stagedMoves': staged_moves,
+            'pendingEdits': {},
+            'stagedMoves': staged_moves_dict,
             'stagedCreations': [],
             'stagedObjectDeletions': [],
             'newFiles': [],
@@ -213,10 +223,10 @@ def run_test():
             'stagedFolderMoves': []
         }
 
-        print_separator("3. APPLYING: Calling apply_object_moves")
+        print_separator("3. APPLYING: Calling apply_object_composite")
 
         # Apply the moves
-        result = service.apply_object_moves(staging_data)
+        result = service.apply_object_composite(staging_data)
 
         print(f"Result success: {result.success}")
         print(f"Result data: {json.dumps(result.data, indent=2, default=str)}")
