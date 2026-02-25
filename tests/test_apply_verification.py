@@ -374,6 +374,43 @@ def test_orchestrator_file_mismatch():
     assert report["objectLevel"]["passed"] is True
 
 
+def test_verify_move_uses_stable_key():
+    """Move verification should parse stable key, not rely on 'object' sub-dict."""
+    staging = {
+        "stagedMoves": {
+            "/cfg/hosts.cfg|host|web-01": {
+                "global_index": 5,
+                "targetFile": "/cfg/services.cfg",
+                "insertPosition": None,
+            }
+        },
+    }
+    parsed = [
+        {"object_type": "host", "source_file": "/cfg/services.cfg",
+         "attributes": {"host_name": "web-01"}},
+    ]
+    report = verify_objects(staging, parsed)
+    assert report["movesVerified"] == 1
+    assert report["movesFailed"] == 0
+    assert report["passed"] is True
+
+
+def test_staged_moves_changeset_uses_stable_key():
+    """build_expected_changeset should extract source_file from stable key."""
+    staging = {
+        "stagedMoves": {
+            "/cfg/hosts.cfg|host|web-01": {
+                "global_index": 5,
+                "targetFile": "/cfg/services.cfg",
+                "insertPosition": None,
+            }
+        },
+    }
+    changeset = build_expected_changeset(staging)
+    assert "/cfg/hosts.cfg" in changeset["modified"]
+    assert "/cfg/services.cfg" in changeset["modified"]
+
+
 def test_orchestrator_no_git_graceful():
     """When git data is not provided, file-level is skipped, object-level still runs."""
     staging = {

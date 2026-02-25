@@ -8,6 +8,7 @@ Two-layer verification:
 import logging
 
 from nagios_model import NAME_FIELDS
+from staging_manager import parse_stable_key
 
 logger = logging.getLogger("nagios_bulk_editor.verification")
 
@@ -52,10 +53,13 @@ def build_expected_changeset(staging_data, parser_objects=None):
                     modified.add(source)
 
     # Object moves → both source and target modified
-    for move in staging_data.get("stagedMoves", {}).values():
+    for stable_key, move in staging_data.get("stagedMoves", {}).items():
         if isinstance(move, dict):
-            obj = move.get("object", {})
-            source = obj.get("source_file")
+            parsed_key = parse_stable_key(stable_key) if stable_key else None
+            source = parsed_key["source_file"] if parsed_key else None
+            if not source:
+                obj = move.get("object", {})
+                source = obj.get("source_file")
             target = move.get("targetFile")
             if source:
                 modified.add(source)
@@ -268,13 +272,20 @@ def verify_objects(staging_data, parsed_objects, pre_objects=None):
                 deletions_verified += 1
 
     # Verify moves
-    for move in staging_data.get("stagedMoves", {}).values():
+    for stable_key, move in staging_data.get("stagedMoves", {}).items():
         if not isinstance(move, dict):
             continue
-        obj_meta = move.get("object", {})
         target_file = move.get("targetFile")
-        obj_type = obj_meta.get("object_type")
-        obj_name = obj_meta.get("name")
+
+        # Parse identity from stable key first, fall back to object sub-dict
+        parsed_key = parse_stable_key(stable_key) if stable_key else None
+        if parsed_key:
+            obj_type = parsed_key["object_type"]
+            obj_name = parsed_key["name"]
+        else:
+            obj_meta = move.get("object", {})
+            obj_type = obj_meta.get("object_type")
+            obj_name = obj_meta.get("name")
 
         found = _find_object(parsed_objects, obj_type, obj_name, source_file=target_file)
         if found:
