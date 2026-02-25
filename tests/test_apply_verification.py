@@ -2,7 +2,7 @@
 
 import os
 
-from apply_verification import build_expected_changeset
+from apply_verification import build_expected_changeset, compare_file_changes
 
 
 def test_empty_staging_returns_empty_changeset():
@@ -114,3 +114,78 @@ def test_combined_operations():
     assert "/etc/nagios/hosts.cfg" in changeset["modified"]
     assert "/etc/nagios/new.cfg" in changeset["created"]
     assert "/etc/nagios/old.cfg" in changeset["deleted"]
+
+
+def test_perfect_match():
+    """All expected changes present, no unexpected changes."""
+    expected = {"modified": {"/cfg/hosts.cfg"}, "created": set(), "deleted": set()}
+    pre_files = []
+    post_files = [{"path": "hosts.cfg", "status_code": " M"}]
+    config_path = "/cfg"
+
+    report = compare_file_changes(expected, pre_files, post_files, config_path)
+    assert report["passed"] is True
+    assert report["unexpected"] == []
+    assert report["missing"] == []
+
+
+def test_unexpected_file_changed():
+    """A file changed on disk that staging didn't intend to touch."""
+    expected = {"modified": {"/cfg/hosts.cfg"}, "created": set(), "deleted": set()}
+    pre_files = []
+    post_files = [
+        {"path": "hosts.cfg", "status_code": " M"},
+        {"path": "services.cfg", "status_code": " M"},
+    ]
+    config_path = "/cfg"
+
+    report = compare_file_changes(expected, pre_files, post_files, config_path)
+    assert report["passed"] is False
+    assert any("services.cfg" in u for u in report["unexpected"])
+
+
+def test_missing_expected_change():
+    """Staging expected to modify a file but git shows no diff."""
+    expected = {"modified": {"/cfg/hosts.cfg"}, "created": set(), "deleted": set()}
+    pre_files = []
+    post_files = []
+    config_path = "/cfg"
+
+    report = compare_file_changes(expected, pre_files, post_files, config_path)
+    assert report["passed"] is False
+    assert any("hosts.cfg" in m for m in report["missing"])
+
+
+def test_pre_existing_changes_excluded():
+    """Files already dirty before apply are not flagged as unexpected."""
+    expected = {"modified": {"/cfg/hosts.cfg"}, "created": set(), "deleted": set()}
+    pre_files = [{"path": "unrelated.cfg", "status_code": " M"}]
+    post_files = [
+        {"path": "hosts.cfg", "status_code": " M"},
+        {"path": "unrelated.cfg", "status_code": " M"},
+    ]
+    config_path = "/cfg"
+
+    report = compare_file_changes(expected, pre_files, post_files, config_path)
+    assert report["passed"] is True
+    assert report["unexpected"] == []
+
+
+def test_file_creation_detected():
+    expected = {"modified": set(), "created": {"/cfg/new.cfg"}, "deleted": set()}
+    pre_files = []
+    post_files = [{"path": "new.cfg", "status_code": "??"}]
+    config_path = "/cfg"
+
+    report = compare_file_changes(expected, pre_files, post_files, config_path)
+    assert report["passed"] is True
+
+
+def test_file_deletion_detected():
+    expected = {"modified": set(), "created": set(), "deleted": {"/cfg/old.cfg"}}
+    pre_files = []
+    post_files = [{"path": "old.cfg", "status_code": " D"}]
+    config_path = "/cfg"
+
+    report = compare_file_changes(expected, pre_files, post_files, config_path)
+    assert report["passed"] is True
