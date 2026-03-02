@@ -1391,6 +1391,11 @@ class StagingManager:
 # Stable Key Utilities
 # =============================================================================
 
+# Stable key format: "source_file|object_type|name"
+# This format is shared with the frontend (static/js/stable-key.js).
+# Any change here MUST be coordinated with the frontend.
+
+
 def generate_stable_key(source_file: str, object_type: str, name: str) -> str:
     """Generate a stable key for an object.
 

@@ -115,25 +115,18 @@ Explorer.state = {
  * Format: "source_file|object_type|display_name"
  * Uses display_name to ensure uniqueness — services with the same
  * service_description on different hosts get different keys.
+ * Delegates to shared StableKey module (static/js/stable-key.js).
  */
 Explorer.getObjectKey = function(obj) {
-    const nameComponent = obj.display_name ?? obj.name ?? `idx:${obj.global_index}`;
-    return `${obj.source_file}|${obj.object_type}|${nameComponent}`;
+    return StableKey.build(obj);
 };
 
 /**
- * Find an object by its stable key
+ * Find an object by its stable key.
+ * Delegates to shared StableKey module (static/js/stable-key.js).
  */
 Explorer.findObjectByKey = function(key) {
-    const [source_file, object_type, ...nameParts] = key.split('|');
-    // Rejoin name parts in case the name itself contains '|'
-    const name = nameParts.join('|');
-    return Explorer.state.allObjects.find(o => {
-        const objName = o.display_name ?? o.name ?? `idx:${o.global_index}`;
-        return o.source_file === source_file &&
-               o.object_type === object_type &&
-               objName === name;
-    });
+    return StableKey.findObject(key, Explorer.state.allObjects);
 };
 
 /**

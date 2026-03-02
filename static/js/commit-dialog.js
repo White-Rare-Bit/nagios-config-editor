@@ -766,65 +766,6 @@ async function applyGitCommit() {
 // =============================================================================
 
 /**
- * Tries to decode a stable key and return its parts.
- * Stable keys are Base64-encoded "source_file|object_type|name" strings.
- * @returns {Object|null} - {source_file, object_type, name} or null if not a valid stable key
- */
-function decodeStableKey(key) {
-    if (typeof key !== 'string') {return null;}
-
-    // First check if it's already a decoded format (has pipes)
-    if (key.includes('|')) {
-        const parts = key.split('|');
-        if (parts.length === 3) {
-            return { source_file: parts[0], object_type: parts[1], name: parts[2] };
-        }
-    }
-
-    // Try to decode as Base64
-    try {
-        const decoded = atob(key);
-        if (decoded.includes('|')) {
-            const parts = decoded.split('|');
-            if (parts.length === 3) {
-                return { source_file: parts[0], object_type: parts[1], name: parts[2] };
-            }
-        }
-    } catch (e) {
-        // Not valid Base64, that's fine
-    }
-
-    return null;
-}
-
-/**
- * Finds an object in allObjects by stable key or numeric index.
- * @param {string|number} key - Either a stable key (Base64 or plain) or numeric global_index
- * @param {Array} allObjects - Array of all Nagios objects
- * @returns {Object|null} - Found object or null
- */
-function findObjectByKey(key, allObjects) {
-    // Try stable key first
-    const stableKeyParts = decodeStableKey(key);
-    if (stableKeyParts) {
-        const { source_file, object_type, name } = stableKeyParts;
-        return allObjects.find(o =>
-            o.source_file === source_file &&
-            o.object_type === object_type &&
-            (o.display_name ?? o.name) === name
-        );
-    }
-
-    // Try numeric global_index
-    const numericIdx = typeof key === 'string' ? parseInt(key, 10) : key;
-    if (!isNaN(numericIdx)) {
-        return allObjects.find(o => o.global_index === numericIdx);
-    }
-
-    return null;
-}
-
-/**
  * Ensures a file entry exists in the fileChanges map with initialized arrays.
  */
 function ensureFileChange(fileChanges, filePath, configPath) {
@@ -858,7 +799,7 @@ function processStagedMove(moveEntry, allObjects, editsMap, fileChanges, configP
     const [moveKey, move] = moveEntry;
 
     // Find object by stable key (Base64-encoded or plain) or by global_index
-    let obj = findObjectByKey(moveKey, allObjects);
+    let obj = StableKey.findObject(moveKey, allObjects);
 
     // Fallback: create object from move.object data
     if (!obj && move.object) {
@@ -910,7 +851,7 @@ function processPendingEdit(editEntry, allObjects, movedIndices, fileChanges, co
     if (movedIndices.has(editIdx)) {return;}
 
     // Find object by stable key (Base64-encoded or plain) or by global_index
-    let obj = findObjectByKey(editIdx, allObjects);
+    let obj = StableKey.findObject(editIdx, allObjects);
 
     if (!obj && edit.object) {
         obj = {
@@ -991,7 +932,7 @@ function buildGlobalFileBasedChanges(pendingEdits, stagedMoves, stagedCreations,
     const movedIndices = new Set();
     iterateMoves(stagedMoves, (moveKey, move) => {
         // Try to find the object using stable key or global_index
-        const obj = findObjectByKey(moveKey, allObjects);
+        const obj = StableKey.findObject(moveKey, allObjects);
         if (obj) {
             movedIndices.add(obj.global_index);
         }
