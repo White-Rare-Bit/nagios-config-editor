@@ -997,14 +997,11 @@ function bulkDeleteCleanupGroup(groupType) {
         }
 
         // Update UI
-        Explorer.saveStagedChanges();
-        Explorer.updateCommitUI();
-        Explorer.buildTree();
+        Explorer.afterFrontendMutation();
         Explorer.closeDialog();
         renderCleanupSuggestions();
         updateSuggestionsBadge();
         updateCleanupBadge();
-        Explorer.renderTargetPane();
 
         showToast(`Staged deletion of ${deletedCount} ${label}`, 'success');
     });
@@ -1049,10 +1046,7 @@ function stageCleanupDelete(idx) {
 
     // Stage the deletion
     state.stagedObjectDeletions.add(obj.global_index);
-    Explorer.saveStagedChanges();
-    Explorer.updateCommitUI();
-    Explorer.buildTree();
-    Explorer.renderTargetPane();
+    Explorer.afterFrontendMutation();
 
     showToast(`Staged deletion of ${obj.object_type} "${obj.display_name || obj.name}"`, 'success');
 
@@ -1174,10 +1168,7 @@ function keepDuplicateAndDeleteOthers(suggestionIdx, keepIdx) {
         }
     });
 
-    Explorer.saveStagedChanges();
-    Explorer.updateCommitUI();
-    Explorer.buildTree();
-    Explorer.renderTargetPane();
+    Explorer.afterFrontendMutation();
     Explorer.closeDialog();
 
     showToast(`Staged deletion of ${deletedCount} duplicate(s)`, 'success');

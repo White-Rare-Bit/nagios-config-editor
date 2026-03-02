@@ -509,9 +509,7 @@
             }
         }
 
-        Explorer.saveStagedChanges();
-        Explorer.updateCommitUI();
-        Explorer.buildTree();
+        Explorer.afterFrontendMutation();
         closeDialog();
 
         if (staged > 0) {
@@ -570,12 +568,8 @@
             refUpdates = stageReferenceUpdates(currentName, newName, state.contextTarget);
         }
 
-        Explorer.saveStagedChanges();
-        Explorer.updateCommitUI();
         state.healthCheckData = null;
-        Explorer.computeStagedIssues();
-        Explorer.buildTree();
-        Explorer.renderTargetPane();
+        Explorer.afterFrontendMutation();
         closeDialog();
 
         // Refresh center pane if this object is currently displayed
@@ -657,10 +651,7 @@
             return;
         }
 
-        Explorer.saveStagedChanges();
-        Explorer.updateCommitUI();
-        Explorer.buildTree();
-        Explorer.renderTargetPane();
+        Explorer.afterFrontendMutation();
         closeDialog();
         showToast(`Staged ${clonedCount} cloned object(s). Commit to apply.`, 'info');
     }
@@ -722,9 +713,7 @@
             }
         }
 
-        Explorer.saveStagedChanges();
-        Explorer.updateCommitUI();
-        Explorer.buildTree();
+        Explorer.afterFrontendMutation();
         closeDialog();
 
         if (updatedCount > 0) {
@@ -923,9 +912,7 @@
             }
         }
 
-        Explorer.saveStagedChanges();
-        Explorer.updateCommitUI();
-        Explorer.buildTree();
+        Explorer.afterFrontendMutation();
 
         // If the currently displayed object in center panel was updated, refresh it
         if (state.editedObject && state.editedObject.global_index !== -1) {
@@ -1065,8 +1052,7 @@
                 }
             });
             if (moved > 0) {
-                Explorer.saveStagedChanges();
-                Explorer.buildTree();
+                Explorer.afterFrontendMutation();
                 showToast(`Moved ${moved} new object(s) to ${targetFile.split('/').pop()}`, 'info');
             }
             return;
@@ -1101,10 +1087,8 @@
         }
 
         if (staged > 0) {
-            Explorer.saveStagedChanges();
+            Explorer.afterFrontendMutation();
             showToast(`Staged ${staged} object(s) to move. Use Commit to apply.`, 'info');
-            Explorer.updateCommitUI();
-            Explorer.buildTree();
         }
     }
 

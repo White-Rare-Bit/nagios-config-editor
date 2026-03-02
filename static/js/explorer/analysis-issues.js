@@ -413,11 +413,8 @@
         }
 
         // Refresh UI
-        Explorer.saveStagedChanges();
-        Explorer.updateCommitUI();
-        Explorer.buildTree();
         state.healthCheckData = null;
-        Explorer.computeStagedIssues();
+        Explorer.afterFrontendMutation();
         loadIssues();
 
         if (failed === 0) {
