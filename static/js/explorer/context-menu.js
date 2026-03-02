@@ -150,7 +150,8 @@
 
         // Update "Add to group" menu item based on selected types
         const addToGroupItem = document.getElementById('addToGroupMenuItem');
-        const groupableTypes = ['host', 'service', 'contact'];
+        const gs = Explorer.constants.groupStructure;
+        const groupableTypes = gs ? Object.values(gs).map(g => g.member_type) : [];
         const groupableSelected = [...selectedTypes].filter(t => groupableTypes.includes(t));
 
         if (groupableSelected.length === 0) {

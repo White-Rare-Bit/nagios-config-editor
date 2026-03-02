@@ -81,11 +81,6 @@
 
     // Attributes that affect inheritance/reference sections (UI behavior)
     const INHERITANCE_ATTRS = ['use', 'parents'];
-    const REFERENCE_TRIGGER_ATTRS = [
-        'use', 'parents', 'hostgroups', 'servicegroups', 'contactgroups',
-        'contact_groups', 'host_name', 'hostgroup_name', 'check_command',
-        'event_handler', 'check_period', 'notification_period', 'contacts', 'members'
-    ];
 
     Explorer.constants = {
         // --- Populated by /api/metadata ---
@@ -107,7 +102,9 @@
         templateBadgeTiers: TEMPLATE_BADGE_TIERS,
         tabLabelTiers: TAB_LABEL_TIERS,
         inheritanceAttrs: INHERITANCE_ATTRS,
-        referenceAttrs: REFERENCE_TRIGGER_ATTRS,
+        referenceAttrs: [],
+        hostScopedTypes: new Set(),
+        referenceTriggerAttrs: [],
 
         // Notification option accessors (populated by applyMetadata)
         HOST_NOTIFICATION_OPTIONS: [],
@@ -164,6 +161,14 @@
         c.NAGIOS_ATTRIBUTES = meta.valid_attributes || c.NAGIOS_ATTRIBUTES;
         c.defaultAttributes = meta.default_attributes || c.defaultAttributes;
         c.groupStructure = meta.group_structure || c.groupStructure;
+
+        if (meta.host_scoped_types) {
+            c.hostScopedTypes = new Set(meta.host_scoped_types);
+        }
+        if (meta.reference_trigger_attrs) {
+            c.referenceTriggerAttrs = meta.reference_trigger_attrs;
+        }
+        c.referenceAttrs = c.referenceTriggerAttrs;
 
         buildAttrReferenceMap(c);
         applyNotificationOptions(c, meta.notification_options || {});
@@ -232,10 +237,6 @@
         return val.trim().replace(/^[+!]+/, '').trim();
     };
 
-    // D-01: Object types whose identity is scoped by host (composite key).
-    // Mirrors health_checks.py host_scoped_types.
-    const HOST_SCOPED_TYPES = new Set(['service', 'serviceescalation', 'servicedependency']);
-
     /**
      * Check whether a name would be a duplicate for the given object type.
      * For host-scoped types (service, serviceescalation, servicedependency),
@@ -253,7 +254,7 @@
         const state = Explorer.state;
         const c = Explorer.constants;
         const nameField = c.nameFields[objectType] || 'name';
-        const isHostScoped = HOST_SCOPED_TYPES.has(objectType);
+        const isHostScoped = Explorer.constants.hostScopedTypes.has(objectType);
         const hostScope = isHostScoped
             ? (attributes.host_name || attributes.hostgroup_name || '')
             : '';

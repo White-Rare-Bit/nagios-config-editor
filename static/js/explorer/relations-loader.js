@@ -416,16 +416,8 @@
             const parents = [];
             const groupType = groupObj.object_type;
             const groupName = getEffectiveName(groupObj);
-            let membersAttr;
-            if (groupType === 'hostgroup') {
-                membersAttr = 'hostgroup_members';
-            } else if (groupType === 'servicegroup') {
-                membersAttr = 'servicegroup_members';
-            } else if (groupType === 'contactgroup') {
-                membersAttr = 'contactgroup_members';
-            } else {
-                membersAttr = null;
-            }
+            const groupInfo = Explorer.constants.groupStructure?.[groupType];
+            const membersAttr = groupInfo?.member_attrs?.[1] ?? null;
 
             if (!membersAttr) {return [];}
 

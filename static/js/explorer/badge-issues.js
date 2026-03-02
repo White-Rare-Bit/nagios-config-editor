@@ -159,10 +159,9 @@
                     targetType = o.object_type; // Templates are same type
                 } else if (field === 'members') {
                     // Members type depends on group type
-                    if (o.object_type === 'hostgroup') {targetType = 'host';}
-                    else if (o.object_type === 'contactgroup') {targetType = 'contact';}
-                    else if (o.object_type === 'servicegroup') {targetType = 'service';}
-                    else {continue;}
+                    const groupInfo = Explorer.constants.groupStructure?.[o.object_type];
+                    if (!groupInfo) { continue; }
+                    targetType = groupInfo.member_type;
                 }
 
                 if (!targetType) {continue;}

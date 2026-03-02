@@ -310,7 +310,11 @@
     }
 
     // Host-type object types for option lookups
-    const HOST_TYPES = new Set(['host', 'hostescalation', 'hostdependency']);
+    const HOST_TYPES = new Set(
+        Object.entries(Explorer.constants.nameFields)
+            .filter(([, field]) => field === 'host_name')
+            .map(([type]) => type)
+    );
 
     function getOptionSuggestions(attrName, objectType) {
         if (attrName === 'host_notification_options') {return constants.HOST_NOTIFICATION_OPTIONS;}
