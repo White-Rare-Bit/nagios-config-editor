@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from app import create_app
+from staging_manager import generate_stable_key
 
 
 @pytest.fixture
@@ -103,14 +104,16 @@ define timeperiod {
     shutil.rmtree(test_dir, ignore_errors=True)
 
 
-def _find_index(client, obj_type, name_attr, name_value):
-    """Find global_index for an object by type and name."""
+def _find_stable_key(client, obj_type, name_attr, name_value):
+    """Find stable key for an object by type and attribute name."""
     resp = client.get("/api/objects")
     assert resp.status_code == 200  # noqa: PLR2004
     for obj in resp.get_json():
         if obj.get("object_type") == obj_type:
             if obj.get("attributes", {}).get(name_attr) == name_value:
-                return obj["global_index"]
+                return generate_stable_key(
+                    obj["source_file"], obj["object_type"], obj["display_name"]
+                )
     return None
 
 
@@ -120,10 +123,10 @@ class TestTransitiveImpact:
     def test_transitive_count_through_intermediate(self, transitive_app):
         """template-A → template-B → 3 hosts: transitive_count should be 4."""
         client = transitive_app.test_client()
-        idx = _find_index(client, "host", "name", "template-A")
-        assert idx is not None, "Could not find template-A"
+        key = _find_stable_key(client, "host", "name", "template-A")
+        assert key is not None, "Could not find template-A"
 
-        resp = client.get(f"/api/object-references/{idx}")
+        resp = client.get(f"/api/object-references?key={key}")
         assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
 
@@ -139,10 +142,10 @@ class TestTransitiveImpact:
     def test_no_transitive_when_flat(self, transitive_app):
         """flat-template → 3 hosts directly: no intermediate templates, so no transitive_summary."""
         client = transitive_app.test_client()
-        idx = _find_index(client, "host", "name", "flat-template")
-        assert idx is not None, "Could not find flat-template"
+        key = _find_stable_key(client, "host", "name", "flat-template")
+        assert key is not None, "Could not find flat-template"
 
-        resp = client.get(f"/api/object-references/{idx}")
+        resp = client.get(f"/api/object-references?key={key}")
         assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
 
@@ -199,11 +202,11 @@ define timeperiod {
             app.config["TESTING"] = True
             client = app.test_client()
 
-            idx = _find_index(client, "host", "name", "cycle-A")
-            assert idx is not None, "Could not find cycle-A"
+            key = _find_stable_key(client, "host", "name", "cycle-A")
+            assert key is not None, "Could not find cycle-A"
 
             # Should complete without hanging (cycle protection)
-            resp = client.get(f"/api/object-references/{idx}")
+            resp = client.get(f"/api/object-references?key={key}")
             assert resp.status_code == 200  # noqa: PLR2004
             data = resp.get_json()
 

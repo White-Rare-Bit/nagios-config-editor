@@ -370,12 +370,12 @@
      * Load references (dependencies and dependents) for an object.
      */
     async function loadCenterReferences(obj) {
-        if (!obj || obj.global_index == null) {
+        if (!obj) {
             renderCenterReferences({ outgoing: [], incoming: [] });
             return;
         }
         try {
-            const result = await ApiClient.get(`/api/object-references/${obj.global_index}`);
+            const result = await ApiClient.get(`/api/object-references?key=${encodeURIComponent(Explorer.getObjectKey(obj))}`);
             if (!result.success) {
                 renderCenterReferences({ outgoing: [], incoming: [] });
                 return;
@@ -638,12 +638,12 @@
      * Load members for a group or template object.
      */
     async function loadCenterMembers(obj) {
-        if (!obj || obj.global_index == null) {
+        if (!obj) {
             renderCenterMembers([], obj);
             return;
         }
         try {
-            const result = await ApiClient.get(`/api/object-references/${obj.global_index}`);
+            const result = await ApiClient.get(`/api/object-references?key=${encodeURIComponent(Explorer.getObjectKey(obj))}`);
             if (!result.success) {
                 renderCenterMembers([], obj);
                 return;

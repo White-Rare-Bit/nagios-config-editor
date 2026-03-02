@@ -1514,17 +1514,21 @@ def api_escalation_path(object_type, name, service_desc=None):
     })
 
 
-@bp.route("/api/object-references/<int:global_index>")
-def api_object_references(global_index):
-    """Return all relationships for an object by global_index."""
-    service = get_service()
-    p = service.parser
-    objects = list(p.objects)
+@bp.route("/api/object-references")
+def api_object_references():
+    """Return all relationships for an object by stable key."""
+    stable_key = request.args.get("key")
+    if not stable_key:
+        return jsonify({"error": "Missing 'key' parameter"}), 400
 
-    if global_index < 0 or global_index >= len(objects):
+    service = get_service()
+    result = service.find_object_by_stable_key(stable_key)
+    if result is None:
         return jsonify({"error": "Object not found"}), 404
 
-    obj = objects[global_index]
+    global_index, obj = result
+    p = service.parser
+    objects = list(p.objects)
     obj_name = obj.get_name() or obj.get_display_name()
     obj_template_name = obj.attributes.get("name")
 

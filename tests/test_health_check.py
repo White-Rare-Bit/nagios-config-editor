@@ -12,6 +12,7 @@ from app import create_app
 from file_operations import edit_object_in_file
 from git_service import GitService
 from nagios_model import REQUIRED_FIELDS
+from staging_manager import generate_stable_key
 
 
 @pytest.fixture
@@ -1708,22 +1709,24 @@ def ref_client(references_app):
 
 
 class TestObjectReferences:
-    """Tests for /api/object-references/<global_index> endpoint."""
+    """Tests for /api/object-references?key=<stable_key> endpoint."""
 
-    def _find_index(self, client, object_type, name):
-        """Find the global_index of an object by type and name."""
+    def _find_stable_key(self, client, object_type, name):
+        """Find the stable key of an object by type and name."""
         resp = client.get("/api/objects")
         for obj in resp.json:
             if obj["object_type"] == object_type and obj.get("name") == name:
-                return obj["global_index"]
+                return generate_stable_key(
+                    obj["source_file"], obj["object_type"], obj["display_name"]
+                )
         return None
 
     def test_host_outgoing_references(self, ref_client):
         """Host web-01 uses generic-host template -> outgoing reference to template."""
-        idx = self._find_index(ref_client, "host", "web-01")
-        assert idx is not None, "Could not find host web-01"
+        key = self._find_stable_key(ref_client, "host", "web-01")
+        assert key is not None, "Could not find host web-01"
 
-        resp = ref_client.get(f"/api/object-references/{idx}")
+        resp = ref_client.get(f"/api/object-references?key={key}")
         assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json
 
@@ -1737,10 +1740,10 @@ class TestObjectReferences:
 
     def test_host_incoming_references(self, ref_client):
         """Host web-01 is referenced by services -> incoming references."""
-        idx = self._find_index(ref_client, "host", "web-01")
-        assert idx is not None, "Could not find host web-01"
+        key = self._find_stable_key(ref_client, "host", "web-01")
+        assert key is not None, "Could not find host web-01"
 
-        resp = ref_client.get(f"/api/object-references/{idx}")
+        resp = ref_client.get(f"/api/object-references?key={key}")
         assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json
 
@@ -1752,10 +1755,10 @@ class TestObjectReferences:
 
     def test_host_members(self, ref_client):
         """Host web-01 is member of hostgroup web-servers -> member_of."""
-        idx = self._find_index(ref_client, "host", "web-01")
-        assert idx is not None, "Could not find host web-01"
+        key = self._find_stable_key(ref_client, "host", "web-01")
+        assert key is not None, "Could not find host web-01"
 
-        resp = ref_client.get(f"/api/object-references/{idx}")
+        resp = ref_client.get(f"/api/object-references?key={key}")
         assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json
 
@@ -1768,10 +1771,10 @@ class TestObjectReferences:
 
     def test_hostgroup_members(self, ref_client):
         """Hostgroup web-servers has web-01 as member -> members list."""
-        idx = self._find_index(ref_client, "hostgroup", "web-servers")
-        assert idx is not None, "Could not find hostgroup web-servers"
+        key = self._find_stable_key(ref_client, "hostgroup", "web-servers")
+        assert key is not None, "Could not find hostgroup web-servers"
 
-        resp = ref_client.get(f"/api/object-references/{idx}")
+        resp = ref_client.get(f"/api/object-references?key={key}")
         assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json
 
@@ -1784,10 +1787,10 @@ class TestObjectReferences:
 
     def test_command_incoming_references(self, ref_client):
         """Command check-host-alive is referenced by the template -> incoming."""
-        idx = self._find_index(ref_client, "command", "check-host-alive")
-        assert idx is not None, "Could not find command check-host-alive"
+        key = self._find_stable_key(ref_client, "command", "check-host-alive")
+        assert key is not None, "Could not find command check-host-alive"
 
-        resp = ref_client.get(f"/api/object-references/{idx}")
+        resp = ref_client.get(f"/api/object-references?key={key}")
         assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json
 
@@ -1799,20 +1802,25 @@ class TestObjectReferences:
 
     def test_parent_hosts_none_for_non_host(self, ref_client):
         """Non-host objects should have parent_hosts=None."""
-        idx = self._find_index(ref_client, "command", "check-host-alive")
-        assert idx is not None, "Could not find command check-host-alive"
+        key = self._find_stable_key(ref_client, "command", "check-host-alive")
+        assert key is not None, "Could not find command check-host-alive"
 
-        resp = ref_client.get(f"/api/object-references/{idx}")
+        resp = ref_client.get(f"/api/object-references?key={key}")
         assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json
 
         assert data["parent_hosts"] is None, \
             f"Expected parent_hosts=None for command, got: {data['parent_hosts']}"
 
-    def test_invalid_index_returns_404(self, ref_client):
-        """Out-of-range global_index should return 404."""
-        resp = ref_client.get("/api/object-references/99999")
+    def test_invalid_key_returns_404(self, ref_client):
+        """Non-existent stable key should return 404."""
+        resp = ref_client.get("/api/object-references?key=nonexistent.cfg|host|fake")
         assert resp.status_code == 404  # noqa: PLR2004
+
+    def test_missing_key_returns_400(self, ref_client):
+        """Missing key parameter should return 400."""
+        resp = ref_client.get("/api/object-references")
+        assert resp.status_code == 400  # noqa: PLR2004
 
 
 # ============================================================
