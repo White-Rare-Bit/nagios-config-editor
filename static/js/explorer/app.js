@@ -18,7 +18,6 @@
     const referenceAttrs = constants.referenceAttrs;
 
 // Delegates to functions defined in object-editor.js and dialogs.js modules
-function updateCommitUI() { Explorer.updateCommitUI(); }
 function showCenterPaneObject(obj) { Explorer.showCenterPaneObject(obj); }
 function hideCenterPaneObject() { Explorer.hideCenterPaneObject(); }
 function showCenterPaneMultiple(count) { Explorer.showCenterPaneMultiple(count); }

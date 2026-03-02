@@ -1224,14 +1224,9 @@
         // Centralized refresh ensures all UI components stay in sync
         Explorer.afterFrontendMutation();
 
-        // Phase 2: Refresh relationship sections (References, Inheritance, Members)
-        // NOTE: These refresh AFTER refreshAfterObjectChange() because:
-        // 1. refreshAfterObjectChange() → syncCenterPaneAfterUndo() → renderCenterAttributes()
-        //    updates the attributes display in the center pane
-        // 2. loadImpactAndRelationships analyzes relationships based on the newly staged
-        //    attributes (e.g., if attribute "use" changed, inheritance tree changes)
-        // 3. Order matters: attribute display must update first, then relationship analysis
-        //    reads from state.editedObject containing staged values
+        // Refresh relationship sections after UI rebuild completes
+        // Order matters: afterFrontendMutation rebuilds attributes display first,
+        // then loadImpactAndRelationships analyzes relationships based on staged values
         Explorer.loadImpactAndRelationships(state.editedObject);
     }
 

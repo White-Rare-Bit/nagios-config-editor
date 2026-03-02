@@ -1302,14 +1302,6 @@
         }
     }
 
-    // ============================================================================
-    // Commit System
-    // ============================================================================
-
-    function updateCommitUI() {
-        Explorer.saveStagedChanges();
-    }
-
     function removeStagedCreation(idx) {
         // D-02: Add bounds check to prevent runtime errors
         if (idx < 0 || idx >= state.stagedCreations.length) {
@@ -1374,7 +1366,6 @@
     Explorer.selectByPattern = selectByPattern;
     Explorer.runValidation = runValidation;
     Explorer.runValidationFull = runValidationFull;
-    Explorer.updateCommitUI = updateCommitUI;
     Explorer.removeStagedCreation = removeStagedCreation;
 
 })(Explorer);

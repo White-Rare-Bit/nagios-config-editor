@@ -319,50 +319,10 @@
         }
     };
 
-    // =============================================================================
-    // Legacy Refresh (being migrated to rebuildUI + orchestrators)
-    // =============================================================================
-
-    /**
-     * Refresh UI components after object changes
-     * @param {Object} options - Optional controls for which components to refresh
-     * @param {boolean} options.skipTree - Skip tree refresh
-     * @param {boolean} options.skipTarget - Skip target pane refresh
-     * @param {boolean} options.skipCenter - Skip center pane refresh
-     * @param {boolean} options.skipSuggestions - Skip suggestions refresh
-     * @param {boolean} options.skipCommit - Skip commit UI refresh
-     */
+    // Backwards compatibility — delegates to afterServerSync
+    // DEPRECATED: Use afterFrontendMutation() or afterServerSync() instead.
     Explorer.refreshAfterObjectChange = function(options = {}) {
-        // Bug 017: Recompute staged issues (broken references, resolved warnings)
-        // before rebuilding the tree so badges are up to date.
-        if (!options.skipTree && Explorer.computeStagedIssues) {
-            Explorer.computeStagedIssues();
-        }
-
-        if (!options.skipTree && Explorer.buildTree) {
-            Explorer.buildTree();
-        }
-
-        if (!options.skipTarget && Explorer.renderTargetPane) {
-            Explorer.renderTargetPane();
-        }
-
-        if (!options.skipCenter && Explorer.syncCenterPaneAfterUndo && state.editedObject) {
-            Explorer.syncCenterPaneAfterUndo();
-        }
-
-        if (!options.skipSuggestions && Explorer.loadAllSuggestions) {
-            Explorer.loadAllSuggestions(true);
-        }
-
-        if (!options.skipCommit && window.updateCommitUI) {
-            window.updateCommitUI();
-        }
-
-        // Refresh tab bar to update modified indicators
-        if (Explorer.renderTabBar) {
-            Explorer.renderTabBar();
-        }
+        Explorer.afterServerSync(options);
     };
 
 })(window.Explorer);

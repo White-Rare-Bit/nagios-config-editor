@@ -204,84 +204,8 @@
         triggerAnalysisUpdate();
     };
 
-    // =============================================================================
-    // Legacy Staging API (being migrated to orchestrators above)
-    // =============================================================================
-
-    /**
-     * Save staged changes to server (true staging - no disk writes)
-     */
-    Explorer.saveStagedChanges = async function() {
-        // Debounce
-        if (saveDebounceTimer) {
-            clearTimeout(saveDebounceTimer);
-        }
-
-        if (saveInProgress) {
-            saveDebounceTimer = setTimeout(() => Explorer.saveStagedChanges(), CONFIG.SAVE_DEBOUNCE_RETRY_MS);
-            return;
-        }
-
-        saveInProgress = true;
-        isSavingStaging = true;
-
-        try {
-            const state = Explorer.state;
-
-            // Get user identity (from global function if available)
-            const identity = typeof getUserIdentity === 'function' ? getUserIdentity() : {};
-
-            const data = {
-                sessionId: state.sessionId,
-                userName: identity.userName || '',
-                userEmail: identity.userEmail || '',
-                // Object operations
-                pendingEdits: Object.fromEntries(state.pendingEdits),
-                stagedMoves: Object.fromEntries(state.stagedMoves),
-                stagedCreations: state.stagedCreations,
-                newFiles: Array.from(state.newFiles),
-                stagedObjectDeletions: Array.from(state.stagedObjectDeletions),
-                // File/folder operations
-                stagedFileCreations: state.stagedFileCreations,
-                stagedFileDeletions: state.stagedFileDeletions,
-                stagedFileMoves: state.stagedFileMoves,
-                stagedFolderCreations: state.stagedFolderCreations,
-                stagedFolderDeletions: state.stagedFolderDeletions,
-                stagedFolderMoves: state.stagedFolderMoves
-            };
-
-            const result = await ApiClient.post('/api/staging', data, { silent: true });
-
-            if (result.success) {
-                // Update timestamp and undo count
-                const infoResult = await ApiClient.get('/api/staging/info', { silent: true });
-                if (infoResult.success) {
-                    lastStagingTimestamp = infoResult.data.lastModified;
-                    // Sync undo count with backend
-                    if (typeof updateUndoButton === 'function') {
-                        updateUndoButton(infoResult.data.undoCount || 0);
-                    }
-                }
-
-                if (typeof checkPendingChanges === 'function') {
-                    checkPendingChanges();
-                }
-
-                // Trigger analysis to update suggestions badge
-                triggerAnalysisUpdate();
-            } else if (result.status === 423) {
-                Explorer.showToast(result.data?.error || 'Staging is locked by another user', 'error');
-                window.isEditingLocked = true;
-                Explorer.updateEditingLockedUI();
-            } else {
-                console.error('Failed to save staging to server');
-                Explorer.showToast('Failed to save changes to server.', 'error');
-            }
-        } finally {
-            isSavingStaging = false;
-            saveInProgress = false;
-        }
-    };
+    // Backwards compatibility — delegates to side-effect-free saveStaging
+    Explorer.saveStagedChanges = Explorer.saveStaging;
 
     /**
      * Load staged changes from server
