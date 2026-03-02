@@ -690,6 +690,7 @@ class NagiosService:
             start_char, end_char = block_range
             raw_block = content[start_char:end_char].strip()
             blocks[action.stable_key] = raw_block
+            logger.debug("move_batch extract: key=%s line=%d len=%d", action.stable_key, obj.line_number, len(raw_block))
 
         return blocks
 
@@ -780,6 +781,18 @@ class NagiosService:
                 target_path, incoming, move_actions, delete_keys,
             )
 
+            existing_count = sum(1 for item in order if item["source"] == "existing")
+            incoming_count = sum(1 for item in order if item["source"] == "incoming")
+            logger.debug(
+                "move_batch plan: file=%s existing=%d incoming=%d final=%d",
+                target_path, existing_count, incoming_count, len(order),
+            )
+            for i, item in enumerate(order):
+                logger.debug(
+                    "move_batch plan[%d]: %s %s pos=%.1f",
+                    i, item["source"], item["name"], item["position"],
+                )
+
             # Extract preamble from current file content
             current_content = file_contents.get(target_real, "")
             all_blocks = extract_all_blocks(current_content)
@@ -814,6 +827,7 @@ class NagiosService:
             else:
                 new_content = assemble_file_from_blocks(preamble, ordered_blocks)
 
+            logger.debug("move_batch write: file=%s blocks=%d", target_path, len(ordered_blocks))
             try:
                 # Ensure parent directory exists (for new files)
                 Path(target_path).parent.mkdir(parents=True, exist_ok=True)
@@ -876,6 +890,7 @@ class NagiosService:
                 obj_name = get_object_name(obj.object_type, obj.attributes)
                 obj_key = f"{os.path.realpath(obj.source_file)}|{obj.object_type}|{obj_name}"
                 if obj_key in moved_keys:
+                    logger.debug("move_batch source_delete: file=%s key=%s", src_path, obj_key)
                     continue
                 block_range = find_block_range(src_content, obj.line_number)
                 if block_range:
@@ -941,7 +956,49 @@ class NagiosService:
                     self._parser = NagiosConfigParser(self._config_path)
                     self._parser.parse_all()
 
+        # Step 6: Verify ordering
+        expected_orders: dict[str, list[str]] = {}
+        for target_real in target_files:
+            target_path = None
+            for a in move_actions:
+                if os.path.realpath(a.target_file) == target_real:
+                    target_path = a.target_file
+                    break
+            if target_path:
+                incoming = [
+                    a for a in move_actions
+                    if os.path.realpath(a.target_file) == target_real
+                ]
+                order = self._compute_expected_file_order(
+                    target_path, incoming, move_actions, delete_keys,
+                )
+                expected_orders[target_path] = [item["name"] for item in order]
+
+        warnings = self._verify_move_ordering(expected_orders)
+        for w in warnings:
+            logger.warning("move_batch verify: %s", w)
+
         return results
+
+    def _verify_move_ordering(self, expected_orders: dict[str, list[str]]) -> list[str]:
+        """Re-parse affected files, compare object order against expected.
+
+        Returns list of warning messages (empty = all match).
+        """
+        self._parser = NagiosConfigParser(self._config_path)
+        self._parser.parse_all()
+        warnings = []
+        for file_path, expected_names in expected_orders.items():
+            actual = [
+                get_object_name(o.object_type, o.attributes)
+                for o in self.parser.objects
+                if os.path.realpath(o.source_file) == os.path.realpath(file_path)
+            ]
+            if actual != expected_names:
+                warnings.append(
+                    f"Order mismatch in {file_path}: expected={expected_names} actual={actual}"
+                )
+        return warnings
 
     def _find_by_identity(
         self, source_file: str, obj_type: str, obj_name: str

@@ -493,3 +493,39 @@ class TestBatchedMoveApply:
         assert len(web01s) == 1
         assert os.path.realpath(web01s[0].source_file) == os.path.realpath(services)
         assert web01s[0].attributes["alias"] == "Moved And Edited"
+
+
+class TestVerifyMoveOrdering:
+    def test_verification_passes_on_correct_order(self, service, config_dir):
+        """After a successful batched move, verification should produce no warnings."""
+        hosts = os.path.join(config_dir, "hosts.cfg")
+        services = os.path.join(config_dir, "services.cfg")
+        staging = {
+            "pendingEdits": {},
+            "stagedMoves": {
+                f"{hosts}|host|web-01": {
+                    "targetFile": services,
+                    "insertPosition": None,
+                },
+            },
+            "stagedCreations": [],
+            "stagedObjectDeletions": [],
+        }
+        result = service.apply_object_composite(staging)
+        assert result.success
+        # Verification is called internally; no warnings should be logged
+        # We can also call it directly
+        warnings = service._verify_move_ordering({
+            services: ["existing-svc", "web-01"],
+        })
+        assert warnings == []
+
+    def test_verification_detects_mismatch(self, service, config_dir):
+        """_verify_move_ordering reports when actual order differs from expected."""
+        hosts = os.path.join(config_dir, "hosts.cfg")
+        # Expected order that doesn't match actual file order
+        warnings = service._verify_move_ordering({
+            hosts: ["web-03", "web-01", "web-02"],
+        })
+        assert len(warnings) == 1
+        assert "Order mismatch" in warnings[0]
