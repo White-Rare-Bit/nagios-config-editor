@@ -26,10 +26,10 @@ Explorer.state = {
     selectedStagedIndices: new Set(),
 
     // Staging data - Object operations
-    pendingEdits: new Map(),      // global_index -> {original, edited, object}
+    pendingEdits: new Map(),      // stableKey -> {original, edited, object}
     stagedMoves: new Map(),       // objKey -> {targetFile, originalFile, object}
     stagedCreations: [],          // {object_type, attributes, targetFile, displayName}
-    stagedObjectDeletions: new Set(),  // Set of global_index
+    stagedObjectDeletions: new Set(),  // Set of stable keys
     stagedCreationDeletions: new Set(),
     newFiles: new Set(),
 
@@ -56,7 +56,7 @@ Explorer.state = {
     selectedFolder: null,           // Track selected folder for subfolder creation
 
     // Tab state
-    openTabs: [],              // Array of { key, objectIndex, label, typeIcon }
+    openTabs: [],              // Array of { key, label, typeIcon }
     activeTabKey: null,        // Stable key of currently active tab
     isTabSwitch: false,        // Guard flag to prevent tab↔tree infinite loop
 
@@ -75,7 +75,7 @@ Explorer.state = {
     allCleanupSuggestions: [],
     allNotificationSuggestions: [],
     groupedErrors: [],
-    orphanIndices: new Set(),   // Set of global_index values for orphan objects
+    orphanIndices: new Set(),   // Set of stable keys for orphan objects
     healthCheckData: null,      // Cached /api/health-check response
 
     // Folder/file state

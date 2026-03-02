@@ -46,7 +46,6 @@
                 if (obj) {
                     state.openTabs.push({
                         key: tab.key,
-                        objectIndex: obj.global_index,
                         label: obj.display_name || tab.label,
                         typeIcon: obj.object_type
                     });
@@ -89,12 +88,10 @@
         const existingIdx = state.openTabs.findIndex(t => t.key === key);
         if (existingIdx >= 0) {
             state.openTabs[existingIdx].label = obj.display_name;
-            state.openTabs[existingIdx].objectIndex = obj.global_index;
             state.activeTabKey = key;
         } else {
             state.openTabs.push({
                 key: key,
-                objectIndex: obj.global_index,
                 label: obj.display_name,
                 typeIcon: obj.object_type
             });
@@ -193,20 +190,11 @@
     function validateTabs() {
         const before = state.openTabs.length;
         state.openTabs = state.openTabs.filter(tab => {
-            let obj = Explorer.findObjectByKey(tab.key);
+            const obj = Explorer.findObjectByKey(tab.key);
             if (obj) {
-                tab.objectIndex = obj.global_index;
                 tab.label = obj.display_name;
                 return true;
             }
-
-            obj = state.allObjects.find(o => o.global_index === tab.objectIndex);
-            if (obj) {
-                tab.key = Explorer.getObjectKey(obj);
-                tab.label = obj.display_name;
-                return true;
-            }
-
             return false;
         });
 
@@ -251,7 +239,7 @@
 
         const tabsHtml = state.openTabs.map(tab => {
             const isActive = tab.key === state.activeTabKey;
-            const hasPendingEdit = state.pendingEdits.has(tab.objectIndex);
+            const hasPendingEdit = state.pendingEdits.has(tab.key);
             const icon = Explorer.getObjectTypeIcon(tab.typeIcon);
             const escapedKey = Explorer.escapeHtml(tab.key);
             const escapedLabel = Explorer.escapeHtml(tab.label);
