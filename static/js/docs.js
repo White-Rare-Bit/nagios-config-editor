@@ -712,7 +712,17 @@
     // Init
     // =========================================================================
 
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', async function() {
+        // Fetch metadata to validate Nagios categories against known types
+        var metaResult = await ApiClient.get('/api/metadata', { silent: true });
+        var meta = metaResult.success ? (metaResult.data.data || metaResult.data) : {};
+        var knownTypes = meta.name_fields || meta.object_type_labels || {};
+        if (Object.keys(knownTypes).length > 0) {
+            NAGIOS_CATEGORIES = NAGIOS_CATEGORIES.map(function(cat) {
+                return { name: cat.name, types: cat.types.filter(function(t) { return !!knownTypes[t]; }) };
+            }).filter(function(cat) { return cat.types.length > 0; });
+        }
+
         // Restore expanded state from session, or start collapsed
         loadExpandedSections();
 

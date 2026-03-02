@@ -60,15 +60,11 @@ console.log('dependencies.js loaded');
     // Currently enabled edge categories
     let enabledCategories = new Set(['dependencies', 'templates', 'groups']);
 
-    // All available object types for filtering
-    const allObjectTypes = [
-        'host', 'hostgroup', 'service', 'servicegroup',
-        'contact', 'contactgroup', 'command', 'timeperiod',
-        'hostdependency', 'servicedependency', 'hostescalation', 'serviceescalation'
-    ];
+    // All available object types for filtering (populated from metadata at init)
+    let allObjectTypes = [];
 
-    // Currently enabled object types (all enabled by default)
-    let enabledTypes = new Set(allObjectTypes);
+    // Currently enabled object types (all enabled by default, populated after metadata fetch)
+    let enabledTypes = new Set();
 
     // Map quick view presets to relevant object types
     // When a quick view is applied, only these types are shown
@@ -155,6 +151,12 @@ console.log('dependencies.js loaded');
     }
 
     document.addEventListener('DOMContentLoaded', async () => {
+        // Fetch metadata to derive object types dynamically
+        const metaResult = await ApiClient.get('/api/metadata', { silent: true });
+        const meta = metaResult.success ? (metaResult.data.data || metaResult.data) : {};
+        allObjectTypes = Object.keys(meta.name_fields || {});
+        enabledTypes = new Set(allObjectTypes);
+
         await loadAllData();
 
         // Check for URL parameters to initialize graph with a specific node
