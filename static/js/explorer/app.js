@@ -15,7 +15,7 @@
     const typeLabels = constants.typeLabels;
     const identityFields = constants.identityFields;
     const inheritanceAttrs = constants.inheritanceAttrs;
-    const referenceAttrs = constants.referenceAttrs;
+
 
 // Delegates to functions defined in object-editor.js and dialogs.js modules
 function showCenterPaneObject(obj) { Explorer.showCenterPaneObject(obj); }
@@ -55,7 +55,7 @@ function renderCleanupSuggestions() { Explorer.renderCleanupSuggestions(); }
 // Utility: Refresh Impact & Relationships when relevant attributes change
 function refreshRelatedSections(key, obj) {
     // If any reference-related attribute changes, refresh the unified section
-    if (inheritanceAttrs.includes(key) || referenceAttrs.includes(key) || key === 'members' || key === 'use') {
+    if (inheritanceAttrs.includes(key) || constants.referenceAttrs.includes(key) || key === 'members' || key === 'use') {
         Explorer.loadImpactAndRelationships(obj);
     }
 }

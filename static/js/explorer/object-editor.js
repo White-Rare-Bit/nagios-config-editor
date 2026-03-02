@@ -309,18 +309,16 @@
         content.style.display = 'none';
     }
 
-    // Host-type object types for option lookups
-    const HOST_TYPES = new Set(
-        Object.entries(Explorer.constants.nameFields)
-            .filter(([, field]) => field === 'host_name')
-            .map(([type]) => type)
-    );
+    // Host-type object types for option lookups (computed lazily — nameFields is empty at load time)
+    function isHostType(objectType) {
+        return constants.nameFields[objectType] === 'host_name';
+    }
 
     function getOptionSuggestions(attrName, objectType) {
         if (attrName === 'host_notification_options') {return constants.HOST_NOTIFICATION_OPTIONS;}
         if (attrName === 'service_notification_options') {return constants.SERVICE_NOTIFICATION_OPTIONS;}
         if (attrName === 'notification_options') {
-            return HOST_TYPES.has(objectType) ? constants.HOST_NOTIFICATION_OPTIONS : constants.SERVICE_NOTIFICATION_OPTIONS;
+            return isHostType(objectType) ? constants.HOST_NOTIFICATION_OPTIONS : constants.SERVICE_NOTIFICATION_OPTIONS;
         }
         if (attrName === 'execution_failure_criteria' || attrName === 'notification_failure_criteria') {
             return objectType === 'hostdependency' ? constants.HOST_FAILURE_CRITERIA : constants.SERVICE_FAILURE_CRITERIA;
