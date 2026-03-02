@@ -207,6 +207,41 @@ def find_block_range(content: str, target_line: int) -> tuple[int, int] | None:
     return (define_pos, end_pos)
 
 
+def extract_all_blocks(content: str) -> list[tuple[int, int, str]]:
+    """Extract all define blocks from file content.
+
+    Returns list of (start_char, end_char, raw_block_text) ordered by position.
+    """
+    blocks = []
+    for match in re.finditer(r'^define\s+\w+\s*\{', content, re.MULTILINE):
+        define_start = match.start()
+        brace_open = content.index("{", define_start)
+        end_pos = _find_matching_brace(content, brace_open)
+        if end_pos is not None:
+            blocks.append((define_start, end_pos, content[define_start:end_pos]))
+    return blocks
+
+
+def assemble_file_from_blocks(preamble: str, blocks: list[str]) -> str:
+    """Assemble file from preamble text and ordered raw blocks.
+
+    Uses 2 blank lines between blocks, 1 trailing newline at EOF.
+    """
+    if not blocks:
+        return preamble if preamble else ""
+
+    preamble_stripped = preamble.rstrip("\n")
+    if preamble_stripped:
+        parts = [preamble_stripped] + blocks
+    else:
+        parts = list(blocks)
+
+    result = "\n\n".join(parts)
+    if not result.endswith("\n"):
+        result += "\n"
+    return result
+
+
 def edit_object_in_file(file_path: str, line_number: int, new_attrs: dict[str, str],
                         obj_type: str, expected_checksum: str | None = None,
                         inline_comments: dict | None = None) -> OperationResult:
