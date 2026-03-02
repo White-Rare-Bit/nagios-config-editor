@@ -20,20 +20,21 @@
     // =============================================================================
 
     /**
-     * Resolve various input types to a global_index
+     * Resolve various input types to a stable key
      * @param {string|number|Object} objOrKeyOrIndex - Stable key, global_index, or object
-     * @returns {number|null} The global_index or null if not resolvable
+     * @returns {string|null} The stable key or null if not resolvable
      */
-    function resolveToGlobalIndex(objOrKeyOrIndex) {
+    function resolveToStableKey(objOrKeyOrIndex) {
         if (typeof objOrKeyOrIndex === 'string') {
-            const obj = Explorer.findObjectByKey(objOrKeyOrIndex);
-            return obj ? obj.global_index : null;
+            // Already a stable key — verify it's valid
+            return objOrKeyOrIndex.indexOf('|') !== -1 ? objOrKeyOrIndex : null;
         }
         if (typeof objOrKeyOrIndex === 'number') {
-            return objOrKeyOrIndex;
+            // Legacy: global_index — convert to stable key
+            return Explorer.getObjectKeyByIndex(objOrKeyOrIndex);
         }
         if (objOrKeyOrIndex && typeof objOrKeyOrIndex === 'object') {
-            return objOrKeyOrIndex.global_index;
+            return Explorer.getObjectKey(objOrKeyOrIndex);
         }
         return null;
     }
@@ -48,8 +49,8 @@
      * @returns {Object|undefined} The pending edit data
      */
     Explorer.getPendingEdit = function(objOrKeyOrIndex) {
-        const index = resolveToGlobalIndex(objOrKeyOrIndex);
-        return index !== null ? state.pendingEdits.get(index) : undefined;
+        const key = resolveToStableKey(objOrKeyOrIndex);
+        return key !== null ? state.pendingEdits.get(key) : undefined;
     };
 
     /**
@@ -59,9 +60,9 @@
      * @returns {boolean} True if set successfully
      */
     Explorer.setPendingEdit = function(objOrKeyOrIndex, editData) {
-        const index = resolveToGlobalIndex(objOrKeyOrIndex);
-        if (index !== null) {
-            state.pendingEdits.set(index, editData);
+        const key = resolveToStableKey(objOrKeyOrIndex);
+        if (key !== null) {
+            state.pendingEdits.set(key, editData);
             return true;
         }
         return false;
@@ -73,9 +74,9 @@
      * @returns {boolean} True if deleted successfully
      */
     Explorer.deletePendingEdit = function(objOrKeyOrIndex) {
-        const index = resolveToGlobalIndex(objOrKeyOrIndex);
-        if (index !== null) {
-            state.pendingEdits.delete(index);
+        const key = resolveToStableKey(objOrKeyOrIndex);
+        if (key !== null) {
+            state.pendingEdits.delete(key);
             return true;
         }
         return false;
@@ -91,8 +92,8 @@
      * @returns {boolean}
      */
     Explorer.isObjectMarkedForDeletion = function(objOrKeyOrIndex) {
-        const index = resolveToGlobalIndex(objOrKeyOrIndex);
-        return index !== null && state.stagedObjectDeletions.has(index);
+        const key = resolveToStableKey(objOrKeyOrIndex);
+        return key !== null && state.stagedObjectDeletions.has(key);
     };
 
     /**
@@ -101,9 +102,9 @@
      * @returns {boolean} True if marked successfully
      */
     Explorer.markObjectForDeletion = function(objOrKeyOrIndex) {
-        const index = resolveToGlobalIndex(objOrKeyOrIndex);
-        if (index !== null) {
-            state.stagedObjectDeletions.add(index);
+        const key = resolveToStableKey(objOrKeyOrIndex);
+        if (key !== null) {
+            state.stagedObjectDeletions.add(key);
             return true;
         }
         return false;
@@ -115,9 +116,9 @@
      * @returns {boolean} True if unmarked successfully
      */
     Explorer.unmarkObjectForDeletion = function(objOrKeyOrIndex) {
-        const index = resolveToGlobalIndex(objOrKeyOrIndex);
-        if (index !== null) {
-            state.stagedObjectDeletions.delete(index);
+        const key = resolveToStableKey(objOrKeyOrIndex);
+        if (key !== null) {
+            state.stagedObjectDeletions.delete(key);
             return true;
         }
         return false;
