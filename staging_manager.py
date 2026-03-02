@@ -28,7 +28,7 @@ from typing import Any
 from nagios_model import OperationResult
 
 # Schema version
-STAGING_SCHEMA_VERSION = 3
+STAGING_SCHEMA_VERSION = 4
 
 # Set up structured logging
 logger = logging.getLogger(__name__)
@@ -1425,13 +1425,13 @@ def parse_stable_key(key: str) -> dict[str, str] | None:
 
     """
     parts = key.split("|")
-    if len(parts) != 3:  # noqa: PLR2004
+    if len(parts) < 3:  # noqa: PLR2004
         return None
 
     return {
         "source_file": parts[0],
         "object_type": parts[1],
-        "name": parts[2],
+        "name": "|".join(parts[2:]),
     }
 
 

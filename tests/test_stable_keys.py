@@ -8,7 +8,16 @@ from pathlib import Path
 import pytest
 
 from app import create_app
-from staging_manager import generate_stable_key_for_object
+from staging_manager import generate_stable_key_for_object, parse_stable_key
+
+
+def test_parse_stable_key_with_pipe_in_name():
+    """parse_stable_key should handle names containing pipe characters."""
+    result = parse_stable_key("servers/hosts.cfg|host|my|special|host")
+    assert result is not None
+    assert result["source_file"] == "servers/hosts.cfg"
+    assert result["object_type"] == "host"
+    assert result["name"] == "my|special|host"
 
 
 @pytest.fixture
