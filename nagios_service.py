@@ -340,16 +340,6 @@ class NagiosService:
             return (action.source_file or "", -line)
         delete_actions.sort(key=_delete_sort_key)
 
-        # Sort moves by target file then insert position so that
-        # same-file reorders are applied from lowest position first.
-        # Edits (no insert_position) sort to the end — order doesn't
-        # matter for in-place edits since each re-parses the file.
-        def _modify_sort_key(action):
-            target = action.target_file or action.source_file or ""
-            pos = action.insert_position if action.insert_position is not None else float("inf")
-            return (target, pos)
-        modify_actions.sort(key=_modify_sort_key)
-
         return delete_actions + modify_actions + create_actions
 
     def apply_object_composite(self, staging_data: dict) -> OperationResult:
