@@ -154,7 +154,12 @@ console.log('dependencies.js loaded');
         // Fetch metadata to derive object types dynamically
         const metaResult = await ApiClient.get('/api/metadata', { silent: true });
         const meta = metaResult.success ? (metaResult.data.data || metaResult.data) : {};
-        allObjectTypes = Object.keys(meta.name_fields || {});
+        // Intersect metadata types with checkbox types in the HTML template
+        const checkboxTypes = new Set(
+            [...document.querySelectorAll('#objectTypeFilters input[type="checkbox"]')]
+                .map(cb => cb.dataset.type)
+        );
+        allObjectTypes = Object.keys(meta.name_fields || {}).filter(t => checkboxTypes.has(t));
         enabledTypes = new Set(allObjectTypes);
 
         await loadAllData();
