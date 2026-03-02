@@ -367,7 +367,7 @@
             lastStagingTimestamp = null;
 
             Explorer.updateEditingLockedUI();
-            Explorer.updateCommitUI();
+            Explorer.afterServerSync();
         } else {
             Explorer.handleApiError('Failed to clear staged changes', result.error);
         }
@@ -405,8 +405,7 @@
                         lastStagingTimestamp = info.lastModified;
 
                         // Centralized refresh ensures all UI components stay in sync
-                        // Suggestions now filter by stagedObjectDeletions, so polling won't resurrect deleted objects
-                        Explorer.refreshAfterObjectChange();
+                        Explorer.afterServerSync();
                     }
                 }
             } finally {
@@ -434,9 +433,7 @@
         if (state.externalChangePending) {
             state.externalChangePending = false;
             await Explorer.loadStagedChanges(false);
-            Explorer.buildTree();
-            Explorer.renderTargetPane();
-            Explorer.updateCommitUI();
+            Explorer.afterServerSync();
         }
     };
 
@@ -484,10 +481,7 @@
 
             // Reload fresh data from disk
             await Explorer.loadObjects();
-
-            Explorer.buildTree();
-            Explorer.renderTargetPane();
-            Explorer.updateCommitUI();
+            Explorer.afterServerSync();
 
             Explorer.showToast('Changes applied successfully', 'success');
             return { success: true, results: result.data };
@@ -521,8 +515,7 @@
                 await Explorer.loadStagedChanges(false);
 
                 // Centralized refresh ensures all UI components stay in sync
-                // Center pane synced via syncCenterPaneAfterUndo which refreshAfterObjectChange calls conditionally
-                Explorer.refreshAfterObjectChange();
+                Explorer.afterServerSync();
 
                 const description = result.data.undone?.description || 'action';
                 Explorer.showToast(`Undone: ${description}`, 'info');

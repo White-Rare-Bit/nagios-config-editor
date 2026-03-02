@@ -207,10 +207,8 @@ let _undoInProgress = false;  // H-028: Guard against concurrent undo
 async function handleUndoClick() {
     if (typeof Explorer !== 'undefined' && Explorer.undoLastAction) {
         // Explorer.undoLastAction has its own concurrency guard
-        const result = await Explorer.undoLastAction();
-        if (result.success) {
-            checkPendingChanges();
-        }
+        // afterServerSync inside undoLastAction handles badges — no checkPendingChanges needed
+        await Explorer.undoLastAction();
     } else {
         // Fallback: call API directly with concurrency guard
         if (_undoInProgress) {return;}

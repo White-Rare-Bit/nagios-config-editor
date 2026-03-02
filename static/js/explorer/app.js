@@ -178,9 +178,7 @@ async function checkStagingChanges() {
 
                 // Reload staging from server (don't update lock state during polling)
                 await Explorer.loadStagedChanges(false);
-                updateCommitUI();
-                renderTargetPane();
-                buildTree();
+                Explorer.afterServerSync();
             }
         } else if (Explorer.hasStagedChanges() || state.isEditingLocked) {
             // Server staging was cleared (committed or discarded)
@@ -188,11 +186,9 @@ async function checkStagingChanges() {
             lastStagingTimestamp = null;
             state.isEditingLocked = false;
             Explorer.updateEditingLockedUI();
-            updateCommitUI();
             // Reload data in case changes were committed
             await Explorer.loadObjects();
-            renderTargetPane();
-            buildTree();
+            Explorer.afterServerSync();
             loadIssues();
         }
     } catch (e) {
@@ -311,7 +307,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Update commit button with any persisted changes
-    updateCommitUI();
+    Explorer.updateBadges();
 
     // Load issues in background for badges
     Explorer.loadIssuesForBadges();
