@@ -555,3 +555,128 @@ class TestApplyObjectComposite:
             assert "action" in detail
             assert "object_type" in detail
             assert "object_name" in detail
+
+
+class TestMultiFileDeletes:
+    """Tests for deleting objects across multiple files.
+
+    Regression: _exec_delete used stale global_index after parser reloads
+    from prior deletes, causing wrong-object deletion or index-out-of-bounds
+    when deletes span multiple files.
+    """
+
+    @pytest.fixture
+    def multi_file_dir(self):
+        """Config dir with objects spread across two files."""
+        d = tempfile.mkdtemp()
+        hosts_a = os.path.join(d, "hosts-a.cfg")
+        hosts_b = os.path.join(d, "hosts-b.cfg")
+        with open(hosts_a, "w") as f:
+            f.write(
+                "define host {\n"
+                "    host_name    alpha\n"
+                "    alias        Alpha Host\n"
+                "    address      10.0.0.1\n"
+                "}\n\n"
+                "define host {\n"
+                "    host_name    bravo\n"
+                "    alias        Bravo Host\n"
+                "    address      10.0.0.2\n"
+                "}\n"
+            )
+        with open(hosts_b, "w") as f:
+            f.write(
+                "define host {\n"
+                "    host_name    charlie\n"
+                "    alias        Charlie Host\n"
+                "    address      10.0.0.3\n"
+                "}\n\n"
+                "define host {\n"
+                "    host_name    delta\n"
+                "    alias        Delta Host\n"
+                "    address      10.0.0.4\n"
+                "}\n"
+            )
+        yield d
+        shutil.rmtree(d)
+
+    @pytest.fixture
+    def multi_file_service(self, multi_file_dir):
+        return NagiosService(multi_file_dir)
+
+    def test_delete_objects_across_two_files(
+        self, multi_file_service, multi_file_dir
+    ):
+        """Delete one object from each file — indices shift after first delete."""
+        svc = multi_file_service
+        # Identify the indices for bravo and delta
+        bravo_idx = next(
+            i
+            for i, o in enumerate(svc.parser.objects)
+            if o.attributes.get("host_name") == "bravo"
+        )
+        delta_idx = next(
+            i
+            for i, o in enumerate(svc.parser.objects)
+            if o.attributes.get("host_name") == "delta"
+        )
+
+        staging = {
+            "pendingEdits": {},
+            "stagedMoves": {},
+            "stagedCreations": [],
+            "stagedObjectDeletions": [bravo_idx, delta_idx],
+        }
+        result = svc.apply_object_composite(staging)
+        assert result.success
+        assert result.data["counts"]["deletes"] == 2
+        assert not result.data["errors"]
+
+        # Verify correct objects remain
+        svc._parser.parse_all()
+        remaining = {
+            o.attributes.get("host_name") for o in svc._parser.objects
+        }
+        assert remaining == {"alpha", "charlie"}
+
+    def test_delete_all_from_file_a_and_one_from_file_b(
+        self, multi_file_service, multi_file_dir
+    ):
+        """Delete both objects from file A plus one from file B.
+
+        After removing two objects from file A, stored indices for file B
+        objects are off by 2 — this is the core stale-index scenario.
+        """
+        svc = multi_file_service
+        alpha_idx = next(
+            i
+            for i, o in enumerate(svc.parser.objects)
+            if o.attributes.get("host_name") == "alpha"
+        )
+        bravo_idx = next(
+            i
+            for i, o in enumerate(svc.parser.objects)
+            if o.attributes.get("host_name") == "bravo"
+        )
+        charlie_idx = next(
+            i
+            for i, o in enumerate(svc.parser.objects)
+            if o.attributes.get("host_name") == "charlie"
+        )
+
+        staging = {
+            "pendingEdits": {},
+            "stagedMoves": {},
+            "stagedCreations": [],
+            "stagedObjectDeletions": [alpha_idx, bravo_idx, charlie_idx],
+        }
+        result = svc.apply_object_composite(staging)
+        assert result.success
+        assert result.data["counts"]["deletes"] == 3
+        assert not result.data["errors"]
+
+        svc._parser.parse_all()
+        remaining = {
+            o.attributes.get("host_name") for o in svc._parser.objects
+        }
+        assert remaining == {"delta"}

@@ -896,17 +896,6 @@
             return;
         }
 
-        // Validate that the group exists
-        const requiredGroupTypes = [...new Set(eligibleObjects.map(o => getGroupTypeMap()[o.object_type]))];
-        const existingGroups = state.allObjects
-            .filter(o => requiredGroupTypes.includes(o.object_type))
-            .map(o => o.name || o.display_name);
-
-        if (!existingGroups.includes(groupName)) {
-            showToast(`Group "${groupName}" does not exist`, 'error');
-            return;
-        }
-
         // Update each object's group attribute by appending the new group
         let updatedCount = 0;
         for (const obj of eligibleObjects) {

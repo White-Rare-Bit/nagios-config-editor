@@ -348,6 +348,7 @@ def _preserve_existing_session_data(existing, data, session_id):
         "stagedFolderMoves",
         "undoStack",
         "baseFileChecksums",
+        "_deletionIdentities",
     ]:
         if field not in data and existing.get(field):
             data[field] = existing.get(field)
@@ -417,6 +418,35 @@ def _collect_files_from_deletions(files, staged_deletions):
             obj = service.find_object_by_index(int(deletion_entry))
             if obj:
                 files.add(obj.source_file)
+
+
+def _enrich_deletion_identities(data):
+    """Resolve deletion indices to stable identities and store as sidecar.
+
+    Called at staging save time when indices are valid. Preserves any
+    existing identities (from prior saves) so they survive partial-apply
+    retries where the parser has changed.
+
+    Populates data["_deletionIdentities"] = {str(idx): {source_file, object_type, name}}.
+    """
+    from nagios_model import get_object_name
+
+    service = get_service()
+    identities = data.get("_deletionIdentities", {})
+    for idx in data.get("stagedObjectDeletions", []):
+        if not isinstance(idx, (int, float)):
+            continue
+        idx_str = str(int(idx))
+        if idx_str in identities:
+            continue  # Already captured — don't overwrite with stale data
+        obj = service.find_object_by_index(int(idx))
+        if obj:
+            identities[idx_str] = {
+                "source_file": obj.source_file,
+                "object_type": obj.object_type,
+                "name": get_object_name(obj.object_type, obj.attributes),
+            }
+    data["_deletionIdentities"] = identities
 
 
 def _get_existing_operation_keys(existing):
@@ -627,7 +657,7 @@ def _build_staging_data(sm, data):
         Staging data dict with schema version applied
 
     """
-    return sm.migrate_staging_schema(
+    result = sm.migrate_staging_schema(
         {
             "sessionId": data["sessionId"],
             "userName": data.get("userName", ""),
@@ -647,6 +677,10 @@ def _build_staging_data(sm, data):
             "baseFileChecksums": data.get("baseFileChecksums", {}),
         }
     )
+    # Sidecar field — not part of schema, preserved as extra key
+    if data.get("_deletionIdentities"):
+        result["_deletionIdentities"] = data["_deletionIdentities"]
+    return result
 
 
 def is_safe_path(path, base_dir=None):
@@ -833,6 +867,11 @@ def api_save_staging():
     # Preserve user identity and file/folder ops from existing staging
     existing = sm.get_staging()
     _preserve_existing_session_data(existing, data, session_id)
+
+    # Resolve deletion indices to stable identities while indices are valid.
+    # Preserves existing identities so they survive partial-apply retries.
+    if data.get("stagedObjectDeletions"):
+        _enrich_deletion_identities(data)
 
     # Collect and track files affected by all staging operations.
     # Compute checksums directly into data (not via sm.update_base_checksums,

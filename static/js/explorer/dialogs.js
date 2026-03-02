@@ -935,8 +935,6 @@
         });
     }
 
-    const BULK_COMMAND_ATTRS = new Set(['check_command', 'event_handler', 'host_notification_commands', 'service_notification_commands']);
-
     function validateBulkActionInputs(action, field, findText, sortedFields) {
         if (field && !sortedFields.includes(field)) {
             showToast(`Field "${field}" does not exist in selected objects`, 'warning');
@@ -949,30 +947,6 @@
         if ((action === 'set' || action === 'remove') && !field) {
             showToast(`Please select an attribute to ${action === 'set' ? 'set' : 'remove'}`, 'warning');
             return false;
-        }
-        return true;
-    }
-
-    function validateBulkReferenceValues(field, valueText, scope) {
-        const objectTypes = [...new Set(scope.map(idx => {
-            const obj = state.allObjects.find(o => o.global_index === idx);
-            return obj?.object_type;
-        }).filter(t => t))];
-
-        for (const objType of objectTypes) {
-            const suggestions = Explorer.getAttributeSuggestions(field, objType);
-            if (suggestions.length > 0) {
-                const values = valueText.split(',').map(v => v.trim()).filter(v => v);
-                for (const v of values) {
-                    let checkValue = BULK_COMMAND_ATTRS.has(field) ? v.split('!')[0] : v;
-                    checkValue = Explorer.stripPrefix(checkValue);
-                    if (!suggestions.includes(checkValue)) {
-                        showToast(`"${checkValue}" does not exist`, 'error');
-                        return false;
-                    }
-                }
-                break;
-            }
         }
         return true;
     }
@@ -1046,7 +1020,6 @@
         const valueText = document.getElementById('editAttrValue').value;
 
         if (!validateBulkActionInputs(action, field, findText, sortedFields)) {return;}
-        if (action === 'set' && field && valueText && !validateBulkReferenceValues(field, valueText, scope)) {return;}
 
         const { filteredScope, skippedIncompatible } = filterScopeByAttribute(scope, field, action);
 

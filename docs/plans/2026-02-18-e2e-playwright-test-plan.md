@@ -10,6 +10,28 @@
 
 ---
 
+## Global Directives
+
+### MCP Tool Strategy (follow throughout all tasks)
+
+1. **Screenshots for observation/verification** — use `browser_take_screenshot` for visual confirmation; much smaller than snapshots, prefer these when the structure is already known
+2. **`browser_run_code` with JS selectors** — when the DOM structure is known, use JS to find refs and click elements directly instead of snapshotting
+3. **`browser_snapshot` to file only** — use `browser_snapshot` with a `filename` only when exploring unknown structure; then use `Read` to inspect targeted sections rather than returning the full snapshot inline
+4. **Avoid returning full snapshots inline** — never call `browser_snapshot` without a `filename` unless absolutely necessary; inline snapshots are verbose and slow
+
+### Nagios Administrator Perspective
+
+When evaluating behavior, think critically as an experienced Nagios administrator. Ask: *Would a real admin notice this? Would it cause confusion, data loss, or misconfiguration in production?* Prioritize issues that affect operational correctness over cosmetic concerns.
+
+### Bug Documentation Requirement
+
+**Before moving on to the next test phase or task, document every discovered issue.** Do not defer writing discovery files. For each bug:
+- Create `docs/test-discoveries/NNN-{description}.md` immediately when found
+- Include: steps to reproduce, actual vs expected behavior, severity, screenshot filename if taken
+- Only proceed to the next step after all issues from the current step are recorded
+
+---
+
 ### Task 1: Create Worktree and Branch
 
 **Files:**

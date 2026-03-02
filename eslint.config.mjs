@@ -100,6 +100,9 @@ const projectGlobals = {
 
 export default defineConfig([
   {
+    ignores: ["static/vendor/**"],
+  },
+  {
     files: ["**/*.{js,mjs,cjs}"],
     plugins: { js },
     extends: ["js/recommended"],

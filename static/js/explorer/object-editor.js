@@ -874,31 +874,6 @@
         });
     }
 
-    function validateReferenceValue(key, value) {
-        const objIdentityFields = identityFields[state.editedObject.object_type] || [];
-        if (objIdentityFields.includes(key)) {return true;}
-
-        const suggestions = getAttributeSuggestions(key, state.editedObject.object_type);
-        if (suggestions.length === 0 || !value) {return true;}
-        if (constants.NOTIFICATION_OPTION_ATTRS.includes(key)) {return true;}
-
-        // Bug 014: For single-value command attrs, don't split on commas
-        // (commas in check_ping!100,20%!500,60% are thresholds, not separators)
-        const values = SINGLE_COMMAND_ATTRS.has(key) ? [value] : Explorer.parseCommaValues(value);
-        const isCommandAttr = COMMAND_ATTRS.has(key);
-        for (const v of values) {
-            let checkValue = isCommandAttr ? v.split('!')[0] : v;
-            checkValue = Explorer.stripPrefix(checkValue);
-            // Bug 015: Skip validation for Nagios special values (*, null)
-            if (NAGIOS_SPECIAL_VALUES.has(checkValue)) {continue;}
-            if (!suggestions.includes(checkValue)) {
-                showToast(`"${checkValue}" does not exist`, 'error');
-                return false;
-            }
-        }
-        return true;
-    }
-
     function syncNameDisplays(key, value) {
         const nameField = Explorer.getNewObjectNameField(state.editedObject.object_type);
         if (key !== nameField) {return;}
@@ -934,13 +909,6 @@
     }
 
     function updateAttribute(key, value, inputElement) {
-        if (!validateReferenceValue(key, value)) {
-            if (inputElement) {
-                inputElement.value = state.editedObject.attributes[key] || '';
-            }
-            return;
-        }
-
         state.editedObject.attributes[key] = value;
         Explorer.refreshRelatedSections(key, state.editedObject);
         syncNameDisplays(key, value);
@@ -1027,30 +995,6 @@
             const name = document.getElementById('newAttrName').value.trim();
             const value = document.getElementById('newAttrValue').value;
             if (name) {
-                const objIdentityFields = identityFields[state.editedObject.object_type] || [];
-                const isIdentityField = objIdentityFields.includes(name);
-
-                // Validate reference values (commands, groups, timeperiods, etc.)
-                const suggestions = getAttributeSuggestions(name, state.editedObject.object_type);
-                if (suggestions.length > 0 && value && !isIdentityField) {
-                    // Skip validation for notification options (they use short codes like d,r,f)
-                    if (!constants.NOTIFICATION_OPTION_ATTRS.includes(name)) {
-                        // This attribute references other objects - validate the values
-                        const isSingleCmd = SINGLE_COMMAND_ATTRS.has(name);
-                        const values = isSingleCmd ? [value] : Explorer.parseCommaValues(value);
-                        const isCommandAttr = COMMAND_ATTRS.has(name);
-
-                        for (const v of values) {
-                            let checkValue = isCommandAttr ? v.split('!')[0] : v;
-                            checkValue = Explorer.stripPrefix(checkValue);
-                            if (NAGIOS_SPECIAL_VALUES.has(checkValue)) {continue;}
-                            if (!suggestions.includes(checkValue)) {
-                                showToast(`"${checkValue}" does not exist`, 'error');
-                                return;
-                            }
-                        }
-                    }
-                }
                 state.editedObject.attributes[name] = value;
 
                 // Refresh info sections if relevant attributes added

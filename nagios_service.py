@@ -213,16 +213,29 @@ class NagiosService:
                     norm_key = key
                 moves_by_key[norm_key] = move_entry
 
-        # Index stagedObjectDeletions by stable key (resolve via parser)
+        # Index stagedObjectDeletions by stable key.
+        # Use _deletionIdentities (captured at staging save time) when
+        # available to avoid stale-index issues on retry after partial apply.
+        identities = staging_data.get("_deletionIdentities", {})
         for deletion_idx in staging_data.get("stagedObjectDeletions", []):
-            if isinstance(deletion_idx, int) and 0 <= deletion_idx < len(p.objects):
+            if not isinstance(deletion_idx, int):
+                continue
+            identity = identities.get(str(deletion_idx))
+            if identity:
+                source_file = identity["source_file"]
+                obj_type = identity["object_type"]
+                name = identity["name"]
+            elif 0 <= deletion_idx < len(p.objects):
                 obj = p.objects[deletion_idx]
-                name = get_object_name(obj.object_type, obj.attributes)
-                key = f"{os.path.realpath(obj.source_file)}|{obj.object_type}|{name}"
-                deletes_by_key[key] = {
-                    "global_index": deletion_idx,
-                    "obj": obj,
-                }
+                source_file = obj.source_file
+                obj_type = obj.object_type
+                name = get_object_name(obj_type, obj.attributes)
+            else:
+                continue
+            key = f"{os.path.realpath(source_file)}|{obj_type}|{name}"
+            deletes_by_key[key] = {
+                "global_index": deletion_idx,
+            }
 
         # Collect creation actions (no merging needed)
         create_actions = []
@@ -439,19 +452,22 @@ class NagiosService:
         self, action: CompositeAction
     ) -> tuple[OperationResult, dict | None]:
         """Execute a delete composite action."""
-        p = self.parser
-        if action.global_index is None or action.global_index >= len(p.objects):
+        self._parser = NagiosConfigParser(self._config_path)
+        self._parser.parse_all()
+        target_obj = self._find_by_identity(
+            action.source_file, action.object_type, action.object_name
+        )
+        if not target_obj:
             return OperationResult(
-                False, f"Invalid index for delete: {action.stable_key}"
+                False, f"Delete: object not found: {action.stable_key}"
             ), None
-        obj = p.objects[action.global_index]
-        result = self.delete_object(obj.source_file, obj.line_number)
+        result = self.delete_object(target_obj.source_file, target_obj.line_number)
         if result.success:
             detail = {
                 "action": "delete",
                 "object_type": action.object_type,
                 "object_name": action.object_name,
-                "file": obj.source_file,
+                "file": target_obj.source_file,
             }
             return result, detail
         return result, None
