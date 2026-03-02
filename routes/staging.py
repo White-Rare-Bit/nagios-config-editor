@@ -358,7 +358,6 @@ def _preserve_existing_session_data(existing, data, session_id):
         "stagedFolderMoves",
         "undoStack",
         "baseFileChecksums",
-        "_deletionIdentities",
     ]:
         if field not in data and existing.get(field):
             data[field] = existing.get(field)
@@ -654,9 +653,6 @@ def _build_staging_data(sm, data):
             "baseFileChecksums": data.get("baseFileChecksums", {}),
         }
     )
-    # Sidecar field — not part of schema, preserved as extra key
-    if data.get("_deletionIdentities"):
-        result["_deletionIdentities"] = data["_deletionIdentities"]
     return result
 
 

@@ -87,9 +87,9 @@
         let referencesData = { outgoing: [], incoming: [] };
         let membersData = { members: [], memberOf: [], transitiveSummary: null };
 
-        if (!state.isNewObject && obj.global_index != null) {
+        if (!state.isNewObject && Explorer.getObjectKey(obj)) {
             try {
-                const result = await ApiClient.get(`/api/object-references/${obj.global_index}`);
+                const result = await ApiClient.get(`/api/object-references?key=${encodeURIComponent(Explorer.getObjectKey(obj))}`);
 
                 // Discard if superseded by a newer request
                 if (thisRequestId !== impactRequestId) {return;}

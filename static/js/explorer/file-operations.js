@@ -709,7 +709,7 @@
         for (const obj of sortedExisting) {
             const objKey = Explorer.getObjectKey(obj);
             const isPendingOut = state.stagedMoves.has(objKey) && state.stagedMoves.get(objKey).originalFile === filePath;
-            const isDeleted = state.stagedObjectDeletions.has(obj.global_index);
+            const isDeleted = state.stagedObjectDeletions.has(Explorer.getObjectKey(obj));
             if (!isPendingOut && !isDeleted) {
                 items.push({ type: 'existing', obj, position: obj.line_number });
             }

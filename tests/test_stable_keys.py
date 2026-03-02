@@ -136,6 +136,63 @@ def test_apply_staged_deletions_by_stable_key(app):
         assert 1 in deleted
 
 
+def test_build_composite_actions_with_stable_key_edits(app):
+    """_build_composite_actions should accept stable-key-keyed pendingEdits."""
+    with app.app_context():
+        from routes.helpers import get_service
+        service = get_service()
+        objects = service.get_objects()
+        if not objects:
+            pytest.skip("No objects in sample config")
+
+        obj = objects[0]
+        key = generate_stable_key_for_object(obj)
+
+        staging_data = {
+            "pendingEdits": {
+                key: {
+                    "object": {
+                        "source_file": obj.source_file,
+                        "object_type": obj.object_type,
+                        "display_name": obj.get_display_name(),
+                    },
+                    "original": dict(obj.attributes),
+                    "edited": {**obj.attributes, "alias": "test_alias"},
+                }
+            },
+            "stagedMoves": {},
+            "stagedObjectDeletions": [],
+            "stagedCreations": [],
+        }
+        actions = service._build_composite_actions(staging_data)
+        assert len(actions) == 1
+        assert actions[0].action_type == "edit"
+        assert actions[0].final_attrs.get("alias") == "test_alias"
+
+
+def test_build_composite_actions_with_stable_key_deletions(app):
+    """_build_composite_actions should accept stable-key stagedObjectDeletions."""
+    with app.app_context():
+        from routes.helpers import get_service
+        service = get_service()
+        objects = service.get_objects()
+        if not objects:
+            pytest.skip("No objects in sample config")
+
+        obj = objects[0]
+        key = generate_stable_key_for_object(obj)
+
+        staging_data = {
+            "pendingEdits": {},
+            "stagedMoves": {},
+            "stagedObjectDeletions": [key],
+            "stagedCreations": [],
+        }
+        actions = service._build_composite_actions(staging_data)
+        assert len(actions) == 1
+        assert actions[0].action_type == "delete"
+
+
 def test_inheritance_api_resolves_correct_service(app_with_duplicate_services):
     """GET /api/templates/inheritance/<key> should find the right service by display_name."""
     with app_with_duplicate_services.app_context():
