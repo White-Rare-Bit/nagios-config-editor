@@ -14,9 +14,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from file_operations import (
+    _atomic_write,
+    _find_matching_brace,
     add_object_to_file,
+    assemble_file_from_blocks,
     delete_object_from_file,
     edit_object_in_file,
+    extract_all_blocks,
+    find_block_range,
     is_safe_path,
     move_object_between_files,
 )
@@ -361,12 +366,17 @@ class NagiosService:
         logger.debug("apply_object_composite: result=started")
         actions = self._build_composite_actions(staging_data)
 
+        # Partition actions by type
+        delete_actions = [a for a in actions if a.action_type == "delete"]
+        move_actions = [a for a in actions if a.action_type in ("move", "move_edit")]
+        edit_actions = [a for a in actions if a.action_type == "edit"]
+        create_actions = [a for a in actions if a.action_type == "create"]
+
         counts = {"deletes": 0, "moves": 0, "edits": 0, "move_edits": 0, "creates": 0}
         errors = []
         details = []
 
-        for action in actions:
-            result, detail = self._execute_composite_action(action)
+        def _record(result, detail, action):
             if result.success:
                 count_key = (
                     action.action_type + "s"
@@ -381,6 +391,27 @@ class NagiosService:
                     result.error
                     or f"Failed {action.action_type} on {action.stable_key}"
                 )
+
+        # Phase 1: Deletes (unchanged — sequential, reverse line order)
+        for action in delete_actions:
+            result, detail = self._exec_delete(action)
+            _record(result, detail, action)
+
+        # Phase 2: Batched moves (deterministic per-file ordering)
+        if move_actions:
+            move_results = self._exec_moves_batched(move_actions, staging_data)
+            for (result, detail), action in zip(move_results, move_actions):
+                _record(result, detail, action)
+
+        # Phase 3: Edits (unchanged — sequential)
+        for action in edit_actions:
+            result, detail = self._exec_edit(action)
+            _record(result, detail, action)
+
+        # Phase 4: Creates (unchanged — sequential)
+        for action in create_actions:
+            result, detail = self._exec_create(action)
+            _record(result, detail, action)
 
         total = sum(counts.values())
         if errors:
@@ -618,6 +649,299 @@ class NagiosService:
             }
             return result, detail
         return result, None
+
+    def _extract_raw_blocks_for_actions(
+        self, move_actions: list[CompositeAction],
+    ) -> dict[str, str]:
+        """Extract raw block text for each move action's source object.
+
+        Must be called BEFORE any file mutations. Reads each source file,
+        finds the object by identity, extracts the raw define block.
+
+        Returns dict mapping stable_key -> raw_block_text.
+        """
+        blocks = {}
+        # Cache file contents to avoid re-reading
+        file_cache: dict[str, str] = {}
+
+        for action in move_actions:
+            source_real = os.path.realpath(action.source_file)
+            if source_real not in file_cache:
+                try:
+                    file_cache[source_real] = Path(action.source_file).read_text()
+                except OSError as e:
+                    logger.warning("move_batch extract: read error file=%s: %s", action.source_file, e)
+                    continue
+
+            content = file_cache[source_real]
+            # Find the object in parser
+            obj = self._find_by_attrs(
+                action.source_file, action.object_type, action.original_attrs,
+            )
+            if not obj:
+                logger.warning("move_batch extract: object not found key=%s", action.stable_key)
+                continue
+
+            block_range = find_block_range(content, obj.line_number)
+            if not block_range:
+                logger.warning("move_batch extract: block not found key=%s line=%d", action.stable_key, obj.line_number)
+                continue
+
+            start_char, end_char = block_range
+            raw_block = content[start_char:end_char].strip()
+            blocks[action.stable_key] = raw_block
+
+        return blocks
+
+    def _exec_moves_batched(
+        self, move_actions: list[CompositeAction], staging_data: dict,
+    ) -> list[tuple[OperationResult, dict | None]]:
+        """Execute all moves with deterministic per-file ordering.
+
+        1. Parse once (pre-mutation snapshot)
+        2. Extract all raw blocks from source files
+        3. For each affected target file:
+           a. Compute expected order via _compute_expected_file_order
+           b. For existing objects staying in file: extract raw blocks
+           c. Assemble file from preamble + ordered blocks
+           d. Atomic write
+        4. For source files not already rewritten: remove moved objects
+        5. For move_edit actions: re-parse and apply edits
+        """
+        results = []
+
+        # Step 1: Parse once
+        self._parser = NagiosConfigParser(self._config_path)
+        self._parser.parse_all()
+
+        # Step 2: Extract raw blocks for all move actions BEFORE mutations
+        raw_blocks = self._extract_raw_blocks_for_actions(move_actions)
+
+        # Actions that failed to extract a raw block → report error immediately
+        failed_keys: set[str] = set()
+        for action in move_actions:
+            if action.stable_key not in raw_blocks:
+                failed_keys.add(action.stable_key)
+                results.append((
+                    OperationResult(False, f"Move: object not found at source: {action.stable_key}"),
+                    None,
+                ))
+
+        # Filter to only actions with extracted blocks
+        move_actions = [a for a in move_actions if a.stable_key not in failed_keys]
+        if not move_actions:
+            return results
+
+        # Build helper sets
+        all_move_keys = {a.stable_key for a in move_actions}
+        delete_keys = set()  # Deletions handled in separate phase
+
+        # Identify all affected target files
+        target_files = set()
+        for action in move_actions:
+            target_files.add(os.path.realpath(action.target_file))
+        # Also include source files that have objects being moved out (for cleanup)
+        source_files = set()
+        for action in move_actions:
+            source_files.add(os.path.realpath(action.source_file))
+
+        # Cache current file contents for existing block extraction
+        file_contents: dict[str, str] = {}
+        for fpath in target_files | source_files:
+            # Find the actual path (not necessarily realpath) for reading
+            try:
+                content = Path(fpath).read_text()
+                file_contents[fpath] = content
+            except OSError:
+                pass
+
+        # Track which files we've rewritten (to avoid double-processing)
+        rewritten_files: set[str] = set()
+
+        # Step 3: For each target file, compute order and write
+        for target_real in target_files:
+            # Find the actual file path from an action
+            target_path = None
+            for a in move_actions:
+                if os.path.realpath(a.target_file) == target_real:
+                    target_path = a.target_file
+                    break
+            if not target_path:
+                continue
+
+            # Get incoming actions for this target
+            incoming = [
+                a for a in move_actions
+                if os.path.realpath(a.target_file) == target_real
+            ]
+
+            # Compute expected order
+            order = self._compute_expected_file_order(
+                target_path, incoming, move_actions, delete_keys,
+            )
+
+            # Extract preamble from current file content
+            current_content = file_contents.get(target_real, "")
+            all_blocks = extract_all_blocks(current_content)
+            if all_blocks:
+                preamble = current_content[:all_blocks[0][0]]
+            else:
+                preamble = current_content
+
+            # Build ordered block list
+            ordered_blocks = []
+            for item in order:
+                if item["source"] == "existing":
+                    # Extract raw block from current file content
+                    obj = item["obj"]
+                    block_range = find_block_range(current_content, obj.line_number)
+                    if block_range:
+                        start, end = block_range
+                        ordered_blocks.append(current_content[start:end].strip())
+                    else:
+                        logger.warning("move_batch write: existing block not found name=%s", item["name"])
+                elif item["source"] == "incoming":
+                    action = item["action"]
+                    if action.stable_key in raw_blocks:
+                        ordered_blocks.append(raw_blocks[action.stable_key])
+                    else:
+                        logger.warning("move_batch write: raw block missing key=%s", action.stable_key)
+
+            # Assemble and write
+            if not ordered_blocks and not preamble.strip():
+                # File would be empty — write empty content
+                new_content = ""
+            else:
+                new_content = assemble_file_from_blocks(preamble, ordered_blocks)
+
+            try:
+                # Ensure parent directory exists (for new files)
+                Path(target_path).parent.mkdir(parents=True, exist_ok=True)
+                _atomic_write(target_path, new_content)
+                rewritten_files.add(target_real)
+            except OSError as e:
+                for a in incoming:
+                    results.append((
+                        OperationResult(False, f"Write error for {target_path}: {e}"),
+                        None,
+                    ))
+                continue
+
+            # Record success for each incoming move action
+            for a in incoming:
+                detail = {
+                    "action": "move" if a.action_type == "move" else "move_edit",
+                    "object_type": a.object_type,
+                    "object_name": a.object_name,
+                    "from_file": a.source_file,
+                    "to_file": a.target_file,
+                }
+                results.append((OperationResult(True), detail))
+
+        # Step 4: Clean up source files (remove moved-out objects)
+        # Group moves by source file
+        source_groups: dict[str, list[CompositeAction]] = {}
+        for action in move_actions:
+            src_real = os.path.realpath(action.source_file)
+            # Skip if source was already rewritten as a target (same-file reorder)
+            if src_real in rewritten_files:
+                continue
+            source_groups.setdefault(src_real, []).append(action)
+
+        for src_real, actions_in_file in source_groups.items():
+            # Re-read and rebuild the source file without the moved objects
+            src_path = actions_in_file[0].source_file
+            try:
+                src_content = Path(src_path).read_text()
+            except OSError:
+                continue
+
+            src_blocks = extract_all_blocks(src_content)
+            if not src_blocks:
+                continue
+
+            # Determine which blocks to keep
+            # Re-parse to find current objects
+            self._parser = NagiosConfigParser(self._config_path)
+            self._parser.parse_all()
+            src_objs = [
+                o for o in self._parser.objects
+                if os.path.realpath(o.source_file) == src_real
+            ]
+            src_objs.sort(key=lambda o: o.line_number)
+
+            moved_keys = {a.stable_key for a in actions_in_file}
+            keep_blocks = []
+            for obj in src_objs:
+                obj_name = get_object_name(obj.object_type, obj.attributes)
+                obj_key = f"{os.path.realpath(obj.source_file)}|{obj.object_type}|{obj_name}"
+                if obj_key in moved_keys:
+                    continue
+                block_range = find_block_range(src_content, obj.line_number)
+                if block_range:
+                    start, end = block_range
+                    keep_blocks.append(src_content[start:end].strip())
+
+            # Extract preamble
+            if src_blocks:
+                preamble = src_content[:src_blocks[0][0]]
+            else:
+                preamble = ""
+
+            new_content = assemble_file_from_blocks(preamble, keep_blocks)
+            try:
+                _atomic_write(src_path, new_content)
+            except OSError as e:
+                logger.warning("move_batch source_delete: write error file=%s: %s", src_path, e)
+
+        # Step 5: For move_edit actions, re-parse and apply edits
+        move_edit_actions = [a for a in move_actions if a.action_type == "move_edit"]
+        if move_edit_actions:
+            self._parser = NagiosConfigParser(self._config_path)
+            self._parser.parse_all()
+            for action in move_edit_actions:
+                moved_obj = self._find_by_identity(
+                    action.target_file, action.object_type, action.object_name,
+                )
+                if not moved_obj:
+                    # Update the result for this action
+                    for i, (r, d) in enumerate(results):
+                        if d and d.get("object_name") == action.object_name and d.get("action") == "move_edit":
+                            results[i] = (
+                                OperationResult(False, f"MoveEdit edit: object not found after move: {action.stable_key}"),
+                                None,
+                            )
+                            break
+                    continue
+
+                old_attrs = dict(moved_obj.attributes)
+                merged_attrs = dict(moved_obj.attributes)
+                merged_attrs.update(action.final_attrs)
+                edit_result = self.update_object(
+                    moved_obj.source_file,
+                    moved_obj.line_number,
+                    merged_attrs,
+                    moved_obj.object_type,
+                    inline_comments=moved_obj.inline_comments,
+                )
+                if not edit_result.success:
+                    for i, (r, d) in enumerate(results):
+                        if d and d.get("object_name") == action.object_name and d.get("action") == "move_edit":
+                            results[i] = (edit_result, None)
+                            break
+                else:
+                    # Update detail with changes info
+                    for i, (r, d) in enumerate(results):
+                        if d and d.get("object_name") == action.object_name and d.get("action") == "move_edit":
+                            d["changes"] = self._build_edit_detail(
+                                moved_obj, old_attrs, action.final_attrs,
+                            ).get("changes", [])
+                            break
+                    # Re-parse for next edit
+                    self._parser = NagiosConfigParser(self._config_path)
+                    self._parser.parse_all()
+
+        return results
 
     def _find_by_identity(
         self, source_file: str, obj_type: str, obj_name: str
