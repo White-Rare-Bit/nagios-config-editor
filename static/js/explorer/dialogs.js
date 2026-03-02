@@ -546,16 +546,17 @@
         const objectsToDelete = [];
         const allDependencies = [];
 
-        for (const index of Explorer.getSelectedIndices()) {
-            const obj = state.allObjects.find(o => o.global_index === index);
+        for (const key of state.selectedKeys) {
+            const obj = Explorer.findObjectByKey(key);
             if (obj) {
+                const objKey = Explorer.getObjectKey(obj);
                 const objName = obj.display_name;
                 const deps = findDependencies(objName);
                 // Filter out self-references and objects also being deleted
-                const externalDeps = deps.filter(d =>
-                    d.object.global_index !== index &&
-                    !Explorer.isSelectedByIndex(d.object.global_index)
-                );
+                const externalDeps = deps.filter(d => {
+                    const depKey = Explorer.getObjectKey(d.object);
+                    return depKey !== objKey && !state.selectedKeys.has(depKey);
+                });
                 if (externalDeps.length > 0) {
                     objectsToDelete.push({ obj, deps: externalDeps });
                     allDependencies.push(...externalDeps);
@@ -573,8 +574,8 @@
             const selectedCount = state.selectedKeys.size;
             let message;
             if (selectedCount === 1) {
-                const index = Array.from(Explorer.getSelectedIndices())[0];
-                const obj = state.allObjects.find(o => o.global_index === index);
+                const key = Array.from(state.selectedKeys)[0];
+                const obj = Explorer.findObjectByKey(key);
                 const name = obj ? (obj.display_name || obj.name || 'unnamed') : 'this object';
                 message = `Are you sure you want to stage "${name}" for deletion?`;
             } else {
@@ -726,24 +727,23 @@
         let deletedCount = 0;
 
         // Stage regular objects for deletion
-        for (const index of Explorer.getSelectedIndices()) {
-            if (!state.stagedObjectDeletions.has(index)) {
-                state.stagedObjectDeletions.add(index);
+        for (const key of state.selectedKeys) {
+            const obj = Explorer.findObjectByKey(key);
+            if (!obj) {continue;}
+            const objKey = Explorer.getObjectKey(obj);
+            if (!state.stagedObjectDeletions.has(objKey)) {
+                state.stagedObjectDeletions.add(objKey);
                 // Remove any pending edits for this object since it's being deleted
-                state.pendingEdits.delete(index);
-                // Remove any staged moves for this object (use stable key)
-                const obj = state.allObjects.find(o => o.global_index === index);
-                if (obj) {
-                    state.stagedMoves.delete(Explorer.getObjectKey(obj));
-                }
+                state.pendingEdits.delete(objKey);
+                // Remove any staged moves for this object
+                state.stagedMoves.delete(objKey);
                 deletedCount++;
             }
         }
 
         // Close tabs for deleted objects
-        for (const index of Explorer.getSelectedIndices()) {
-            const obj = state.allObjects.find(o => o.global_index === index);
-            if (obj) {Explorer.closeTab(Explorer.getObjectKey(obj));}
+        for (const key of state.selectedKeys) {
+            Explorer.closeTab(key);
         }
 
         // Clear selection
@@ -761,8 +761,8 @@
         }
     }
 
-    function unstageObjectDeletion(index) {
-        state.stagedObjectDeletions.delete(index);
+    function unstageObjectDeletion(key) {
+        state.stagedObjectDeletions.delete(key);
         // Centralized refresh ensures all UI components stay in sync
         Explorer.afterFrontendMutation();
     }
@@ -775,19 +775,20 @@
      * Stage reference updates for a batch of renames, excluding renamed objects from
      * each other's reference scans. Uses Explorer.stageReferenceUpdates for individual
      * renames, but filters out co-renamed objects to avoid circular updates.
-     * @param {Array<{oldName: string, newName: string, idx: number}>} renames
+     * @param {Array<{oldName: string, newName: string, key: string}>} renames
      * @returns {number} total reference objects updated
      */
     function stageBulkReferenceUpdates(renames) {
-        const allRenamedIndices = new Set(renames.map(r => r.idx));
+        const allRenamedKeys = new Set(renames.map(r => r.key));
         let totalRefUpdates = 0;
 
         for (const { oldName, newName } of renames) {
             const deps = Explorer.findDependencies(oldName)
-                .filter(d => !allRenamedIndices.has(d.object.global_index));
+                .filter(d => !allRenamedKeys.has(Explorer.getObjectKey(d.object)));
 
             for (const dep of deps) {
-                const existingEdit = state.pendingEdits.get(dep.object.global_index);
+                const depKey = Explorer.getObjectKey(dep.object);
+                const existingEdit = state.pendingEdits.get(depKey);
                 const originalAttrs = existingEdit ? existingEdit.original : {...dep.object.attributes};
                 const editedAttrs = existingEdit ? {...existingEdit.edited} : {...dep.object.attributes};
                 let changed = false;
@@ -802,7 +803,7 @@
                 }
 
                 if (changed) {
-                    state.pendingEdits.set(dep.object.global_index, {
+                    state.pendingEdits.set(depKey, {
                         original: originalAttrs,
                         edited: editedAttrs,
                         object: {
@@ -829,12 +830,13 @@
         const renames = [];
         let centerPaneNeedsRefresh = false;
 
-        for (const idx of Explorer.getSelectedIndices()) {
-            const obj = state.allObjects.find(o => o.global_index === idx);
+        for (const key of state.selectedKeys) {
+            const obj = Explorer.findObjectByKey(key);
             if (!obj) {continue;}
 
+            const objKey = Explorer.getObjectKey(obj);
             const nameField = Explorer.getNameFieldForObject(obj);
-            const existingEdit = state.pendingEdits.get(idx);
+            const existingEdit = state.pendingEdits.get(objKey);
             const currentName = existingEdit ? (existingEdit.edited[nameField] || '') : (obj.attributes[nameField] || '');
             const newName = currentName.split(find).join(replace);
 
@@ -843,7 +845,7 @@
                 const editedAttrs = existingEdit ? {...existingEdit.edited} : {...obj.attributes};
                 editedAttrs[nameField] = newName;
 
-                state.pendingEdits.set(idx, {
+                state.pendingEdits.set(objKey, {
                     original: originalAttrs,
                     edited: editedAttrs,
                     object: {
@@ -854,9 +856,9 @@
                         display_name: obj.display_name
                     }
                 });
-                renames.push({ oldName: currentName, newName, idx });
+                renames.push({ oldName: currentName, newName, key: objKey });
 
-                if (state.editedObject && state.editedObject.global_index === idx) {
+                if (state.editedObject && Explorer.getObjectKey(state.editedObject) === objKey) {
                     centerPaneNeedsRefresh = true;
                 }
             }
@@ -878,7 +880,8 @@
         Explorer.closeDialog();
 
         if (centerPaneNeedsRefresh && state.editedObject) {
-            const obj = state.allObjects.find(o => o.global_index === state.editedObject.global_index);
+            const editedKey = Explorer.getObjectKey(state.editedObject);
+            const obj = Explorer.findObjectByKey(editedKey);
             if (obj) {Explorer.showCenterPaneObject(obj);}
         } else if (state.editedObject && renames.length > 0) {
             Explorer.loadImpactAndRelationships(state.editedObject);
@@ -976,8 +979,8 @@
         if (!field || (action !== 'set' && action !== 'remove') || !constants.NAGIOS_ATTRIBUTES) {
             return { filteredScope: scope, skippedIncompatible: 0 };
         }
-        const filteredScope = scope.filter(idx => {
-            const obj = state.allObjects.find(o => o.global_index === idx);
+        const filteredScope = scope.filter(key => {
+            const obj = Explorer.findObjectByKey(key);
             if (!obj) {return false;}
             const validAttrs = constants.NAGIOS_ATTRIBUTES[obj.object_type];
             if (!validAttrs) {return true;} // No metadata for type — be permissive
@@ -1018,16 +1021,17 @@
 
         let updatedCount = 0;
         let unchangedCount = 0;
-        for (const idx of filteredScope) {
-            const obj = state.allObjects.find(o => o.global_index === idx);
+        for (const key of filteredScope) {
+            const obj = Explorer.findObjectByKey(key);
             if (!obj) {continue;}
 
-            const existingEdit = state.pendingEdits.get(idx);
+            const objKey = Explorer.getObjectKey(obj);
+            const existingEdit = state.pendingEdits.get(objKey);
             const originalAttrs = existingEdit ? existingEdit.original : {...obj.attributes};
             const editedAttrs = existingEdit ? {...existingEdit.edited} : {...obj.attributes};
 
             if (applyBulkAction(action, field, findText, valueText, editedAttrs)) {
-                state.pendingEdits.set(idx, {
+                state.pendingEdits.set(objKey, {
                     original: originalAttrs,
                     edited: editedAttrs,
                     object: {
@@ -1048,8 +1052,12 @@
         Explorer.afterFrontendMutation();
         Explorer.closeDialog();
 
-        if (state.editedObject && !state.isNewObject && scope.includes(state.editedObject.global_index)) {
-            Explorer.showCenterPaneObject(state.allObjects.find(o => o.global_index === state.editedObject.global_index));
+        if (state.editedObject && !state.isNewObject) {
+            const editedKey = Explorer.getObjectKey(state.editedObject);
+            if (scope.includes(editedKey)) {
+                const obj = Explorer.findObjectByKey(editedKey);
+                if (obj) {Explorer.showCenterPaneObject(obj);}
+            }
         }
 
         showBulkEditResultToast(action, updatedCount, unchangedCount, skippedIncompatible);
@@ -1060,12 +1068,15 @@
         Explorer.closeActionsMenu();
 
         // Collect all unique attribute names from selected objects
-        const scope = state.selectedKeys.size > 0 ? Array.from(Explorer.getSelectedIndices()) : state.allObjects.map(o => o.global_index);
+        const scope = state.selectedKeys.size > 0
+            ? Array.from(state.selectedKeys)
+            : state.allObjects.map(o => Explorer.getObjectKey(o));
         const availableFields = new Set();
-        for (const idx of scope) {
-            const obj = state.allObjects.find(o => o.global_index === idx);
+        for (const key of scope) {
+            const obj = Explorer.findObjectByKey(key);
             if (!obj) {continue;}
-            const pendingEdit = state.pendingEdits.get(idx);
+            const objKey = Explorer.getObjectKey(obj);
+            const pendingEdit = state.pendingEdits.get(objKey);
             const attrs = pendingEdit ? pendingEdit.edited : obj.attributes;
             Object.keys(attrs).forEach(k => availableFields.add(k));
         }
@@ -1198,7 +1209,7 @@
             const type = document.getElementById('selectType').value;
             Explorer.clearSelection();
             state.allObjects.filter(o => o.object_type === type).forEach(o => {
-                Explorer.selectObjectByIndex(o.global_index);
+                state.selectedKeys.add(Explorer.getObjectKey(o));
             });
             Explorer.updateSelection();
             Explorer.closeDialog();
@@ -1232,7 +1243,7 @@
                 const regex = new RegExp(pattern, 'i');
                 Explorer.clearSelection();
                 state.allObjects.filter(o => regex.test(o.display_name)).forEach(o => {
-                    Explorer.selectObjectByIndex(o.global_index);
+                    state.selectedKeys.add(Explorer.getObjectKey(o));
                 });
                 Explorer.updateSelection();
                 Explorer.closeDialog();

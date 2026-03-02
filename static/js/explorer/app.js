@@ -753,7 +753,7 @@ function renderTreeItem(obj, showType = false) {
             <span class="tree-item-delete-badge" title="Staged for deletion">−</span>
             <span class="tree-item-name" title="${Explorer.escapeHtml(displayName)}">${Explorer.escapeHtml(displayName)}</span>
             ${showType ? '' : `<span class="tree-item-type type-${obj.object_type}" title="${obj.object_type}" data-badge-compact="${badgeCompact}" data-badge-medium="${badgeMedium}" data-badge-full="${badgeFull}">${typeLabel}</span>`}
-            <button class="tree-item-undo-btn" onclick="event.stopPropagation(); Explorer.unstageObjectDeletion(${obj.global_index})" title="Undo deletion">Undo</button>
+            <button class="tree-item-undo-btn" onclick="event.stopPropagation(); Explorer.unstageObjectDeletion('${Explorer.escapeJs(Explorer.getObjectKey(obj))}')" title="Undo deletion">Undo</button>
         </div>
     `;
     }
