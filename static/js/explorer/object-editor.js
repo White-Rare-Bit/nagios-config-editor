@@ -1173,11 +1173,8 @@
 
             state.pendingEdits.delete(globalIndex);
 
-            // Persist the removal to backend
-            Explorer.saveStagedChanges();
-
             // Centralized refresh ensures all UI components stay in sync
-            Explorer.refreshAfterObjectChange();
+            Explorer.afterFrontendMutation();
         }
     }
 
@@ -1218,17 +1215,14 @@
             }
         });
 
-        // Persist to localStorage
-        Explorer.saveStagedChanges();
-
-        // Update state.allObjects locally (for UI display)
+        // Update state.allObjects locally (for UI display) — must happen before rebuildUI
         const idx = state.allObjects.findIndex(o => o.global_index === globalIndex);
         if (idx >= 0) {
             state.allObjects[idx].attributes = {...state.editedObject.attributes};
         }
 
         // Centralized refresh ensures all UI components stay in sync
-        Explorer.refreshAfterObjectChange();
+        Explorer.afterFrontendMutation();
 
         // Phase 2: Refresh relationship sections (References, Inheritance, Members)
         // NOTE: These refresh AFTER refreshAfterObjectChange() because:

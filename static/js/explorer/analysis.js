@@ -750,8 +750,7 @@ function stageCleanupDeletion(idx) {
         // Remove from cleanup suggestions
         state.allCleanupSuggestions.splice(idx, 1);
 
-        Explorer.saveStagedChanges();
-        Explorer.refreshAfterObjectChange();
+        Explorer.afterFrontendMutation();
         renderUnifiedSuggestionsList();
 
         showToast(`Staged "${obj.display_name}" for deletion`, 'success');

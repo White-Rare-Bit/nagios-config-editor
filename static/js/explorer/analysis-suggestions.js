@@ -393,8 +393,7 @@
             }
 
             Explorer.closeDialog();
-            Explorer.saveStagedChanges();
-            Explorer.refreshAfterObjectChange();
+            Explorer.afterFrontendMutation();
 
             // Select the newly created staged item to show in center pane
             setTimeout(() => {
@@ -483,8 +482,7 @@
             const newStagedIdx = state.stagedCreations.length - 1;
 
             Explorer.closeDialog();
-            Explorer.saveStagedChanges();
-            Explorer.refreshAfterObjectChange();
+            Explorer.afterFrontendMutation();
 
             // Select the newly created staged item to show in center pane
             setTimeout(() => {

@@ -281,8 +281,7 @@
         document.getElementById('centerCloseBtn').style.display = 'none';
 
         // Centralized refresh ensures all UI components stay in sync
-        Explorer.saveStagedChanges();
-        Explorer.refreshAfterObjectChange();
+        Explorer.afterFrontendMutation();
         showToast('New object discarded', 'info');
     }
 
@@ -485,8 +484,7 @@
 
         // Centralized refresh ensures all UI components stay in sync
         // Skip center pane sync since we're about to show the new object
-        Explorer.saveStagedChanges();
-        Explorer.refreshAfterObjectChange({ skipCenter: true });
+        Explorer.afterFrontendMutation({ skipCenter: true });
 
         // Scroll to and highlight the newly staged item
         setTimeout(() => {
@@ -719,8 +717,7 @@
         } else if (stagedCreationDeletedCount > 0) {
             // Only staged creations were deleted
             // Centralized refresh ensures all UI components (tree, target, suggestions, commit) stay in sync
-            Explorer.saveStagedChanges();
-            Explorer.refreshAfterObjectChange();
+            Explorer.afterFrontendMutation();
             showToast(`Removed ${stagedCreationDeletedCount} staged creation(s)`, 'success');
         }
     }
@@ -753,8 +750,7 @@
         Explorer.clearSelection();
 
         // Centralized refresh ensures all UI components (tree, target, suggestions, commit) stay in sync
-        Explorer.saveStagedChanges();
-        Explorer.refreshAfterObjectChange();
+        Explorer.afterFrontendMutation();
 
         // Show appropriate message
         const totalDeleted = deletedCount + stagedCreationDeletedCount;
@@ -768,8 +764,7 @@
     function unstageObjectDeletion(index) {
         state.stagedObjectDeletions.delete(index);
         // Centralized refresh ensures all UI components stay in sync
-        Explorer.saveStagedChanges();
-        Explorer.refreshAfterObjectChange();
+        Explorer.afterFrontendMutation();
     }
 
     // ============================================================================
@@ -878,10 +873,8 @@
             totalRefUpdates = stageBulkReferenceUpdates(renames);
         }
 
-        Explorer.saveStagedChanges();
         state.healthCheckData = null;
-        Explorer.computeStagedIssues();
-        Explorer.refreshAfterObjectChange();
+        Explorer.afterFrontendMutation();
         Explorer.closeDialog();
 
         if (centerPaneNeedsRefresh && state.editedObject) {
@@ -1051,10 +1044,8 @@
             }
         }
 
-        Explorer.saveStagedChanges();
         state.healthCheckData = null;
-        Explorer.computeStagedIssues();
-        Explorer.refreshAfterObjectChange();
+        Explorer.afterFrontendMutation();
         Explorer.closeDialog();
 
         if (state.editedObject && !state.isNewObject && scope.includes(state.editedObject.global_index)) {
@@ -1346,8 +1337,7 @@
         }
 
         state.stagedCreations.splice(idx, 1);
-        Explorer.saveStagedChanges();
-        Explorer.refreshAfterObjectChange();
+        Explorer.afterFrontendMutation();
     }
 
     // ============================================================================
