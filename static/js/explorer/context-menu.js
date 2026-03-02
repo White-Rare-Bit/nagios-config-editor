@@ -33,7 +33,7 @@
      * @returns {{original: Object, edited: Object}} Original and edited attributes
      */
     function getOrCreatePendingEdit(obj) {
-        const existingEdit = state.pendingEdits.get(obj.global_index);
+        const existingEdit = state.pendingEdits.get(Explorer.getObjectKey(obj));
         if (existingEdit) {
             return {
                 original: existingEdit.original,
@@ -92,7 +92,7 @@
             }
 
             if (changed) {
-                state.pendingEdits.set(obj.global_index, {
+                state.pendingEdits.set(Explorer.getObjectKey(obj), {
                     original: originalAttrs,
                     edited: editedAttrs,
                     object: {
@@ -215,7 +215,7 @@
         // Helper to get current name (respecting pending edits and templates)
         function getCurrentName(obj) {
             const nameField = Explorer.getNameFieldForObject(obj);
-            const pendingEdit = state.pendingEdits.get(obj.global_index);
+            const pendingEdit = state.pendingEdits.get(Explorer.getObjectKey(obj));
             if (pendingEdit) {
                 return pendingEdit.edited[nameField] || obj.display_name || obj.name || 'unnamed';
             }
@@ -280,7 +280,7 @@
         if (!obj) {return;}
 
         // Use pending edit attributes if available
-        const pendingEdit = state.pendingEdits.get(obj.global_index);
+        const pendingEdit = state.pendingEdits.get(Explorer.getObjectKey(obj));
         const attrs = pendingEdit ? pendingEdit.edited : obj.attributes;
         const comments = obj.inline_comments || {};
 
@@ -549,7 +549,7 @@
 
         editedAttrs[nameField] = newName;
 
-        state.pendingEdits.set(state.contextTarget, {
+        state.pendingEdits.set(Explorer.getObjectKey(obj), {
             original: originalAttrs,
             edited: editedAttrs,
             object: {
@@ -590,7 +590,7 @@
         const creation = {
             id: generateUniqueId(),
             object_type: obj.object_type,
-            attributes: {...(state.pendingEdits.get(obj.global_index)?.edited || obj.attributes)},
+            attributes: {...(state.pendingEdits.get(Explorer.getObjectKey(obj))?.edited || obj.attributes)},
             targetFile: targetFile,
             displayName: newName,
             insertPosition: targetFile === obj.source_file ? obj.line_number : null
@@ -624,7 +624,7 @@
             if (!obj) {continue;}
 
             const nameField = Explorer.getNameFieldForObject(obj);
-            const pendingEdit = state.pendingEdits.get(idx);
+            const pendingEdit = state.pendingEdits.get(Explorer.getObjectKey(obj));
             const sourceAttrs = pendingEdit ? pendingEdit.edited : obj.attributes;
             const currentName = sourceAttrs[nameField] || obj.name || obj.display_name || 'unnamed';
             const newName = isSingleClone ? newNameInput.value.trim() : currentName + suffix;
@@ -700,7 +700,7 @@
             }
 
             if (madeChange) {
-                state.pendingEdits.set(idx, {
+                state.pendingEdits.set(Explorer.getObjectKey(obj), {
                     original: originalAttrs,
                     edited: editedAttrs,
                     object: {
@@ -898,7 +898,7 @@
                 currentGroups.push(groupName);
                 editedAttrs[groupAttr] = currentGroups.join(',');
 
-                state.pendingEdits.set(obj.global_index, {
+                state.pendingEdits.set(Explorer.getObjectKey(obj), {
                     original: originalAttrs,
                     edited: editedAttrs,
                     object: {
@@ -917,7 +917,7 @@
 
         // If the currently displayed object in center panel was updated, refresh it
         if (state.editedObject && state.editedObject.global_index !== -1) {
-            const pendingEdit = state.pendingEdits.get(state.editedObject.global_index);
+            const pendingEdit = state.pendingEdits.get(Explorer.getObjectKey(state.editedObject));
             if (pendingEdit) {
                 state.editedObject.attributes = {...pendingEdit.edited};
                 Explorer.renderCenterAttributes();
