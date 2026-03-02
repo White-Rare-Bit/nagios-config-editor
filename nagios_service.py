@@ -650,6 +650,71 @@ class NagiosService:
                 return obj
         return None
 
+    def _compute_expected_file_order(
+        self,
+        target_file: str,
+        incoming_actions: list[CompositeAction],
+        all_move_actions: list[CompositeAction],
+        delete_keys: set[str],
+    ) -> list[dict]:
+        """Compute expected object order for a target file after all moves.
+
+        Mirrors frontend buildFileItemsList logic:
+        1. Existing objects in file sorted by line_number
+        2. Remove objects being moved OUT or deleted
+        3. Add incoming objects at their insertPosition
+        4. Sort by position
+
+        Returns list of dicts with: source, stable_key, name, position, action (if incoming).
+        """
+        target_real = os.path.realpath(target_file)
+
+        # Build set of keys being moved (any direction) for quick lookup
+        move_keys = {a.stable_key for a in all_move_actions}
+
+        # Get existing objects in target file, sorted by line_number
+        existing = [
+            o for o in self.parser.objects
+            if os.path.realpath(o.source_file) == target_real
+        ]
+        existing.sort(key=lambda o: o.line_number)
+
+        order = []
+        for obj in existing:
+            obj_name = get_object_name(obj.object_type, obj.attributes)
+            obj_key = f"{os.path.realpath(obj.source_file)}|{obj.object_type}|{obj_name}"
+
+            # Skip objects staged for deletion
+            if obj_key in delete_keys:
+                continue
+
+            # Skip objects being moved (they'll be re-added at new position if
+            # targeting this same file, or removed if targeting another file)
+            if obj_key in move_keys:
+                continue
+
+            order.append({
+                "source": "existing",
+                "stable_key": obj_key,
+                "name": obj_name,
+                "position": float(obj.line_number),
+                "obj": obj,
+            })
+
+        # Add incoming move actions
+        for action in incoming_actions:
+            pos = float(action.insert_position) if action.insert_position is not None else float("inf")
+            order.append({
+                "source": "incoming",
+                "stable_key": action.stable_key,
+                "name": action.object_name,
+                "position": pos,
+                "action": action,
+            })
+
+        order.sort(key=lambda item: item["position"])
+        return order
+
     @contextmanager
     def modification_context(self):
         """Context manager for parser modification with lock held.

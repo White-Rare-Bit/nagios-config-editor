@@ -7,7 +7,7 @@ import tempfile
 import pytest
 
 from file_operations import extract_all_blocks, assemble_file_from_blocks
-from nagios_service import NagiosService
+from nagios_service import CompositeAction, NagiosService
 
 
 class TestExtractAllBlocks:
@@ -92,3 +92,159 @@ class TestAssembleFileFromBlocks:
         result = assemble_file_from_blocks(preamble, blocks)
         # Should not have excessive blank lines between preamble and first block
         assert "\n\n\n\n" not in result
+
+
+# --- Fixtures for service-level tests ---
+
+@pytest.fixture
+def config_dir():
+    """Create a temp config dir with hosts.cfg and services.cfg."""
+    d = tempfile.mkdtemp()
+    hosts = os.path.join(d, "hosts.cfg")
+    services = os.path.join(d, "services.cfg")
+    with open(hosts, "w") as f:
+        f.write(
+            "define host {\n"
+            "    host_name    web-01\n"
+            "    alias        Web Server 1\n"
+            "    address      10.0.0.1\n"
+            "}\n\n"
+            "define host {\n"
+            "    host_name    web-02\n"
+            "    alias        Web Server 2\n"
+            "    address      10.0.0.2\n"
+            "}\n\n"
+            "define host {\n"
+            "    host_name    web-03\n"
+            "    alias        Web Server 3\n"
+            "    address      10.0.0.3\n"
+            "}\n"
+        )
+    with open(services, "w") as f:
+        f.write(
+            "define host {\n"
+            "    host_name    existing-svc\n"
+            "    alias        Existing\n"
+            "    address      10.0.1.1\n"
+            "}\n"
+        )
+    yield d
+    shutil.rmtree(d)
+
+
+@pytest.fixture
+def service(config_dir):
+    return NagiosService(config_dir)
+
+
+class TestComputeExpectedFileOrder:
+    def test_cross_file_moves_ordered_by_insert_position(self, service, config_dir):
+        """Two objects moved to services.cfg with explicit positions."""
+        hosts = os.path.join(config_dir, "hosts.cfg")
+        services = os.path.join(config_dir, "services.cfg")
+        # Move web-02 at position 10, web-01 at position 20
+        move_actions = [
+            CompositeAction(
+                action_type="move",
+                stable_key=f"{os.path.realpath(hosts)}|host|web-02",
+                object_type="host",
+                object_name="web-02",
+                source_file=hosts,
+                original_attrs={"host_name": "web-02", "alias": "Web Server 2", "address": "10.0.0.2"},
+                target_file=services,
+                insert_position=10,
+            ),
+            CompositeAction(
+                action_type="move",
+                stable_key=f"{os.path.realpath(hosts)}|host|web-01",
+                object_type="host",
+                object_name="web-01",
+                source_file=hosts,
+                original_attrs={"host_name": "web-01", "alias": "Web Server 1", "address": "10.0.0.1"},
+                target_file=services,
+                insert_position=20,
+            ),
+        ]
+        # incoming = actions targeting services.cfg
+        incoming = [a for a in move_actions if os.path.realpath(a.target_file) == os.path.realpath(services)]
+        order = service._compute_expected_file_order(
+            services, incoming, move_actions, set(),
+        )
+        names = [item["name"] for item in order]
+        # existing-svc is at line 1 (position < 10), so it stays first
+        # Then web-02 (pos 10), then web-01 (pos 20)
+        assert names == ["existing-svc", "web-02", "web-01"]
+
+    def test_same_file_reorder(self, service, config_dir):
+        """Reorder objects within same file."""
+        hosts = os.path.join(config_dir, "hosts.cfg")
+        hosts_real = os.path.realpath(hosts)
+        # Move web-03 to position 0 (before everything), web-01 to position 5
+        move_actions = [
+            CompositeAction(
+                action_type="move",
+                stable_key=f"{hosts_real}|host|web-03",
+                object_type="host",
+                object_name="web-03",
+                source_file=hosts,
+                original_attrs={"host_name": "web-03", "alias": "Web Server 3", "address": "10.0.0.3"},
+                target_file=hosts,
+                insert_position=0,
+            ),
+            CompositeAction(
+                action_type="move",
+                stable_key=f"{hosts_real}|host|web-01",
+                object_type="host",
+                object_name="web-01",
+                source_file=hosts,
+                original_attrs={"host_name": "web-01", "alias": "Web Server 1", "address": "10.0.0.1"},
+                target_file=hosts,
+                insert_position=5,
+            ),
+        ]
+        incoming = move_actions  # same file, so all are incoming
+        order = service._compute_expected_file_order(
+            hosts, incoming, move_actions, set(),
+        )
+        names = [item["name"] for item in order]
+        # web-03 at pos 0, web-01 at pos 5, web-02 stays (not moved, keeps original line ~7)
+        assert names == ["web-03", "web-01", "web-02"]
+
+    def test_mixed_existing_and_incoming(self, service, config_dir):
+        """File has existing objects + incoming moves interleaved."""
+        hosts = os.path.join(config_dir, "hosts.cfg")
+        services = os.path.join(config_dir, "services.cfg")
+        svc_real = os.path.realpath(services)
+        hosts_real = os.path.realpath(hosts)
+        # Move web-01 to services.cfg at position 0 (before existing-svc)
+        move_actions = [
+            CompositeAction(
+                action_type="move",
+                stable_key=f"{hosts_real}|host|web-01",
+                object_type="host",
+                object_name="web-01",
+                source_file=hosts,
+                original_attrs={"host_name": "web-01", "alias": "Web Server 1", "address": "10.0.0.1"},
+                target_file=services,
+                insert_position=0,
+            ),
+        ]
+        incoming = move_actions
+        order = service._compute_expected_file_order(
+            services, incoming, move_actions, set(),
+        )
+        names = [item["name"] for item in order]
+        assert names == ["web-01", "existing-svc"]
+
+    def test_deleted_objects_excluded(self, service, config_dir):
+        """Objects staged for deletion are excluded from expected order."""
+        hosts = os.path.join(config_dir, "hosts.cfg")
+        hosts_real = os.path.realpath(hosts)
+        delete_keys = {f"{hosts_real}|host|web-02"}
+        order = service._compute_expected_file_order(
+            hosts, [], [], delete_keys,
+        )
+        names = [item["name"] for item in order]
+        assert "web-02" not in names
+        assert "web-01" in names
+        assert "web-03" in names
