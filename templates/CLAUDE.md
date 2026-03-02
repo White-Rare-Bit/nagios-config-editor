@@ -19,7 +19,7 @@ base.html
 
 **CSS** (in `<head>`): Bootstrap → FontAwesome → `tokens.css` → `forms.css` → `style.css` → `{% block extra_css %}`
 
-**JS** (before `</body>`): Bootstrap JS → `app.js` → `base-state.js` → `session-manager.js` → `ui-notifications.js` → `git-ui.js` → `api-client.js` → `commit-dialog.js` → `lock-manager.js` → `base.js` → `{% block scripts %}`
+**JS** (before `</body>`): Bootstrap JS → `app.js` → `base-state.js` → `session-manager.js` → `ui-notifications.js` → `git-ui.js` → `stable-key.js` → `api-client.js` → `commit-dialog.js` → `lock-manager.js` → `base.js` → `{% block scripts %}`
 
 Page scripts can rely on all the above being loaded.
 
