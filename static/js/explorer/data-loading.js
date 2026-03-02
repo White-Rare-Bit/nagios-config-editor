@@ -216,14 +216,11 @@
      * Load staged changes from server
      */
     function syncStagingFromData(state, data) {
-        // Object operations - dict format: {key: entry, ...}
-        // Bug 039: JSON keys are always strings, but pendingEdits uses numeric
-        // global_index keys everywhere else. Convert to numbers so Map lookups
-        // like state.pendingEdits.get(obj.global_index) work after server load.
+        // pendingEdits: keyed by stable key strings
         if (data.pendingEdits) {
             const validEdits = Object.entries(data.pendingEdits).filter(([key, edit]) => {
                 return edit && edit.object && edit.object.source_file;
-            }).map(([key, edit]) => [Number(key), edit]);
+            });
             state.pendingEdits = new Map(validEdits);
         }
         if (data.stagedMoves) {
