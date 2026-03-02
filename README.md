@@ -1,50 +1,19 @@
 # Nagios Bulk Editor
 
-Web interface for bulk editing Nagios configuration files with staging, backups, and validation.
+I've been working with Nagios Core for a few years now, and have noticed over time that Nagios configuration can become very "organic" (barnacled with technical debt) this is a project that aims to help Nagios Core administrators a safe and modern way to edit their Nagios configuration in bulk without resorting to grepping and reading through a ton of text files. 
 
-## Architecture
+There are a multitude of safety features implemented to prevent unrecoverable situations.
 
-```
-HTTP Request → Flask Route → app.extensions
-                               ├── ['service']  → NagiosService (CRUD, apply phases)
-                               ├── ['staging']  → StagingManager (locks, undo)
-                               └── ['backup']   → BackupManager
-                                        ↓
-                              Parser / Writer → .cfg files
-```
+Staging -> arguably the most important, changes are written to a json staging file and do not impact files on disk prior to committing in the commit menu.
 
-## Staging System
+Backups -> Prior to applying the configuration a zip of the entire configuration directory is taken.
 
-No changes written to disk until "Apply". Staging uses explicit state enum:
+Git integration -> Serves a couple of purposes in the application, attribution for the audit log, changes are tracked by git in addition to full backups.
 
-```
-EMPTY ──(acquire lock)──> ACTIVE ──(clear)──> EMPTY
-  ^                          |
-  └──────(clear)──── RESTORE_PENDING <──(backup restore)
-```
+Nagios verification -> The option to run verify against the Nagios configuration after committing
 
-Apply processes staged changes in 10 phases: folder creations → file creations → object deletions → object moves → object edits → object creations → file moves → folder moves → file deletions → folder deletions.
+Staging lock -> polling checks that staging doesn't currently doesn't have any content and will produce a lock banner for users in other sessions if staging content is detected.
 
-Staging entries use dict format only. Legacy list format rejected at API boundary with 400.
+Audit log -> Changes are tracked under the git username set in the settings per session.
 
-## Key Invariants
-
-1. **Single-writer**: Only one session holds staging lock at a time.
-2. **Atomic writes**: Temp file + rename to prevent partial writes.
-3. **Parser sync**: NagiosService reloads parser after file modifications.
-4. **Backup preservation**: `/backups/` paths excluded from `.cfg` discovery.
-
-## Testing
-
-```bash
-python3 -m pytest tests/ -v
-```
-
-## Configuration
-
-```
-config_path/
-├── objects/         # .cfg object definitions
-├── backups/         # Timestamped backups (auto-created)
-└── staging.json     # Active staging state (auto-created)
-```
+Full disclosure, this has been completely written with the assistance of Claude Code, all due respect to Anthropic and it's team for producing this incredible tool.
