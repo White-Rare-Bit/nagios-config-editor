@@ -378,15 +378,14 @@
                     }
 
                     // Stage the edit
-                    state.pendingEdits.set(obj.global_index, {
+                    state.pendingEdits.set(Explorer.getObjectKey(obj), {
                         original: { ...obj.attributes },
                         edited: newAttrs,
                         object: {
                             source_file: obj.source_file,
                             line_number: obj.line_number,
                             object_type: obj.object_type,
-                            display_name: obj.display_name,
-                            global_index: obj.global_index
+                            display_name: obj.display_name
                         }
                     });
                 }

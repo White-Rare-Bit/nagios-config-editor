@@ -12,7 +12,7 @@
 
     // A-02: Filter out suggestions for objects marked for deletion (used 11+ times)
     function filterActiveSuggestions(suggestions) {
-        return suggestions.filter(s => s.object && !Explorer.isObjectMarkedForDeletion(s.object.global_index));
+        return suggestions.filter(s => s.object && !Explorer.isObjectMarkedForDeletion(s.object));
     }
 
 async function analyzeAll() {
@@ -147,7 +147,7 @@ const ISSUE_TYPE_HANDLERS = {
     },
     orphan: (issue, obj) => {
         if (!obj) {return;}
-        state.orphanIndices.add(obj.global_index);
+        state.orphanIndices.add(Explorer.getObjectKey(obj));
         state.allCleanupSuggestions.push({
             type: 'orphan', severity: 'info', object: obj,
             title: `Orphan ${issue.object_type}: ${issue.object}`,
@@ -157,11 +157,11 @@ const ISSUE_TYPE_HANDLERS = {
     },
     orphan_service: (issue, obj) => {
         if (!obj) {return;}
-        state.orphanIndices.add(obj.global_index);
+        state.orphanIndices.add(Explorer.getObjectKey(obj));
     },
     service_on_empty_hostgroup: (issue, obj) => {
         if (!obj) {return;}
-        state.orphanIndices.add(obj.global_index);
+        state.orphanIndices.add(Explorer.getObjectKey(obj));
     },
     command_arg_mismatch: () => {
         // Already tracked in issuesByObject — no additional state needed
@@ -226,7 +226,7 @@ function mapHealthCheckToState(data) {
     // 6. Dispatch each issue to its type handler
     for (const issue of state.allIssues) {
         const obj = issue.global_index != null ? objectsByIndex.get(issue.global_index) : null;
-        if (obj && state.stagedObjectDeletions.has(obj.global_index)) {continue;}
+        if (obj && state.stagedObjectDeletions.has(Explorer.getObjectKey(obj))) {continue;}
 
         const handler = ISSUE_TYPE_HANDLERS[issue.type];
         if (handler) {
@@ -310,7 +310,10 @@ function collectHealthWarningSuggestions(suggestions) {
     if (!state.allIssues) {return;}
     const warnings = state.allIssues.filter(i => i.severity === 'warning' && !CLEANUP_HANDLED_TYPES.has(i.type));
     for (const issue of warnings) {
-        if (issue.global_index != null && state.stagedObjectDeletions.has(issue.global_index)) {continue;}
+        if (issue.global_index != null) {
+            const issueObj = state.allObjects.find(o => o.global_index === issue.global_index);
+            if (issueObj && state.stagedObjectDeletions.has(Explorer.getObjectKey(issueObj))) {continue;}
+        }
         suggestions.push({
             id: `health-warning-${issue.type}-${issue.object}`,
             severity: 'warning',
@@ -741,9 +744,9 @@ function stageCleanupDeletion(idx) {
     const obj = s.object;
 
     // Stage the deletion
-    if (!state.stagedObjectDeletions.has(obj.global_index)) {
-        state.stagedObjectDeletions.add(obj.global_index);
-        state.pendingEdits.delete(obj.global_index);
+    if (!state.stagedObjectDeletions.has(Explorer.getObjectKey(obj))) {
+        state.stagedObjectDeletions.add(Explorer.getObjectKey(obj));
+        state.pendingEdits.delete(Explorer.getObjectKey(obj));
 
         // Remove from cleanup suggestions
         state.allCleanupSuggestions.splice(idx, 1);
@@ -984,7 +987,7 @@ function bulkDeleteCleanupGroup(groupType) {
         for (const idx of indicesToDelete) {
             const s = state.allCleanupSuggestions[idx];
             if (s.object) {
-                state.stagedObjectDeletions.add(s.object.global_index);
+                state.stagedObjectDeletions.add(Explorer.getObjectKey(s.object));
                 deletedCount++;
             }
         }
@@ -1043,7 +1046,7 @@ function stageCleanupDelete(idx) {
     if (!obj) {return;}
 
     // Stage the deletion
-    state.stagedObjectDeletions.add(obj.global_index);
+    state.stagedObjectDeletions.add(Explorer.getObjectKey(obj));
     Explorer.afterFrontendMutation();
 
     showToast(`Staged deletion of ${obj.object_type} "${obj.display_name || obj.name}"`, 'success');
@@ -1161,7 +1164,7 @@ function keepDuplicateAndDeleteOthers(suggestionIdx, keepIdx) {
     let deletedCount = 0;
     s.duplicateGroup.forEach((obj, i) => {
         if (i !== keepIdx) {
-            state.stagedObjectDeletions.add(obj.global_index);
+            state.stagedObjectDeletions.add(Explorer.getObjectKey(obj));
             deletedCount++;
         }
     });
@@ -1228,7 +1231,7 @@ function openHostgroupEditorForService(suggestionIdx, hosts) {
 
     // Store the link so we can update the service when the hostgroup is saved
     state.pendingHostgroupServiceLink = {
-        serviceGlobalIndex: obj.global_index,
+        serviceKey: Explorer.getObjectKey(obj),
         suggestionIdx: suggestionIdx
     };
 
@@ -1278,7 +1281,7 @@ function openNewObjectInEditor(newObj, targetFile) {
 
     // Show message about the linked service update
     if (state.pendingHostgroupServiceLink) {
-        const serviceObj = state.allObjects.find(o => o.global_index === state.pendingHostgroupServiceLink.serviceGlobalIndex);
+        const serviceObj = state.allObjects.find(o => Explorer.getObjectKey(o) === state.pendingHostgroupServiceLink.serviceKey);
         if (serviceObj) {
             showToast(`Set the hostgroup name, then save. The service "${serviceObj.display_name}" will be updated automatically.`, 'info');
         }
@@ -1294,13 +1297,13 @@ function handleHostgroupServiceLink() {
     const hostgroupName = state.editedObject.attributes.hostgroup_name;
     if (!hostgroupName) {return;}
 
-    const serviceGlobalIndex = state.pendingHostgroupServiceLink.serviceGlobalIndex;
+    const serviceKey = state.pendingHostgroupServiceLink.serviceKey;
     const suggestionIdx = state.pendingHostgroupServiceLink.suggestionIdx;
 
     // Stage edit to update the service - remove host_name, add hostgroup_name
-    const serviceObj = state.allObjects.find(o => o.global_index === serviceGlobalIndex);
+    const serviceObj = state.allObjects.find(o => Explorer.getObjectKey(o) === serviceKey);
     if (serviceObj) {
-        const existingEdit = state.pendingEdits.get(serviceGlobalIndex);
+        const existingEdit = state.pendingEdits.get(serviceKey);
         const edit = existingEdit || {
             original: { ...serviceObj.attributes },
             edited: { ...serviceObj.attributes },
@@ -1308,13 +1311,12 @@ function handleHostgroupServiceLink() {
                 source_file: serviceObj.source_file,
                 line_number: serviceObj.line_number,
                 object_type: serviceObj.object_type,
-                display_name: serviceObj.display_name,
-                global_index: serviceGlobalIndex
+                display_name: serviceObj.display_name
             }
         };
         delete edit.edited.host_name;
         edit.edited.hostgroup_name = hostgroupName;
-        state.pendingEdits.set(serviceGlobalIndex, edit);
+        state.pendingEdits.set(serviceKey, edit);
 
         showToast(`Service "${serviceObj.display_name}" will now use hostgroup "${hostgroupName}"`, 'success');
     }
