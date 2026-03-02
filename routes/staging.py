@@ -430,35 +430,6 @@ def _collect_files_from_deletions(files, staged_deletions):
                 files.add(obj.source_file)
 
 
-def _enrich_deletion_identities(data):
-    """Resolve deletion indices to stable identities and store as sidecar.
-
-    Called at staging save time when indices are valid. Preserves any
-    existing identities (from prior saves) so they survive partial-apply
-    retries where the parser has changed.
-
-    Populates data["_deletionIdentities"] = {str(idx): {source_file, object_type, name}}.
-    """
-    from nagios_model import get_object_name
-
-    service = get_service()
-    identities = data.get("_deletionIdentities", {})
-    for idx in data.get("stagedObjectDeletions", []):
-        if not isinstance(idx, (int, float)):
-            continue
-        idx_str = str(int(idx))
-        if idx_str in identities:
-            continue  # Already captured — don't overwrite with stale data
-        obj = service.find_object_by_index(int(idx))
-        if obj:
-            identities[idx_str] = {
-                "source_file": obj.source_file,
-                "object_type": obj.object_type,
-                "name": get_object_name(obj.object_type, obj.attributes),
-            }
-    data["_deletionIdentities"] = identities
-
-
 def _get_existing_operation_keys(existing):
     """Extract sets of keys for operations already in existing staging data.
 
@@ -483,11 +454,7 @@ def _get_existing_operation_keys(existing):
         if isinstance(creation, dict) and creation.get("id"):
             creation_ids.add(str(creation["id"]))
 
-    deletion_keys = set(
-        str(int(d))
-        for d in existing.get("stagedObjectDeletions", [])
-        if isinstance(d, (int, float))
-    )
+    deletion_keys = set(str(d) for d in existing.get("stagedObjectDeletions", []))
 
     return edit_keys, move_keys, creation_ids, deletion_keys
 
@@ -823,7 +790,7 @@ def _validate_staging_format(data):
     """
     pending_edits = data.get("pendingEdits")
     if pending_edits is not None and not isinstance(pending_edits, dict):
-        return "pendingEdits must be a dict {globalIndex: entry}"
+        return "pendingEdits must be a dict {stableKey: entry}"
 
     staged_moves = data.get("stagedMoves")
     if staged_moves is not None and not isinstance(staged_moves, dict):
@@ -849,10 +816,10 @@ def api_save_staging():
     #
     # Required fields:
     #   sessionId: str
-    #   pendingEdits: dict[str, object]   — key is stringified global_index
+    #   pendingEdits: dict[str, object]   — key is stable key (source_file|type|name)
     #   stagedMoves: dict[str, object]    — key is stable key
     #   stagedCreations: list[object]
-    #   stagedObjectDeletions: list[int]  — global_index values
+    #   stagedObjectDeletions: list[str]  — stable key values
     #   newFiles: list[str]               — file paths
     #   stagedFileCreations: list[object]
     #   stagedFileDeletions: list[object]
@@ -899,11 +866,6 @@ def api_save_staging():
     # Preserve user identity and file/folder ops from existing staging
     existing = sm.get_staging()
     _preserve_existing_session_data(existing, data, session_id)
-
-    # Resolve deletion indices to stable identities while indices are valid.
-    # Preserves existing identities so they survive partial-apply retries.
-    if data.get("stagedObjectDeletions"):
-        _enrich_deletion_identities(data)
 
     # Collect and track files affected by all staging operations.
     # Compute checksums directly into data (not via sm.update_base_checksums,
@@ -1619,29 +1581,43 @@ def api_apply_staging():
         ), 500
 
 
+def _build_stable_key_index(virtual_objects):
+    """Build a stable_key -> list_index map from virtual object dicts.
+
+    Uses the same name resolution as StableKey.build() in JS:
+    display_name ?? name ?? "idx:{global_index}"
+    """
+    index_map = {}
+    for i, obj in enumerate(virtual_objects):
+        name = obj.get("display_name") or obj.get("name") or f"idx:{obj.get('global_index', i)}"
+        key = f"{obj['source_file']}|{obj['object_type']}|{name}"
+        index_map[key] = i
+    return index_map
+
+
 def _apply_staged_edits_to_virtual(virtual_objects, pending_edits):
     """Apply pending edits to virtual objects in place.
 
     Args:
         virtual_objects: List of virtual object dicts (modified in place)
-        pending_edits: Dict {globalIndex: edit_data} from staging
+        pending_edits: Dict {stableKey: edit_data} from staging
 
     Returns:
         Set of edited global indices
 
     """
+    key_index = _build_stable_key_index(virtual_objects)
     edited_indices = set()
-    for gi_str, edit_data in pending_edits.items():
+    for stable_key, edit_data in pending_edits.items():
         if not isinstance(edit_data, dict):
             continue
-        global_index = int(gi_str) if gi_str is not None else None
-
-        if global_index is not None and 0 <= global_index < len(virtual_objects):
+        idx = key_index.get(stable_key)
+        if idx is not None:
             edited_attrs = edit_data.get("edited", {})
             if edited_attrs:
-                virtual_objects[global_index]["attributes"].update(edited_attrs)
-                virtual_objects[global_index]["_staged_status"] = "edited"
-                edited_indices.add(global_index)
+                virtual_objects[idx]["attributes"].update(edited_attrs)
+                virtual_objects[idx]["_staged_status"] = "edited"
+                edited_indices.add(idx)
     return edited_indices
 
 
@@ -1650,19 +1626,21 @@ def _apply_staged_deletions_to_virtual(virtual_objects, staged_deletions):
 
     Args:
         virtual_objects: List of virtual object dicts (modified in place)
-        staged_deletions: List of int global indices from staging
+        staged_deletions: List of stable key strings from staging
 
     Returns:
         Set of deleted global indices
 
     """
+    key_index = _build_stable_key_index(virtual_objects)
     deleted_indices = set()
-    for deletion_entry in staged_deletions:
-        if isinstance(deletion_entry, (int, float)):
-            global_index = int(deletion_entry)
-            if 0 <= global_index < len(virtual_objects):
-                virtual_objects[global_index]["_staged_status"] = "deleted"
-                deleted_indices.add(global_index)
+    for stable_key in staged_deletions:
+        if not isinstance(stable_key, str):
+            continue
+        idx = key_index.get(stable_key)
+        if idx is not None:
+            virtual_objects[idx]["_staged_status"] = "deleted"
+            deleted_indices.add(idx)
     return deleted_indices
 
 
@@ -1674,22 +1652,15 @@ def _apply_staged_moves_to_virtual(virtual_objects, staged_moves):
         staged_moves: Dict {stableKey: move_data} from staging
 
     """
-    for move_data in staged_moves.values():
+    key_index = _build_stable_key_index(virtual_objects)
+    for stable_key, move_data in staged_moves.items():
         if not isinstance(move_data, dict):
             continue
-
-        obj_info = move_data.get("object", {})
         target_file = move_data.get("targetFile")
-
-        for obj in virtual_objects:
-            if (
-                obj["source_file"] == obj_info.get("source_file")
-                and obj["object_type"] == obj_info.get("object_type")
-                and obj["attributes"] == obj_info.get("attributes")
-            ):
-                obj["_staged_status"] = "moved"
-                obj["_staged_target_file"] = target_file
-                break
+        idx = key_index.get(stable_key)
+        if idx is not None:
+            virtual_objects[idx]["_staged_status"] = "moved"
+            virtual_objects[idx]["_staged_target_file"] = target_file
 
 
 def _add_staged_creations_to_virtual(virtual_objects, staged_creations):
