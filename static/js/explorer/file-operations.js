@@ -17,18 +17,19 @@
     };
 
     /**
-     * Update UI after staging changes. Consolidates the common pattern:
-     * saveStagedChanges → updateCommitUI → renderTargetPane → buildTree
+     * Update UI after staging changes. Delegates to staging orchestrators.
      * @param {Object} options - Optional configuration
-     * @param {boolean} options.save - Call saveStagedChanges (default: true)
-     * @param {boolean} options.tree - Call buildTree (default: true)
+     * @param {boolean} options.save - Use afterFrontendMutation (default: true), false = afterServerSync
+     * @param {boolean} options.tree - Include tree rebuild (default: true)
      */
     function afterStagingChange(options = {}) {
         const { save = true, tree = true } = options;
-        if (save) {Explorer.saveStagedChanges();}
-        Explorer.updateCommitUI();
-        renderTargetPane();
-        if (tree) {Explorer.buildTree();}
+        const uiOptions = tree ? {} : { skipTree: true };
+        if (save) {
+            Explorer.afterFrontendMutation(uiOptions);
+        } else {
+            Explorer.afterServerSync(uiOptions);
+        }
     }
 
     // ============================================================================
@@ -1016,12 +1017,9 @@
 
         if (staged > 0) {
             showToast(`Staged ${staged} object(s) to move. Use Commit to apply.`, 'info');
-            Explorer.saveStagedChanges();
-            Explorer.updateCommitUI();
         }
 
-        renderTargetPane();
-        Explorer.buildTree();
+        afterStagingChange();
     }
 
     function moveStagedCreationsToFile(dataIndices, targetFile) {
@@ -1121,13 +1119,7 @@
             }
         }
 
-        if (staged > 0 || cancelled > 0) {
-            Explorer.saveStagedChanges();
-            Explorer.updateCommitUI();
-        }
-
-        renderTargetPane();
-        Explorer.buildTree();
+        afterStagingChange();
 
         showFileDropToast(staged, cancelled);
     }
@@ -1416,12 +1408,9 @@
             const isNewFile = state.newFiles.has(targetFile);
             const prefix = isNewFile ? `Created ${extractFileName(targetFile)} and staged` : 'Staged';
             showToast(`${prefix} ${staged} object(s) to ${extractFileName(targetFile)}. Commit to apply.`, 'info');
-            Explorer.saveStagedChanges();
-            Explorer.updateCommitUI();
         }
 
-        renderTargetPane();
-        Explorer.buildTree();
+        afterStagingChange();
     }
 
     function handleFolderDrop(event, targetFolder) {
