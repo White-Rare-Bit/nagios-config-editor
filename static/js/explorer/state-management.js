@@ -286,7 +286,41 @@
     };
 
     // =============================================================================
-    // Centralized Refresh Function
+    // UI Rebuild Primitives
+    // =============================================================================
+
+    /**
+     * Synchronous UI rebuild — no network calls, no saves.
+     * @param {Object} options
+     * @param {boolean} options.skipTree - Skip tree + staged issues refresh
+     * @param {boolean} options.skipTarget - Skip target pane refresh
+     * @param {boolean} options.skipCenter - Skip center pane sync
+     * @param {boolean} options.skipTabs - Skip tab bar refresh
+     */
+    Explorer.rebuildUI = function(options = {}) {
+        if (!options.skipTree && Explorer.computeStagedIssues) {
+            Explorer.computeStagedIssues();
+        }
+
+        if (!options.skipTree && Explorer.buildTree) {
+            Explorer.buildTree();
+        }
+
+        if (!options.skipTarget && Explorer.renderTargetPane) {
+            Explorer.renderTargetPane();
+        }
+
+        if (!options.skipCenter && Explorer.syncCenterPaneAfterUndo && state.editedObject) {
+            Explorer.syncCenterPaneAfterUndo();
+        }
+
+        if (Explorer.renderTabBar) {
+            Explorer.renderTabBar();
+        }
+    };
+
+    // =============================================================================
+    // Legacy Refresh (being migrated to rebuildUI + orchestrators)
     // =============================================================================
 
     /**

@@ -85,6 +85,129 @@
         };
     };
 
+    // =============================================================================
+    // Staging Orchestration Primitives
+    // =============================================================================
+
+    /**
+     * Save staging state to server (side-effect-free).
+     * Only POSTs current state. Does NOT update badges or trigger analysis.
+     * @returns {Promise<{success: boolean, error?: string}>}
+     */
+    Explorer.saveStaging = async function() {
+        if (saveDebounceTimer) {
+            clearTimeout(saveDebounceTimer);
+        }
+
+        if (saveInProgress) {
+            saveDebounceTimer = setTimeout(() => Explorer.saveStaging(), CONFIG.SAVE_DEBOUNCE_RETRY_MS);
+            return { success: false, error: 'debounced' };
+        }
+
+        saveInProgress = true;
+        isSavingStaging = true;
+
+        try {
+            const state = Explorer.state;
+            const identity = typeof getUserIdentity === 'function' ? getUserIdentity() : {};
+
+            const data = {
+                sessionId: state.sessionId,
+                userName: identity.userName || '',
+                userEmail: identity.userEmail || '',
+                pendingEdits: Object.fromEntries(state.pendingEdits),
+                stagedMoves: Object.fromEntries(state.stagedMoves),
+                stagedCreations: state.stagedCreations,
+                newFiles: Array.from(state.newFiles),
+                stagedObjectDeletions: Array.from(state.stagedObjectDeletions),
+                stagedFileCreations: state.stagedFileCreations,
+                stagedFileDeletions: state.stagedFileDeletions,
+                stagedFileMoves: state.stagedFileMoves,
+                stagedFolderCreations: state.stagedFolderCreations,
+                stagedFolderDeletions: state.stagedFolderDeletions,
+                stagedFolderMoves: state.stagedFolderMoves
+            };
+
+            const result = await ApiClient.post('/api/staging', data, { silent: true });
+
+            if (result.success) {
+                return { success: true };
+            } else if (result.status === 423) {
+                Explorer.showToast(result.data?.error || 'Staging is locked by another user', 'error');
+                window.isEditingLocked = true;
+                Explorer.updateEditingLockedUI();
+                return { success: false, error: 'locked' };
+            } else {
+                console.error('Failed to save staging to server');
+                Explorer.showToast('Failed to save changes to server.', 'error');
+                return { success: false, error: 'save_failed' };
+            }
+        } finally {
+            isSavingStaging = false;
+            saveInProgress = false;
+        }
+    };
+
+    /**
+     * Fetch staging info and update nav badges (commit count + undo button).
+     * Single GET /api/staging/info — no other side effects.
+     */
+    Explorer.updateBadges = async function() {
+        const infoResult = await ApiClient.get('/api/staging/info', { silent: true });
+
+        if (infoResult.success) {
+            const info = infoResult.data;
+            lastStagingTimestamp = info.lastModified;
+            let count = info.totalCount || 0;
+
+            if (typeof updateUndoButton === 'function') {
+                updateUndoButton(info.undoCount || 0);
+            }
+
+            // If no GUI staging, check git for external changes
+            if (count === 0) {
+                const gitResult = await ApiClient.get('/api/git/status', { silent: true });
+                if (gitResult.success && gitResult.data?.has_changes) {
+                    count = gitResult.data.files.length;
+                }
+            }
+
+            if (typeof updateNavCommitButton === 'function') {
+                updateNavCommitButton(count);
+            }
+        }
+    };
+
+    /**
+     * ORCHESTRATOR: Call after any frontend-initiated mutation.
+     * Saves to server, rebuilds UI, updates badges, triggers debounced analysis.
+     * This is the ONE function to call after modifying staging state locally.
+     *
+     * @param {Object} options - Passed through to rebuildUI
+     */
+    Explorer.afterFrontendMutation = async function(options = {}) {
+        await Explorer.saveStaging();
+        Explorer.rebuildUI(options);
+        Explorer.updateBadges();
+        triggerAnalysisUpdate();
+    };
+
+    /**
+     * ORCHESTRATOR: Call after server-originated changes (undo, apply, polling).
+     * Does NOT save (server already has the truth). Rebuilds UI, updates badges.
+     *
+     * @param {Object} options - Passed through to rebuildUI
+     */
+    Explorer.afterServerSync = function(options = {}) {
+        Explorer.rebuildUI(options);
+        Explorer.updateBadges();
+        triggerAnalysisUpdate();
+    };
+
+    // =============================================================================
+    // Legacy Staging API (being migrated to orchestrators above)
+    // =============================================================================
+
     /**
      * Save staged changes to server (true staging - no disk writes)
      */
