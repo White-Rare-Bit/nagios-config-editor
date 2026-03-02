@@ -1,21 +1,24 @@
-# Explorer Refresh Synchronization — Design Decisions
+# Explorer Staging Orchestration — Design Decisions
 
 ## Problem
 
-Different operations (delete, edit, create, undo) each called different subsets of refresh functions in different orders, causing bugs like deleted objects reappearing in the suggestions panel after polling sync.
+Different operations (delete, edit, create, undo) each called different subsets of refresh functions in different orders, causing redundant network requests (7-16 per mutation) and bugs like deleted objects reappearing in the suggestions panel.
 
 ## Solution
 
-`refreshAfterObjectChange()` in `state-management.js` ensures all 5 UI components refresh together after any mutation:
+Two orchestrators in `data-loading.js` with side-effect-free primitives:
 
-buildTree (left) → renderTargetPane (right) → syncCenterPane (center) → loadAllSuggestions → updateCommitUI
+- `afterFrontendMutation(opts)` — user mutated state locally: save -> rebuildUI -> updateBadges -> debouncedAnalysis
+- `afterServerSync(opts)` — server is source of truth (undo, apply, polling): rebuildUI -> updateBadges -> debouncedAnalysis
 
-Order matters: tree provides base state, target pane depends on tree counts, suggestions need final filtered list, commit UI summarizes all changes.
+`rebuildUI()` in `state-management.js` handles synchronous UI rebuild:
+
+computeStagedIssues -> buildTree (left) -> renderTargetPane (right) -> syncCenterPane (center) -> renderTabBar
 
 ## Key Decisions
 
-- **Centralized function over scattered calls**: Single function prevents future inconsistencies
-- **No batching/debouncing**: Immediate refresh per operation; bulk ops can call once at end
-- **Options param for selective refresh**: Polling sync only needs commit UI update, not full tree rebuild
-- **Force flag for suggestions only**: Bypasses the 500ms analysis debounce to prevent stale data
-- **Direct function calls over event bus**: Only 6-8 call sites; event bus adds indirection without benefit
+- **Two orchestrators over one**: Frontend-initiated vs server-initiated flows have different needs (save vs no-save)
+- **Side-effect-free primitives**: `saveStaging()`, `updateBadges()`, `rebuildUI()` do exactly one thing each
+- **Debounced analysis only**: `loadAllSuggestions` is never called immediately; always goes through 500ms debounce
+- **Single badge fetch**: One `GET /api/staging/info` per mutation (was 3x before)
+- **Options param for selective refresh**: `{ skipTree, skipTarget, skipCenter, skipTabs }`
