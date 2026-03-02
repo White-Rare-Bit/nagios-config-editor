@@ -346,11 +346,10 @@
     }
 
     function isStagedCreationTemplate(creation) {
-        const attrs = creation.attributes || {};
-        return attrs.register === '0' ||
-            (creation.object_type === 'host' && attrs.name && !attrs.host_name) ||
-            (creation.object_type === 'service' && attrs.name && !attrs.service_description) ||
-            (creation.object_type === 'contact' && attrs.name && !attrs.contact_name);
+        return Explorer.isObjectTemplate({
+            object_type: creation.object_type,
+            attributes: creation.attributes || {}
+        });
     }
 
     function buildRowClasses(base, flags) {

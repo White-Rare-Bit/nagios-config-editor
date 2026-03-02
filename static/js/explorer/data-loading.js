@@ -91,6 +91,9 @@
     // Staging Orchestration Primitives
     // =============================================================================
 
+    // Staging wire format — field names must match routes/staging.py.
+    // See routes/staging.py api_save_staging() for the canonical field documentation.
+
     /**
      * Save staging state to server (side-effect-free).
      * Only POSTs current state. Does NOT update badges or trigger analysis.

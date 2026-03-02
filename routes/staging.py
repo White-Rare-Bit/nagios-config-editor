@@ -27,6 +27,16 @@ from .helpers import (
 bp = Blueprint("staging", __name__)
 logger = logging.getLogger("nagios_bulk_editor")
 
+# Known fields in the staging wire format (POST /api/staging body).
+# Used to warn on unexpected fields that may indicate a version mismatch.
+KNOWN_STAGING_FIELDS = {
+    'sessionId', 'userName', 'userEmail',
+    'pendingEdits', 'stagedMoves', 'stagedCreations',
+    'newFiles', 'stagedObjectDeletions',
+    'stagedFileCreations', 'stagedFileDeletions', 'stagedFileMoves',
+    'stagedFolderCreations', 'stagedFolderDeletions', 'stagedFolderMoves',
+}
+
 # Serialize staging operations to prevent race conditions
 # Uses multiprocessing.Lock because WSGI servers may use multiple processes
 staging_operation_lock = multiprocessing.Lock()
@@ -833,12 +843,34 @@ def api_save_staging():
     Requires X-Session-Id header. Rejects if staging is locked by another session.
     Accepts userName and userEmail in request body for user identification.
     """
+    # Staging state wire format (shared with frontend data-loading.js:saveStaging).
+    # Field names use camelCase to match frontend conventions.
+    # Changes to these field names MUST be coordinated with the frontend.
+    #
+    # Required fields:
+    #   sessionId: str
+    #   pendingEdits: dict[str, object]   — key is stringified global_index
+    #   stagedMoves: dict[str, object]    — key is stable key
+    #   stagedCreations: list[object]
+    #   stagedObjectDeletions: list[int]  — global_index values
+    #   newFiles: list[str]               — file paths
+    #   stagedFileCreations: list[object]
+    #   stagedFileDeletions: list[object]
+    #   stagedFileMoves: list[object]
+    #   stagedFolderCreations: list[object]
+    #   stagedFolderDeletions: list[object]
+    #   stagedFolderMoves: list[object]
     import logging
 
     log = logging.getLogger("nagios_bulk_editor.staging")
 
     sm = get_staging_manager()
     data = request.get_json() or {}
+
+    # Warn on unknown fields (possible frontend/backend version mismatch)
+    unknown = set(data.keys()) - KNOWN_STAGING_FIELDS
+    if unknown:
+        log.warning("Unknown staging fields (possible frontend/backend mismatch): %s", unknown)
 
     # Validate format before processing
     format_error = _validate_staging_format(data)

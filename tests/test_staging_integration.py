@@ -658,3 +658,32 @@ def test_apply_verification_multi_operation(client, app):
     assert v["objectLevel"]["passed"] is True
     assert v["objectLevel"]["editsVerified"] == 1
     assert v["objectLevel"]["creationsVerified"] == 1
+
+
+def test_unknown_staging_fields_logged_but_accepted(client):
+    """POST /api/staging with unknown fields should succeed (just logs a warning)."""
+    resp = client.get("/api/objects")
+    objects = resp.json
+    obj = objects[0]
+
+    staging_data = {
+        "sessionId": "test-session",
+        "pendingEdits": {
+            str(obj["global_index"]): {
+                "object": obj,
+                "original": obj["attributes"],
+                "edited": {**obj["attributes"], "alias": "Unknown Field Test"},
+            },
+        },
+        "totallyBogusField": True,
+        "anotherUnknownField": [1, 2, 3],
+    }
+
+    resp = client.post(
+        "/api/staging",
+        data=json.dumps(staging_data),
+        content_type="application/json",
+        headers={"X-Session-Id": "test-session"},
+    )
+    assert resp.status_code == 200
+    assert resp.json.get("success") is True
