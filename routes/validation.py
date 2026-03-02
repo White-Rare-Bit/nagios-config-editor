@@ -3,6 +3,7 @@
 from flask import Blueprint, jsonify
 
 from nagios_model import NAME_FIELDS, REFERENCE_FIELDS, REQUIRED_FIELDS
+from staging_manager import generate_stable_key_for_object
 from validator import NagiosValidator
 
 from .helpers import get_config, get_service
@@ -225,7 +226,7 @@ def _collect_suggestions(obj_type, signatures, suggestions):
             "type": obj_type,
             "suggested_name": suggested_name,
             "attributes": attrs,
-            "object_indices": [idx for idx, _ in matching_entries],
+            "object_keys": [generate_stable_key_for_object(obj) for _, obj in matching_entries],
             "count": len(matching_entries),
             "attr_count": len(attrs),
         })

@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from app import create_app
+from staging_manager import generate_stable_key_for_object
 
 
 @pytest.fixture
@@ -201,7 +202,7 @@ class TestTemplateSuggestions:
             assert "type" in s, "Suggestion missing 'type'"
             assert "suggested_name" in s, "Suggestion missing 'suggested_name'"
             assert "attributes" in s, "Suggestion missing 'attributes'"
-            assert "object_indices" in s, "Suggestion missing 'object_indices'"
+            assert "object_keys" in s, "Suggestion missing 'object_keys'"
             assert "count" in s, "Suggestion missing 'count'"
             assert "attr_count" in s, "Suggestion missing 'attr_count'"
 
@@ -218,12 +219,12 @@ class TestTemplateSuggestions:
         response = client.get("/api/analysis/template-suggestions")
         data = response.get_json()
 
-        all_suggested_indices = set()
+        all_suggested_keys = set()
         for s in data["suggestions"]:
-            all_suggested_indices.update(s["object_indices"])
+            all_suggested_keys.update(s["object_keys"])
 
-        for idx, obj in enumerate(service.get_objects()):
-            if idx in all_suggested_indices:
+        for obj in service.get_objects():
+            if generate_stable_key_for_object(obj) in all_suggested_keys:
                 assert "use" not in obj.attributes, \
                     f"Object {obj.get_name()} already uses a template but is in suggestion"
 
@@ -232,12 +233,12 @@ class TestTemplateSuggestions:
         response = client.get("/api/analysis/template-suggestions")
         data = response.get_json()
 
-        all_suggested_indices = set()
+        all_suggested_keys = set()
         for s in data["suggestions"]:
-            all_suggested_indices.update(s["object_indices"])
+            all_suggested_keys.update(s["object_keys"])
 
-        for idx, obj in enumerate(service.get_objects()):
-            if idx in all_suggested_indices:
+        for obj in service.get_objects():
+            if generate_stable_key_for_object(obj) in all_suggested_keys:
                 assert obj.attributes.get("register", "1") != "0", \
                     f"Template {obj.get_name()} should not be in suggestions"
 

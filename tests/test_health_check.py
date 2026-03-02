@@ -1534,7 +1534,7 @@ class TestTemplateConsolidation:
             assert "suggestion" in issue, \
                 f"template_opportunity missing suggestion: {issue}"
             suggestion = issue["suggestion"]
-            for field in ["suggested_name", "type", "attributes", "object_indices", "count", "attr_count"]:
+            for field in ["suggested_name", "type", "attributes", "object_keys", "count", "attr_count"]:
                 assert field in suggestion, \
                     f"suggestion missing field '{field}': {suggestion}"
 

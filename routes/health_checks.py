@@ -10,6 +10,7 @@ import re
 from inheritance import has_attr_in_chain, resolve_all_attrs, resolve_inherited_attrs
 from nagios_cfg import parse_nagios_cfg, parse_resource_cfg
 from nagios_model import NAME_FIELDS, REFERENCE_FIELDS, REQUIRED_FIELDS
+from staging_manager import generate_stable_key_for_object
 
 # Minimum common prefix length for auto-generating template names
 _MIN_PREFIX_LENGTH = 3
@@ -1445,7 +1446,7 @@ def _check_type_for_consolidation(obj_type, type_entries, identity_fields_set, i
             "suggested_name": suggested_name,
             "type": obj_type,
             "attributes": attrs,
-            "object_indices": [idx for idx, _ in matching_entries],
+            "object_keys": [generate_stable_key_for_object(obj) for _, obj in matching_entries],
             "count": len(matching_entries),
             "attr_count": len(attrs),
         }

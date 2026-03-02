@@ -128,9 +128,7 @@ function processTemplateOpportunity(issue) {
         type: s.type,
         suggestedName: s.suggested_name,
         attributes: s.attributes,
-        objects: (s.object_indices || []).map(idx =>
-            state.allObjects.find(o => o.global_index === idx)
-        ).filter(Boolean),
+        objects: (s.object_keys || []).map(key => StableKey.findObject(key, state.allObjects)).filter(Boolean),
         count: s.count,
         attrCount: s.attr_count
     });
