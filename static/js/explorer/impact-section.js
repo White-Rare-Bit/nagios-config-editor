@@ -212,7 +212,7 @@
             );
             if (!tmplObj) {continue;}
 
-            const pendingEdit = state.pendingEdits.get(tmplObj.global_index);
+            const pendingEdit = state.pendingEdits.get(Explorer.getObjectKey(tmplObj));
             if (!pendingEdit) {continue;}
 
             // Apply each changed attribute from the staged edit

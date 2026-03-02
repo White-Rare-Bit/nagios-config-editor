@@ -447,10 +447,10 @@ function buildTree() {
     // Filter by orphans and/or issues (OR logic when both checked)
     if (orphansOnly && issuesOnly) {
         filtered = filtered.filter(o =>
-            state.orphanIndices.has(o.global_index) || getObjectIssue(o) !== null
+            state.orphanIndices.has(Explorer.getObjectKey(o)) || getObjectIssue(o) !== null
         );
     } else if (orphansOnly) {
-        filtered = filtered.filter(o => state.orphanIndices.has(o.global_index));
+        filtered = filtered.filter(o => state.orphanIndices.has(Explorer.getObjectKey(o)));
     } else if (issuesOnly) {
         filtered = filtered.filter(o => getObjectIssue(o) !== null);
     }
@@ -727,10 +727,10 @@ function buildTypeTree(container, objects) {
 function renderTreeItem(obj, showType = false) {
     const selected = Explorer.isSelectedByIndex(obj.global_index) ? 'selected' : '';
     const isTemplate = isTreeItemTemplate(obj);
-    const isOrphan = state.orphanIndices.has(obj.global_index);
+    const isOrphan = state.orphanIndices.has(Explorer.getObjectKey(obj));
     const hostListInfo = getHostListInfo(obj);
     const issue = getObjectIssue(obj);
-    const isDeleted = state.stagedObjectDeletions.has(obj.global_index);
+    const isDeleted = state.stagedObjectDeletions.has(Explorer.getObjectKey(obj));
     const isStagedMove = state.stagedMoves.has(Explorer.getObjectKey(obj));
     const orphanClass = isOrphan ? 'is-orphan' : '';
     const longListClass = hostListInfo.shouldGroup ? 'has-long-list' : '';
@@ -796,7 +796,7 @@ function getSearchMatchField(obj) {
 
 // Get display name for an object, checking staged edits first
 function getStagedDisplayName(obj) {
-    const edit = state.pendingEdits.get(obj.global_index);
+    const edit = state.pendingEdits.get(Explorer.getObjectKey(obj));
     if (edit) {
         // Get the name field for this object type
         const nameField = getNewObjectNameField(obj.object_type);
@@ -843,7 +843,7 @@ function isTreeItemTemplate(obj) {
 
 // Helper to get effective attributes for an object (considering pending edits)
 function getEffectiveAttributes(obj) {
-    const pendingEdit = state.pendingEdits.get(obj.global_index);
+    const pendingEdit = state.pendingEdits.get(Explorer.getObjectKey(obj));
     return pendingEdit ? pendingEdit.edited : obj.attributes;
 }
 

@@ -122,8 +122,8 @@
 
         // Build a map of original names -> new names for renamed objects
         const renames = new Map(); // "type:originalName" -> newName
-        for (const [idx, edit] of state.pendingEdits) {
-            const obj = state.allObjects.find(o => o.global_index === idx);
+        for (const [key, edit] of state.pendingEdits) {
+            const obj = StableKey.findObject(key, state.allObjects);
             if (!obj) {continue;}
 
             const nameField = Explorer.getNameFieldForObject(obj);
@@ -146,7 +146,7 @@
         // Check all objects for references to renamed objects
         state.allObjects.forEach(o => {
             // Skip deleted objects
-            if (state.stagedObjectDeletions.has(o.global_index)) {return;}
+            if (state.stagedObjectDeletions.has(Explorer.getObjectKey(o))) {return;}
 
             const attrs = Explorer.getEffectiveAttributes(o);
 
@@ -239,8 +239,8 @@
      */
     function buildEditedTemplatesMap() {
         const editedTemplates = new Map();
-        for (const [idx, edit] of state.pendingEdits) {
-            const obj = state.allObjects.find(o => o.global_index === idx);
+        for (const [key, edit] of state.pendingEdits) {
+            const obj = StableKey.findObject(key, state.allObjects);
             if (!obj) {continue;}
             if (obj.attributes.register !== '0' && edit.edited.register !== '0') {continue;}
             const tmplName = obj.attributes.name || obj.display_name;
