@@ -11,6 +11,13 @@ from pathlib import Path
 import pytest
 
 from app import create_app, get_config_path
+from staging_manager import generate_stable_key_for_object
+
+
+def _obj_stable_key(obj):
+    """Build a stable key from an API object dict."""
+    name = obj.get("display_name") or obj.get("name") or ""
+    return f"{obj['source_file']}|{obj['object_type']}|{name}"
 
 
 @pytest.fixture
@@ -78,12 +85,13 @@ def test_staging_round_trip_dict_format(client, app):
 
     # Stage an edit in dict format (uses 'original' and 'edited' field names)
     obj = objects[0]
+    stable_key = _obj_stable_key(obj)
     edit_data = {
         "sessionId": "test-session",
         "userName": "Test User",
         "userEmail": "test@example.com",
         "pendingEdits": {
-            str(obj["global_index"]): {
+            stable_key: {
                 "object": obj,
                 "original": obj["attributes"],
                 "edited": {**obj["attributes"], "alias": "Updated Alias"},
@@ -155,12 +163,13 @@ def test_undo_operations_dict_format(client):
     obj = objects[0]
 
     # Stage multiple operations
+    stable_key = _obj_stable_key(obj)
     staging_data = {
         "sessionId": "test-session",
         "userName": "Test User",
         "userEmail": "test@example.com",
         "pendingEdits": {
-            str(obj["global_index"]): {
+            stable_key: {
                 "object": obj,
                 "original": obj["attributes"],
                 "edited": {**obj["attributes"], "alias": "Edit 1"},
@@ -206,6 +215,7 @@ def test_multi_operation_workflow(client, app):
     obj = objects[0]
 
     # Stage both creation and edit in one request
+    stable_key = _obj_stable_key(obj)
     staging_data = {
         "sessionId": session_id,
         "stagedCreations": [{
@@ -219,7 +229,7 @@ def test_multi_operation_workflow(client, app):
             },
         }],
         "pendingEdits": {
-            str(obj["global_index"]): {
+            stable_key: {
                 "object": obj,
                 "original": obj["attributes"],
                 "edited": {**obj["attributes"], "alias": "Modified"},
@@ -278,10 +288,11 @@ def test_conflict_detection(client):
     resp = client.get("/api/objects")
     obj = resp.json[0]
 
+    stable_key = _obj_stable_key(obj)
     edit_data = {
         "sessionId": session_id,
         "pendingEdits": {
-            str(obj["global_index"]): {
+            stable_key: {
                 "object": obj,
                 "original": obj["attributes"],
                 "edited": {**obj["attributes"], "alias": "Changed"},
@@ -322,9 +333,10 @@ class TestBulkOpsUseStagingSystem:
             original_content = Path(host.source_file).read_text()
 
         # Stage a rename edit (don't apply)
+        stable_key = generate_stable_key_for_object(host)
         resp = client.post("/api/staging", json={
             "pendingEdits": {
-                "0": {
+                stable_key: {
                     "object": host.to_dict(),
                     "original": host.attributes.copy(),
                     "edited": {**host.attributes, "alias": "RENAMED-ALIAS"},
@@ -480,10 +492,11 @@ define hostdependency {
         host_obj = next(o for o in objects
                         if o["attributes"].get("host_name") == "web-server-01")
 
+        stable_key = _obj_stable_key(host_obj)
         edit_data = {
             "sessionId": session_id,
             "pendingEdits": {
-                str(host_obj["global_index"]): {
+                stable_key: {
                     "object": host_obj,
                     "original": host_obj["attributes"],
                     "edited": {**host_obj["attributes"], "host_name": "web-server-renamed"},
@@ -543,10 +556,11 @@ define service {
         host_obj = next(o for o in objects
                         if o["attributes"].get("host_name") == "myhost")
 
+        stable_key = _obj_stable_key(host_obj)
         edit_data = {
             "sessionId": session_id,
             "pendingEdits": {
-                str(host_obj["global_index"]): {
+                stable_key: {
                     "object": host_obj,
                     "original": host_obj["attributes"],
                     "edited": {**host_obj["attributes"], "host_name": "myhost-renamed"},
@@ -580,10 +594,11 @@ def test_apply_includes_verification(client, app):
     objects = resp.json
     obj = objects[0]
 
+    stable_key = _obj_stable_key(obj)
     edit_data = {
         "sessionId": "test-session",
         "pendingEdits": {
-            str(obj["global_index"]): {
+            stable_key: {
                 "object": obj,
                 "original": obj["attributes"],
                 "edited": {**obj["attributes"], "alias": "Verified Alias"},
@@ -621,6 +636,7 @@ def test_apply_verification_multi_operation(client, app):
     # Use the same absolute source_file path so verification can match
     target_file = obj["source_file"]
 
+    stable_key = _obj_stable_key(obj)
     staging_data = {
         "sessionId": session_id,
         "stagedCreations": [{
@@ -634,7 +650,7 @@ def test_apply_verification_multi_operation(client, app):
             },
         }],
         "pendingEdits": {
-            str(obj["global_index"]): {
+            stable_key: {
                 "object": obj,
                 "original": obj["attributes"],
                 "edited": {**obj["attributes"], "alias": "Also Verified"},
@@ -666,10 +682,11 @@ def test_unknown_staging_fields_logged_but_accepted(client):
     objects = resp.json
     obj = objects[0]
 
+    stable_key = _obj_stable_key(obj)
     staging_data = {
         "sessionId": "test-session",
         "pendingEdits": {
-            str(obj["global_index"]): {
+            stable_key: {
                 "object": obj,
                 "original": obj["attributes"],
                 "edited": {**obj["attributes"], "alias": "Unknown Field Test"},

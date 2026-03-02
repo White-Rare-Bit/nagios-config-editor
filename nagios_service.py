@@ -188,20 +188,14 @@ class NagiosService:
         moves_by_key = {}
         deletes_by_key = {}
 
-        # Index pendingEdits by stable key
-        for gi_str, entry in staging_data.get("pendingEdits", {}).items():
+        # Index pendingEdits by normalized stable key
+        for stable_key, entry in staging_data.get("pendingEdits", {}).items():
             if not isinstance(entry, dict):
                 continue
-            obj_meta = entry.get("object", {})
-            source_file = obj_meta.get("source_file")
-            obj_type = obj_meta.get("object_type")
-            obj_name = obj_meta.get("display_name") or obj_meta.get("name")
-            if source_file and obj_type and obj_name is not None:
-                key = f"{os.path.realpath(source_file)}|{obj_type}|{obj_name}"
-                edits_by_key[key] = {
-                    "entry": entry,
-                    "global_index": int(gi_str) if gi_str is not None else None,
-                }
+            parsed = parse_stable_key(stable_key)
+            if parsed:
+                norm_key = f"{os.path.realpath(parsed['source_file'])}|{parsed['object_type']}|{parsed['name']}"
+                edits_by_key[norm_key] = {"entry": entry}
 
         # Index stagedMoves by stable key (normalize path portion)
         for key, move_entry in staging_data.get("stagedMoves", {}).items():
@@ -213,29 +207,15 @@ class NagiosService:
                     norm_key = key
                 moves_by_key[norm_key] = move_entry
 
-        # Index stagedObjectDeletions by stable key.
-        # Use _deletionIdentities (captured at staging save time) when
-        # available to avoid stale-index issues on retry after partial apply.
-        identities = staging_data.get("_deletionIdentities", {})
-        for deletion_idx in staging_data.get("stagedObjectDeletions", []):
-            if not isinstance(deletion_idx, int):
+        # Index stagedObjectDeletions by normalized stable key
+        for deletion_key in staging_data.get("stagedObjectDeletions", []):
+            if not isinstance(deletion_key, str):
                 continue
-            identity = identities.get(str(deletion_idx))
-            if identity:
-                source_file = identity["source_file"]
-                obj_type = identity["object_type"]
-                name = identity["name"]
-            elif 0 <= deletion_idx < len(p.objects):
-                obj = p.objects[deletion_idx]
-                source_file = obj.source_file
-                obj_type = obj.object_type
-                name = get_object_name(obj_type, obj.attributes)
-            else:
+            parsed = parse_stable_key(deletion_key)
+            if not parsed:
                 continue
-            key = f"{os.path.realpath(source_file)}|{obj_type}|{name}"
-            deletes_by_key[key] = {
-                "global_index": deletion_idx,
-            }
+            norm_key = f"{os.path.realpath(parsed['source_file'])}|{parsed['object_type']}|{parsed['name']}"
+            deletes_by_key[norm_key] = {}
 
         # Collect creation actions (no merging needed)
         create_actions = []
@@ -278,7 +258,6 @@ class NagiosService:
             source_file = parsed["source_file"]
 
             if has_delete:
-                del_info = deletes_by_key[key]
                 delete_actions.append(
                     CompositeAction(
                         action_type="delete",
@@ -286,7 +265,6 @@ class NagiosService:
                         object_type=obj_type,
                         object_name=obj_name,
                         source_file=source_file,
-                        global_index=del_info["global_index"],
                     )
                 )
 
@@ -339,7 +317,6 @@ class NagiosService:
             elif has_edit:
                 edit_info = edits_by_key[key]
                 final_attrs = edit_info["entry"].get("edited", {})
-                gi = edit_info["global_index"]
                 modify_actions.append(
                     CompositeAction(
                         action_type="edit",
@@ -348,12 +325,15 @@ class NagiosService:
                         object_name=obj_name,
                         source_file=source_file,
                         final_attrs=final_attrs,
-                        global_index=gi,
                     )
                 )
 
-        # Sort deletes by reverse line order within same file (same as current)
-        delete_actions.sort(key=lambda a: (a.source_file or "", -(a.global_index or 0)))
+        # Sort deletes by reverse line order within same file
+        def _delete_sort_key(action):
+            obj = self._find_by_identity(action.source_file, action.object_type, action.object_name)
+            line = obj.line_number if obj else 0
+            return (action.source_file or "", -line)
+        delete_actions.sort(key=_delete_sort_key)
 
         return delete_actions + modify_actions + create_actions
 

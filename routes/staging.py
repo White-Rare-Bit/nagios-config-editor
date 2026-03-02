@@ -12,7 +12,7 @@ import file_operations
 from apply_verification import verify_apply_integrity
 from audit_service import log_audit
 from nagios_model import NAME_FIELDS
-from staging_manager import UNDO_HANDLERS, OperationType, UndoKeyError
+from staging_manager import UNDO_HANDLERS, OperationType, UndoKeyError, parse_stable_key
 
 from .helpers import (
     format_audit_user,
@@ -2080,15 +2080,16 @@ def api_staging_analyze_references():
     name_changes = []
     total_references = 0
 
-    for gi_str, edit_data in pending_edits.items():
+    for stable_key, edit_data in pending_edits.items():
         if not isinstance(edit_data, dict):
             continue
-        try:
-            global_index = int(gi_str)
-        except (ValueError, TypeError):
+        parsed = parse_stable_key(stable_key)
+        if not parsed:
             continue
 
-        obj = service.find_object_by_index(global_index)
+        obj = service._find_by_identity(
+            parsed["source_file"], parsed["object_type"], parsed["name"]
+        )
         if obj is None:
             continue
         original = edit_data.get("original", {})
@@ -2130,7 +2131,7 @@ def api_staging_analyze_references():
 
             name_changes.append(
                 {
-                    "globalIndex": global_index,
+                    "stableKey": stable_key,
                     "objectType": obj.object_type,
                     "oldName": old_name,
                     "newName": new_name,

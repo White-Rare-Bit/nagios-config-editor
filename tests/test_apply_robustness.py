@@ -12,6 +12,7 @@ import tempfile
 import pytest
 
 from nagios_service import NagiosService
+from staging_manager import generate_stable_key_for_object
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +129,19 @@ def _find_index(service, host_name):
     raise ValueError(f"Host {host_name!r} not found")
 
 
+def _find_object(service, host_name):
+    """Find a NagiosObject by host_name."""
+    for obj in service.parser.objects:
+        if obj.attributes.get("host_name") == host_name:
+            return obj
+    raise ValueError(f"Host {host_name!r} not found")
+
+
+def _stable_key(service, host_name):
+    """Build a stable key for a host by name."""
+    return generate_stable_key_for_object(_find_object(service, host_name))
+
+
 def _make_staging(deletions=None, edits=None, moves=None, creations=None):
     """Build a minimal staging data dict."""
     return {
@@ -157,10 +171,11 @@ class TestMultiFileDeleteStaleIndices:
         Expected: alpha and delta remain.
         """
         service = NagiosService(two_file_config)
-        bravo_idx = _find_index(service, "bravo")
-        charlie_idx = _find_index(service, "charlie")
 
-        staging = _make_staging(deletions=[bravo_idx, charlie_idx])
+        staging = _make_staging(deletions=[
+            _stable_key(service, "bravo"),
+            _stable_key(service, "charlie"),
+        ])
         result = service.apply_object_composite(staging)
         assert result.success
 
@@ -174,11 +189,12 @@ class TestMultiFileDeleteStaleIndices:
         Expected remaining: alpha, delta, foxtrot.
         """
         service = NagiosService(three_file_config)
-        bravo_idx = _find_index(service, "bravo")
-        charlie_idx = _find_index(service, "charlie")
-        echo_idx = _find_index(service, "echo")
 
-        staging = _make_staging(deletions=[bravo_idx, charlie_idx, echo_idx])
+        staging = _make_staging(deletions=[
+            _stable_key(service, "bravo"),
+            _stable_key(service, "charlie"),
+            _stable_key(service, "echo"),
+        ])
         result = service.apply_object_composite(staging)
         assert result.success
 
@@ -190,10 +206,11 @@ class TestMultiFileDeleteStaleIndices:
         and should work correctly.
         """
         service = NagiosService(single_file_config)
-        bravo_idx = _find_index(service, "bravo")
-        charlie_idx = _find_index(service, "charlie")
 
-        staging = _make_staging(deletions=[bravo_idx, charlie_idx])
+        staging = _make_staging(deletions=[
+            _stable_key(service, "bravo"),
+            _stable_key(service, "charlie"),
+        ])
         result = service.apply_object_composite(staging)
         assert result.success
 
@@ -301,24 +318,15 @@ class TestApplyRetryDuplicates:
     def test_delete_replay_does_not_delete_wrong_object(self, single_file_config):
         """Apply a delete twice — second apply must not delete a different object.
 
-        When _deletionIdentities is provided, _build_composite_actions uses
-        stored identity (source_file + type + name) instead of the stale index.
-        On retry, the identity lookup fails to find the already-deleted object
-        and skips it rather than deleting whatever now occupies that index.
+        With stable keys, _build_composite_actions uses the key's identity
+        (source_file + type + name) directly. On retry, the identity lookup
+        fails to find the already-deleted object and skips it rather than
+        deleting whatever now occupies that index.
         """
         service = NagiosService(single_file_config)
-        bravo_idx = _find_index(service, "bravo")
-        bravo_obj = service.parser.objects[bravo_idx]
+        bravo_key = _stable_key(service, "bravo")
 
-        # Simulate enriched staging data (as the backend save route would produce)
-        staging = _make_staging(deletions=[bravo_idx])
-        staging["_deletionIdentities"] = {
-            str(bravo_idx): {
-                "source_file": bravo_obj.source_file,
-                "object_type": bravo_obj.object_type,
-                "name": "bravo",
-            }
-        }
+        staging = _make_staging(deletions=[bravo_key])
 
         # First apply — deletes bravo
         result1 = service.apply_object_composite(staging)
@@ -349,33 +357,33 @@ class TestCompositeErrorIsolation:
     is safe or leads to corruption.
     """
 
-    def test_out_of_range_delete_silently_skipped(self, two_file_config):
-        """An out-of-range delete index is filtered by _build_composite_actions
+    def test_invalid_delete_key_silently_skipped(self, two_file_config):
+        """An invalid stable key (wrong format) is filtered by _build_composite_actions
         and never reaches _exec_delete.  The edit still applies.
         """
         service = NagiosService(two_file_config)
-        alpha_idx = _find_index(service, "alpha")
         a_cfg = os.path.join(two_file_config, "a_hosts.cfg")
+        alpha_key = _stable_key(service, "alpha")
 
         staging = _make_staging(
-            deletions=[999],
+            deletions=["invalid-key-no-pipes"],
             edits={
-                str(alpha_idx): {
+                alpha_key: {
                     "original": {"host_name": "alpha", "alias": "Alpha Host", "address": "10.0.0.1"},
                     "edited": {"host_name": "alpha", "alias": "Updated Alpha", "address": "10.0.0.1"},
                     "object": {
                         "source_file": a_cfg,
                         "object_type": "host",
                         "display_name": "alpha",
-                        "global_index": alpha_idx,
+                        "global_index": _find_index(service, "alpha"),
                     },
                 }
             },
         )
 
         result = service.apply_object_composite(staging)
-        # Out-of-range index silently filtered — no error, edit still applies
-        assert not result.data["errors"], "Invalid index should be silently filtered"
+        # Invalid key silently filtered — no error, edit still applies
+        assert not result.data["errors"], "Invalid key should be silently filtered"
         assert result.data["counts"]["edits"] == 1
         assert result.data["counts"]["deletes"] == 0
 
@@ -393,21 +401,21 @@ class TestCompositeErrorIsolation:
         So edits are safe even when mixed with cross-file deletes.
         """
         service = NagiosService(two_file_config)
-        bravo_idx = _find_index(service, "bravo")
-        charlie_idx = _find_index(service, "charlie")
         b_cfg = os.path.join(two_file_config, "b_hosts.cfg")
+        bravo_key = _stable_key(service, "bravo")
+        charlie_key = _stable_key(service, "charlie")
 
         staging = _make_staging(
-            deletions=[bravo_idx],
+            deletions=[bravo_key],
             edits={
-                str(charlie_idx): {
+                charlie_key: {
                     "original": {"host_name": "charlie", "alias": "Charlie Host", "address": "10.0.0.3"},
                     "edited": {"host_name": "charlie", "alias": "Updated Charlie", "address": "10.0.0.3"},
                     "object": {
                         "source_file": b_cfg,
                         "object_type": "host",
                         "display_name": "charlie",
-                        "global_index": charlie_idx,
+                        "global_index": _find_index(service, "charlie"),
                     },
                 }
             },

@@ -5,6 +5,7 @@ import tempfile
 import shutil
 import pytest
 from nagios_service import NagiosService
+from staging_manager import generate_stable_key_for_object
 
 
 @pytest.fixture
@@ -51,9 +52,10 @@ class TestBuildCompositeActions:
 
     def test_edit_only(self, service, config_dir):
         hosts = os.path.join(config_dir, "hosts.cfg")
+        stable_key = f"{hosts}|host|web-01"
         staging = {
             "pendingEdits": {
-                "0": {
+                stable_key: {
                     "original": {
                         "host_name": "web-01",
                         "alias": "Web Server 1",
@@ -104,11 +106,12 @@ class TestBuildCompositeActions:
         assert actions[0].target_file == services
 
     def test_delete_only(self, service, config_dir):
+        hosts = os.path.join(config_dir, "hosts.cfg")
         staging = {
             "pendingEdits": {},
             "stagedMoves": {},
             "stagedCreations": [],
-            "stagedObjectDeletions": [2],  # old-host at index 2
+            "stagedObjectDeletions": [f"{hosts}|host|old-host"],
         }
         actions = service._build_composite_actions(staging)
         assert len(actions) == 1
@@ -145,7 +148,7 @@ class TestBuildCompositeActions:
         stable_key = f"{hosts}|host|web-01"
         staging = {
             "pendingEdits": {
-                "0": {
+                stable_key: {
                     "original": {
                         "host_name": "web-01",
                         "alias": "Web Server 1",
@@ -185,9 +188,10 @@ class TestBuildCompositeActions:
     def test_delete_wins_over_edit(self, service, config_dir):
         """If same entity has both edit and delete staged, delete wins."""
         hosts = os.path.join(config_dir, "hosts.cfg")
+        old_host_key = f"{hosts}|host|old-host"
         staging = {
             "pendingEdits": {
-                "2": {
+                old_host_key: {
                     "original": {
                         "host_name": "old-host",
                         "alias": "Old Host",
@@ -210,7 +214,7 @@ class TestBuildCompositeActions:
             },
             "stagedMoves": {},
             "stagedCreations": [],
-            "stagedObjectDeletions": [2],
+            "stagedObjectDeletions": [old_host_key],
         }
         actions = service._build_composite_actions(staging)
         assert len(actions) == 1
@@ -220,17 +224,18 @@ class TestBuildCompositeActions:
         """If same entity has both move and delete staged, delete wins."""
         hosts = os.path.join(config_dir, "hosts.cfg")
         services = os.path.join(config_dir, "services.cfg")
+        old_host_key = f"{hosts}|host|old-host"
         staging = {
             "pendingEdits": {},
             "stagedMoves": {
-                f"{hosts}|host|old-host": {
+                old_host_key: {
                     "global_index": 2,
                     "targetFile": services,
                     "insertPosition": None,
                 }
             },
             "stagedCreations": [],
-            "stagedObjectDeletions": [2],
+            "stagedObjectDeletions": [old_host_key],
         }
         actions = service._build_composite_actions(staging)
         assert len(actions) == 1
@@ -238,11 +243,15 @@ class TestBuildCompositeActions:
 
     def test_deletes_sorted_reverse_line_order(self, service, config_dir):
         """Deletes should be processed in reverse line order to preserve indices."""
+        hosts = os.path.join(config_dir, "hosts.cfg")
         staging = {
             "pendingEdits": {},
             "stagedMoves": {},
             "stagedCreations": [],
-            "stagedObjectDeletions": [0, 2],  # web-01 (line 1) and old-host (line ~15)
+            "stagedObjectDeletions": [
+                f"{hosts}|host|web-01",
+                f"{hosts}|host|old-host",
+            ],
         }
         actions = service._build_composite_actions(staging)
         assert len(actions) == 2
@@ -257,7 +266,7 @@ class TestBuildCompositeActions:
         services = os.path.join(config_dir, "services.cfg")
         staging = {
             "pendingEdits": {
-                "0": {
+                f"{hosts}|host|web-01": {
                     "original": {
                         "host_name": "web-01",
                         "alias": "Web Server 1",
@@ -286,7 +295,7 @@ class TestBuildCompositeActions:
                 }
             },
             "stagedCreations": [],
-            "stagedObjectDeletions": [2],  # old-host
+            "stagedObjectDeletions": [f"{hosts}|host|old-host"],
         }
         actions = service._build_composite_actions(staging)
         types = {a.action_type for a in actions}
@@ -299,9 +308,10 @@ class TestApplyObjectComposite:
 
     def test_edit_changes_attribute(self, service, config_dir):
         hosts = os.path.join(config_dir, "hosts.cfg")
+        stable_key = f"{hosts}|host|web-01"
         staging = {
             "pendingEdits": {
-                "0": {
+                stable_key: {
                     "original": {
                         "host_name": "web-01",
                         "alias": "Web Server 1",
@@ -367,11 +377,12 @@ class TestApplyObjectComposite:
         assert os.path.realpath(hosts) not in files
 
     def test_delete_removes_object(self, service, config_dir):
+        hosts = os.path.join(config_dir, "hosts.cfg")
         staging = {
             "pendingEdits": {},
             "stagedMoves": {},
             "stagedCreations": [],
-            "stagedObjectDeletions": [2],  # old-host
+            "stagedObjectDeletions": [f"{hosts}|host|old-host"],
         }
         result = service.apply_object_composite(staging)
         assert result.success
@@ -413,7 +424,7 @@ class TestApplyObjectComposite:
         stable_key = f"{hosts}|host|web-01"
         staging = {
             "pendingEdits": {
-                "0": {
+                stable_key: {
                     "original": {
                         "host_name": "web-01",
                         "alias": "Web Server 1",
@@ -464,7 +475,7 @@ class TestApplyObjectComposite:
         services = os.path.join(config_dir, "services.cfg")
         staging = {
             "pendingEdits": {
-                "0": {
+                f"{hosts}|host|web-01": {
                     "original": {
                         "host_name": "web-01",
                         "alias": "Web Server 1",
@@ -493,7 +504,7 @@ class TestApplyObjectComposite:
                 }
             },
             "stagedCreations": [],
-            "stagedObjectDeletions": [2],  # old-host
+            "stagedObjectDeletions": [f"{hosts}|host|old-host"],
         }
         result = service.apply_object_composite(staging)
         assert result.success
@@ -524,7 +535,7 @@ class TestApplyObjectComposite:
         hosts = os.path.join(config_dir, "hosts.cfg")
         staging = {
             "pendingEdits": {
-                "0": {
+                f"{hosts}|host|web-01": {
                     "original": {
                         "host_name": "web-01",
                         "alias": "Web Server 1",
@@ -547,7 +558,7 @@ class TestApplyObjectComposite:
             },
             "stagedMoves": {},
             "stagedCreations": [],
-            "stagedObjectDeletions": [2],
+            "stagedObjectDeletions": [f"{hosts}|host|old-host"],
         }
         result = service.apply_object_composite(staging)
         assert result.success
@@ -609,15 +620,13 @@ class TestMultiFileDeletes:
     ):
         """Delete one object from each file — indices shift after first delete."""
         svc = multi_file_service
-        # Identify the indices for bravo and delta
-        bravo_idx = next(
-            i
-            for i, o in enumerate(svc.parser.objects)
+        # Build stable keys for bravo and delta
+        bravo_obj = next(
+            o for o in svc.parser.objects
             if o.attributes.get("host_name") == "bravo"
         )
-        delta_idx = next(
-            i
-            for i, o in enumerate(svc.parser.objects)
+        delta_obj = next(
+            o for o in svc.parser.objects
             if o.attributes.get("host_name") == "delta"
         )
 
@@ -625,7 +634,10 @@ class TestMultiFileDeletes:
             "pendingEdits": {},
             "stagedMoves": {},
             "stagedCreations": [],
-            "stagedObjectDeletions": [bravo_idx, delta_idx],
+            "stagedObjectDeletions": [
+                generate_stable_key_for_object(bravo_obj),
+                generate_stable_key_for_object(delta_obj),
+            ],
         }
         result = svc.apply_object_composite(staging)
         assert result.success
@@ -648,19 +660,16 @@ class TestMultiFileDeletes:
         objects are off by 2 — this is the core stale-index scenario.
         """
         svc = multi_file_service
-        alpha_idx = next(
-            i
-            for i, o in enumerate(svc.parser.objects)
+        alpha_obj = next(
+            o for o in svc.parser.objects
             if o.attributes.get("host_name") == "alpha"
         )
-        bravo_idx = next(
-            i
-            for i, o in enumerate(svc.parser.objects)
+        bravo_obj = next(
+            o for o in svc.parser.objects
             if o.attributes.get("host_name") == "bravo"
         )
-        charlie_idx = next(
-            i
-            for i, o in enumerate(svc.parser.objects)
+        charlie_obj = next(
+            o for o in svc.parser.objects
             if o.attributes.get("host_name") == "charlie"
         )
 
@@ -668,7 +677,11 @@ class TestMultiFileDeletes:
             "pendingEdits": {},
             "stagedMoves": {},
             "stagedCreations": [],
-            "stagedObjectDeletions": [alpha_idx, bravo_idx, charlie_idx],
+            "stagedObjectDeletions": [
+                generate_stable_key_for_object(alpha_obj),
+                generate_stable_key_for_object(bravo_obj),
+                generate_stable_key_for_object(charlie_obj),
+            ],
         }
         result = svc.apply_object_composite(staging)
         assert result.success
