@@ -748,6 +748,8 @@ class NagiosService:
 
         # Track which files we've rewritten (to avoid double-processing)
         rewritten_files: set[str] = set()
+        # Capture expected orders during write phase for post-write verification
+        expected_orders: dict[str, list[str]] = {}
 
         # Step 3: For each target file, compute order and write
         for target_real in target_files:
@@ -782,6 +784,9 @@ class NagiosService:
                     "move_batch plan[%d]: %s %s pos=%.1f",
                     i, item["source"], item["name"], item["position"],
                 )
+
+            # Save expected order for post-write verification
+            expected_orders[target_path] = [item["name"] for item in order]
 
             # Extract preamble from current file content
             current_content = file_contents.get(target_real, "")
@@ -946,24 +951,7 @@ class NagiosService:
                     self._parser = NagiosConfigParser(self._config_path)
                     self._parser.parse_all()
 
-        # Step 6: Verify ordering
-        expected_orders: dict[str, list[str]] = {}
-        for target_real in target_files:
-            target_path = None
-            for a in move_actions:
-                if os.path.realpath(a.target_file) == target_real:
-                    target_path = a.target_file
-                    break
-            if target_path:
-                incoming = [
-                    a for a in move_actions
-                    if os.path.realpath(a.target_file) == target_real
-                ]
-                order = self._compute_expected_file_order(
-                    target_path, incoming, move_actions, delete_keys,
-                )
-                expected_orders[target_path] = [item["name"] for item in order]
-
+        # Step 6: Verify ordering (uses expected_orders captured during Step 3)
         warnings = self._verify_move_ordering(expected_orders)
         for w in warnings:
             logger.warning("move_batch verify: %s", w)
