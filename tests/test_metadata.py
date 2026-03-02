@@ -10,10 +10,12 @@ from app import create_app
 from nagios_model import (
     DEFAULT_ATTRIBUTES,
     GROUP_STRUCTURE,
+    HOST_SCOPED_TYPES,
     NAME_FIELDS,
     NOTIFICATION_OPTIONS,
     OBJECT_TYPE_LABELS,
     REFERENCE_FIELDS,
+    REFERENCE_TRIGGER_ATTRS,
     VALID_ATTRIBUTES,
 )
 
@@ -80,6 +82,15 @@ class TestModelConstants:
             assert "member_attrs" in gs
             assert "member_of_attr" in gs
 
+    def test_host_scoped_types_is_list(self):
+        assert isinstance(HOST_SCOPED_TYPES, list)
+        assert HOST_SCOPED_TYPES == ["service", "serviceescalation", "servicedependency"]
+
+    def test_reference_trigger_attrs_is_list(self):
+        assert isinstance(REFERENCE_TRIGGER_ATTRS, list)
+        for attr in ["use", "host_name", "check_command"]:
+            assert attr in REFERENCE_TRIGGER_ATTRS
+
 
 class TestMetadataEndpoint:
     """Test GET /api/metadata."""
@@ -122,6 +133,21 @@ class TestMetadataEndpoint:
         meta = resp.json["data"]
         service_reqs = meta["required_fields"]["service"]
         assert ["host_name", "hostgroup_name"] in service_reqs
+
+    def test_host_scoped_types_in_metadata(self, client):
+        resp = client.get("/api/metadata")
+        assert resp.status_code == 200  # noqa: PLR2004
+        meta = resp.json["data"]
+        assert "host_scoped_types" in meta
+        assert meta["host_scoped_types"] == ["service", "serviceescalation", "servicedependency"]
+
+    def test_reference_trigger_attrs_in_metadata(self, client):
+        resp = client.get("/api/metadata")
+        assert resp.status_code == 200  # noqa: PLR2004
+        meta = resp.json["data"]
+        assert "reference_trigger_attrs" in meta
+        for attr in ["use", "host_name", "check_command"]:
+            assert attr in meta["reference_trigger_attrs"]
 
 
 class TestNewObjectTypeParsing:

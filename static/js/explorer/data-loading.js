@@ -63,6 +63,8 @@
 
         // Populate constants from backend metadata (once)
         if (metadataResult && metadataResult.success) {
+            // ApiClient wraps entire JSON body as .data; metadata endpoint nests
+            // its payload under a .data key, so we need .data.data to reach it.
             Explorer.applyMetadata(metadataResult.data.data || metadataResult.data);
             Explorer.state.metadataLoaded = true;
         }

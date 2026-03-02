@@ -326,6 +326,16 @@ GROUP_STRUCTURE: dict[str, dict[str, Any]] = {
     },
 }
 
+# Types whose identity is scoped by host (composite key: host + name)
+HOST_SCOPED_TYPES: list[str] = ["service", "serviceescalation", "servicedependency"]
+
+# Attributes that trigger reference/inheritance UI in the editor
+REFERENCE_TRIGGER_ATTRS: list[str] = [
+    "use", "parents", "hostgroups", "servicegroups", "contactgroups",
+    "contact_groups", "host_name", "hostgroup_name", "check_command",
+    "event_handler", "check_period", "notification_period", "contacts", "members",
+]
+
 # Reference fields mapping: field name → object type it references
 # None means type depends on context (template references, group members)
 REFERENCE_FIELDS: dict[str, str | None] = {
