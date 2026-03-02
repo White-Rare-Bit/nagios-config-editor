@@ -167,7 +167,7 @@
         });
 
         // Check if there are pending edits for this object
-        const pendingEdit = state.pendingEdits.get(obj.global_index);
+        const pendingEdit = state.pendingEdits.get(Explorer.getObjectKey(obj));
         if (pendingEdit) {
             state.editedObject = {...obj, attributes: {...pendingEdit.edited}};
             state.originalAttributes = {...pendingEdit.original};
@@ -181,7 +181,7 @@
         document.getElementById('centerCloseBtn').style.display = 'none';
 
         const isTemplate = Explorer.isObjectTemplate(obj);
-        const isOrphan = Explorer.state.orphanIndices.has(obj.global_index);
+        const isOrphan = Explorer.state.orphanIndices.has(Explorer.getObjectKey(obj));
         const hostListInfo = Explorer.getHostListInfo(obj);
         const issue = Explorer.getObjectIssue(obj);
 
@@ -256,17 +256,17 @@
         }
 
         // For existing objects, sync attributes with current pendingEdits state
-        const globalIndex = state.editedObject.global_index;
-        if (globalIndex === undefined || globalIndex === -1) {return;}
+        const objKey = Explorer.getObjectKey(state.editedObject);
+        if (!objKey) {return;}
 
-        const obj = state.allObjects.find(o => o.global_index === globalIndex);
+        const obj = Explorer.findObjectByKey(objKey);
         if (!obj) {
             hideCenterPaneObject();
             return;
         }
 
         // Check if there are still pending edits for this object
-        const pendingEdit = state.pendingEdits.get(globalIndex);
+        const pendingEdit = state.pendingEdits.get(objKey);
         if (pendingEdit) {
             // Still has pending edits - use them
             state.editedObject.attributes = {...pendingEdit.edited};
@@ -335,16 +335,8 @@
         return null;
     }
 
-    function getDeletedObjectKeys() {
-        const stagedDeletionIndices = state.stagedObjectDeletions || new Set();
-        const deletedKeys = new Set();
-        for (const idx of stagedDeletionIndices) {
-            const obj = state.allObjects.find(o => o.global_index === idx);
-            if (obj) {
-                deletedKeys.add(`${obj.source_file}:${obj.line_number}`);
-            }
-        }
-        return deletedKeys;
+    function isObjectStagedForDeletion(obj) {
+        return state.stagedObjectDeletions.has(Explorer.getObjectKey(obj));
     }
 
     function addStagedCreationSuggestions(suggestions, refType) {
@@ -392,11 +384,10 @@
 
         if (!refType) {return [];}
 
-        const deletedKeys = getDeletedObjectKeys();
         const suggestions = state.allObjects
             .filter(o => {
                 if (o.object_type !== refType) {return false;}
-                return !deletedKeys.has(`${o.source_file}:${o.line_number}`);
+                return !isObjectStagedForDeletion(o);
             })
             .map(o => o.display_name)
             .filter(name => name && name !== '(unnamed)');
@@ -1162,18 +1153,18 @@
             stageCurrentChanges();
         } else {
             // If reverted to original, remove from pending
-            const globalIndex = state.editedObject.global_index;
+            const objKey = Explorer.getObjectKey(state.editedObject);
 
             // Restore allObjects to original state before deleting pending edit
-            const existingEdit = state.pendingEdits.get(globalIndex);
+            const existingEdit = state.pendingEdits.get(objKey);
             if (existingEdit) {
-                const idx = state.allObjects.findIndex(o => o.global_index === globalIndex);
-                if (idx >= 0) {
-                    state.allObjects[idx].attributes = {...existingEdit.original};
+                const obj = Explorer.findObjectByKey(objKey);
+                if (obj) {
+                    obj.attributes = {...existingEdit.original};
                 }
             }
 
-            state.pendingEdits.delete(globalIndex);
+            state.pendingEdits.delete(objKey);
 
             // Centralized refresh ensures all UI components stay in sync
             Explorer.afterFrontendMutation();
@@ -1181,7 +1172,7 @@
     }
 
     function stageCurrentChanges() {
-        const globalIndex = state.editedObject.global_index;
+        const objKey = Explorer.getObjectKey(state.editedObject);
 
         // C-05: Validate required fields (warning only - allow staging for template inheritance)
         const validation = validateRequiredFields(
@@ -1201,11 +1192,11 @@
         }
 
         // Get the original state (either from state.pendingEdits or current state.originalAttributes)
-        const existingEdit = state.pendingEdits.get(globalIndex);
+        const existingEdit = state.pendingEdits.get(objKey);
         const originalState = existingEdit ? existingEdit.original : {...state.originalAttributes};
 
         // Store the pending edit
-        state.pendingEdits.set(globalIndex, {
+        state.pendingEdits.set(objKey, {
             original: originalState,
             edited: {...state.editedObject.attributes},
             object: {
@@ -1213,14 +1204,14 @@
                 line_number: state.editedObject.line_number,
                 object_type: state.editedObject.object_type,
                 display_name: state.editedObject.display_name,
-                global_index: globalIndex
+                global_index: state.editedObject.global_index
             }
         });
 
         // Update state.allObjects locally (for UI display) — must happen before rebuildUI
-        const idx = state.allObjects.findIndex(o => o.global_index === globalIndex);
-        if (idx >= 0) {
-            state.allObjects[idx].attributes = {...state.editedObject.attributes};
+        const obj = Explorer.findObjectByKey(objKey);
+        if (obj) {
+            obj.attributes = {...state.editedObject.attributes};
         }
 
         // Centralized refresh ensures all UI components stay in sync
@@ -1442,26 +1433,12 @@
      * @returns {Array<string>} - Template names with optional alias suffix
      */
     function getTemplatesForType(objectType) {
-        // C-06: Build a set of objects staged for deletion
-        // stagedObjectDeletions is a Set of global_index values
-        const stagedDeletionIndices = state.stagedObjectDeletions || new Set();
-        const deletedKeys = new Set();
-        for (const idx of stagedDeletionIndices) {
-            const obj = state.allObjects.find(o => o.global_index === idx);
-            if (obj) {
-                deletedKeys.add(`${obj.source_file}:${obj.line_number}`);
-            }
-        }
-
         // Get all templates for the given object type (register=0 is the Nagios template marker)
         // C-06: Filter out templates that are staged for deletion
         const templates = state.allObjects
             .filter(o => {
                 if (o.object_type !== objectType || o.attributes.register !== '0') {return false;}
-                // Check if this template is staged for deletion
-                const objKey = `${o.source_file}:${o.line_number}`;
-                if (deletedKeys.has(objKey)) {return false;}
-                return true;
+                return !isObjectStagedForDeletion(o);
             })
             .map(o => {
                 const name = o.attributes.name;
