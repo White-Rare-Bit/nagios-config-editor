@@ -11,7 +11,6 @@ TRUE STAGING ARCHITECTURE:
 - Detects conflicts via file checksums
 """
 
-import contextlib
 import hashlib
 import json
 import logging
@@ -1291,9 +1290,9 @@ class StagingManager:
         undo_items = []
 
         for entry in renames:
-            key = str(entry["globalIndex"])
+            key = entry["stableKey"]
             pending_edits[key] = {
-                "globalIndex": key,
+                "stableKey": key,
                 "object": entry["object"],
                 "original": entry["originalAttrs"],
                 "edited": entry["editedAttrs"],
@@ -1550,7 +1549,7 @@ def _undo_folder_move(staging, action_data):
 
 def _undo_edit(staging, action_data):
     """Remove pending edit."""
-    edit_key = str(action_data["key"]) if "key" in action_data else str(action_data.get("globalIndex", ""))
+    edit_key = str(action_data.get("key", ""))
     pending_edits = staging.get("pendingEdits", {})
     staging["pendingEdits"] = _filter_staged_entries(pending_edits, edit_key)
     return f"Unstaged edit: {action_data.get('object', {}).get('name', 'unknown')}"
@@ -1558,7 +1557,7 @@ def _undo_edit(staging, action_data):
 
 def _undo_move(staging, action_data):
     """Remove staged move."""
-    move_key = str(action_data["key"]) if "key" in action_data else str(action_data.get("globalIndex", ""))
+    move_key = str(action_data.get("key", ""))
     staged_moves = staging.get("stagedMoves", {})
     staging["stagedMoves"] = _filter_staged_entries(staged_moves, move_key)
     return f"Unstaged move: {action_data.get('object', {}).get('name', 'unknown')}"
@@ -1577,14 +1576,9 @@ def _undo_creation(staging, action_data):
 
 def _undo_deletion(staging, action_data):
     """Remove staged deletion."""
-    deletion_key = str(action_data["key"]) if "key" in action_data else str(action_data.get("globalIndex", ""))
+    deletion_key = str(action_data.get("key", ""))
     staged_deletions = staging.get("stagedObjectDeletions", [])
-    # stagedObjectDeletions is an array of ints — filter by int comparison
-    try:
-        target_int = int(deletion_key)
-        staging["stagedObjectDeletions"] = [d for d in staged_deletions if d != target_int]
-    except (ValueError, TypeError):
-        pass
+    staging["stagedObjectDeletions"] = [d for d in staged_deletions if d != deletion_key]
     return f"Unstaged deletion: {action_data.get('deletion', {}).get('name', 'unknown')}"
 
 
@@ -1601,7 +1595,7 @@ def _undo_bulk_move(staging, action_data):
     items = action_data.get("items", [])
     count = 0
     for item in items:
-        move_key = str(item["key"]) if "key" in item else str(item.get("globalIndex", ""))
+        move_key = str(item.get("key", ""))
         staged_moves = staging.get("stagedMoves", {})
         before_len = len(staged_moves)
         staging["stagedMoves"] = _filter_staged_entries(staged_moves, move_key)
@@ -1615,7 +1609,7 @@ def _undo_bulk_edit(staging, action_data):
     items = action_data.get("items", [])
     count = 0
     for item in items:
-        edit_key = str(item["key"]) if "key" in item else str(item.get("globalIndex", ""))
+        edit_key = str(item.get("key", ""))
         pending_edits = staging.get("pendingEdits", {})
         before_len = len(pending_edits)
         staging["pendingEdits"] = _filter_staged_entries(pending_edits, edit_key)
@@ -1641,12 +1635,11 @@ def _undo_bulk_creation(staging, action_data):
 def _undo_bulk_deletion(staging, action_data):
     """Remove all staged deletions from a bulk operation."""
     items = action_data.get("items", [])
-    # Collect all int keys to remove
     keys_to_remove = set()
     for item in items:
-        deletion_key = str(item["key"]) if "key" in item else str(item.get("globalIndex", ""))
-        with contextlib.suppress(ValueError, TypeError):
-            keys_to_remove.add(int(deletion_key))
+        deletion_key = str(item.get("key", ""))
+        if deletion_key:
+            keys_to_remove.add(deletion_key)
     staged_deletions = staging.get("stagedObjectDeletions", [])
     before_len = len(staged_deletions)
     staging["stagedObjectDeletions"] = [d for d in staged_deletions if d not in keys_to_remove]

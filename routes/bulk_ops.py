@@ -265,7 +265,7 @@ def api_apply_rename():
             continue
         ref_updates[old_name] = new_name
         renames.append({
-            "globalIndex": idx,
+            "stableKey": generate_stable_key_for_object(obj),
             "object": obj.to_dict(),
             "originalAttrs": {name_field: old_name},
             "editedAttrs": {name_field: new_name},
@@ -296,7 +296,7 @@ def api_apply_rename():
                     ref_edits[field] = ",".join(new_parts)
             if ref_edits:
                 # Check if this object already has a rename entry
-                existing = next((r for r in renames if r["globalIndex"] == idx), None)
+                existing = next((r for r in renames if r["stableKey"] == generate_stable_key_for_object(obj)), None)
                 if existing:
                     existing["editedAttrs"].update(ref_edits)
                     existing["originalAttrs"].update(
@@ -304,7 +304,7 @@ def api_apply_rename():
                     )
                 else:
                     renames.append({
-                        "globalIndex": idx,
+                        "stableKey": generate_stable_key_for_object(obj),
                         "object": obj.to_dict(),
                         "originalAttrs": {f: obj.attributes[f] for f in ref_edits},
                         "editedAttrs": ref_edits,
