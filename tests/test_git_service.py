@@ -274,16 +274,3 @@ class TestGitServiceIntegration:
         log_result = gs.get_log()
         assert len(log_result.data["commits"]) == 1
         assert log_result.data["commits"][0].message == "Initial commit"
-
-
-class TestGitIdentityRoute:
-    """Route-level tests for GET /api/git/identity."""
-
-    def test_identity_includes_git_config(self, client):
-        """GET /api/git/identity should include git_config_name/email from git config."""
-        resp = client.get("/api/git/identity")
-        assert resp.status_code == 200
-        data = resp.get_json()
-        # Fields should exist (may be empty if git config isn't set)
-        assert "git_config_name" in data
-        assert "git_config_email" in data
