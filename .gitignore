@@ -12,3 +12,10 @@ config/
 .worktrees/
 .playwright-mcp/
 node_modules/
+docs/
+
+# AI-specific test docs
+tests/TESTING_PROMPT.md
+tests/test-plan.txt
+tests/test-execution-guide.txt
+tests/test_conventions.md
