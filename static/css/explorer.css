@@ -603,10 +603,6 @@
     flex-shrink: 0;
 }
 
-.selection-count {
-    display: none;
-}
-
 .batch-actions {
     display: flex;
     align-items: center;

@@ -190,11 +190,6 @@
     max-width: 464px; /* 400px tips + 64px padding */
 }
 
-.empty-state--constrained {
-    max-width: 464px; /* 400px tips + 64px padding */
-    margin: 0 auto;
-}
-
 /* Dark theme modifier for pages with dark backgrounds */
 .empty-state--dark {
     color: var(--nbe-dark-text-secondary);

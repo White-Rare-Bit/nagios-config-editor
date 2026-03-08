@@ -26,15 +26,6 @@ body {
     margin-bottom: 0;
 }
 
-/* Object browser styles */
-.object-row {
-    cursor: pointer;
-}
-
-.object-row:hover {
-    background-color: var(--nbe-bg-page);
-}
-
 /* Code/pre styling */
 pre {
     background-color: var(--nbe-bg-page);
@@ -52,34 +43,10 @@ code {
     font-size: var(--nbe-font-size-md);
 }
 
-/* Preview/diff styles */
-.text-success code {
-    background-color: var(--nbe-success-light);
-    color: var(--nbe-success);
-}
-
-.text-danger code {
-    background-color: var(--nbe-danger-light);
-    color: var(--nbe-danger);
-}
-
 /* Match highlighting */
 mark {
     background-color: var(--nbe-warning-light);
     padding: 0;
-}
-
-/* Object list for reorganize */
-.object-item {
-    transition: background-color 0.15s ease;
-}
-
-.object-item:hover {
-    background-color: var(--nbe-bg-page);
-}
-
-.object-item .form-check-label {
-    cursor: pointer;
 }
 
 /* Table improvements */
@@ -131,37 +98,10 @@ mark {
     font-style: italic;
 }
 
-/* Modal improvements */
-.modal-lg {
-    max-width: 800px;
-}
-
-.modal pre {
-    max-height: 400px;
-    overflow-y: auto;
-}
-
 /* Responsive adjustments */
 @media (max-width: 768px) {
-    .btn-group-vertical {
-        width: 100%;
-    }
-
     .table-responsive {
         max-height: 400px;
     }
 }
 
-/* Dark mode support (optional) */
-@media (prefers-color-scheme: dark) {
-    /* Uncomment to enable dark mode
-    body {
-        background-color: #1a1a1a;
-        color: #e0e0e0;
-    }
-    .card {
-        background-color: #2d2d2d;
-        border-color: #444;
-    }
-    */
-}
