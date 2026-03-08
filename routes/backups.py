@@ -41,6 +41,7 @@ def api_create_backup():
     user_email = identity.get("userEmail", "")
 
     backup_path = bm.create_backup(description, user_name=user_name, user_email=user_email)
+    bm.cleanup_old_backups(keep_count=20)
 
     # Write audit log entry
     log_audit(

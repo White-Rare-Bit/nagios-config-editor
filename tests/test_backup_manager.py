@@ -153,3 +153,19 @@ class TestCleanupOldBackups:
         deleted = bm.cleanup_old_backups(keep_count=3)
         assert deleted == 2
         assert len(bm.list_backups()) == 3
+
+
+class TestBackupCreationTriggersCleanup:
+    """Verify the /api/backups POST route auto-cleans old backups."""
+
+    def test_old_backups_cleaned_after_create(self, client, app):
+        """Creating a backup via API should trigger cleanup_old_backups."""
+        from unittest.mock import patch
+
+        with app.app_context():
+            bm = app.extensions["backup"]
+
+        with patch.object(bm, "cleanup_old_backups", wraps=bm.cleanup_old_backups) as mock_cleanup:
+            resp = client.post("/api/backups", json={"description": "trigger cleanup"})
+            assert resp.status_code == 200
+            mock_cleanup.assert_called_once_with(keep_count=20)
