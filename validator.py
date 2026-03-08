@@ -262,12 +262,6 @@ class NagiosValidator:
             return OperationResult(success=False, error=f"Error verifying binary: {e!s}")
 
 
-def validate_config(nagios_bin: str = "/usr/local/nagios/bin/nagios",
-                    config_file: str = "./sample-config/nagios.cfg") -> ValidationResult:
-    """Convenience function to validate Nagios configuration."""
-    validator = NagiosValidator(nagios_bin, config_file)
-    return validator.validate()
-
 
 def verify_nagios_binary(binary_path: str) -> OperationResult:
     """Verify that a path points to a valid Nagios binary.

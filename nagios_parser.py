@@ -367,9 +367,6 @@ class NagiosConfigParser:
         """Get all objects of a specific type."""
         return [obj for obj in self.objects if obj.object_type == object_type]
 
-    def get_object_types(self) -> list[str]:
-        """Get a list of all object types found."""
-        return sorted(set(obj.object_type for obj in self.objects))
 
     def get_files(self) -> list[str]:
         """Get list of all parsed config files."""
@@ -451,44 +448,6 @@ class NagiosConfigParser:
 
     # ==================== Write Methods ====================
 
-    def _format_object_block(self, object_type: str, attributes: dict[str, str]) -> str:
-        """Format an object as a Nagios define block."""
-        return _model_format_object_block(object_type, attributes)
-
-    def _find_block_range(self, content: str, line_number: int) -> tuple | None:
-        """Find the start and end positions of a define block starting at line_number.
-
-        Returns (start_pos, end_pos) or None if not found.
-        """
-        lines = content.split("\n")
-
-        # Convert line number to character position
-        pos = 0
-        for i, line in enumerate(lines):
-            if i + 1 == line_number:
-                remaining = content[pos:]
-                match = re.match(r"\s*define\s+\w+\s*\{", remaining)
-                if not match:
-                    return None
-
-                start_pos = pos
-                brace_start = pos + remaining.index("{")
-                j, brace_depth, _ = self._scan_block_body(content, brace_start, len(content))
-
-                if brace_depth == 0:
-                    end_pos = j
-                    if end_pos < len(content) and content[end_pos] == "\n":
-                        end_pos += 1
-                    return (start_pos, end_pos)
-                return None
-
-            pos += len(line) + 1
-
-        return None
 
 
-def parse_config(config_path: str = "./sample-config") -> NagiosConfigParser:
-    """Convenience function to parse a Nagios configuration directory."""
-    parser = NagiosConfigParser(config_path)
-    parser.parse_all()
-    return parser
+

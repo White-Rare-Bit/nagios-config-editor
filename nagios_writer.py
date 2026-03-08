@@ -111,8 +111,3 @@ class NagiosConfigWriter:
 
         return results
 
-
-def write_config_file(filepath: str, objects: list[NagiosObject], indent: str = "    ") -> None:
-    """Convenience function to write objects to a file."""
-    writer = NagiosConfigWriter(indent=indent)
-    writer.write_file(filepath, objects)
