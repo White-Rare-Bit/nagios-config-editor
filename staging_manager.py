@@ -67,56 +67,6 @@ class StagingStatus(Enum):
 
 
 @dataclass
-class PendingEdit:
-    key: str  # stable_key
-    object_type: str
-    new_attributes: dict[str, str]
-    original_attributes: dict[str, str] | None = None
-    op_id: str | None = None
-
-
-@dataclass
-class StagedMove:
-    key: str
-    source_file: str
-    target_file: str
-    object_type: str
-    op_id: str | None = None
-
-
-@dataclass
-class StagedCreation:
-    object_type: str
-    attributes: dict[str, str]
-    target_file: str
-    op_id: str | None = None
-
-
-@dataclass
-class StagedDeletion:
-    key: str
-    object_type: str
-    source_file: str
-    op_id: str | None = None
-
-
-@dataclass
-class StagedFileOp:
-    path: str
-    target_path: str | None = None  # for moves
-    op_id: str | None = None
-
-
-@dataclass
-class UndoEntry:
-    action_type: OperationType
-    data: dict[str, Any]
-    description: str
-    op_id: str
-    timestamp: str | None = None
-
-
-@dataclass
 class StagingState:
     """Typed representation of the staging data.
 
@@ -206,21 +156,6 @@ class StagingState:
             last_modified_iso=data.get("lastModifiedISO"),
         )
 
-    @property
-    def is_empty(self) -> bool:
-        """Check if staging has any operations."""
-        return not any([
-            self.pending_edits,
-            self.staged_moves,
-            self.staged_creations,
-            self.staged_object_deletions,
-            self.staged_file_creations,
-            self.staged_file_deletions,
-            self.staged_file_moves,
-            self.staged_folder_creations,
-            self.staged_folder_deletions,
-            self.staged_folder_moves,
-        ])
 
 
 # =============================================================================
@@ -1374,16 +1309,6 @@ class StagingManager:
             return OperationResult(True, data=len(moves))
         return result
 
-    def get_total_staged_count(self) -> int:
-        """Get total count of all staged operations.
-
-        Returns:
-            Total number of staged changes
-
-        """
-        info = self.get_staging_info()
-        counts = info.get("counts", {})
-        return sum(counts.values())
 
 
 # =============================================================================
