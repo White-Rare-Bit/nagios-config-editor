@@ -1,19 +1,33 @@
 # Nagios Bulk Editor
 
-I've been working with Nagios Core for a few years now, and have noticed over time that Nagios configuration can become very "organic" (barnacled with technical debt) this is a project that aims to help Nagios Core administrators a safe and modern way to edit their Nagios configuration in bulk without resorting to grepping and reading through a ton of text files. 
+A safe, modern web UI for bulk-editing Nagios Core configurations.
 
-There are a multitude of safety features implemented to prevent unrecoverable situations.
+https://github.com/White-Rare-Bit/nagios-config-editor/releases/download/demo-assets/Nagios_Bulk_Editor.mp4
 
-Staging -> arguably the most important, changes are written to a json staging file and do not impact files on disk prior to committing in the commit menu.
+I've been working with Nagios Core for a few years now and have noticed that configurations tend to become very "organic" over time, i.e. barnacled with technical debt. This project gives Nagios administrators a way to edit their configuration in bulk without resorting to grepping through a ton of text files.
 
-Backups -> Prior to applying the configuration a zip of the entire configuration directory is taken.
+## Safety Features
 
-Git integration -> Serves a couple of purposes in the application, attribution for the audit log, changes are tracked by git in addition to full backups.
+- **Staging**: Changes are written to a staging file and do not touch files on disk until you explicitly apply them in the commit menu.
+- **Backups**: A zip of the entire configuration directory is taken before every apply.
+- **Git integration**: Changes are tracked by git in addition to full backups, with attribution tied to the audit log.
+- **Nagios verification**: Option to run `nagios -v` against the configuration after applying.
+- **Staging lock**: Polling checks detect active staging content and display a lock banner for other sessions.
+- **Audit log**: All changes are tracked under the git username set in settings per session.
 
-Nagios verification -> The option to run verify against the Nagios configuration after committing
+## Getting Started
 
-Staging lock -> polling checks that staging doesn't currently doesn't have any content and will produce a lock banner for users in other sessions if staging content is detected.
+```bash
+pip install -r requirements.txt
+python3 app.py
+```
 
-Audit log -> Changes are tracked under the git username set in the settings per session.
+Then open [http://localhost:8080](http://localhost:8080).
 
-Full disclosure, this has been completely written with the assistance of Claude Code, all due respect to Anthropic and it's team for producing this incredible tool.
+## License
+
+[MIT](LICENSE)
+
+---
+
+This project was built entirely with the assistance of [Claude Code](https://claude.ai/claude-code). All due respect to Anthropic and its team for producing this incredible tool.
