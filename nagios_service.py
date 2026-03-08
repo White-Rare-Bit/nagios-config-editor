@@ -430,35 +430,6 @@ class NagiosService:
             },
         )
 
-    def _execute_composite_action(
-        self, action: CompositeAction
-    ) -> tuple[OperationResult, dict | None]:
-        """Execute a single composite action and return result + detail entry.
-
-        Each action triggers a parser reload after modifying files so
-        subsequent actions see the updated state.
-
-        Args:
-            action: The CompositeAction to execute.
-
-        Returns:
-            Tuple of (OperationResult, detail_dict or None).
-
-        """
-        if action.action_type == "delete":
-            return self._exec_delete(action)
-        if action.action_type == "edit":
-            return self._exec_edit(action)
-        if action.action_type == "move":
-            return self._exec_move(action)
-        if action.action_type == "move_edit":
-            return self._exec_move_edit(action)
-        if action.action_type == "create":
-            return self._exec_create(action)
-        return OperationResult(
-            False, f"Unknown action type: {action.action_type}"
-        ), None
-
     def _exec_delete(
         self, action: CompositeAction
     ) -> tuple[OperationResult, dict | None]:
@@ -511,114 +482,6 @@ class NagiosService:
             detail["action"] = "edit"
             return result, detail
         return result, None
-
-    def _exec_move(
-        self, action: CompositeAction
-    ) -> tuple[OperationResult, dict | None]:
-        """Execute a move composite action."""
-        self._parser = NagiosConfigParser(self._config_path)
-        self._parser.parse_all()
-        target_obj = self._find_by_attrs(
-            action.source_file, action.object_type, action.original_attrs
-        )
-        if not target_obj:
-            return OperationResult(
-                False, f"Move: object not found: {action.stable_key}"
-            ), None
-        insert_line = self._resolve_insert_position(
-            action.target_file,
-            action.insert_position,
-            self._parser.objects,
-            exclude_obj=target_obj,
-        )
-        result = move_object_between_files(
-            target_obj.source_file,
-            target_obj.line_number,
-            action.target_file,
-            action.object_type,
-            action.original_attrs,
-            insert_line,
-        )
-        if result.success:
-            detail = {
-                "action": "move",
-                "object_type": action.object_type,
-                "object_name": action.object_name,
-                "from_file": action.source_file,
-                "to_file": action.target_file,
-            }
-            return result, detail
-        return result, None
-
-    def _exec_move_edit(
-        self, action: CompositeAction
-    ) -> tuple[OperationResult, dict | None]:
-        """Execute a move+edit composite action.
-
-        Step 1: Move using original on-disk attrs for matching.
-        Step 2: Edit in new location with final attrs.
-        """
-        # Move phase
-        self._parser = NagiosConfigParser(self._config_path)
-        self._parser.parse_all()
-        target_obj = self._find_by_attrs(
-            action.source_file, action.object_type, action.original_attrs
-        )
-        if not target_obj:
-            return OperationResult(
-                False, f"MoveEdit move: object not found: {action.stable_key}"
-            ), None
-        insert_line = self._resolve_insert_position(
-            action.target_file,
-            action.insert_position,
-            self._parser.objects,
-            exclude_obj=target_obj,
-        )
-        move_result = move_object_between_files(
-            target_obj.source_file,
-            target_obj.line_number,
-            action.target_file,
-            action.object_type,
-            action.original_attrs,
-            insert_line,
-        )
-        if not move_result.success:
-            return move_result, None
-
-        # Edit phase — find the moved object in target file
-        self._parser = NagiosConfigParser(self._config_path)
-        self._parser.parse_all()
-        moved_obj = self._find_by_identity(
-            action.target_file, action.object_type, action.object_name
-        )
-        if not moved_obj:
-            return OperationResult(
-                False,
-                f"MoveEdit edit: object not found after move: {action.stable_key}",
-            ), None
-        old_attrs = dict(moved_obj.attributes)
-        merged_attrs = dict(moved_obj.attributes)
-        merged_attrs.update(action.final_attrs)
-        edit_result = self.update_object(
-            moved_obj.source_file,
-            moved_obj.line_number,
-            merged_attrs,
-            moved_obj.object_type,
-            inline_comments=moved_obj.inline_comments,
-        )
-        if edit_result.success:
-            detail = {
-                "action": "move_edit",
-                "object_type": action.object_type,
-                "object_name": action.object_name,
-                "from_file": action.source_file,
-                "to_file": action.target_file,
-                "changes": self._build_edit_detail(
-                    moved_obj, old_attrs, action.final_attrs
-                ).get("changes", []),
-            }
-            return edit_result, detail
-        return edit_result, None
 
     def _exec_create(
         self, action: CompositeAction
@@ -1089,20 +952,6 @@ class NagiosService:
                 self._parser.parse_all()
             yield self._parser
 
-    def get_typed_staging(self) -> StagingState | None:
-        """Get typed staging state.
-
-        Returns:
-            StagingState instance, or None if no staging manager or no staging data
-
-        """
-        if not self._staging_manager:
-            return None
-        staging_data = self._staging_manager.get_staging()
-        if not staging_data:
-            return None
-        return StagingState.from_dict(staging_data)
-
     # =========================================================================
     # Query Methods
     # =========================================================================
@@ -1131,54 +980,9 @@ class NagiosService:
             return objects[idx]
         return None
 
-    def search_objects(
-        self,
-        query: str,
-        object_type: str = None,
-        field: str = None,
-        use_regex: bool = False,
-    ) -> list:
-        """Search objects using the parser's find_objects method.
-
-        Args:
-            query: Search term or regex pattern
-            object_type: Optional filter by object type
-            field: Optional filter by specific field
-            use_regex: Whether to treat query as regex
-
-        Returns:
-            List of matching NagiosObject instances
-
-        """
-        return self.parser.find_objects(query, object_type, field, use_regex)
-
-    def get_object_stats(self) -> dict:
-        """Get statistics about parsed objects.
-
-        Returns:
-            Dict with counts by type, total count, and file count
-
-        """
-        objects = self.parser.objects
-        type_counts = {}
-        files = set()
-        for obj in objects:
-            type_counts[obj.object_type] = type_counts.get(obj.object_type, 0) + 1
-            if obj.source_file:
-                files.add(obj.source_file)
-        return {
-            "total": len(objects),
-            "by_type": type_counts,
-            "file_count": len(files),
-        }
-
     # =========================================================================
     # Domain Logic (moved from app.py)
     # =========================================================================
-
-    def get_name_field(self, object_type: str) -> str:
-        """Get the name field for a given object type."""
-        return NAME_FIELDS.get(object_type, "name")
 
     def find_object_by_stable_key(self, stable_key: str) -> tuple | None:
         """Find an object by its stable key.
@@ -1497,71 +1301,6 @@ class NagiosService:
                     line_number,
                 )
                 return OperationResult(False, f"Delete failed: {e}")
-
-    def move_object(
-        self,
-        source_file: str,
-        source_line: int,
-        target_file: str,
-        obj_type: str,
-        attrs: dict[str, str],
-        insert_line: int | None = None,
-    ) -> OperationResult:
-        """Move an object from one file to another.
-
-        Args:
-            source_file: Path to source config file
-            source_line: Line number of object in source file
-            target_file: Path to target config file
-            obj_type: Object type
-            attrs: Object attributes
-            insert_line: Optional line to insert at in target
-
-        Returns:
-            OperationResult with success status
-
-        """
-        with self._lock:
-            # Check if parser state is corrupted
-            corrupted_error = self._check_parser_state()
-            if corrupted_error:
-                return corrupted_error
-
-            try:
-                result = move_object_between_files(
-                    source_file, source_line, target_file, obj_type, attrs, insert_line
-                )
-                if not result.success:
-                    logger.error(
-                        "move_object failed: source_file=%s target_file=%s obj_type=%s error=%s",
-                        source_file,
-                        target_file,
-                        obj_type,
-                        result.error,
-                    )
-                    return result
-                # Save old parser for rollback on reload failure
-                old_parser = self._parser
-                reload_result = self._reload_parser_safe(
-                    old_parser, file_path=target_file
-                )
-                if not reload_result.success:
-                    return reload_result
-                logger.info(
-                    "move_object: source_file=%s target_file=%s obj_type=%s result=success",
-                    source_file,
-                    target_file,
-                    obj_type,
-                )
-                return OperationResult(True)
-            except Exception as e:  # noqa: BLE001
-                logger.exception(
-                    "move_object failed: source_file=%s target_file=%s obj_type=%s",
-                    source_file,
-                    target_file,
-                    obj_type,
-                )
-                return OperationResult(False, f"Move failed: {e}")
 
     # =========================================================================
     # Staging Apply Operations
