@@ -656,18 +656,6 @@ def _build_staging_data(sm, data):
     return result
 
 
-def is_safe_path(path, base_dir=None):
-    """Wrapper that provides get_config_path() as default for base_dir.
-
-    Returns:
-        OperationResult with success=True if safe, success=False with error if unsafe.
-
-    """
-    if base_dir is None:
-        base_dir = get_config_path()
-    return file_operations.is_safe_path(path, base_dir)
-
-
 @bp.route("/api/staging", methods=["GET"])
 def api_get_staging():
     """Get current staged changes.

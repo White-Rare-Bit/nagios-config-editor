@@ -66,11 +66,6 @@ def get_service():
     return current_app.extensions["service"]
 
 
-def get_parser():
-    """Get the config parser (read-only access)."""
-    return get_service().parser
-
-
 def get_parser_for_modification():
     """Get parser with lock held for modification operations."""
     return get_service().modification_context()
