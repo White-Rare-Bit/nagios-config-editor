@@ -8,7 +8,7 @@ import os
 import warnings
 from logging.handlers import RotatingFileHandler
 
-from flask import Flask, current_app
+from flask import Flask
 
 from backup_manager import BackupManager
 from git_service import GitService
@@ -157,22 +157,6 @@ def get_config_path() -> str:
     if _server_config:
         return _server_config.nagios_config_path
     return "./sample-config"
-
-
-def get_server_config() -> ServerConfig | None:
-    """Get the server configuration."""
-    return _server_config
-
-
-def get_service() -> NagiosService:
-    """Get the NagiosService instance."""
-    return current_app.extensions["service"]
-
-
-def get_staging_manager() -> StagingManager:
-    """Get the staging manager."""
-    return current_app.extensions["staging"]
-
 
 
 # Initialize app services with default config

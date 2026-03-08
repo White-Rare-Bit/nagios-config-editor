@@ -117,10 +117,6 @@ class ServerConfig:
         self.paths.nagios_cfg = value
 
 
-def get_config_dir() -> Path:
-    """Get the config directory path."""
-    return CONFIG_DIR
-
 
 def ensure_config_dir() -> None:
     """Create config directory if it doesn't exist."""
@@ -266,12 +262,3 @@ def update_config(updates: dict) -> ServerConfig:
     return config
 
 
-def get_logging_config() -> LoggingConfig:
-    """Get just the logging configuration section."""
-    return load_config().logging
-
-
-def update_logging_config(updates: dict) -> LoggingConfig:
-    """Update just the logging configuration section."""
-    config = update_config({"logging": updates})
-    return config.logging
