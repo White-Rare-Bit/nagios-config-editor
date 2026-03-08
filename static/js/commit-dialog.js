@@ -877,13 +877,13 @@ function processStagedCreation(creation, fileChanges, configPath) {
 /**
  * Processes a single staged object deletion.
  */
-function processStagedDeletion(globalIndex, allObjects, fileChanges, configPath) {
-    const obj = allObjects.find(o => o.global_index === globalIndex);
+function processStagedDeletion(stableKey, allObjects, fileChanges, configPath) {
+    const obj = StableKey.findObject(stableKey, allObjects);
     if (!obj) {return;}
 
     const file = ensureFileChange(fileChanges, obj.source_file, configPath);
     file.removals.push({
-        globalIndex,
+        stableKey,
         object: obj,
         originalAttrs: { ...obj.attributes },
         lineNumber: obj.line_number,
@@ -942,8 +942,8 @@ function buildGlobalFileBasedChanges(pendingEdits, stagedMoves, stagedCreations,
     }
 
     // Process deletions
-    for (const globalIndex of stagedObjectDeletions) {
-        processStagedDeletion(globalIndex, allObjects, fileChanges, configPath);
+    for (const deletionKey of stagedObjectDeletions) {
+        processStagedDeletion(deletionKey, allObjects, fileChanges, configPath);
     }
 
     return fileChanges;

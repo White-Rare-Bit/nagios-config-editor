@@ -251,7 +251,7 @@ def _create_undo_entries_for_deletions(
     """Create undo entries for new staged deletions.
 
     Args:
-        staged_deletions: List of int global indices from staging data
+        staged_deletions: List of stable key strings (or legacy int indices)
         existing_keys: Set of keys that already have undo entries
         log: Logger instance
 
@@ -262,24 +262,30 @@ def _create_undo_entries_for_deletions(
     entries = []
     service = get_service()
     for deletion_entry in staged_deletions:
-        if not isinstance(deletion_entry, (int, float)):
-            continue
-        key = str(int(deletion_entry))
+        key = str(deletion_entry)
         if key in existing_keys:
             continue
 
         # Look up object info for undo description
-        obj = service.find_object_by_index(int(deletion_entry))
         obj_name = f"Object {key}"
         obj_type = "object"
-        if obj:
-            obj_name = obj.get_display_name() or obj_name
-            obj_type = obj.object_type
+        if isinstance(deletion_entry, str) and "|" in deletion_entry:
+            # Stable key format: "source_file|object_type|name"
+            result = service.find_object_by_stable_key(deletion_entry)
+            if result:
+                _idx, obj = result
+                obj_name = obj.get_display_name() or obj_name
+                obj_type = obj.object_type
+        elif isinstance(deletion_entry, (int, float)):
+            # Legacy integer index format
+            obj = service.find_object_by_index(int(deletion_entry))
+            if obj:
+                obj_name = obj.get_display_name() or obj_name
+                obj_type = obj.object_type
 
         op_data = {
             "op_id": str(uuid.uuid4())[:8],
             "key": key,
-            "globalIndex": int(deletion_entry),
         }
         entry = _create_undo_entry(
             "deletion",
