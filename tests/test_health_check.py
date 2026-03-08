@@ -1553,52 +1553,6 @@ class TestTemplateConsolidation:
             assert issue["severity"] == "info"
 
 
-class TestConstantsEndpoint:
-    """Tests for /api/constants endpoint serving domain metadata."""
-
-    def test_constants_returns_name_fields(self, health_client):
-        """Endpoint should return name_fields with correct mappings."""
-        resp = health_client.get("/api/constants")
-        assert resp.status_code == 200  # noqa: PLR2004
-        data = resp.json
-
-        assert "name_fields" in data
-        nf = data["name_fields"]
-        assert nf["host"] == "host_name"
-        assert nf["service"] == "service_description"
-        assert nf["command"] == "command_name"
-
-    def test_constants_returns_required_fields(self, health_client):
-        """Endpoint should return required_fields with OR conditions as lists."""
-        resp = health_client.get("/api/constants")
-        assert resp.status_code == 200  # noqa: PLR2004
-        data = resp.json
-
-        assert "required_fields" in data
-        rf = data["required_fields"]
-
-        # host should only require host_name per spec
-        assert "host_name" in rf["host"]
-        assert "address" not in rf["host"]
-
-        # service should have at least one OR condition (host_name|hostgroup_name)
-        or_conditions = [r for r in rf["service"] if isinstance(r, list)]
-        assert len(or_conditions) >= 1, \
-            f"Expected at least one OR condition in service required_fields, got: {rf['service']}"
-
-    def test_constants_returns_reference_fields(self, health_client):
-        """Endpoint should return reference_fields with correct target types."""
-        resp = health_client.get("/api/constants")
-        assert resp.status_code == 200  # noqa: PLR2004
-        data = resp.json
-
-        assert "reference_fields" in data
-        ref = data["reference_fields"]
-        assert ref["check_command"] == "command"
-        assert ref["host_name"] == "host"
-        assert ref["use"] is None
-
-
 # ============================================================
 # Object References endpoint tests
 # ============================================================

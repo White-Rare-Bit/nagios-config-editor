@@ -166,29 +166,3 @@ def api_clear_app_log():
         return jsonify({"error": str(e)}), 500
 
 
-@bp.route("/api/logs/archives", methods=["GET"])
-def api_list_log_archives():
-    """List rotated log files for both log types."""
-    log_dir = _get_log_dir()
-    archives = {"audit": [], "app": []}
-
-    try:
-        for filename in os.listdir(log_dir):
-            filepath = os.path.join(log_dir, filename)
-            stat = os.stat(filepath)
-            entry = {
-                "filename": filename,
-                "size": stat.st_size,
-                "modified": stat.st_mtime,
-            }
-            if filename.startswith("audit.log."):
-                archives["audit"].append(entry)
-            elif filename.startswith("app.log."):
-                archives["app"].append(entry)
-
-        archives["audit"].sort(key=lambda x: x["filename"])
-        archives["app"].sort(key=lambda x: x["filename"])
-
-        return jsonify({"success": True, "data": archives})
-    except OSError as e:
-        return jsonify({"error": str(e)}), 500

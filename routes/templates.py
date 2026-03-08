@@ -76,34 +76,3 @@ def _decode_and_find_object(service, stable_key):
     return None, None, (jsonify({"error": "Object not found"}), 404)
 
 
-@bp.route("/api/templates/validate-use")
-def validate_use():
-    """Check if use references exist for given object type."""
-    obj_type = request.args.get("object_type", "")
-    use_string = request.args.get("use", "")
-
-    if not obj_type or not use_string:
-        return jsonify({"error": "object_type and use parameters required"}), 400
-
-    service = get_service()
-
-    # Build template lookup for this object type
-    template_names = set()
-    for obj in service.get_objects():
-        if obj.object_type == obj_type and obj.attributes.get("register", "1") == "0":
-            name = obj.attributes.get("name")
-            if name:
-                template_names.add(name)
-
-    # Check each template in use string
-    errors = []
-    use_list = [t.strip() for t in use_string.split(",") if t.strip()]
-
-    for tmpl_name in use_list:
-        if tmpl_name not in template_names:
-            errors.append(f"Template '{tmpl_name}' not found for type '{obj_type}'")
-
-    return jsonify({
-        "valid": len(errors) == 0,
-        "errors": errors,
-    })
