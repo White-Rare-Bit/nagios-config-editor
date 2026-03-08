@@ -113,21 +113,31 @@ def api_git_identity_get():
         staging = staging_mgr.get_staging()
 
         if not staging:
-            return jsonify({
-                "user_name": "",
-                "user_email": "",
-                "is_configured": False,
-                "has_lock": False,
-            })
+            user_name = ""
+            user_email = ""
+            has_lock = False
+        else:
+            user_name = staging.get("userName", "")
+            user_email = staging.get("userEmail", "")
+            has_lock = True
 
-        user_name = staging.get("userName", "")
-        user_email = staging.get("userEmail", "")
+        # Include git config identity so frontend can pre-populate fields
+        git_config_name = ""
+        git_config_email = ""
+        git_svc = get_git_service()
+        if git_svc:
+            result = git_svc.get_user_identity()
+            if result.success and result.data:
+                git_config_name = result.data.get("name", "") or ""
+                git_config_email = result.data.get("email", "") or ""
 
         return jsonify({
             "user_name": user_name,
             "user_email": user_email,
             "is_configured": bool(user_name and user_email),
-            "has_lock": True,
+            "has_lock": has_lock,
+            "git_config_name": git_config_name,
+            "git_config_email": git_config_email,
         })
 
     except Exception as e:  # noqa: BLE001
