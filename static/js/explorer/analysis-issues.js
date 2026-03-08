@@ -397,10 +397,7 @@
                     display_name: group.missingName
                 };
 
-                // Get or initialize staged creations
-                const staging = Explorer.getStagedCreations();
-                staging.push(creation);
-                Explorer.setStagedCreations(staging);
+                state.stagedCreations.push(creation);
 
                 // Add to allObjects for UI display
                 state.allObjects.push(newObj);
