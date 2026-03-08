@@ -221,14 +221,6 @@
      * Get all field names that reference a given object type.
      * Example: getFieldsForType('command') returns ['check_command', 'event_handler', ...]
      */
-    Explorer.getFieldsForType = function(targetType) {
-        const fields = [];
-        for (const [field, type] of Object.entries(Explorer.constants.referenceFields)) {
-            if (type === targetType) {fields.push(field);}
-        }
-        return fields;
-    };
-
     /**
      * Strip Nagios additive/exclusion prefixes (+/!) from a value.
      * Shared implementation — do not duplicate in other modules.

@@ -48,40 +48,6 @@
      * @param {string|number|Object} objOrKeyOrIndex
      * @returns {Object|undefined} The pending edit data
      */
-    Explorer.getPendingEdit = function(objOrKeyOrIndex) {
-        const key = resolveToStableKey(objOrKeyOrIndex);
-        return key !== null ? state.pendingEdits.get(key) : undefined;
-    };
-
-    /**
-     * Set pending edit using either stable key, global_index, or object
-     * @param {string|number|Object} objOrKeyOrIndex
-     * @param {Object} editData - The edit data to store
-     * @returns {boolean} True if set successfully
-     */
-    Explorer.setPendingEdit = function(objOrKeyOrIndex, editData) {
-        const key = resolveToStableKey(objOrKeyOrIndex);
-        if (key !== null) {
-            state.pendingEdits.set(key, editData);
-            return true;
-        }
-        return false;
-    };
-
-    /**
-     * Delete pending edit
-     * @param {string|number|Object} objOrKeyOrIndex
-     * @returns {boolean} True if deleted successfully
-     */
-    Explorer.deletePendingEdit = function(objOrKeyOrIndex) {
-        const key = resolveToStableKey(objOrKeyOrIndex);
-        if (key !== null) {
-            state.pendingEdits.delete(key);
-            return true;
-        }
-        return false;
-    };
-
     // =============================================================================
     // Deletion Tracking
     // =============================================================================
@@ -101,29 +67,6 @@
      * @param {string|number|Object} objOrKeyOrIndex
      * @returns {boolean} True if marked successfully
      */
-    Explorer.markObjectForDeletion = function(objOrKeyOrIndex) {
-        const key = resolveToStableKey(objOrKeyOrIndex);
-        if (key !== null) {
-            state.stagedObjectDeletions.add(key);
-            return true;
-        }
-        return false;
-    };
-
-    /**
-     * Unmark object for deletion
-     * @param {string|number|Object} objOrKeyOrIndex
-     * @returns {boolean} True if unmarked successfully
-     */
-    Explorer.unmarkObjectForDeletion = function(objOrKeyOrIndex) {
-        const key = resolveToStableKey(objOrKeyOrIndex);
-        if (key !== null) {
-            state.stagedObjectDeletions.delete(key);
-            return true;
-        }
-        return false;
-    };
-
     // =============================================================================
     // Selection Management
     // =============================================================================
@@ -170,10 +113,6 @@
     /**
      * Get count of selected items
      */
-    Explorer.getSelectionCount = function() {
-        return state.selectedKeys.size + state.selectedStagedIndices.size;
-    };
-
     // =============================================================================
     // Staged Changes Helpers
     // =============================================================================
@@ -318,12 +257,6 @@
         if (Explorer.renderTabBar) {
             Explorer.renderTabBar();
         }
-    };
-
-    // Backwards compatibility — delegates to afterServerSync
-    // DEPRECATED: Use afterFrontendMutation() or afterServerSync() instead.
-    Explorer.refreshAfterObjectChange = function(options = {}) {
-        Explorer.afterServerSync(options);
     };
 
 })(window.Explorer);

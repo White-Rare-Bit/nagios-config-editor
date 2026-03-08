@@ -92,16 +92,6 @@
     // Badge Issue Detection Helpers
     // =============================================================================
 
-    function getObjectIdentity(obj) {
-        const nameField = constants.nameFields[obj.object_type];
-        if (obj.object_type === 'service') {
-            const host = obj.attributes.host_name || obj.attributes.hostgroup_name || '*';
-            const desc = obj.attributes.service_description || '';
-            return `${host}::${desc}`;
-        }
-        return nameField ? (obj.attributes[nameField] || '') : (obj.attributes.name || '');
-    }
-
     // =============================================================================
     // Staged Issues (from pending edits)
     // =============================================================================
@@ -340,7 +330,6 @@
 
     Explorer.loadIssuesForBadges = loadIssuesForBadges;
     Explorer.loadSuggestionsForBadges = loadSuggestionsForBadges;
-    Explorer.getObjectIdentity = getObjectIdentity;
     Explorer.computeStagedIssues = computeStagedIssues;
     Explorer.updateStagedIssuesUI = updateStagedIssuesUI;
     Explorer.refreshCenterPaneIssueBadge = refreshCenterPaneIssueBadge;

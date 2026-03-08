@@ -53,11 +53,6 @@ function updateCreatePath(path) {
     }
 }
 
-// Legacy function - keep for backwards compatibility
-function switchSuggestionsSubtab(subtab) {
-    Explorer.switchTabs('.suggestions-subtab', '.suggestions-section', subtab, 'subtab', 'Suggestions');
-}
-
 async function loadAllSuggestions(forceRefresh = false) {
     if (!forceRefresh && state.healthCheckData) {
         mapHealthCheckToState(state.healthCheckData);
@@ -1447,7 +1442,6 @@ state.allIssues = [];
 Explorer.analyzeAll = analyzeAll;
 Explorer.updateValidationSummary = updateValidationSummary;
 Explorer.updateCreatePath = updateCreatePath;
-Explorer.switchSuggestionsSubtab = switchSuggestionsSubtab;
 Explorer.loadAllSuggestions = loadAllSuggestions;
 Explorer.updateSuggestionsBadge = updateSuggestionsBadge;
 // Template & grouping functions exported from analysis-suggestions.js

@@ -111,28 +111,6 @@ function handleAutocompleteKeyNav(event, config) {
     return false;
 }
 
-// Utility: Render a grouped info section
-function renderGroupedInfoSection(title, items, renderItem, options = {}) {
-    if (items.length === 0) {return '';}
-    const { showCount = false, showAttr = true } = options;
-    const grouped = Explorer.groupByType(items);
-
-    let html = `<div class="info-section">
-        <div class="info-section-title">${title}${showCount ? ` <span class="member-count">${items.length}</span>` : ''}</div>`;
-
-    for (const [type, typeItems] of Object.entries(grouped)) {
-        html += `
-            <div class="ref-type-group">
-                <div class="ref-type-header">${typeLabels[type] || type}</div>
-                <div class="ref-type-list">
-                    ${typeItems.map(item => renderItem(item, showAttr)).join('')}
-                </div>
-            </div>`;
-    }
-    html += `</div>`;
-    return html;
-}
-
 // Use loadObjects, saveStagedChanges, loadStagedChanges, clearStagedChanges from data-loading.js
 // Use toDisplayPath from data-loading.js
 const configRootName = Explorer.getConfigRootName();
@@ -155,44 +133,6 @@ function updateEditingLockedUI() {
 // Check if editing is allowed (not locked by another session)
 function canEdit() {
     return !state.isEditingLocked;
-}
-
-// Check if staging has changed (for multi-user sync)
-async function checkStagingChanges() {
-    // Skip check while we're in the middle of saving
-    if (isSavingStaging) {return;}
-
-    try {
-        // Check lock status from base.html (updates banner)
-        await checkLockStatus();
-
-        const response = await fetch('/api/staging/info');
-        const info = await response.json();
-
-        if (info.hasStaging) {
-            // Check if staging was modified
-            if (info.lastModified && info.lastModified !== lastStagingTimestamp) {
-                // Double-check we're not saving (race condition guard)
-                if (isSavingStaging) {return;}
-
-                // Reload staging from server (don't update lock state during polling)
-                await Explorer.loadStagedChanges(false);
-                Explorer.afterServerSync();
-            }
-        } else if (Explorer.hasStagedChanges() || state.isEditingLocked) {
-            // Server staging was cleared (committed or discarded)
-            Explorer.resetStagingState();
-            lastStagingTimestamp = null;
-            state.isEditingLocked = false;
-            Explorer.updateEditingLockedUI();
-            // Reload data in case changes were committed
-            await Explorer.loadObjects();
-            Explorer.afterServerSync();
-            loadIssues();
-        }
-    } catch (e) {
-        console.error('Failed to check staging changes:', e);
-    }
 }
 
 // hasStagedChanges, startStagingPoll, stopStagingPoll now in modules
@@ -1442,7 +1382,6 @@ function restoreSuggestionSectionState() {
     Explorer.refreshRelatedSections = refreshRelatedSections;
     Explorer.hideAutocompleteDropdown = hideAutocompleteDropdown;
     Explorer.handleAutocompleteKeyNav = handleAutocompleteKeyNav;
-    Explorer.renderGroupedInfoSection = renderGroupedInfoSection;
     Explorer.updateEditingLockedUI = updateEditingLockedUI;
     Explorer.canEdit = canEdit;
 

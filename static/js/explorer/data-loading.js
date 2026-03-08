@@ -368,32 +368,6 @@
     // =============================================================================
 
     /**
-     * Load virtual tree (merged view with staged changes applied)
-     * This replaces loadObjects() for displaying the tree with pending changes
-     */
-    Explorer.loadVirtualTree = async function() {
-        const result = await ApiClient.get('/api/staging/virtual-tree?_=' + Date.now(), { silent: true });
-
-        if (!result.success) {
-            console.error('Failed to load virtual tree:', result.error);
-            // Fall back to regular loadObjects but warn user
-            Explorer.showToast('Failed to load merged view. Showing disk state only - staged changes may not be visible.', 'warning');
-            Explorer.loadObjects();
-            return;
-        }
-
-        const data = result.data;
-        const state = Explorer.state;
-
-        state.allObjects = data.objects || [];
-        state.allFiles = data.files || [];
-        state.existingFolders = data.folders || [];
-
-        // Files/folders may have staged flags (_staged_new, _staged_deleted, etc.)
-        // These can be used for visual indicators in the tree
-    };
-
-    /**
      * Apply all staged changes to disk
      * @returns {Promise<{success: boolean, message?: string, results?: object}>}
      */
@@ -473,19 +447,6 @@
         }
         Explorer.handleApiError('Failed to check conflicts', result.error);
         return { hasConflicts: false, conflicts: [] };
-    };
-
-    /**
-     * Get extended staging info including counts
-     * @returns {Promise<object>}
-     */
-    Explorer.getStagingInfoExtended = async function() {
-        const result = await ApiClient.get('/api/staging/info', { silent: true });
-        if (result.success) {
-            return result.data;
-        }
-        Explorer.handleApiError('Failed to get extended staging info', result.error);
-        return null;
     };
 
     /**
