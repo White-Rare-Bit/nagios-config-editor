@@ -246,32 +246,6 @@ class GitService:
             return OperationResult(success=True, data=False)
         return OperationResult(success=True, data=(result.data.returncode == 0))
 
-    def get_user_identity(self) -> OperationResult:
-        """Get configured git user name and email.
-
-        Checks local config first, then global.
-        Returns OperationResult with data={'name': ..., 'email': ...} or data=None.
-        """
-        def get_config(key):
-            git_dir = os.path.join(self._config_path, ".git")
-            # Try local first
-            if os.path.isdir(git_dir):
-                r = self._run_git(["config", "--local", key], timeout=TIMEOUT_QUERY)
-                if r.success and r.data.returncode == 0 and r.data.stdout.strip():
-                    return r.data.stdout.strip()
-            # Try global
-            r = self._run_git(["config", "--global", key], timeout=TIMEOUT_QUERY)
-            if r.success and r.data.returncode == 0 and r.data.stdout.strip():
-                return r.data.stdout.strip()
-            return None
-
-        name = get_config("user.name")
-        email = get_config("user.email")
-
-        if name or email:
-            return OperationResult(success=True, data={"name": name, "email": email})
-        return OperationResult(success=True, data=None)
-
     def get_status(self, excluded_paths: list[str] | None = None) -> OperationResult:
         """Get git status of config directory.
 
