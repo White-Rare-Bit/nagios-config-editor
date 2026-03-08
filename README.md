@@ -2,7 +2,7 @@
 
 A safe, modern web UI for bulk-editing Nagios Core configurations.
 
-<video src="https://github.com/White-Rare-Bit/nagios-config-editor/releases/download/demo-assets/Nagios_Bulk_Editor.mp4" controls width="100%"></video>
+https://github.com/user-attachments/assets/cba01855-61b0-4721-9dee-b63d79f255d8
 
 I've been working with Nagios Core for a few years now and have noticed that configurations tend to become very "organic" over time, i.e. barnacled with technical debt. This project gives Nagios administrators a way to edit their configuration in bulk without resorting to grepping through a ton of text files.
 
