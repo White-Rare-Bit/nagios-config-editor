@@ -302,12 +302,6 @@ async function saveServerSettings() {
     await saveLoggingSettings();
 }
 
-// Legacy function for backwards compatibility
-async function saveSettings() {
-    await saveIdentity();
-    await saveServerSettings();
-}
-
 function resetToDefaults() {
     document.getElementById('nagiosConfigPath').value = './sample-config';
     document.getElementById('backupPath').value = '';

@@ -379,11 +379,6 @@ function toggleReferencePreview(checked) {
     );
 }
 
-function buildReferenceChangesSection(refData) {
-    // No longer used — reference changes are now shown inline in file diffs
-    return '';
-}
-
 /**
  * Injects reference updates into the file-based changes map as synthetic modifications.
  * Each reference becomes a modification entry showing old_value -> new_value for the affected field.
@@ -782,17 +777,6 @@ function ensureFileChange(fileChanges, filePath, configPath) {
 }
 
 /**
- * Builds a map of globalIndex -> edit data from pendingEdits dict.
- */
-function buildEditsMap(pendingEdits) {
-    const editsMap = new Map();
-    for (const [key, entry] of Object.entries(pendingEdits)) {
-        editsMap.set(key, entry);
-    }
-    return editsMap;
-}
-
-/**
  * Processes a single staged move, adding removal to source file and addition to target file.
  */
 function processStagedMove(moveEntry, allObjects, editsMap, fileChanges, configPath) {
@@ -913,7 +897,7 @@ function processStagedDeletion(globalIndex, allObjects, fileChanges, configPath)
  */
 function buildGlobalFileBasedChanges(pendingEdits, stagedMoves, stagedCreations, stagedObjectDeletions, allObjects, configPath) {
     const fileChanges = new Map();
-    const editsMap = buildEditsMap(pendingEdits);
+    const editsMap = new Map(Object.entries(pendingEdits));
 
     // Iterate over moves dict {stableKey: moveData, ...}
     const iterateMoves = (moves, callback) => {

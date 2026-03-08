@@ -59,21 +59,6 @@ function escapeRegex(str) {
 }
 
 /**
- * Debounce function for search inputs
- */
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-}
-
-/**
  * Generate a unique ID for staged operations
  * @returns {string} A unique identifier string
  */

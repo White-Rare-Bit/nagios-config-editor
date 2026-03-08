@@ -116,41 +116,6 @@ function pluralize(count, singular, plural) {
 
 // setButtonLoading() is defined in app.js (loaded first) - use that global function
 
-/**
- * Show a loading state in a container
- * @param {HTMLElement|string} containerOrSelector - Container element or CSS selector
- * @param {string} [message='Loading...'] - Message to display
- */
-function showLoadingState(containerOrSelector, message = 'Loading...') {
-    const container = typeof containerOrSelector === 'string'
-        ? document.querySelector(containerOrSelector)
-        : containerOrSelector;
-
-    if (!container) {return;}
-
-    container.innerHTML = `
-        <div class="loading-state">
-            <div class="loading-state-spinner"></div>
-            <div class="loading-state-text">${escapeHtml(message)}</div>
-        </div>
-    `;
-}
-
-/**
- * Wrap an async action with button loading state
- * @param {HTMLElement} button - Button element
- * @param {Function} action - Async function to execute
- * @param {string} [loadingText] - Text to show while loading
- */
-async function withLoadingButton(button, action, loadingText = null) {
-    setButtonLoading(button, true, loadingText);
-    try {
-        return await action();
-    } finally {
-        setButtonLoading(button, false);
-    }
-}
-
 // =============================================================================
 // Nav Commit Button
 // =============================================================================
