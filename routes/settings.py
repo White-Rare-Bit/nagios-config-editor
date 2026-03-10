@@ -82,24 +82,28 @@ def _update_config_path(server_config, path, updated, errors):
         errors.append(f"Invalid directory: {path}")
         return
 
-    import file_operations
     from backup_manager import BackupManager
     from git_service import GitService
     from nagios_service import NagiosService
-    from staging_manager import StagingManager
+    from shadow_copy_manager import ShadowCopyManager
 
     normalized_path = os.path.abspath(path)
 
     try:
-        new_staging = StagingManager(normalized_path)
         new_service = NagiosService(normalized_path)
         _ = new_service.parser  # Force init to catch config errors early
         new_backup = BackupManager(normalized_path, server_config.backup_path)
         new_git = GitService(normalized_path)
 
+        # Re-initialize shadow manager with new config path
+        shadow_path = server_config.shadow_path
+        if not shadow_path:
+            shadow_path = os.path.join(os.path.dirname(normalized_path), ".shadow")
+        new_shadow = ShadowCopyManager(normalized_path, shadow_path)
+
         server_config.paths.nagios_config_path = normalized_path
         current_app.extensions["service"] = new_service
-        current_app.extensions["staging"] = new_staging
+        current_app.extensions["shadow"] = new_shadow
         current_app.extensions["backup"] = new_backup
         current_app.extensions["git"] = new_git
         updated.append("nagios_config_path")
