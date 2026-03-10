@@ -425,3 +425,87 @@ class ShadowCopyManager:
                 count += 1
 
         return count
+
+    # =========================================================================
+    # Apply
+    # =========================================================================
+
+    def apply(self, backup_manager=None) -> OperationResult:
+        """Apply shadow changes back to the original config directory.
+
+        Copies changed files from shadow to original, removes deleted files,
+        then destroys the shadow copy.
+
+        Args:
+            backup_manager: Optional BackupManager to create pre-apply backup
+
+        Returns:
+            OperationResult with data={'changed_files': [...]} on success
+
+        """
+        with self._lock:
+            if not self.has_shadow():
+                # No shadow — nothing to apply, still success
+                return OperationResult(success=True, data={"changed_files": []})
+
+            try:
+                changed = self.get_changed_files()
+
+                # Create backup before applying if manager provided and there are changes
+                if backup_manager and changed:
+                    backup_manager.create_backup("pre_shadow_apply")
+
+                for change in changed:
+                    rel_path = change["path"]
+                    orig = self.original_path(rel_path)
+                    shad = self.shadow_path(rel_path)
+
+                    if change["status"] == "deleted":
+                        if os.path.isfile(orig):
+                            os.remove(orig)
+                            # Remove empty parent directories
+                            parent = os.path.dirname(orig)
+                            while parent != self.config_path:
+                                if os.path.isdir(parent) and not os.listdir(parent):
+                                    os.rmdir(parent)
+                                    parent = os.path.dirname(parent)
+                                else:
+                                    break
+
+                    elif change["status"] in ("added", "modified"):
+                        # Ensure parent directory exists
+                        os.makedirs(os.path.dirname(orig), exist_ok=True)
+                        # Atomic copy: write to temp, then replace
+                        import tempfile as _tempfile
+                        fd, tmp_path = _tempfile.mkstemp(
+                            dir=os.path.dirname(orig),
+                            suffix=".tmp",
+                        )
+                        try:
+                            with os.fdopen(fd, "wb") as tmp_f:
+                                with open(shad, "rb") as src_f:
+                                    shutil.copyfileobj(src_f, tmp_f)
+                                tmp_f.flush()
+                                os.fsync(tmp_f.fileno())
+                            os.replace(tmp_path, orig)
+                        except:
+                            if os.path.exists(tmp_path):
+                                os.unlink(tmp_path)
+                            raise
+
+                # Handle new directories from shadow that may be empty
+                for dirpath, dirnames, filenames in os.walk(self._config_dir):
+                    rel_dir = os.path.relpath(dirpath, self._config_dir)
+                    orig_dir = os.path.join(self.config_path, rel_dir)
+                    if not os.path.isdir(orig_dir):
+                        os.makedirs(orig_dir, exist_ok=True)
+
+                logger.info("Applied %d changed files", len(changed))
+
+            except Exception as e:
+                logger.error("Failed to apply shadow changes: %s", e)
+                return OperationResult(success=False, error=str(e))
+
+        # Destroy shadow (outside the lock since destroy_shadow acquires it)
+        self.destroy_shadow()
+        return OperationResult(success=True, data={"changed_files": changed})

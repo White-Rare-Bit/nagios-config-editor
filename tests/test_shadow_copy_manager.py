@@ -247,3 +247,74 @@ class TestDiffComputation:
             f.write("define host {\n    host_name webserver1\n    alias Modified\n}\n")
         count = scm.get_changed_object_count()
         assert count >= 1
+
+
+class TestApply:
+    def test_apply_copies_modified_files(self, setup_dirs):
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+        # Modify shadow
+        with open(scm.shadow_path("hosts.cfg"), "w") as f:
+            f.write("modified\n")
+        result = scm.apply()
+        assert result.success
+        # Original should now have modified content
+        with open(os.path.join(config_dir, "hosts.cfg")) as f:
+            assert f.read() == "modified\n"
+        # Shadow should be destroyed
+        assert not scm.has_shadow()
+
+    def test_apply_handles_new_files(self, setup_dirs):
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+        with open(scm.shadow_path("new.cfg"), "w") as f:
+            f.write("new content\n")
+        result = scm.apply()
+        assert result.success
+        assert os.path.exists(os.path.join(config_dir, "new.cfg"))
+
+    def test_apply_handles_deleted_files(self, setup_dirs):
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+        os.remove(scm.shadow_path("hosts.cfg"))
+        result = scm.apply()
+        assert result.success
+        assert not os.path.exists(os.path.join(config_dir, "hosts.cfg"))
+
+    def test_apply_handles_new_subdirectory(self, setup_dirs):
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+        new_dir = os.path.join(scm.shadow_path(""), "newdir")
+        os.makedirs(new_dir)
+        with open(os.path.join(new_dir, "test.cfg"), "w") as f:
+            f.write("content\n")
+        result = scm.apply()
+        assert result.success
+        assert os.path.exists(os.path.join(config_dir, "newdir", "test.cfg"))
+
+    def test_apply_with_no_changes(self, setup_dirs):
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+        result = scm.apply()
+        assert result.success
+        assert not scm.has_shadow()
+
+    def test_apply_creates_backup_when_manager_provided(self, setup_dirs):
+        config_dir, shadow_base = setup_dirs
+        from backup_manager import BackupManager
+        backup_path = tempfile.mkdtemp()
+        bm = BackupManager(config_dir, backup_path)
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+        with open(scm.shadow_path("hosts.cfg"), "w") as f:
+            f.write("modified\n")
+        result = scm.apply(backup_manager=bm)
+        assert result.success
+        backups = bm.list_backups()
+        assert len(backups) >= 1
+        shutil.rmtree(backup_path, ignore_errors=True)
