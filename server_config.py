@@ -37,6 +37,7 @@ class PathsConfig:
 
     nagios_config_path: str = "./sample-config"
     backup_path: str | None = None
+    shadow_path: str | None = None
     nagios_bin: str = "/usr/local/nagios/bin/nagios"
     nagios_cfg: str = "./sample-config/nagios.cfg"
     resource_cfg: str = ""
@@ -69,6 +70,7 @@ class ServerConfig:
             paths=PathsConfig(
                 nagios_config_path=paths_data.get("nagios_config_path", "./sample-config"),
                 backup_path=paths_data.get("backup_path"),
+                shadow_path=paths_data.get("shadow_path"),
                 nagios_bin=paths_data.get("nagios_bin", "/usr/local/nagios/bin/nagios"),
                 nagios_cfg=paths_data.get("nagios_cfg", "./sample-config/nagios.cfg"),
                 resource_cfg=paths_data.get("resource_cfg", ""),
@@ -99,6 +101,14 @@ class ServerConfig:
     @backup_path.setter
     def backup_path(self, value: str | None):
         self.paths.backup_path = value
+
+    @property
+    def shadow_path(self) -> str | None:
+        return self.paths.shadow_path
+
+    @shadow_path.setter
+    def shadow_path(self, value: str | None):
+        self.paths.shadow_path = value
 
     @property
     def nagios_bin(self) -> str:
@@ -137,6 +147,9 @@ def _apply_env_overrides(config: ServerConfig) -> ServerConfig:
 
     if env_val := os.environ.get("BACKUP_PATH"):
         config.paths.backup_path = env_val
+
+    if env_val := os.environ.get("NBE_SHADOW_PATH"):
+        config.paths.shadow_path = env_val
 
     if env_val := os.environ.get("NAGIOS_BIN"):
         config.paths.nagios_bin = env_val
@@ -213,7 +226,7 @@ def _apply_paths_updates(config: ServerConfig, paths_dict: dict) -> None:
     """
     if "nagios_config_path" in paths_dict:
         config.paths.nagios_config_path = os.path.abspath(paths_dict["nagios_config_path"])
-    for key in ("backup_path", "nagios_bin", "nagios_cfg"):
+    for key in ("backup_path", "shadow_path", "nagios_bin", "nagios_cfg"):
         if key in paths_dict:
             setattr(config.paths, key, paths_dict[key])
 
