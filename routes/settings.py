@@ -92,7 +92,7 @@ def _update_config_path(server_config, path, updated, errors):
 
     try:
         new_staging = StagingManager(normalized_path)
-        new_service = NagiosService(normalized_path, new_staging)
+        new_service = NagiosService(normalized_path)
         _ = new_service.parser  # Force init to catch config errors early
         new_backup = BackupManager(normalized_path, server_config.backup_path)
         new_git = GitService(normalized_path)

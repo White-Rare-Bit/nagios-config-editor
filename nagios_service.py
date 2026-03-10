@@ -29,11 +29,10 @@ class NagiosService:
     with automatic state synchronization (reload after write).
     """
 
-    def __init__(self, config_path: str, staging_manager=None):
+    def __init__(self, config_path: str):
         self._config_path = config_path
         self._parser: NagiosConfigParser | None = None
         self._lock = multiprocessing.Lock()
-        self._staging_manager = staging_manager
         # Flag to indicate parser state is inconsistent with disk state.
         # When True, all CRUD operations are blocked until explicit reload succeeds.
         self._parser_corrupted = False
@@ -74,9 +73,6 @@ class NagiosService:
         self, path: str, path_type: str
     ) -> tuple[bool, str | None]:
         """Path validation wrapper preventing path traversal attacks.
-
-        Used by 7 apply methods (folder/file creations, deletions, moves)
-        to ensure consistent path safety validation.
 
         Args:
             path: Path to validate

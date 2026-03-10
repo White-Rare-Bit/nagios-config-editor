@@ -175,7 +175,7 @@ def run_test():
 
         staging_file = os.path.join(test_dir, "staging.json")
         sm = StagingManager(staging_file)
-        service = NagiosService(test_dir, staging_manager=sm)
+        service = NagiosService(test_dir)
 
         initial_order = get_object_order(service, config_file)
         print(f"Initial order: {initial_order}")

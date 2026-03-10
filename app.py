@@ -131,7 +131,7 @@ def create_app(config_path: str | None = None, log_dir_override: str | None = No
     if staging_manager.has_staging():
         logger.info("Clearing stale staging lock from previous session")
         staging_manager.clear_staging()
-    service = NagiosService(nagios_config_path, staging_manager)
+    service = NagiosService(nagios_config_path)
     backup_manager = BackupManager(nagios_config_path, backup_path)
 
     # Shadow copy manager
