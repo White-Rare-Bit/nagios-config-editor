@@ -23,36 +23,14 @@ Explorer.state = {
 
     // Selection (uses stable keys)
     selectedKeys: new Set(),
-    selectedStagedIndices: new Set(),
-
-    // Staging data - Object operations
-    pendingEdits: new Map(),      // stableKey -> {original, edited, object}
-    stagedMoves: new Map(),       // objKey -> {targetFile, originalFile, object}
-    stagedCreations: [],          // {object_type, attributes, targetFile, displayName}
-    stagedObjectDeletions: new Set(),  // Set of stable keys
-    stagedCreationDeletions: new Set(),
-    newFiles: new Set(),
-
-    // Staging data - File/folder operations (true staging)
-    stagedFileCreations: [],      // [{id, path, timestamp}]
-    stagedFileDeletions: [],      // [{id, path, timestamp}]
-    stagedFileMoves: [],          // [{id, sourcePath, targetPath, timestamp}]
-    stagedFolderCreations: [],    // [{id, path, timestamp}]
-    stagedFolderDeletions: [],    // [{id, path, timestamp}]
-    stagedFolderMoves: [],        // [{id, sourcePath, targetPath, timestamp}]
-
-    // Undo support
-    undoStack: [],                // [{id, type, data, description, timestamp}]
 
     // UI state
     currentView: 'file',
     editedObject: null,
     originalAttributes: null,
     isNewObject: false,
-    newObjectStagedIndex: null,
     contextTarget: null,
     hoveredIndex: null,
-    externalChangePending: false,
     selectedFolder: null,           // Track selected folder for subfolder creation
 
     // Tab state
@@ -89,8 +67,6 @@ Explorer.state = {
 
     // Session
     sessionId: null,
-    currentStagingOwner: null,
-    isEditingLocked: false,
 
     // Autocomplete state
     currentAutocompleteKey: null,

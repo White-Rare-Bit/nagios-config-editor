@@ -1,7 +1,8 @@
 /**
- * Nagios Bulk Editor - State Management Module
+ * Nagios Bulk Editor - State Management Module (Shadow Copy Architecture)
  *
- * Handles stable key operations, pending edits, and deletion tracking.
+ * Handles stable key operations, selection management, and UI rebuild.
+ * Client-side staging state removed — server is the source of truth.
  *
  * Dependencies:
  * - window.Explorer (from main.js)
@@ -15,58 +16,6 @@
 
     const state = Explorer.state;
 
-    // =============================================================================
-    // Private Helpers
-    // =============================================================================
-
-    /**
-     * Resolve various input types to a stable key
-     * @param {string|number|Object} objOrKeyOrIndex - Stable key, global_index, or object
-     * @returns {string|null} The stable key or null if not resolvable
-     */
-    function resolveToStableKey(objOrKeyOrIndex) {
-        if (typeof objOrKeyOrIndex === 'string') {
-            // Already a stable key — verify it's valid
-            return objOrKeyOrIndex.indexOf('|') !== -1 ? objOrKeyOrIndex : null;
-        }
-        if (typeof objOrKeyOrIndex === 'number') {
-            // Legacy: global_index — convert to stable key
-            return Explorer.getObjectKeyByIndex(objOrKeyOrIndex);
-        }
-        if (objOrKeyOrIndex && typeof objOrKeyOrIndex === 'object') {
-            return Explorer.getObjectKey(objOrKeyOrIndex);
-        }
-        return null;
-    }
-
-    // =============================================================================
-    // Pending Edit Operations
-    // =============================================================================
-
-    /**
-     * Get pending edit using either stable key, global_index, or object
-     * @param {string|number|Object} objOrKeyOrIndex
-     * @returns {Object|undefined} The pending edit data
-     */
-    // =============================================================================
-    // Deletion Tracking
-    // =============================================================================
-
-    /**
-     * Check if object is marked for deletion
-     * @param {string|number|Object} objOrKeyOrIndex
-     * @returns {boolean}
-     */
-    Explorer.isObjectMarkedForDeletion = function(objOrKeyOrIndex) {
-        const key = resolveToStableKey(objOrKeyOrIndex);
-        return key !== null && state.stagedObjectDeletions.has(key);
-    };
-
-    /**
-     * Mark object for deletion
-     * @param {string|number|Object} objOrKeyOrIndex
-     * @returns {boolean} True if marked successfully
-     */
     // =============================================================================
     // Selection Management
     // =============================================================================
@@ -110,53 +59,9 @@
         state.selectedKeys.clear();
     };
 
-    /**
-     * Get count of selected items
-     */
     // =============================================================================
-    // Staged Changes Helpers
+    // Object Lookup
     // =============================================================================
-
-    /**
-     * Check if there are any staged changes
-     */
-    Explorer.hasStagedChanges = function() {
-        return state.pendingEdits.size > 0 ||
-               state.stagedMoves.size > 0 ||
-               state.stagedCreations.length > 0 ||
-               state.stagedObjectDeletions.size > 0 ||
-               state.stagedCreationDeletions.size > 0 ||
-               state.newFiles.size > 0 ||
-               // File/folder operations
-               state.stagedFileCreations.length > 0 ||
-               state.stagedFileDeletions.length > 0 ||
-               state.stagedFileMoves.length > 0 ||
-               state.stagedFolderCreations.length > 0 ||
-               state.stagedFolderDeletions.length > 0 ||
-               state.stagedFolderMoves.length > 0;
-    };
-
-    /**
-     * Reset all staging state
-     */
-    Explorer.resetStagingState = function() {
-        state.pendingEdits.clear();
-        state.stagedMoves.clear();
-        state.stagedCreations = [];
-        state.stagedObjectDeletions.clear();
-        state.stagedCreationDeletions.clear();
-        state.newFiles.clear();
-        // File/folder operations
-        state.stagedFileCreations = [];
-        state.stagedFileDeletions = [];
-        state.stagedFileMoves = [];
-        state.stagedFolderCreations = [];
-        state.stagedFolderDeletions = [];
-        state.stagedFolderMoves = [];
-        // Undo stack
-        state.undoStack = [];
-        state.isEditingLocked = false;
-    };
 
     /**
      * Find object by attributes (for idempotent operations).
@@ -201,28 +106,6 @@
         }
 
         return found;
-    };
-
-    // =============================================================================
-    // Editing Lock Management
-    // =============================================================================
-
-    /**
-     * Update UI to show/hide editing lock state
-     */
-    Explorer.updateEditingLockedUI = function() {
-        if (state.isEditingLocked) {
-            document.body.classList.add('editing-locked');
-        } else {
-            document.body.classList.remove('editing-locked');
-        }
-    };
-
-    /**
-     * Check if editing is allowed
-     */
-    Explorer.canEdit = function() {
-        return !state.isEditingLocked;
     };
 
     // =============================================================================
