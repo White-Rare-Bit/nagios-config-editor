@@ -76,6 +76,11 @@ def get_staging_manager():
     return current_app.extensions["staging"]
 
 
+def get_shadow_manager():
+    """Get the shadow copy manager."""
+    return current_app.extensions["shadow"]
+
+
 def get_backup_manager():
     """Get the backup manager."""
     return current_app.extensions["backup"]

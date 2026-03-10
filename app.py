@@ -15,6 +15,7 @@ from git_service import GitService
 from nagios_service import NagiosService
 from server_config import ServerConfig
 from server_config import load_config as load_server_config
+from shadow_copy_manager import ShadowCopyManager
 from staging_manager import StagingManager
 
 logger = logging.getLogger("nagios_bulk_editor")
@@ -133,12 +134,23 @@ def create_app(config_path: str | None = None, log_dir_override: str | None = No
     service = NagiosService(nagios_config_path, staging_manager)
     backup_manager = BackupManager(nagios_config_path, backup_path)
 
+    # Shadow copy manager
+    shadow_path = _server_config.shadow_path
+    if not shadow_path:
+        shadow_path = os.path.join(os.path.dirname(os.path.abspath(nagios_config_path)), ".shadow")
+    shadow_manager = ShadowCopyManager(nagios_config_path, shadow_path)
+    # Clear stale shadow from previous server session
+    if shadow_manager.has_shadow():
+        logger.info("Clearing stale shadow copy from previous session")
+        shadow_manager.destroy_shadow()
+
     # Initialize git service
     git_service = GitService(nagios_config_path)
 
     # Store in app.extensions for access via current_app
     app.extensions["service"] = service
     app.extensions["staging"] = staging_manager
+    app.extensions["shadow"] = shadow_manager
     app.extensions["backup"] = backup_manager
     app.extensions["git"] = git_service
     app.extensions["server_config"] = _server_config
