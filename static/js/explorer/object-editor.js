@@ -166,18 +166,11 @@
             globalIndex: obj.global_index
         });
 
-        // Check if there are pending edits for this object
-        const pendingEdit = state.pendingEdits.get(Explorer.getObjectKey(obj));
-        if (pendingEdit) {
-            state.editedObject = {...obj, attributes: {...pendingEdit.edited}};
-            state.originalAttributes = {...pendingEdit.original};
-        } else {
-            state.editedObject = obj;
-            state.originalAttributes = {...obj.attributes};
-        }
+        // Shadow copy: object attributes on disk are the truth
+        state.editedObject = obj;
+        state.originalAttributes = {...obj.attributes};
 
         state.isNewObject = false;
-        state.newObjectStagedIndex = null;
         document.getElementById('centerCloseBtn').style.display = 'none';
 
         const isTemplate = Explorer.isObjectTemplate(obj);
@@ -1149,78 +1142,41 @@
         const hasChanges = JSON.stringify(state.editedObject.attributes) !== JSON.stringify(state.originalAttributes);
 
         if (hasChanges) {
-            // Auto-stage changes
             stageCurrentChanges();
-        } else {
-            // If reverted to original, remove from pending
-            const objKey = Explorer.getObjectKey(state.editedObject);
-
-            // Restore allObjects to original state before deleting pending edit
-            const existingEdit = state.pendingEdits.get(objKey);
-            if (existingEdit) {
-                const obj = Explorer.findObjectByKey(objKey);
-                if (obj) {
-                    obj.attributes = {...existingEdit.original};
-                }
-            }
-
-            state.pendingEdits.delete(objKey);
-
-            // Centralized refresh ensures all UI components stay in sync
-            Explorer.afterFrontendMutation();
         }
     }
 
-    function stageCurrentChanges() {
+    async function stageCurrentChanges() {
         const objKey = Explorer.getObjectKey(state.editedObject);
 
-        // C-05: Validate required fields (warning only - allow staging for template inheritance)
+        // C-05: Validate required fields (warning only)
         const validation = validateRequiredFields(
             state.editedObject.object_type,
             state.editedObject.attributes
         );
         if (!validation.valid) {
-            // Check if object uses a template (which may provide the missing fields)
             const usesTemplate = state.editedObject.attributes.use && state.editedObject.attributes.use.trim() !== '';
             if (usesTemplate) {
-                // Just show a subtle warning - template may provide the fields
                 console.warn(`Object may be missing required fields (may be inherited from template): ${validation.errors.join(', ')}`);
             } else {
-                // Show warning toast for non-template objects
                 showToast(`Warning: ${validation.errors[0]}`, 'warning');
             }
         }
 
-        // Get the original state (either from state.pendingEdits or current state.originalAttributes)
-        const existingEdit = state.pendingEdits.get(objKey);
-        const originalState = existingEdit ? existingEdit.original : {...state.originalAttributes};
+        // Call API to update object on shadow copy
+        const result = await ApiClient.post('/api/objects/update', {
+            stable_key: objKey,
+            attributes: state.editedObject.attributes
+        }, { silent: true });
 
-        // Store the pending edit
-        state.pendingEdits.set(objKey, {
-            original: originalState,
-            edited: {...state.editedObject.attributes},
-            object: {
-                source_file: state.editedObject.source_file,
-                line_number: state.editedObject.line_number,
-                object_type: state.editedObject.object_type,
-                display_name: state.editedObject.display_name,
-                global_index: state.editedObject.global_index
-            }
-        });
-
-        // Update state.allObjects locally (for UI display) — must happen before rebuildUI
-        const obj = Explorer.findObjectByKey(objKey);
-        if (obj) {
-            obj.attributes = {...state.editedObject.attributes};
+        if (result.success) {
+            // Update originalAttributes to match what's now on disk
+            state.originalAttributes = {...state.editedObject.attributes};
+            Explorer.afterFrontendMutation();
+            Explorer.loadImpactAndRelationships(state.editedObject);
+        } else {
+            showToast(result.data?.error || 'Failed to save changes', 'error');
         }
-
-        // Centralized refresh ensures all UI components stay in sync
-        Explorer.afterFrontendMutation();
-
-        // Refresh relationship sections after UI rebuild completes
-        // Order matters: afterFrontendMutation rebuilds attributes display first,
-        // then loadImpactAndRelationships analyzes relationships based on staged values
-        Explorer.loadImpactAndRelationships(state.editedObject);
     }
 
     function toggleSection(section) {
