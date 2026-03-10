@@ -1,4 +1,4 @@
-"""Git integration routes."""
+"""Git integration routes — shadow copy architecture."""
 
 import logging
 
@@ -6,7 +6,6 @@ from flask import Blueprint, jsonify, request
 
 from audit_service import log_audit
 from file_operations import is_safe_path
-from staging_manager import StagingStatus
 
 from .helpers import (
     format_audit_user,
@@ -14,15 +13,15 @@ from .helpers import (
     get_config_path,
     get_git_service,
     get_service,
-    get_staging_manager,
+    get_shadow_manager,
 )
 
 bp = Blueprint("git", __name__)
 logger = logging.getLogger(__name__)
 
 
-def _check_staging_lock(session_id, operation="git"):
-    """Check if staging is locked by another session.
+def _check_shadow_lock(session_id, operation="git"):
+    """Check if shadow is locked by another session.
 
     Returns:
         Error response tuple (jsonify, status_code) if locked, or None if OK.
@@ -30,21 +29,23 @@ def _check_staging_lock(session_id, operation="git"):
     """
     if not session_id:
         return None
-    staging_mgr = get_staging_manager()
-    lock_owner = staging_mgr.get_lock_owner()
-    if lock_owner and lock_owner != session_id:
-        logger.warning("Lock conflict on %s: session_id=%s, lock_owner=%s",
-                       operation, session_id, lock_owner)
-        return jsonify({
-            "error": "Another user has pending changes. Wait for them to commit or discard.",
-            "locked": True,
-            "lockOwner": staging_mgr.get_lock_status(session_id),
-        }), 423
-    return None
+    sm = get_shadow_manager()
+    if not sm.has_shadow():
+        return None
+    if sm.can_modify(session_id):
+        return None
+    lock_status = sm.get_lock_status()
+    logger.warning("Lock conflict on %s: session_id=%s, lock_owner=%s",
+                   operation, session_id, lock_status.get("session_id"))
+    return jsonify({
+        "error": "Another user has pending changes. Wait for them to commit or discard.",
+        "locked": True,
+        "lockOwner": lock_status,
+    }), 423
 
 
 def _resolve_user_identity(data):
-    """Resolve user identity from request body, falling back to staging data.
+    """Resolve user identity from request body, falling back to shadow lock state.
 
     Returns:
         Tuple of (user_name, user_email) - either may be None.
@@ -54,11 +55,11 @@ def _resolve_user_identity(data):
     user_email = data.get("user_email", "").strip() if data.get("user_email") else None
 
     if not user_name or not user_email:
-        staging_mgr = get_staging_manager()
-        staging = staging_mgr.get_staging()
-        if staging:
-            user_name = user_name or staging.get("userName")
-            user_email = user_email or staging.get("userEmail")
+        sm = get_shadow_manager()
+        if sm.has_shadow():
+            lock_status = sm.get_lock_status()
+            user_name = user_name or lock_status.get("user_name")
+            user_email = user_email or lock_status.get("user_email")
 
     return user_name, user_email
 
@@ -89,30 +90,15 @@ def _write_commit_audit_log(commit_hash, message, user_name, user_email, initial
         )
         return
 
-    kwargs = {"commit_hash": commit_hash, "message": message}
-
-    staging_mgr = get_staging_manager()
-    staging = staging_mgr.get_staging()
-    if staging and staging.get("status") == StagingStatus.RESTORE_PENDING.value:
-        kwargs["restoreType"] = staging.get("restoreType", "")
-        kwargs["restoreFrom"] = staging.get("restoreFrom", "")
-
-    log_audit(action="git_commit", user=user, **kwargs)
+    log_audit(action="git_commit", user=user, commit_hash=commit_hash, message=message)
 
 
 @bp.route("/api/git/identity", methods=["GET"])
 def api_git_identity_get():
-    """Get the identity of the current lock owner from staging data.
-
-    Returns the userName and userEmail stored in staging data.
-    This is the identity of whoever currently has pending changes.
-    Each user's own identity is stored in their browser's localStorage.
-    """
+    """Get the identity of the current lock owner from shadow lock state."""
     try:
-        staging_mgr = get_staging_manager()
-        staging = staging_mgr.get_staging()
-
-        if not staging:
+        sm = get_shadow_manager()
+        if not sm.has_shadow():
             return jsonify({
                 "user_name": "",
                 "user_email": "",
@@ -120,8 +106,9 @@ def api_git_identity_get():
                 "has_lock": False,
             })
 
-        user_name = staging.get("userName", "")
-        user_email = staging.get("userEmail", "")
+        lock_status = sm.get_lock_status()
+        user_name = lock_status.get("user_name", "")
+        user_email = lock_status.get("user_email", "")
 
         return jsonify({
             "user_name": user_name,
@@ -136,17 +123,15 @@ def api_git_identity_get():
 
 @bp.route("/api/git/identity", methods=["POST"])
 def api_git_identity_set():
-    """Update user identity in staging data.
+    """Update user identity in shadow lock state.
 
     Requires X-Session-Id header. Only the lock owner can update identity.
-    If no staging exists, creates minimal staging with just the identity.
-    Identity is stored per-session (each browser stores own identity in localStorage).
     """
     session_id = request.headers.get("X-Session-Id")
     if not session_id:
         return jsonify({"error": "X-Session-Id header required"}), 400
 
-    lock_error = _check_staging_lock(session_id)
+    lock_error = _check_shadow_lock(session_id)
     if lock_error:
         return lock_error
 
@@ -159,15 +144,30 @@ def api_git_identity_set():
     user_email = data.get("user_email", "").strip()
 
     try:
-        staging_mgr = get_staging_manager()
-        staging = staging_mgr.get_staging() or {}
-        staging["sessionId"] = session_id
-        staging["userName"] = user_name
-        staging["userEmail"] = user_email
+        sm = get_shadow_manager()
+        if not sm.has_shadow():
+            # Create shadow to store identity
+            result = sm.create_shadow(session_id, user_name, user_email)
+            if not result.success:
+                return jsonify({"error": result.error or "Failed to create shadow"}), 500
+            # Point service at shadow
+            service = get_service()
+            service.config_path = sm._config_dir
+            service.reload()
+        else:
+            # Update lock file with new identity
+            import json
+            import os
+            lock_file = sm._lock_file
+            if os.path.isfile(lock_file):
+                with open(lock_file) as f:
+                    lock_data = json.load(f)
+                lock_data["user_name"] = user_name
+                lock_data["user_email"] = user_email
+                with open(lock_file, "w") as f:
+                    json.dump(lock_data, f, indent=2)
 
-        if staging_mgr.save_staging(staging).success:
-            return jsonify({"success": True, "user_name": user_name, "user_email": user_email})
-        return jsonify({"error": "Failed to save identity"}), 500
+        return jsonify({"success": True, "user_name": user_name, "user_email": user_email})
 
     except Exception as e:  # noqa: BLE001
         return jsonify({"error": str(e)}), 500
@@ -256,7 +256,7 @@ def api_git_commit():
         return jsonify({"error": "Commit message is required"}), 400
 
     session_id = request.headers.get("X-Session-Id")
-    lock_error = _check_staging_lock(session_id, "commit")
+    lock_error = _check_shadow_lock(session_id, "commit")
     if lock_error:
         return lock_error
 
@@ -316,8 +316,14 @@ def _execute_commit(data, message, session_id):
     initialized = result.data["initialized"]
     _write_commit_audit_log(commit_hash, message, user_name, user_email, initialized)
 
-    if session_id:
-        get_staging_manager().clear_staging()
+    # Destroy shadow on successful commit
+    sm = get_shadow_manager()
+    if sm.has_shadow():
+        sm.destroy_shadow()
+        # Point service back at original config
+        service = get_service()
+        service.config_path = sm.config_path
+        service.reload()
 
     return jsonify({
         "success": True, "commit_hash": commit_hash, "message": message,
@@ -353,7 +359,7 @@ def api_git_discard():
         return jsonify({"error": "File path is required"}), 400
 
     session_id = request.headers.get("X-Session-Id")
-    lock_error = _check_staging_lock(session_id, "discard_file")
+    lock_error = _check_shadow_lock(session_id, "discard_file")
     if lock_error:
         return lock_error
 
@@ -385,7 +391,7 @@ def api_git_discard_all():
     logger.info("Git discard all")
 
     session_id = request.headers.get("X-Session-Id")
-    lock_error = _check_staging_lock(session_id, "discard_all")
+    lock_error = _check_shadow_lock(session_id, "discard_all")
     if lock_error:
         return lock_error
 
@@ -401,6 +407,14 @@ def api_git_discard_all():
 
         # Reload config to reflect changes
         get_service().reload()
+
+        # Destroy shadow if present
+        sm = get_shadow_manager()
+        if sm.has_shadow():
+            sm.destroy_shadow()
+            service = get_service()
+            service.config_path = sm.config_path
+            service.reload()
 
         # Write audit log entry for discard
         identity = get_audit_user_identity()
@@ -425,17 +439,15 @@ def api_git_clear_history():
     logger.warning("Git clear history requested")
 
     session_id = request.headers.get("X-Session-Id")
-    lock_error = _check_staging_lock(session_id, "clear_history")
+    lock_error = _check_shadow_lock(session_id, "clear_history")
     if lock_error:
         return lock_error
 
     try:
-        # Get user identity from request body
         data = request.get_json() or {}
         user_name = data.get("user_name", "").strip() if data.get("user_name") else None
         user_email = data.get("user_email", "").strip() if data.get("user_email") else None
 
-        # Require identity
         if not user_name or not user_email:
             return jsonify({
                 "error": "Please set your name and email in Settings before clearing history.",
@@ -447,7 +459,6 @@ def api_git_clear_history():
         if not result.success:
             return jsonify({"error": result.error}), 400
 
-        # Write audit log entry for clear history
         log_audit(
             action="git_clear_history", user=format_audit_user(name=user_name, email=user_email),
             description="Cleared all git history and reinitialized repository",
@@ -463,7 +474,6 @@ def api_git_clear_history():
 @bp.route("/api/git/log", methods=["GET"])
 def api_git_log():
     """Get git commit history."""
-    # Get optional limit parameter (default 50)
     limit = request.args.get("limit", 50, type=int)
 
     try:
@@ -473,7 +483,6 @@ def api_git_log():
             return jsonify({"error": result.error}), 400
 
         data = result.data
-        # Serialize GitCommit dataclasses to dicts
         commits = [{"hash": c.hash, "hash_short": c.hash_short, "author": c.author,
                     "date": c.date, "message": c.message,
                     "matches_working_dir": c.matches_working_dir}
@@ -499,8 +508,8 @@ def api_git_log():
 def api_git_restore():
     """Restore working directory to a specific commit.
 
-    Requires X-Session-Id header. Rejects if staging is locked by another session.
-    Clears all pending GUI changes on successful restore.
+    Requires X-Session-Id header. Rejects if shadow is locked by another session.
+    Destroys shadow on successful restore.
     """
     data = request.get_json() or {}
 
@@ -509,16 +518,10 @@ def api_git_restore():
     if not commit_hash:
         return jsonify({"error": "Commit hash is required"}), 400
 
-    # Check staging lock - git operations require lock ownership
     session_id = request.headers.get("X-Session-Id")
-    if session_id:
-        staging_mgr = get_staging_manager()
-        lock_owner = staging_mgr.get_lock_owner()
-        if lock_owner and lock_owner != session_id:
-            return jsonify({
-                "error": "Another user has pending changes. Wait for them to commit or discard.",
-                "locked": True,
-            }), 423
+    lock_error = _check_shadow_lock(session_id, "restore")
+    if lock_error:
+        return lock_error
 
     # Validate commit hash format (prevent injection)
     if not commit_hash.replace("-", "").isalnum():
@@ -544,19 +547,13 @@ def api_git_restore():
             deleted_files_count=len(result.data["deleted_files"]),
         )
 
-        # Create staging lock so other sessions see the pending restore changes
-        sm = get_staging_manager()
-        if session_id:
-            sm.save_staging({
-                "sessionId": session_id,
-                "userName": audit_identity.get("userName", ""),
-                "userEmail": audit_identity.get("userEmail", ""),
-                "status": StagingStatus.RESTORE_PENDING.value,
-                "restoreType": "git",
-                "restoreFrom": commit_hash,
-            })
-        else:
-            sm.clear_staging()
+        # Destroy shadow if present — restore replaces working dir
+        sm = get_shadow_manager()
+        if sm.has_shadow():
+            sm.destroy_shadow()
+            service = get_service()
+            service.config_path = sm.config_path
+            service.reload()
 
         return jsonify({
             "success": True,
