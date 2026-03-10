@@ -78,6 +78,11 @@ True staging: NO changes written to disk until "Apply". See `.claude/STAGING_REF
 
 **Backup on mutation:** `bm.create_backup("pre_operation_name")` before any write.
 
+## Tool Preferences
+
+- **Use LSP (Pyright)** for code navigation: hover for types, goToDefinition, findReferences, incomingCalls/outgoingCalls, documentSymbol — prefer over grep/read/bash scripts for type lookups, symbol searches, and function discovery.
+- Use `npx pyright` via Bash for bulk type-error auditing.
+
 ## Conventions
 
 - **Python**: snake_case | **JavaScript**: camelCase | **CSS classes**: kebab-case | **CSS variables**: `--nbe-*`
