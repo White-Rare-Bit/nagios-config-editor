@@ -16,12 +16,6 @@ from nagios_model import OperationResult, format_object_block
 logger = logging.getLogger(__name__)
 
 
-def _compute_checksum(content: str) -> str:
-    """Compute SHA256 checksum of content string."""
-    import hashlib
-    return hashlib.sha256(content.encode("utf-8")).hexdigest()
-
-
 def _atomic_write(file_path: str, content: str) -> None:
     """Write content to file atomically using temp file + rename.
 
@@ -45,13 +39,11 @@ def _atomic_write(file_path: str, content: str) -> None:
         raise
 
 
-def _read_file_content(file_path: str, expected_checksum: str | None = None) -> OperationResult:
-    """Read file content with standard error handling and optional checksum validation.
+def _read_file_content(file_path: str) -> OperationResult:
+    """Read file content with standard error handling.
 
     Args:
         file_path: Path to the file to read
-        expected_checksum: If provided, validates file hasn't changed since staging began.
-                          Returns conflict error if checksum doesn't match.
 
     Returns:
         OperationResult with success=True and data=content on success,
@@ -63,11 +55,6 @@ def _read_file_content(file_path: str, expected_checksum: str | None = None) -> 
         return OperationResult(False, f"File not found: {file_path}")
     try:
         content = path.read_text()
-        if expected_checksum is not None:
-            actual_checksum = _compute_checksum(content)
-            if actual_checksum != expected_checksum:
-                return OperationResult(False,
-                    f"Conflict: {file_path} was modified externally. Aborting to prevent data loss.")
         return OperationResult(True, data=content)
     except OSError as e:
         return OperationResult(False, f"Read error: {e}")
@@ -243,7 +230,7 @@ def assemble_file_from_blocks(preamble: str, blocks: list[str]) -> str:
 
 
 def edit_object_in_file(file_path: str, line_number: int, new_attrs: dict[str, str],
-                        obj_type: str, expected_checksum: str | None = None,
+                        obj_type: str,
                         inline_comments: dict | None = None) -> OperationResult:
     """Edit an object in place in its file.
 
@@ -252,8 +239,6 @@ def edit_object_in_file(file_path: str, line_number: int, new_attrs: dict[str, s
         line_number: Line number of the object to edit
         new_attrs: New attributes for the object
         obj_type: Type of the object (e.g., 'host', 'service')
-        expected_checksum: If provided, validates file hasn't changed since staging began.
-                          Returns conflict error if checksum doesn't match.
         inline_comments: If provided, preserves inline comments on attributes.
 
     Returns:
@@ -262,7 +247,7 @@ def edit_object_in_file(file_path: str, line_number: int, new_attrs: dict[str, s
     """
     logger.debug("file_op edit_object_in_file file_path=%s line_number=%s obj_type=%s", file_path, line_number, obj_type)
 
-    read_result = _read_file_content(file_path, expected_checksum)
+    read_result = _read_file_content(file_path)
     if not read_result.success:
         return read_result
     content = read_result.data
@@ -285,15 +270,12 @@ def edit_object_in_file(file_path: str, line_number: int, new_attrs: dict[str, s
     return OperationResult(True)
 
 
-def delete_object_from_file(file_path: str, line_number: int,
-                            expected_checksum: str | None = None) -> OperationResult:
+def delete_object_from_file(file_path: str, line_number: int) -> OperationResult:
     """Delete an object from its file.
 
     Args:
         file_path: Path to the file containing the object
         line_number: Line number of the object to delete
-        expected_checksum: If provided, validates file hasn't changed since staging began.
-                          Returns conflict error if checksum doesn't match.
 
     Returns:
         OperationResult with success=True on success, or error details on failure
@@ -301,7 +283,7 @@ def delete_object_from_file(file_path: str, line_number: int,
     """
     logger.debug("file_op delete_object_from_file file_path=%s line_number=%s", file_path, line_number)
 
-    read_result = _read_file_content(file_path, expected_checksum)
+    read_result = _read_file_content(file_path)
     if not read_result.success:
         return read_result
     content = read_result.data
@@ -323,7 +305,6 @@ def delete_object_from_file(file_path: str, line_number: int,
 
 def add_object_to_file(file_path: str, obj_type: str, attrs: dict[str, str],
                        after_block_line: int | None = None,
-                       expected_checksum: str | None = None,
                        raw_block: str | None = None,
                        inline_comments: dict | None = None) -> OperationResult:
     """Add a new object to a file, inserting after a specific block.
@@ -333,9 +314,6 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: dict[str, str],
         obj_type: Type of the object (e.g., 'host', 'service')
         attrs: Attributes for the new object
         after_block_line: Line number of the block to insert after (0 = beginning, None = end)
-        expected_checksum: If provided, validates file hasn't changed since staging began.
-                          Returns conflict error if checksum doesn't match.
-                          Only applies to existing files.
         raw_block: If provided, use this exact block text instead of formatting from attrs.
                    This preserves original formatting, indentation, and inline comments.
         inline_comments: If provided, inline comments to include in the formatted block.
@@ -349,7 +327,6 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: dict[str, str],
     new_block = raw_block or format_object_block(obj_type, attrs, inline_comments=inline_comments)
 
     if not path.exists():
-        # New file - no checksum validation needed
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             _atomic_write(file_path, new_block + "\n")
@@ -357,7 +334,7 @@ def add_object_to_file(file_path: str, obj_type: str, attrs: dict[str, str],
         except OSError as e:
             return OperationResult(False, f"Failed to create file {file_path}: {e}")
 
-    read_result = _read_file_content(file_path, expected_checksum)
+    read_result = _read_file_content(file_path)
     if not read_result.success:
         return read_result
     content = read_result.data
