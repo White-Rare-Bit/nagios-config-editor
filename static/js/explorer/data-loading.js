@@ -108,13 +108,27 @@
     };
 
     /**
+     * Load changed files from server diff and populate state.changedFilesMap.
+     * Used by tree rendering to show modified/added/deleted indicators.
+     */
+    Explorer.loadChangedFiles = async function() {
+        const result = await ApiClient.get('/api/staging/diff', { silent: true });
+        Explorer.state.changedFilesMap.clear();
+        if (result.success && result.data?.files) {
+            for (const f of result.data.files) {
+                Explorer.state.changedFilesMap.set(f.path, f.status);
+            }
+        }
+    };
+
+    /**
      * ORCHESTRATOR: Call after any mutation (frontend-initiated or server-sync).
      * Reloads data, rebuilds UI, updates badges, triggers debounced analysis.
      *
      * @param {Object} options - Passed through to rebuildUI
      */
     Explorer.afterFrontendMutation = async function(options = {}) {
-        await Explorer.loadObjects();
+        await Promise.all([Explorer.loadObjects(), Explorer.loadChangedFiles()]);
         Explorer.rebuildUI(options);
         Explorer.updateBadges();
         triggerAnalysisUpdate();
@@ -126,7 +140,8 @@
      *
      * @param {Object} options - Passed through to rebuildUI
      */
-    Explorer.afterServerSync = function(options = {}) {
+    Explorer.afterServerSync = async function(options = {}) {
+        await Explorer.loadChangedFiles();
         Explorer.rebuildUI(options);
         Explorer.updateBadges();
         triggerAnalysisUpdate();

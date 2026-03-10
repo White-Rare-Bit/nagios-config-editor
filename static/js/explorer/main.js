@@ -62,6 +62,10 @@ Explorer.state = {
     openTreeFolders: new Set(),
     existingFolders: [],
 
+    // Shadow copy change indicators (from /api/staging/diff)
+    // Map of relative path -> status ('added'|'modified'|'deleted')
+    changedFilesMap: new Map(),
+
     // Config
     configPath: '',
 
