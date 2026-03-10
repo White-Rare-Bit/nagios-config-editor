@@ -7,6 +7,8 @@ Replaces JSON-diff staging with a shadow copy architecture:
 - All-or-nothing apply back to original
 """
 
+import difflib
+import filecmp
 import json
 import logging
 import multiprocessing
@@ -310,3 +312,116 @@ class ShadowCopyManager:
             d for d in os.listdir(self._snapshots_dir)
             if os.path.isdir(os.path.join(self._snapshots_dir, d))
         ])
+
+    # =========================================================================
+    # Diff computation
+    # =========================================================================
+
+    def _collect_files(self, root: str) -> set[str]:
+        """Collect all file paths relative to root."""
+        result = set()
+        for dirpath, _dirnames, filenames in os.walk(root):
+            for filename in filenames:
+                full = os.path.join(dirpath, filename)
+                rel = os.path.relpath(full, root)
+                result.add(rel)
+        return result
+
+    def get_changed_files(self) -> list[dict]:
+        """Compute file-level diff between shadow and original.
+
+        Returns:
+            List of dicts with 'path' and 'status' (added/modified/deleted)
+
+        """
+        if not self.has_shadow():
+            return []
+
+        original_files = self._collect_files(self.config_path)
+        shadow_files = self._collect_files(self._config_dir)
+
+        changes = []
+
+        # Files in shadow but not in original → added
+        for f in sorted(shadow_files - original_files):
+            changes.append({"path": f, "status": "added"})
+
+        # Files in original but not in shadow → deleted
+        for f in sorted(original_files - shadow_files):
+            changes.append({"path": f, "status": "deleted"})
+
+        # Files in both → check for modifications
+        for f in sorted(original_files & shadow_files):
+            orig = self.original_path(f)
+            shad = self.shadow_path(f)
+            if not filecmp.cmp(orig, shad, shallow=False):
+                changes.append({"path": f, "status": "modified"})
+
+        return changes
+
+    def get_file_diff(self, relative_path: str) -> dict:
+        """Compute unified diff for a single file.
+
+        Args:
+            relative_path: Path relative to config root
+
+        Returns:
+            Dict with 'diff_text' containing unified diff string
+
+        """
+        orig = self.original_path(relative_path)
+        shad = self.shadow_path(relative_path)
+
+        orig_lines = []
+        shad_lines = []
+
+        if os.path.isfile(orig):
+            with open(orig, encoding="utf-8", errors="replace") as f:
+                orig_lines = f.readlines()
+        if os.path.isfile(shad):
+            with open(shad, encoding="utf-8", errors="replace") as f:
+                shad_lines = f.readlines()
+
+        diff = difflib.unified_diff(
+            orig_lines,
+            shad_lines,
+            fromfile=f"a/{relative_path}",
+            tofile=f"b/{relative_path}",
+        )
+        return {"diff_text": "".join(diff)}
+
+    def get_changed_object_count(self) -> int:
+        """Count the number of changed Nagios objects between shadow and original.
+
+        Parses both directories and compares objects by stable key.
+
+        Returns:
+            Number of added, modified, or deleted objects
+
+        """
+        from nagios_parser import NagiosConfigParser
+        from stable_keys import generate_stable_key_for_object
+
+        def _build_object_map(config_path: str) -> dict[str, dict]:
+            parser = NagiosConfigParser(config_path)
+            objects = parser.parse_all()
+            obj_map = {}
+            for obj in objects:
+                key = generate_stable_key_for_object(obj)
+                obj_map[key] = dict(obj.attributes)
+            return obj_map
+
+        orig_map = _build_object_map(self.config_path)
+        shadow_map = _build_object_map(self._config_dir)
+
+        count = 0
+        # Added objects
+        count += len(shadow_map.keys() - orig_map.keys())
+        # Deleted objects
+        count += len(orig_map.keys() - shadow_map.keys())
+        # Modified objects
+        for key in orig_map.keys() & shadow_map.keys():
+            if orig_map[key] != shadow_map[key]:
+                count += 1
+
+        return count

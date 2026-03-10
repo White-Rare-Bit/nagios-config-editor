@@ -180,3 +180,70 @@ class TestUndoSnapshots:
         result = scm.undo()
         assert result.success
         assert not os.path.exists(new_path)
+
+
+class TestDiffComputation:
+    def test_no_changes_empty_diff(self, setup_dirs):
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+        changed = scm.get_changed_files()
+        assert changed == []
+
+    def test_modified_file_detected(self, setup_dirs):
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+        # Modify a file in shadow
+        shadow_file = scm.shadow_path("hosts.cfg")
+        with open(shadow_file, "w") as f:
+            f.write("modified content\n")
+        changed = scm.get_changed_files()
+        assert len(changed) == 1
+        assert changed[0]["path"] == "hosts.cfg"
+        assert changed[0]["status"] == "modified"
+
+    def test_new_file_detected(self, setup_dirs):
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+        # Create new file in shadow
+        new_path = scm.shadow_path("new.cfg")
+        with open(new_path, "w") as f:
+            f.write("define host {\n    host_name new\n}\n")
+        changed = scm.get_changed_files()
+        assert len(changed) == 1
+        assert changed[0]["path"] == "new.cfg"
+        assert changed[0]["status"] == "added"
+
+    def test_deleted_file_detected(self, setup_dirs):
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+        # Delete file from shadow
+        os.remove(scm.shadow_path("hosts.cfg"))
+        changed = scm.get_changed_files()
+        assert len(changed) == 1
+        assert changed[0]["path"] == "hosts.cfg"
+        assert changed[0]["status"] == "deleted"
+
+    def test_get_file_diff_returns_unified_diff(self, setup_dirs):
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+        shadow_file = scm.shadow_path("hosts.cfg")
+        with open(shadow_file, "w") as f:
+            f.write("define host {\n    host_name webserver1\n    alias Modified\n}\n")
+        diff = scm.get_file_diff("hosts.cfg")
+        assert "alias" in diff["diff_text"]
+
+    def test_get_changed_object_count(self, setup_dirs):
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+        # Modify shadow file
+        shadow_file = scm.shadow_path("hosts.cfg")
+        with open(shadow_file, "w") as f:
+            f.write("define host {\n    host_name webserver1\n    alias Modified\n}\n")
+        count = scm.get_changed_object_count()
+        assert count >= 1
