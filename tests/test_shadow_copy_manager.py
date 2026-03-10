@@ -96,3 +96,87 @@ class TestLockManagement:
         scm = ShadowCopyManager(config_dir, shadow_base)
         status = scm.get_lock_status()
         assert status["locked"] is False
+
+
+class TestUndoSnapshots:
+    def test_snapshot_files_creates_copy(self, setup_dirs):
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+        snapshot_id = scm.snapshot_files(["hosts.cfg"], "edit host")
+        assert snapshot_id is not None
+        assert scm.get_undo_count() == 1
+
+    def test_undo_restores_file(self, setup_dirs):
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+        # Read original content
+        shadow_file = scm.shadow_path("hosts.cfg")
+        with open(shadow_file) as f:
+            original = f.read()
+        # Snapshot before mutation
+        scm.snapshot_files(["hosts.cfg"], "edit host")
+        # Mutate
+        with open(shadow_file, "w") as f:
+            f.write("modified content")
+        # Undo
+        result = scm.undo()
+        assert result.success
+        with open(shadow_file) as f:
+            assert f.read() == original
+        assert scm.get_undo_count() == 0
+
+    def test_multiple_undos_in_order(self, setup_dirs):
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+        shadow_file = scm.shadow_path("hosts.cfg")
+        with open(shadow_file) as f:
+            v1 = f.read()
+        # First edit
+        scm.snapshot_files(["hosts.cfg"], "edit 1")
+        with open(shadow_file, "w") as f:
+            f.write("v2")
+        # Second edit
+        scm.snapshot_files(["hosts.cfg"], "edit 2")
+        with open(shadow_file, "w") as f:
+            f.write("v3")
+        assert scm.get_undo_count() == 2
+        # Undo second
+        scm.undo()
+        with open(shadow_file) as f:
+            assert f.read() == "v2"
+        # Undo first
+        scm.undo()
+        with open(shadow_file) as f:
+            assert f.read() == v1
+
+    def test_undo_when_empty_fails(self, setup_dirs):
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+        result = scm.undo()
+        assert not result.success
+
+    def test_snapshot_multiple_files(self, setup_dirs):
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+        scm.snapshot_files(["hosts.cfg", "subdir/services.cfg"], "bulk edit")
+        assert scm.get_undo_count() == 1
+
+    def test_snapshot_nonexistent_file_for_creation_undo(self, setup_dirs):
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+        # Snapshot a file that doesn't exist yet (for undoing creation)
+        scm.snapshot_files(["new_file.cfg"], "create file")
+        # Create the file
+        new_path = scm.shadow_path("new_file.cfg")
+        with open(new_path, "w") as f:
+            f.write("new content")
+        # Undo should delete the file
+        result = scm.undo()
+        assert result.success
+        assert not os.path.exists(new_path)

@@ -13,6 +13,7 @@ import multiprocessing
 import os
 import shutil
 import time
+import uuid
 
 from nagios_model import OperationResult
 
@@ -176,3 +177,136 @@ class ShadowCopyManager:
 
         """
         return self.destroy_shadow()
+
+    # =========================================================================
+    # Path helpers
+    # =========================================================================
+
+    def shadow_path(self, relative_path: str) -> str:
+        """Return absolute path to a file in the shadow config directory.
+
+        Args:
+            relative_path: Path relative to config root (e.g. "hosts.cfg")
+
+        Returns:
+            Absolute path into shadow config dir
+
+        """
+        return os.path.join(self._config_dir, relative_path)
+
+    def original_path(self, relative_path: str) -> str:
+        """Return absolute path to a file in the original config directory.
+
+        Args:
+            relative_path: Path relative to config root
+
+        Returns:
+            Absolute path into original config dir
+
+        """
+        return os.path.join(self.config_path, relative_path)
+
+    # =========================================================================
+    # Undo snapshots
+    # =========================================================================
+
+    def snapshot_files(self, file_paths: list[str], description: str) -> str:
+        """Take a snapshot of files before mutation for undo support.
+
+        For each relative path, copies the file from shadow config to a
+        snapshot directory. If the file doesn't exist, records it as "absent"
+        so undo can delete a newly created file.
+
+        Args:
+            file_paths: List of relative paths to snapshot
+            description: Human-readable description of the operation
+
+        Returns:
+            Snapshot UUID
+
+        """
+        snapshot_id = f"{time.time():.6f}_{uuid.uuid4().hex[:8]}"
+        snapshot_dir = os.path.join(self._snapshots_dir, snapshot_id)
+        files_dir = os.path.join(snapshot_dir, "files")
+        os.makedirs(files_dir, exist_ok=True)
+
+        file_records = []
+        for rel_path in file_paths:
+            src = self.shadow_path(rel_path)
+            if os.path.isfile(src):
+                # Copy existing file to snapshot
+                dest = os.path.join(files_dir, rel_path)
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                shutil.copy2(src, dest)
+                file_records.append({"path": rel_path, "status": "exists"})
+            else:
+                # File doesn't exist yet — record as absent for creation undo
+                file_records.append({"path": rel_path, "status": "absent"})
+
+        # Write metadata
+        meta = {
+            "description": description,
+            "timestamp": time.time(),
+            "files": file_records,
+        }
+        with open(os.path.join(snapshot_dir, "meta.json"), "w", encoding="utf-8") as f:
+            json.dump(meta, f)
+
+        return snapshot_id
+
+    def undo(self) -> OperationResult:
+        """Undo the most recent operation by restoring from snapshot.
+
+        Returns:
+            OperationResult with success/error
+
+        """
+        with self._lock:
+            if not os.path.isdir(self._snapshots_dir):
+                return OperationResult(success=False, error="No undo history")
+
+            snapshots = sorted(os.listdir(self._snapshots_dir))
+            if not snapshots:
+                return OperationResult(success=False, error="No undo history")
+
+            latest = snapshots[-1]
+            snapshot_dir = os.path.join(self._snapshots_dir, latest)
+            meta_path = os.path.join(snapshot_dir, "meta.json")
+
+            try:
+                with open(meta_path, encoding="utf-8") as f:
+                    meta = json.load(f)
+
+                files_dir = os.path.join(snapshot_dir, "files")
+                for file_record in meta["files"]:
+                    rel_path = file_record["path"]
+                    shadow_file = self.shadow_path(rel_path)
+
+                    if file_record["status"] == "absent":
+                        # File was absent before — delete it to undo creation
+                        if os.path.isfile(shadow_file):
+                            os.remove(shadow_file)
+                    else:
+                        # Restore file from snapshot
+                        src = os.path.join(files_dir, rel_path)
+                        os.makedirs(os.path.dirname(shadow_file), exist_ok=True)
+                        shutil.copy2(src, shadow_file)
+
+                # Remove the snapshot
+                shutil.rmtree(snapshot_dir)
+
+                logger.info("Undo applied: %s", meta.get("description", ""))
+                return OperationResult(success=True)
+
+            except Exception as e:
+                logger.error("Failed to undo: %s", e)
+                return OperationResult(success=False, error=str(e))
+
+    def get_undo_count(self) -> int:
+        """Return the number of available undo operations."""
+        if not os.path.isdir(self._snapshots_dir):
+            return 0
+        return len([
+            d for d in os.listdir(self._snapshots_dir)
+            if os.path.isdir(os.path.join(self._snapshots_dir, d))
+        ])
