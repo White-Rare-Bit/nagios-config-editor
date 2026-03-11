@@ -12,7 +12,7 @@ Dependencies: `flask>=2.0.0,<4.0.0`
 
 ## Documentation Index
 
-**Reference docs** (`.claude/`): ROUTES_REFERENCE.md, API_REFERENCE.md, STAGING_REFERENCE.md, GIT_REFERENCE.md, FILE_OPS_REFERENCE.md, TYPOGRAPHY_REFERENCE.md, DECISION_LOG.md
+**Reference docs** (`.claude/`): ROUTES_REFERENCE.md, API_REFERENCE.md, GIT_REFERENCE.md, FILE_OPS_REFERENCE.md, TYPOGRAPHY_REFERENCE.md, DECISION_LOG.md
 
 **Module docs**: routes/CLAUDE.md, templates/CLAUDE.md, static/css/CLAUDE.md, static/js/CLAUDE.md, static/js/explorer/CLAUDE.md
 
@@ -23,7 +23,7 @@ Dependencies: `flask>=2.0.0,<4.0.0`
 Services stored in `app.extensions`, accessed via helpers:
 
 ```python
-from .helpers import get_service, get_staging_manager, get_backup_manager, get_server_config
+from .helpers import get_service, get_shadow_manager, get_backup_manager, get_server_config
 ```
 
 ### Thread Safety
@@ -31,7 +31,7 @@ from .helpers import get_service, get_staging_manager, get_backup_manager, get_s
 `multiprocessing.Lock` (not `threading.Lock`) — WSGI servers may use multiple processes.
 - **NagiosService**: Lock for all mutations
 - **GitService**: Lock for multi-step mutations
-- **StagingManager**: Atomic file writes (temp file + rename)
+- **ShadowCopyManager**: File-level undo snapshots, session lock
 
 ### OperationResult
 
@@ -47,8 +47,9 @@ All service methods return `OperationResult(success: bool, error: str = None, da
 |--------|------|
 | `app.py` | App factory, service init |
 | `server_config.py` | Config load/save, env overrides |
-| `nagios_service.py` | CRUD operations, apply phases |
-| `staging_manager.py` | Staging state, locks, undo stack |
+| `nagios_service.py` | CRUD operations, reload |
+| `shadow_copy_manager.py` | Shadow copy lifecycle, session lock, file-level undo, apply/destroy |
+| `stable_keys.py` | Stable key generation and lookup helpers |
 | `backup_manager.py` | Zip backups, restore |
 | `nagios_parser.py` | Parse .cfg files |
 | `nagios_writer.py` | Write .cfg files |
@@ -64,13 +65,14 @@ All Nagios domain constants are defined in `nagios_model.py` and served via `GET
 
 To add a new object type or reference field: update `nagios_model.py` — frontend picks it up automatically.
 
-## Staging System
+## Shadow Copy Architecture
 
-True staging: NO changes written to disk until "Apply". See `.claude/STAGING_REFERENCE.md`.
+On first edit, a full directory copy ("shadow") is created. All mutations write directly to shadow files. Apply = replace original with shadow; Discard = destroy shadow.
 
-- **Lock**: Session-based. First edit acquires lock. Check: `sm.can_modify(session_id)`.
-- **Stable keys**: `"source_file|object_type|name"` for object identity (not global_index).
-- **Operations**: pendingEdits, stagedMoves, stagedCreations, stagedObjectDeletions, stagedFileCreations, stagedFileDeletions, stagedFileMoves, stagedFolderCreations, stagedFolderDeletions, stagedFolderMoves
+- **Lock**: Session-based. First mutation calls `ensure_shadow_lock()` which creates shadow + acquires lock. Check: `sm.can_modify(session_id)`.
+- **Undo**: File-level snapshots. Before each mutation, `sm.snapshot_files([rel_path], description)` saves affected files. Undo restores previous snapshot.
+- **Stable keys**: `"source_file|object_type|name"` for object identity across reloads.
+- **Diff**: `sm.get_shadow_diff()` returns per-file unified diffs (shadow vs original).
 
 ## Error Handling
 

@@ -1,21 +1,21 @@
 <div class="docs-prose">
-    <h2>Data Flow &amp; Staging Internals</h2>
+    <h2>Shadow Copy Internals</h2>
 
     <div class="docs-summary">
         <div class="docs-summary-title">On this page</div>
         <ul>
-            <li>How edits flow from UI to disk (7-step path)</li>
-            <li>Staging state machine (EMPTY, ACTIVE, RESTORE_PENDING)</li>
+            <li>How edits flow from UI to disk</li>
+            <li>Shadow copy lifecycle</li>
             <li>Stable keys for object identity</li>
-            <li>The 10-phase apply process</li>
-            <li>Conflict detection and atomic file writes</li>
+            <li>File-level undo snapshots</li>
+            <li>Apply and destroy mechanics</li>
         </ul>
     </div>
 
     <p>
-        This page describes the internal mechanics of the staging system: how edits flow from
-        the UI to disk, how objects are identified, the structure of staged operations, lock
-        management, the undo stack, the 10-phase apply process, and conflict detection.
+        This page describes the internal mechanics of the shadow copy system: how edits flow
+        from the UI to disk, the shadow copy lifecycle, how objects are identified via stable
+        keys, the file-level undo mechanism, and the apply/destroy process.
     </p>
 
     <h3>Edit Flow</h3>
@@ -33,13 +33,13 @@
             <!-- Title -->
             <text x="510" y="28" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="14" font-weight="600">Edit Flow: UI to Disk</text>
 
-            <!-- "No disk writes" region -->
+            <!-- "Shadow copy" region -->
             <rect x="16" y="50" width="650" height="138" rx="5" fill="rgba(56, 139, 253, 0.06)" stroke="rgba(56, 139, 253, 0.2)" stroke-dasharray="4 2"/>
-            <text x="341" y="178" text-anchor="middle" fill="#64b5f6" font-family="Inter, sans-serif" font-size="10">No .cfg files are modified in this zone</text>
+            <text x="341" y="178" text-anchor="middle" fill="#64b5f6" font-family="Inter, sans-serif" font-size="10">Changes written to shadow copy only</text>
 
-            <!-- "Disk writes" region -->
+            <!-- "Original files" region -->
             <rect x="676" y="50" width="330" height="138" rx="5" fill="rgba(76, 175, 80, 0.06)" stroke="rgba(76, 175, 80, 0.2)" stroke-dasharray="4 2"/>
-            <text x="841" y="178" text-anchor="middle" fill="#81c784" font-family="Inter, sans-serif" font-size="10">Config files written to disk</text>
+            <text x="841" y="178" text-anchor="middle" fill="#81c784" font-family="Inter, sans-serif" font-size="10">Original config replaced on Apply</text>
 
             <!-- Step 1: UI -->
             <rect x="30" y="66" width="100" height="52" rx="5" fill="#2d2d2d" stroke="#404040"/>
@@ -50,56 +50,51 @@
             <line x1="130" y1="92" x2="152" y2="92" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#flow-arrow)"/>
 
             <!-- Step 2: API -->
-            <rect x="154" y="66" width="100" height="52" rx="5" fill="#2d2d2d" stroke="#404040"/>
-            <text x="204" y="89" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="12" font-weight="600">API</text>
-            <text x="204" y="106" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">POST + session</text>
-            <text x="204" y="134" text-anchor="middle" fill="#666" font-family="Inter, sans-serif" font-size="10">2</text>
+            <rect x="154" y="66" width="120" height="52" rx="5" fill="#2d2d2d" stroke="#404040"/>
+            <text x="214" y="89" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="12" font-weight="600">API</text>
+            <text x="214" y="106" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Lock + snapshot</text>
+            <text x="214" y="134" text-anchor="middle" fill="#666" font-family="Inter, sans-serif" font-size="10">2</text>
 
-            <line x1="254" y1="92" x2="276" y2="92" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#flow-arrow)"/>
+            <line x1="274" y1="92" x2="296" y2="92" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#flow-arrow)"/>
 
-            <!-- Step 3: StagingManager -->
-            <rect x="278" y="66" width="130" height="52" rx="5" fill="#2d2d2d" stroke="#404040"/>
-            <text x="343" y="89" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="12" font-weight="600">StagingManager</text>
-            <text x="343" y="106" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Lock + store</text>
-            <text x="343" y="134" text-anchor="middle" fill="#666" font-family="Inter, sans-serif" font-size="10">3</text>
+            <!-- Step 3: NagiosService -->
+            <rect x="298" y="66" width="130" height="52" rx="5" fill="#2d2d2d" stroke="#404040"/>
+            <text x="363" y="89" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="12" font-weight="600">NagiosService</text>
+            <text x="363" y="106" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Write .cfg</text>
+            <text x="363" y="134" text-anchor="middle" fill="#666" font-family="Inter, sans-serif" font-size="10">3</text>
 
-            <line x1="408" y1="92" x2="430" y2="92" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#flow-arrow)"/>
+            <line x1="428" y1="92" x2="450" y2="92" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#flow-arrow)"/>
 
-            <!-- Step 4: staging.json -->
-            <rect x="432" y="66" width="120" height="52" rx="5" fill="#252525" stroke="#404040"/>
-            <text x="492" y="89" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="11">staging.json</text>
-            <text x="492" y="106" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Atomic persist</text>
-            <text x="492" y="134" text-anchor="middle" fill="#666" font-family="Inter, sans-serif" font-size="10">4</text>
+            <!-- Step 4: Shadow files -->
+            <rect x="452" y="66" width="120" height="52" rx="5" fill="#252525" stroke="#404040"/>
+            <text x="512" y="89" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="11">shadow/*.cfg</text>
+            <text x="512" y="106" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Modified</text>
+            <text x="512" y="134" text-anchor="middle" fill="#666" font-family="Inter, sans-serif" font-size="10">4</text>
 
-            <line x1="552" y1="92" x2="574" y2="92" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#flow-arrow)"/>
+            <line x1="572" y1="92" x2="594" y2="92" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#flow-arrow)"/>
 
             <!-- Step 5: Review -->
-            <rect x="576" y="66" width="80" height="52" rx="5" fill="#2d2d2d" stroke="#404040"/>
-            <text x="616" y="89" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="12" font-weight="600">Review</text>
-            <text x="616" y="106" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Diffs</text>
-            <text x="616" y="134" text-anchor="middle" fill="#666" font-family="Inter, sans-serif" font-size="10">5</text>
+            <rect x="596" y="66" width="60" height="52" rx="5" fill="#2d2d2d" stroke="#404040"/>
+            <text x="626" y="89" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="12" font-weight="600">Diff</text>
+            <text x="626" y="106" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Review</text>
+            <text x="626" y="134" text-anchor="middle" fill="#666" font-family="Inter, sans-serif" font-size="10">5</text>
 
             <line x1="656" y1="92" x2="690" y2="92" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#flow-arrow)"/>
 
             <!-- Step 6: Apply -->
             <rect x="692" y="66" width="100" height="52" rx="5" fill="#2d2d2d" stroke="#569cd6"/>
             <text x="742" y="89" text-anchor="middle" fill="#569cd6" font-family="Inter, sans-serif" font-size="12" font-weight="600">Apply</text>
-            <text x="742" y="106" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">7 phases</text>
+            <text x="742" y="106" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Replace original</text>
             <text x="742" y="134" text-anchor="middle" fill="#666" font-family="Inter, sans-serif" font-size="10">6</text>
 
             <line x1="792" y1="92" x2="814" y2="92" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#flow-arrow)"/>
 
-            <!-- Step 7: .cfg files -->
+            <!-- Step 7: Git -->
             <rect x="816" y="66" width="90" height="52" rx="5" fill="#252525" stroke="#404040"/>
-            <text x="861" y="89" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="11">*.cfg</text>
-            <text x="861" y="106" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Written</text>
+            <text x="861" y="89" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="12" font-weight="600">Git</text>
+            <text x="861" y="106" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Commit</text>
 
-            <line x1="906" y1="92" x2="928" y2="92" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#flow-arrow)"/>
-
-            <!-- Step 8: Git -->
-            <rect x="930" y="66" width="72" height="52" rx="5" fill="#2d2d2d" stroke="#404040"/>
-            <text x="966" y="89" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="12" font-weight="600">Git</text>
-            <text x="966" y="106" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="10">Commit</text>
+            <text x="861" y="134" text-anchor="middle" fill="#666" font-family="Inter, sans-serif" font-size="10">7</text>
         </svg>
     </div>
 
@@ -108,21 +103,27 @@
     </p>
 
     <ol>
-        <li><strong>UI input</strong> — User edits an attribute, moves an object, creates a file, etc.</li>
-        <li><strong>API call</strong> — Frontend sends the change to the backend via <code>ApiClient.post()</code> with the <code>X-Session-Id</code> header</li>
-        <li><strong>StagingManager</strong> — Backend validates the session lock, then stores the operation in staging state</li>
-        <li><strong>staging.json</strong> — The staging data is persisted atomically to disk (temp file + <code>os.replace()</code>)</li>
-        <li><strong>Commit dialog</strong> — User reviews all staged changes as diffs</li>
-        <li><strong>Apply</strong> — All staged changes are written to the actual config files in a 10-phase process</li>
-        <li><strong>Git commit</strong> — Optionally, changes are committed to version control</li>
+        <li><strong>UI input</strong> &mdash; User edits an attribute, moves an object, creates a file, etc.</li>
+        <li><strong>API call</strong> &mdash; Frontend sends the change to the backend via <code>ApiClient.post()</code>
+            with the <code>X-Session-Id</code> header. The route handler calls <code>ensure_shadow_lock()</code>
+            to create the shadow (if needed) and verify lock ownership, then takes a file-level snapshot for undo.</li>
+        <li><strong>NagiosService</strong> &mdash; The service writes changes directly to the shadow copy's
+            <code>.cfg</code> files via the parser and writer.</li>
+        <li><strong>Shadow files</strong> &mdash; The shadow <code>.cfg</code> files now contain the updated
+            configuration. The service reloads to reflect the new state.</li>
+        <li><strong>Commit dialog</strong> &mdash; User reviews unified diffs (shadow vs original) for every
+            modified file.</li>
+        <li><strong>Apply</strong> &mdash; The shadow copy replaces the original config directory. A backup is
+            created first.</li>
+        <li><strong>Git commit</strong> &mdash; Optionally, changes are committed to version control.</li>
     </ol>
 
     <div class="docs-note">
-        The critical point: steps 1 through 4 never modify your Nagios config files. The
-        actual <code>.cfg</code> files are only written during step 6 (Apply).
+        The critical point: steps 1 through 4 modify only the shadow copy. Your original
+        <code>.cfg</code> files are only replaced during step 6 (Apply).
     </div>
 
-    <h3>State Transitions</h3>
+    <h3>Shadow Copy Lifecycle</h3>
 
     <div class="docs-diagram">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 220">
@@ -137,56 +138,47 @@
 
             <rect width="1020" height="220" fill="#1e1e1e" rx="6"/>
 
-            <text x="510" y="30" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="14" font-weight="600">Staging State Machine</text>
+            <text x="510" y="30" text-anchor="middle" fill="#d4d4d4" font-family="Inter, sans-serif" font-size="14" font-weight="600">Shadow Copy Lifecycle</text>
 
-            <!-- EMPTY state -->
-            <rect x="120" y="74" width="200" height="66" rx="33" fill="#252525" stroke="#4ec9b0" stroke-width="2"/>
-            <text x="220" y="103" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="15" font-weight="600">EMPTY</text>
-            <text x="220" y="123" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">No lock held</text>
+            <!-- NO SHADOW state -->
+            <rect x="120" y="80" width="240" height="66" rx="33" fill="#252525" stroke="#4ec9b0" stroke-width="2"/>
+            <text x="240" y="109" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="15" font-weight="600">NO SHADOW</text>
+            <text x="240" y="129" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">Working on original config</text>
 
-            <!-- ACTIVE state -->
-            <rect x="500" y="74" width="200" height="66" rx="33" fill="#252525" stroke="#569cd6" stroke-width="2"/>
-            <text x="600" y="103" text-anchor="middle" fill="#569cd6" font-family="Inter, sans-serif" font-size="15" font-weight="600">ACTIVE</text>
-            <text x="600" y="123" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">Session editing</text>
+            <!-- SHADOW ACTIVE state -->
+            <rect x="540" y="80" width="240" height="66" rx="33" fill="#252525" stroke="#569cd6" stroke-width="2"/>
+            <text x="660" y="109" text-anchor="middle" fill="#569cd6" font-family="Inter, sans-serif" font-size="15" font-weight="600">SHADOW ACTIVE</text>
+            <text x="660" y="129" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">Working on shadow copy</text>
 
-            <!-- RESTORE_PENDING state -->
-            <rect x="700" y="150" width="250" height="60" rx="30" fill="#252525" stroke="#ffb74d" stroke-width="2"/>
-            <text x="825" y="177" text-anchor="middle" fill="#ffb74d" font-family="Inter, sans-serif" font-size="15" font-weight="600">RESTORE_PENDING</text>
-            <text x="825" y="195" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">Backup loaded</text>
+            <!-- NO SHADOW → SHADOW ACTIVE -->
+            <line x1="360" y1="102" x2="538" y2="102" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#state-arrow)"/>
+            <text x="449" y="94" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">First mutation</text>
 
-            <!-- EMPTY → ACTIVE -->
-            <line x1="320" y1="96" x2="498" y2="96" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#state-arrow)"/>
-            <text x="410" y="88" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">First edit</text>
+            <!-- SHADOW ACTIVE → NO SHADOW (apply) -->
+            <line x1="538" y1="128" x2="362" y2="128" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#state-arrow)"/>
+            <text x="449" y="154" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">Apply / Discard / Break lock</text>
 
-            <!-- ACTIVE → EMPTY -->
-            <line x1="498" y1="122" x2="322" y2="122" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#state-arrow)"/>
-            <text x="410" y="148" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">Apply / Clear / Break lock</text>
-
-            <!-- EMPTY → RESTORE_PENDING -->
-            <path d="M 220 140 L 220 180 L 698 180" fill="none" stroke="#ffb74d" stroke-width="1.5" marker-end="url(#state-arrow-warn)"/>
-            <text x="440" y="173" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">Backup restore</text>
-
-            <!-- RESTORE_PENDING → EMPTY -->
-            <path d="M 825 150 L 825 52 L 220 52 L 220 72" fill="none" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#state-arrow)"/>
-            <text x="510" y="46" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">Apply restore / Discard</text>
+            <!-- Self-loop for edits -->
+            <path d="M 700 80 C 720 50, 760 50, 780 80" fill="none" stroke="#569cd6" stroke-width="1.5" marker-end="url(#state-arrow)"/>
+            <text x="740" y="52" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">Edit, create, delete, move</text>
         </svg>
     </div>
 
     <p>
-        The staging system has three states:
+        The shadow copy has two states:
     </p>
 
     <ul>
-        <li><strong>EMPTY</strong> — No session owns staging. Available for acquisition by any session.</li>
-        <li><strong>ACTIVE</strong> — A session holds the lock and is making edits.</li>
-        <li><strong>RESTORE_PENDING</strong> — A backup restore has populated staging, awaiting apply or discard.</li>
+        <li><strong>NO SHADOW</strong> &mdash; No shadow copy exists. The app reads from the original config.
+            Any session can start editing.</li>
+        <li><strong>SHADOW ACTIVE</strong> &mdash; A shadow copy exists, owned by a session. The app reads
+            from and writes to the shadow. All mutations modify shadow files directly.</li>
     </ul>
 
     <p>
-        Transitions: EMPTY &rarr; (first edit) &rarr; ACTIVE &rarr; (apply or clear) &rarr; EMPTY.
-        A backup restore creates the RESTORE_PENDING state, which transitions back to EMPTY
-        after the user applies or discards the restore. See
-        <a href="#app/staging-system">Staging System</a> for the user-facing workflow.
+        Transitions: NO SHADOW &rarr; (first mutation creates shadow + acquires lock) &rarr;
+        SHADOW ACTIVE &rarr; (apply replaces original, or discard/break destroys shadow) &rarr;
+        NO SHADOW.
     </p>
 
     <h3>Stable Keys</h3>
@@ -204,9 +196,9 @@
 
     <p>
         Stable keys survive parser reloads. When the parser re-reads config files (which
-        happens after every apply), global indices change but stable keys remain the same
-        as long as the object still exists at the same location. This is essential for the
-        staging system, which must track objects across reloads.
+        happens after every mutation in the shadow copy), global indices change but stable
+        keys remain the same as long as the object still exists. The frontend uses stable
+        keys for all API calls.
     </p>
 
     <pre><code># Generate a stable key
@@ -215,70 +207,88 @@ stable_key = generate_stable_key(obj.source_file, obj.object_type, obj.get_name(
 # Look up an object by stable key
 idx, obj = service.find_object_by_stable_key(stable_key)</code></pre>
 
-    <h3>Staged Operations</h3>
+    <h3>File-Level Undo Snapshots</h3>
 
     <p>
-        All pending changes are stored in <code>staging.json</code> under the following fields:
+        Before each mutation, the route handler snapshots the affected files within the
+        shadow copy. Snapshots are stored as a LIFO stack:
+    </p>
+
+    <pre><code># Route handler pattern
+sm = get_shadow_manager()
+rel_path = os.path.relpath(obj.source_file, sm._config_dir)
+sm.snapshot_files([rel_path], "edit host webserver01")
+
+# Then perform the actual mutation
+service.update_object(...)</code></pre>
+
+    <p>
+        Each snapshot entry records:
+    </p>
+
+    <ul>
+        <li>The relative paths of affected files</li>
+        <li>The content of those files before the mutation</li>
+        <li>A human-readable description (e.g., "edit host webserver01")</li>
+    </ul>
+
+    <p>
+        When <code>POST /api/staging/undo</code> is called, the top snapshot is popped and
+        the affected files are restored to their pre-mutation state. The service is then
+        reloaded to reflect the reverted configuration.
+    </p>
+
+    <div class="docs-note">
+        File-level snapshots are more robust than operation-level undo. They correctly handle
+        edge cases like operations that affect multiple objects within the same file, because
+        the entire file state is captured and restored.
+    </div>
+
+    <h3>Shadow Copy Manager</h3>
+
+    <p>
+        The <code>ShadowCopyManager</code> class manages the shadow copy lifecycle:
     </p>
 
     <table>
         <thead>
             <tr>
-                <th>Field</th>
-                <th>Operation</th>
-                <th>What It Stores</th>
+                <th>Method</th>
+                <th>What It Does</th>
             </tr>
         </thead>
         <tbody>
             <tr>
-                <td><code>pendingEdits</code></td>
-                <td>Object edits</td>
-                <td>Original + edited attribute dictionaries, keyed by stable key</td>
+                <td><code>create_shadow(session_id)</code></td>
+                <td>Copies original config to shadow directory, acquires session lock</td>
             </tr>
             <tr>
-                <td><code>stagedMoves</code></td>
-                <td>Object moves</td>
-                <td>Source file, target file, insert position</td>
+                <td><code>has_shadow()</code></td>
+                <td>Returns whether a shadow copy currently exists</td>
             </tr>
             <tr>
-                <td><code>stagedCreations</code></td>
-                <td>Object creations</td>
-                <td>Object type, attributes, target file</td>
+                <td><code>can_modify(session_id)</code></td>
+                <td>Checks if the given session owns the lock</td>
             </tr>
             <tr>
-                <td><code>stagedObjectDeletions</code></td>
-                <td>Object deletions</td>
-                <td>Source file, line number of the object to delete</td>
+                <td><code>snapshot_files(rel_paths, desc)</code></td>
+                <td>Captures file contents for undo before a mutation</td>
             </tr>
             <tr>
-                <td><code>stagedFileCreations</code></td>
-                <td>File creations</td>
-                <td>Path of new <code>.cfg</code> file to create</td>
+                <td><code>undo()</code></td>
+                <td>Restores files from the most recent snapshot</td>
             </tr>
             <tr>
-                <td><code>stagedFileDeletions</code></td>
-                <td>File deletions</td>
-                <td>Path of file to delete</td>
+                <td><code>get_shadow_diff()</code></td>
+                <td>Returns unified diffs for all modified files (shadow vs original)</td>
             </tr>
             <tr>
-                <td><code>stagedFileMoves</code></td>
-                <td>File moves</td>
-                <td>Source path, target path</td>
+                <td><code>apply_shadow()</code></td>
+                <td>Replaces original config with shadow, creates backup first</td>
             </tr>
             <tr>
-                <td><code>stagedFolderCreations</code></td>
-                <td>Folder creations</td>
-                <td>Path of new folder to create</td>
-            </tr>
-            <tr>
-                <td><code>stagedFolderDeletions</code></td>
-                <td>Folder deletions</td>
-                <td>Path of folder to delete recursively</td>
-            </tr>
-            <tr>
-                <td><code>stagedFolderMoves</code></td>
-                <td>Folder moves</td>
-                <td>Source path, target path</td>
+                <td><code>destroy_shadow()</code></td>
+                <td>Deletes shadow copy, releases lock, discards all changes</td>
             </tr>
         </tbody>
     </table>
@@ -286,131 +296,70 @@ idx, obj = service.find_object_by_stable_key(stable_key)</code></pre>
     <h3>Lock Mechanics</h3>
 
     <p>
-        The staging system uses session-based locking to prevent concurrent editing:
+        The shadow copy uses session-based locking to prevent concurrent editing:
     </p>
 
     <ul>
-        <li><strong>Auto-acquire</strong> — The first edit by a session automatically acquires the lock. The session ID is sent via the <code>X-Session-Id</code> header.</li>
-        <li><strong>Validation</strong> — Every staging mutation calls <code>sm.can_modify(session_id)</code> to verify the requesting session owns the lock.</li>
-        <li><strong>Release</strong> — The lock is released when staging is applied or cleared.</li>
-        <li><strong>Break lock</strong> — An admin can force-break a stale lock via <code>POST /api/staging/lock/break</code>, which discards the other session's staged changes.</li>
+        <li><strong>Auto-acquire</strong> &mdash; The first mutation by a session creates the shadow copy
+            and acquires the lock. The session ID is sent via the <code>X-Session-Id</code> header.</li>
+        <li><strong>Validation</strong> &mdash; Every mutation route calls <code>ensure_shadow_lock(session_id)</code>
+            which returns a 423 error if a different session owns the lock.</li>
+        <li><strong>Release</strong> &mdash; The lock is released when the shadow is applied or destroyed.</li>
+        <li><strong>Break lock</strong> &mdash; An admin can force-break a stale lock via
+            <code>POST /api/staging/break-lock</code>, which destroys the shadow copy and discards
+            all pending changes.</li>
     </ul>
 
-    <pre><code># Route handler pattern for staging mutations
-if not sm.can_modify(request.headers.get('X-Session-Id')):
-    return jsonify({'error': 'Locked by another user', 'locked': True}), 423</code></pre>
+    <pre><code># Route handler pattern for mutations
+session_id = request.headers.get("X-Session-Id")
+success, error = ensure_shadow_lock(session_id)
+if not success:
+    return error  # 423 if locked by another session</code></pre>
 
-    <h3>Undo Stack</h3>
-
-    <p>
-        Every staging operation pushes an entry onto a LIFO undo stack. Each entry contains
-        the inverse operation needed to undo the change:
-    </p>
-
-    <pre><code>{
-    "id": "a1b2c3d4",
-    "type": "edit",
-    "data": { ... operation-specific inverse data ... },
-    "description": "Edit host 'webserver01'",
-    "timestamp": 1707500000.0
-}</code></pre>
+    <h3>Apply Process</h3>
 
     <p>
-        Undo types include: <code>edit</code>, <code>move</code>, <code>creation</code>,
-        <code>deletion</code>, <code>file_create</code>, <code>file_delete</code>,
-        <code>file_move</code>, <code>folder_create</code>, <code>folder_delete</code>,
-        and <code>folder_move</code>.
-    </p>
-
-    <p>
-        The <code>staging_manager.py</code> module maintains a registry of undo handlers
-        (<code>UNDO_HANDLERS</code>) that maps each operation type to the function that
-        reverses it. When <code>POST /api/staging/undo</code> is called, the top entry is
-        popped and its corresponding handler is invoked.
-    </p>
-
-    <h3>Apply Phase Order</h3>
-
-    <p>
-        When <code>POST /api/staging/apply</code> is called, all staged changes are written
-        to disk in a carefully ordered 7-phase process. The order prevents conflicts — for
-        example, folders must be created before files can be placed in them, and objects must
-        be deleted before the files containing them are removed.
+        When <code>POST /api/staging/apply</code> is called:
     </p>
 
     <ol>
-        <li><strong>Folder creations</strong> — Create new folders, sorted parent-first so parent directories exist before child directories</li>
-        <li><strong>File creations</strong> — Create new <code>.cfg</code> files</li>
-        <li><strong>Object composite</strong> — Per-entity merged actions:
-            <ul>
-                <li>Deletions first (reverse line order per file)</li>
-                <li>Moves, edits, and combined move+edits</li>
-                <li>Creations last (appended to target files)</li>
-            </ul>
-        </li>
-        <li><strong>File moves</strong> — Rename or relocate files</li>
-        <li><strong>Folder moves</strong> — Rename or relocate folders</li>
-        <li><strong>File deletions</strong> — Delete files from disk</li>
-        <li><strong>Folder deletions</strong> — Delete folders, sorted child-first so empty folders are removed before their parents</li>
+        <li><strong>Backup</strong> &mdash; A zip backup of the original config is created via
+            <code>BackupManager.create_backup("pre_apply")</code></li>
+        <li><strong>Replace</strong> &mdash; The shadow directory's contents replace the original
+            config directory</li>
+        <li><strong>Reload</strong> &mdash; <code>NagiosService</code> reloads the configuration
+            from the (now updated) original directory</li>
+        <li><strong>Cleanup</strong> &mdash; The shadow copy is destroyed and the lock is released</li>
     </ol>
-
-    <p>
-        Object operations on the same entity (e.g., edit + move) are merged into a single
-        composite action before executing. This prevents phase-ordering bugs where one
-        phase's assumptions about object state are violated by a prior phase.
-    </p>
-
-    <p>
-        The composite phase is implemented as <code>NagiosService.apply_object_composite()</code>.
-        File and folder phases are still separate methods: <code>apply_folder_creations()</code>,
-        <code>apply_file_creations()</code>, etc.
-    </p>
 
     <div class="docs-note">
-        Before the apply process begins, the backend creates an automatic backup via
-        <code>BackupManager.create_backup("pre_apply")</code>. If anything goes wrong, you
-        can restore from the <a href="#app/backups">Backups</a> page.
+        The apply is all-or-nothing. Either the entire shadow copy replaces the original,
+        or nothing changes. There are no partial applies or multi-phase write sequences.
     </div>
-
-    <h3>Conflict Detection</h3>
-
-    <p>
-        The staging system tracks file checksums to detect external modifications:
-    </p>
-
-    <ol>
-        <li>When a file is first edited, its SHA256 checksum is captured as a <strong>base checksum</strong> via <code>sm.update_base_checksums([file_path])</code></li>
-        <li>Before applying, <code>sm.detect_conflicts()</code> recomputes the current checksum of each file and compares it to the base</li>
-        <li>If any file's checksum has changed (meaning it was modified outside the app), the apply is blocked with a <code>409</code> status</li>
-    </ol>
-
-    <p>
-        This prevents the apply process from silently overwriting changes made by another
-        user, tool, or manual edit.
-    </p>
 
     <h3>Commit Workflow</h3>
 
     <p>
-        The full commit workflow combines applying staged changes with a Git commit:
+        The full commit workflow combines applying the shadow copy with a Git commit:
     </p>
 
     <ol>
         <li>User clicks the <strong>Commit</strong> button in the navbar</li>
-        <li>Frontend fetches <code>/api/staging/diff</code> and <code>/api/staging/analyze-references</code></li>
-        <li>Commit dialog renders file-based change diffs</li>
-        <li>User enters a commit message and optionally checks "Update references"</li>
-        <li><code>POST /api/staging/apply</code> writes changes to disk (with optional reference updates)</li>
+        <li>Frontend fetches <code>GET /api/staging/info</code> for change counts and
+            <code>GET /api/staging/diff</code> for unified diffs</li>
+        <li>Commit dialog renders per-file unified diffs</li>
+        <li>User enters a commit message</li>
+        <li><code>POST /api/staging/apply</code> replaces the original config with the shadow</li>
         <li><code>POST /api/git/commit</code> stages and commits the changes</li>
         <li>Git result panel shows the outcome (terminal-style)</li>
-        <li>Staging is cleared, page reloads to reflect the new state</li>
+        <li>Page reloads to reflect the new state</li>
     </ol>
 
     <h3>Atomic File Writes</h3>
 
     <p>
-        All file writes during the apply phase (and staging persistence) use an atomic write
-        pattern to prevent data corruption:
+        All file writes by <code>NagiosService</code> (both to shadow and original) use an
+        atomic write pattern to prevent data corruption:
     </p>
 
     <pre><code># 1. Write to a temp file in the same directory

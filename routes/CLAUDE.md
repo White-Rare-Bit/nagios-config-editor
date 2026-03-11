@@ -7,8 +7,8 @@ Flask blueprints registered in `__init__.py`. Service access via `helpers.py`.
 | Module | Routes |
 |--------|--------|
 | `pages.py` | GET /, /explorer, /backups, /git, /settings, /validate, etc. |
-| `objects.py` | GET /api/objects, POST /api/delete-objects, POST /api/clone-objects |
-| `staging.py` | GET/POST/DELETE /api/staging, POST /api/staging/apply, /undo |
+| `objects.py` | GET /api/objects, POST /api/objects/update, /create, /delete, /move, /delete-multiple |
+| `staging.py` | GET /api/staging/info, POST /api/staging/apply, /undo, /break-lock, /clear |
 | `files.py` | GET /api/files, POST /api/files/create, /move, DELETE /api/files/<path> |
 | `bulk_ops.py` | POST /api/apply-rename, POST /api/move-objects |
 | `git.py` | GET /api/git/status, POST /api/git/commit, /restore, GET /api/git/log |
@@ -29,16 +29,17 @@ operation_response(result, success_data=None, error_code=500)
 
 ## Patterns
 
-**Lock check** (required for staging mutations):
+**Shadow lock** (required before all mutations):
 ```python
-if not sm.can_modify(request.headers.get('X-Session-Id')):
-    return jsonify({'error': 'Locked by another user', 'locked': True}), 423
+session_id = request.headers.get("X-Session-Id")
+success, error = ensure_shadow_lock(session_id)
+if not success:
+    return error  # 423 if locked by another session
 ```
 
-**Parser modification** (holds lock, reloads on exit):
+**Snapshot before mutation** (enables undo):
 ```python
-with get_parser_for_modification() as p:
-    # Multi-step mutation
+sm = get_shadow_manager()
+rel_path = os.path.relpath(obj.source_file, sm._config_dir)
+sm.snapshot_files([rel_path], "description of change")
 ```
-
-**Backup before mutation**: `bm.create_backup("operation_name")` before any write.
