@@ -1,21 +1,29 @@
 /** Explorer Analysis Module - Suggestions, cleanup, issues, and template/grouping analysis */
 
-(function(Explorer) {
-    'use strict';
+import { state } from './state.js';
+import { getObjectKey } from './main.js';
+import { escapeHtml } from '../app.js';
+import { showToast } from '../ui-notifications.js';
+import { ApiClient } from '../api-client.js';
+import { StableKey } from '../stable-key.js';
+import { showDialog, closeDialog } from './context-menu.js'; // circular — safe (function-level)
+import { dialogInfoText, dialogAlert, dialogKvList, dialogEntryList, showCenterPaneNewObject, stageNewObjectChanges } from './dialogs.js'; // circular — safe (function-level)
+import { afterFrontendMutation } from './data-loading.js'; // circular — safe (function-level)
+import { navigateToObjectByIndex } from './file-operations.js'; // circular — safe (function-level)
+import { loadGroupingSuggestions, loadTemplateIssues, showCreateTemplateDialog, showCreateGroupDialog } from './analysis-suggestions.js'; // circular — safe (function-level)
+import { filterIssues, navigateToIssue, resolveGroupedError, getIssueResolveInfo, openCreateObjectForIssue } from './analysis-issues.js'; // circular — safe (function-level)
 
-    const state = Explorer.state;
+// A-01: Shared utilities extracted from duplicated patterns
 
-    // A-01: Shared utilities extracted from duplicated patterns
+// Severity order for consistent sorting across suggestion types
+const SEVERITY_ORDER = { error: 0, warning: 1, info: 2 };
 
-    // Severity order for consistent sorting across suggestion types
-    const SEVERITY_ORDER = { error: 0, warning: 1, info: 2 };
+// A-02: Filter out suggestions for objects marked for deletion (used 11+ times)
+function filterActiveSuggestions(suggestions) {
+    return suggestions.filter(s => s.object && !state.stagedObjectDeletions.has(getObjectKey(s.object)));
+}
 
-    // A-02: Filter out suggestions for objects marked for deletion (used 11+ times)
-    function filterActiveSuggestions(suggestions) {
-        return suggestions.filter(s => s.object && !Explorer.isObjectMarkedForDeletion(s.object));
-    }
-
-async function analyzeAll() {
+export async function analyzeAll() {
     try {
         await loadAllSuggestions(true);
     } catch (error) {
@@ -26,7 +34,7 @@ async function analyzeAll() {
 /**
  * Update the validation summary banner in the Suggestions tab
  */
-function updateValidationSummary() {
+export function updateValidationSummary() {
     const summary = document.getElementById('validationSummary');
     const summaryText = document.getElementById('validationSummaryText');
 
@@ -45,7 +53,7 @@ function updateValidationSummary() {
 /**
  * Update the create target path display in the Files tab
  */
-function updateCreatePath(path) {
+export function updateCreatePath(path) {
     const pathEl = document.getElementById('createTargetPath');
     if (pathEl) {
         pathEl.textContent = path ? `in ${path}` : '';
@@ -53,7 +61,7 @@ function updateCreatePath(path) {
     }
 }
 
-async function loadAllSuggestions(forceRefresh = false) {
+export async function loadAllSuggestions(forceRefresh = false) {
     if (!forceRefresh && state.healthCheckData) {
         mapHealthCheckToState(state.healthCheckData);
     } else {
@@ -68,8 +76,8 @@ async function loadAllSuggestions(forceRefresh = false) {
             return;
         }
     }
-    await Explorer.loadGroupingSuggestions(forceRefresh);
-    await Explorer.loadTemplateIssues(forceRefresh);
+    await loadGroupingSuggestions(forceRefresh);
+    await loadTemplateIssues(forceRefresh);
     renderUnifiedSuggestionsList();
 }
 
@@ -142,7 +150,7 @@ const ISSUE_TYPE_HANDLERS = {
     },
     orphan: (issue, obj) => {
         if (!obj) {return;}
-        state.orphanIndices.add(Explorer.getObjectKey(obj));
+        state.orphanIndices.add(getObjectKey(obj));
         state.allCleanupSuggestions.push({
             type: 'orphan', severity: 'info', object: obj,
             title: `Orphan ${issue.object_type}: ${issue.object}`,
@@ -152,11 +160,11 @@ const ISSUE_TYPE_HANDLERS = {
     },
     orphan_service: (issue, obj) => {
         if (!obj) {return;}
-        state.orphanIndices.add(Explorer.getObjectKey(obj));
+        state.orphanIndices.add(getObjectKey(obj));
     },
     service_on_empty_hostgroup: (issue, obj) => {
         if (!obj) {return;}
-        state.orphanIndices.add(Explorer.getObjectKey(obj));
+        state.orphanIndices.add(getObjectKey(obj));
     },
     command_arg_mismatch: () => {
         // Already tracked in issuesByObject — no additional state needed
@@ -192,7 +200,7 @@ const ISSUE_TYPE_HANDLERS = {
  * Distribute health-check issues from backend into existing state arrays.
  * Called after fetching /api/health-check or from cached data.
  */
-function mapHealthCheckToState(data) {
+export function mapHealthCheckToState(data) {
     // 1. Reset state arrays
     state.allCleanupSuggestions = [];
     state.allNotificationSuggestions = [];
@@ -212,7 +220,7 @@ function mapHealthCheckToState(data) {
     });
 
     // 4. Call filterIssues to build groupedErrors
-    Explorer.filterIssues();
+    filterIssues();
 
     // 5. Build index lookup for O(1) object resolution
     const objectsByIndex = new Map();
@@ -228,7 +236,7 @@ function mapHealthCheckToState(data) {
     }
 }
 
-function updateSuggestionsBadge() {
+export function updateSuggestionsBadge() {
     // Use collectAllSuggestions() for accurate count that matches the rendered list
     const allSuggestions = collectAllSuggestions();
     const totalCount = allSuggestions.length;
@@ -441,7 +449,7 @@ function collectGroupingSuggestions(suggestions) {
 /**
  * Collect all suggestions into a unified list with normalized format
  */
-function collectAllSuggestions() {
+export function collectAllSuggestions() {
     const suggestions = [];
 
     collectErrorSuggestions(suggestions);
@@ -501,7 +509,7 @@ function getCleanupTypeLabel(type) {
 /**
  * Render the unified flat suggestions list
  */
-function renderUnifiedSuggestionsList() {
+export function renderUnifiedSuggestionsList() {
     const container = document.getElementById('suggestionsList');
     if (!container) {return;}
 
@@ -597,13 +605,13 @@ function renderSuggestionRow(s) {
         <div class="suggestion-row" data-id="${s.id}" onclick="Explorer.handleSuggestionClick('${s.id}', event)">
             <span class="suggestion-severity ${s.severity}"></span>
             <span class="suggestion-text">
-                <span class="suggestion-type">${Explorer.escapeHtml(s.label)}:</span>
-                <span class="suggestion-name">${Explorer.escapeHtml(s.name)}</span>
+                <span class="suggestion-type">${escapeHtml(s.label)}:</span>
+                <span class="suggestion-name">${escapeHtml(s.name)}</span>
             </span>
             <button class="suggestion-action ${actionClass}" onclick="Explorer.handleSuggestionAction('${s.id}', event)">
-                ${Explorer.escapeHtml(s.actionLabel)}
+                ${escapeHtml(s.actionLabel)}
             </button>
-            ${s.detail ? `<div class="suggestion-detail">${Explorer.escapeHtml(s.detail)}</div>` : ''}
+            ${s.detail ? `<div class="suggestion-detail">${escapeHtml(s.detail)}</div>` : ''}
         </div>
     `;
 }
@@ -611,7 +619,7 @@ function renderSuggestionRow(s) {
 /**
  * Handle clicking a suggestion row (navigate/expand)
  */
-function handleSuggestionClick(id, event) {
+export function handleSuggestionClick(id, event) {
     // Don't trigger if clicking the action button
     if (event.target.closest('.suggestion-action')) {return;}
 
@@ -620,18 +628,18 @@ function handleSuggestionClick(id, event) {
 
     // Navigate to the object if possible
     if (s.data?.object) {
-        Explorer.navigateToObjectByIndex(s.data.object.global_index);
+        navigateToObjectByIndex(s.data.object.global_index);
     } else if (s.data?.objects && s.data.objects.length > 0) {
         // For duplicates, show the first one
-        Explorer.navigateToObjectByIndex(s.data.objects[0].global_index);
+        navigateToObjectByIndex(s.data.objects[0].global_index);
     } else if (s.data?.issue) {
         // For health check warnings, navigate to the referenced object
-        Explorer.navigateToIssue(s.data.issue.object, s.data.issue.object_type);
+        navigateToIssue(s.data.issue.object, s.data.issue.object_type);
     } else if (s.data?.issues && s.data.issues.length > 0) {
         // For missing objects, navigate to the first referencing object
         const firstIssue = s.data.issues[0];
         if (firstIssue.object && firstIssue.object_type) {
-            Explorer.navigateToIssue(firstIssue.object, firstIssue.object_type);
+            navigateToIssue(firstIssue.object, firstIssue.object_type);
         }
     }
 }
@@ -639,7 +647,7 @@ function handleSuggestionClick(id, event) {
 /**
  * Handle clicking a suggestion's action button
  */
-function handleSuggestionAction(id, event) {
+export function handleSuggestionAction(id, event) {
     event.stopPropagation();
 
     const s = findSuggestionById(id);
@@ -651,7 +659,7 @@ function handleSuggestionAction(id, event) {
             if (s.data && state.groupedErrors) {
                 const idx = state.groupedErrors.indexOf(s.data);
                 if (idx !== -1) {
-                    Explorer.resolveGroupedError(idx);
+                    resolveGroupedError(idx);
                 }
             }
             break;
@@ -680,14 +688,14 @@ function handleSuggestionAction(id, event) {
         case 'create_template':
             // Create template from opportunity
             if (s.templateIndex !== undefined) {
-                Explorer.showCreateTemplateDialog(s.templateIndex);
+                showCreateTemplateDialog(s.templateIndex);
             }
             break;
 
         case 'create_hostgroup_pattern':
             // Create hostgroup from pattern
             if (s.groupingIndex !== undefined) {
-                Explorer.showCreateGroupDialog(s.groupingIndex);
+                showCreateGroupDialog(s.groupingIndex);
             }
             break;
 
@@ -709,7 +717,7 @@ function findSuggestionById(id) {
 /**
  * Filter suggestions by severity
  */
-function filterSuggestions(event) {
+export function filterSuggestions(event) {
     const filter = event.target.closest('[data-filter]')?.dataset.filter;
     if (!filter) {return;}
 
@@ -732,12 +740,12 @@ async function stageCleanupDeletion(idx) {
 
     const obj = s.object;
     const result = await ApiClient.post('/api/objects/delete', {
-        stable_key: Explorer.getObjectKey(obj)
+        stable_key: getObjectKey(obj)
     }, { silent: true });
 
     if (result.success) {
         state.allCleanupSuggestions.splice(idx, 1);
-        await Explorer.afterFrontendMutation();
+        await afterFrontendMutation();
         renderUnifiedSuggestionsList();
         showToast(`Deleted "${obj.display_name}"`, 'success');
     } else {
@@ -753,7 +761,7 @@ async function stageCleanupDeletion(idx) {
 // Cleanup Suggestions (Unused Templates, Duplicates, Empty Groups)
 // ============================================================================
 
-async function loadCleanupSuggestions(forceRefresh = false) {
+export async function loadCleanupSuggestions(forceRefresh = false) {
     const container = document.getElementById('cleanupContent');
     const badge = document.getElementById('cleanupSectionBadge');
 
@@ -832,7 +840,7 @@ function renderCleanupItemButtons(s, i) {
         return `<button class="nbe-btn nbe-btn--dark nbe-btn--tonal nbe-btn--xs" onclick="event.stopPropagation(); Explorer.fixLongHostList(${i})">Create Hostgroup</button>`;
     }
     if (s.issueData) {
-        const resolveInfo = Explorer.getIssueResolveInfo(s.issueData);
+        const resolveInfo = getIssueResolveInfo(s.issueData);
         if (resolveInfo) {
             return `<button class="nbe-btn nbe-btn--dark nbe-btn--tonal nbe-btn--xs" onclick="event.stopPropagation(); Explorer.resolveCleanupIssue(${i})">Create ${resolveInfo.objectType}</button>`;
         }
@@ -857,8 +865,8 @@ function renderCleanupItem(s, i) {
     return `
         <div class="cleanup-suggestion ${itemSeverityClass}" data-index="${i}" onclick="Explorer.showCleanupDetail(${i})">
             <div class="cleanup-info">
-                <div class="cleanup-title">${Explorer.escapeHtml(displayTitle)}</div>
-                ${displayDesc ? `<div class="cleanup-desc">${Explorer.escapeHtml(displayDesc)}</div>` : ''}
+                <div class="cleanup-title">${escapeHtml(displayTitle)}</div>
+                ${displayDesc ? `<div class="cleanup-desc">${escapeHtml(displayDesc)}</div>` : ''}
             </div>
             ${buttons}
         </div>
@@ -896,7 +904,7 @@ function renderCleanupGroup(groupType, items) {
     `;
 }
 
-function renderCleanupSuggestions() {
+export function renderCleanupSuggestions() {
     const container = document.getElementById('cleanupContent');
     if (!container) {return;}
 
@@ -922,12 +930,12 @@ function renderCleanupSuggestions() {
     container.innerHTML = html;
 }
 
-function toggleCleanupSection(header) {
+export function toggleCleanupSection(header) {
     const section = header.closest('.cleanup-section');
     section.classList.toggle('collapsed');
 }
 
-function bulkDeleteCleanupGroup(groupType) {
+export function bulkDeleteCleanupGroup(groupType) {
     // Find all suggestions of this type
     const indicesToDelete = [];
     for (let i = state.allCleanupSuggestions.length - 1; i >= 0; i--) {
@@ -957,24 +965,24 @@ function bulkDeleteCleanupGroup(groupType) {
     const itemsList = indicesToDelete.slice(0, 10).map(idx => {
         const s = state.allCleanupSuggestions[idx];
         const name = s.object?.display_name || s.title;
-        return `<li>${Explorer.escapeHtml(name)}</li>`;
+        return `<li>${escapeHtml(name)}</li>`;
     }).join('');
     const moreCount = indicesToDelete.length > 10 ? `<li><em>... and ${indicesToDelete.length - 10} more</em></li>` : '';
 
-    Explorer.showDialog(`Delete All ${label.charAt(0).toUpperCase() + label.slice(1)}`, `
+    showDialog(`Delete All ${label.charAt(0).toUpperCase() + label.slice(1)}`, `
         <p class="u-mb-md">Stage deletion of <strong>${indicesToDelete.length} ${label}</strong>?</p>
         <ul class="dialog-scrollable-list dialog-scrollable-list--medium u-pl-lg">
             ${itemsList}
             ${moreCount}
         </ul>
-        ${Explorer.dialogInfoText('Changes will be staged and can be reviewed before committing.')}
+        ${dialogInfoText('Changes will be staged and can be reviewed before committing.')}
     `, async () => {
         // Delete via API
         const keysToDelete = [];
         for (const idx of indicesToDelete) {
             const s = state.allCleanupSuggestions[idx];
             if (s.object) {
-                keysToDelete.push(Explorer.getObjectKey(s.object));
+                keysToDelete.push(getObjectKey(s.object));
             }
         }
 
@@ -989,8 +997,8 @@ function bulkDeleteCleanupGroup(groupType) {
             state.allCleanupSuggestions.splice(idx, 1);
         }
 
-        await Explorer.afterFrontendMutation();
-        Explorer.closeDialog();
+        await afterFrontendMutation();
+        closeDialog();
         renderCleanupSuggestions();
         updateSuggestionsBadge();
         updateCleanupBadge();
@@ -999,7 +1007,7 @@ function bulkDeleteCleanupGroup(groupType) {
     });
 }
 
-function showCleanupDetail(idx) {
+export function showCleanupDetail(idx) {
     const s = state.allCleanupSuggestions[idx];
 
     if (s.type === 'duplicate') {
@@ -1007,37 +1015,37 @@ function showCleanupDetail(idx) {
         const entries = s.objects.map(o => {
             const file = o.source_file.split('/').pop();
             return {
-                html: `<span class="cleanup-detail-file">${Explorer.escapeHtml(file)}</span>
+                html: `<span class="cleanup-detail-file">${escapeHtml(file)}</span>
                        <span class="cleanup-detail-line">Line ${o.line_number || '?'}</span>`,
                 onclick: `Explorer.navigateToObjectByIndex(${o.global_index}); Explorer.closeDialog();`
             };
         });
 
-        Explorer.showDialog('Duplicate Objects', `
-            ${Explorer.dialogInfoText(s.description)}
+        showDialog('Duplicate Objects', `
+            ${dialogInfoText(s.description)}
             <p class="u-mb-sm"><strong>Click to navigate to each definition:</strong></p>
-            ${Explorer.dialogEntryList(entries)}
+            ${dialogEntryList(entries)}
         `, null);
     } else if (s.object) {
         // Single object - navigate to it
-        Explorer.navigateToObjectByIndex(s.object.global_index);
+        navigateToObjectByIndex(s.object.global_index);
     } else if (s.issueData) {
         // Warning without a direct object - show info dialog
-        Explorer.showDialog('Issue Details', `
-            <p class="u-mb-md"><strong>${Explorer.escapeHtml(s.title)}</strong></p>
-            ${Explorer.dialogInfoText(s.description)}
+        showDialog('Issue Details', `
+            <p class="u-mb-md"><strong>${escapeHtml(s.title)}</strong></p>
+            ${dialogInfoText(s.description)}
         `, null);
     }
 }
 
-async function stageCleanupDelete(idx) {
+export async function stageCleanupDelete(idx) {
     const s = state.allCleanupSuggestions[idx];
     const obj = s.object;
 
     if (!obj) {return;}
 
     const result = await ApiClient.post('/api/objects/delete', {
-        stable_key: Explorer.getObjectKey(obj)
+        stable_key: getObjectKey(obj)
     }, { silent: true });
 
     if (!result.success) {
@@ -1046,7 +1054,7 @@ async function stageCleanupDelete(idx) {
     }
 
     state.allCleanupSuggestions.splice(idx, 1);
-    await Explorer.afterFrontendMutation();
+    await afterFrontendMutation();
     renderCleanupSuggestions();
     updateSuggestionsBadge();
 
@@ -1062,12 +1070,12 @@ async function stageCleanupDelete(idx) {
     showToast(`Deleted ${obj.object_type} "${obj.display_name || obj.name}"`, 'success');
 }
 
-function resolveCleanupIssue(idx) {
+export function resolveCleanupIssue(idx) {
     const s = state.allCleanupSuggestions[idx];
     if (!s.issueData) {return;}
 
     const issue = s.issueData;
-    const resolveInfo = Explorer.getIssueResolveInfo(issue);
+    const resolveInfo = getIssueResolveInfo(issue);
     if (!resolveInfo) {return;}
 
     // Find the source file of the object that has the issue
@@ -1075,10 +1083,10 @@ function resolveCleanupIssue(idx) {
     const targetFile = sourceObj ? sourceObj.source_file : null;
 
     // Open create object dialog with pre-filled values
-    Explorer.openCreateObjectForIssue(resolveInfo.objectType, resolveInfo.missingName, targetFile, issue);
+    openCreateObjectForIssue(resolveInfo.objectType, resolveInfo.missingName, targetFile, issue);
 }
 
-function fixDuplicate(idx) {
+export function fixDuplicate(idx) {
     const s = state.allCleanupSuggestions[idx];
     if (!s || s.type !== 'duplicate' || !s.duplicateGroup) {return;}
 
@@ -1093,7 +1101,7 @@ function fixDuplicate(idx) {
         // Show differing attributes for this object
         let diffHtml = '';
         if (hasDifferences) {
-            diffHtml = Explorer.dialogKvList(differences.map(attr => ({
+            diffHtml = dialogKvList(differences.map(attr => ({
                 key: attr,
                 value: o.attributes[attr]
             })));
@@ -1103,7 +1111,7 @@ function fixDuplicate(idx) {
             html: `<div class="dialog-duplicate-entry">
                 <div class="dialog-entry-header">
                     <div class="ref-item-clickable" onclick="Explorer.navigateToObjectByIndex(${o.global_index}); Explorer.closeDialog();">
-                        <span class="cleanup-detail-file">${Explorer.escapeHtml(file)}</span>
+                        <span class="cleanup-detail-file">${escapeHtml(file)}</span>
                         <span class="cleanup-detail-line">Line ${o.line_number || '?'}</span>
                     </div>
                     <button class="nbe-btn nbe-btn--dark nbe-btn--tonal nbe-btn--sm" onclick="Explorer.keepDuplicateAndDeleteOthers(${idx}, ${i})">Keep This</button>
@@ -1114,21 +1122,21 @@ function fixDuplicate(idx) {
     });
 
     const diffMessage = hasDifferences
-        ? Explorer.dialogAlert('warning',
+        ? dialogAlert('warning',
              `<strong>Differences found!</strong> These duplicates have different values for:
              <code>${differences.join('</code>, <code>')}</code>`)
-        : Explorer.dialogAlert('info',
+        : dialogAlert('info',
              'These duplicates are identical. You can safely delete any of them.');
 
     const objectType = s.duplicateGroup[0]?.object_type || 'object';
-    Explorer.showDialog(`Resolve Duplicate ${objectType}`, `
+    showDialog(`Resolve Duplicate ${objectType}`, `
         ${diffMessage}
-        ${Explorer.dialogInfoText('Choose which definition to keep. The others will be staged for deletion.')}
+        ${dialogInfoText('Choose which definition to keep. The others will be staged for deletion.')}
         <div class="dialog-duplicate-list">${entries.map(e => e.html).join('')}</div>
     `, null);
 }
 
-function findDuplicateDifferences(objects) {
+export function findDuplicateDifferences(objects) {
     if (objects.length < 2) {return [];}
 
     // Collect all attribute keys across all objects
@@ -1151,7 +1159,7 @@ function findDuplicateDifferences(objects) {
     return differences.sort();
 }
 
-async function keepDuplicateAndDeleteOthers(suggestionIdx, keepIdx) {
+export async function keepDuplicateAndDeleteOthers(suggestionIdx, keepIdx) {
     const s = state.allCleanupSuggestions[suggestionIdx];
     if (!s || !s.duplicateGroup) {return;}
 
@@ -1159,7 +1167,7 @@ async function keepDuplicateAndDeleteOthers(suggestionIdx, keepIdx) {
     const keysToDelete = [];
     s.duplicateGroup.forEach((obj, i) => {
         if (i !== keepIdx) {
-            keysToDelete.push(Explorer.getObjectKey(obj));
+            keysToDelete.push(getObjectKey(obj));
         }
     });
 
@@ -1169,8 +1177,8 @@ async function keepDuplicateAndDeleteOthers(suggestionIdx, keepIdx) {
 
     const deletedCount = result.data?.deleted || keysToDelete.length;
 
-    await Explorer.afterFrontendMutation();
-    Explorer.closeDialog();
+    await afterFrontendMutation();
+    closeDialog();
 
     showToast(`Deleted ${deletedCount} duplicate(s)`, 'success');
 
@@ -1182,7 +1190,7 @@ async function keepDuplicateAndDeleteOthers(suggestionIdx, keepIdx) {
 
 // Track pending hostgroup creation that needs to update a service
 
-function fixLongHostList(idx) {
+export function fixLongHostList(idx) {
     const s = state.allCleanupSuggestions[idx];
     if (!s || s.type !== 'long_host_list' || !s.object) {return;}
 
@@ -1191,27 +1199,27 @@ function fixLongHostList(idx) {
     const hosts = hostList.split(',').map(h => h.trim()).filter(h => h && h !== '*');
     const serviceDesc = obj.attributes.service_description || 'service';
 
-    Explorer.showDialog('Create Hostgroup', `
-        ${Explorer.dialogAlert('info',
+    showDialog('Create Hostgroup', `
+        ${dialogAlert('info',
             `<strong>This will:</strong>
             <ol class="u-mt-sm u-pl-lg">
                 <li>Create a new hostgroup definition with ${hosts.length} hosts</li>
-                <li>Update the service "${Explorer.escapeHtml(serviceDesc)}" to use the new hostgroup</li>
+                <li>Update the service "${escapeHtml(serviceDesc)}" to use the new hostgroup</li>
             </ol>`)}
         <div class="u-mb-md">
             <label class="form-label">Hosts to be grouped:</label>
             <div class="dialog-scrollable-list dialog-scrollable-list--short">
-                ${hosts.map(h => Explorer.escapeHtml(h)).join('<br>')}
+                ${hosts.map(h => escapeHtml(h)).join('<br>')}
             </div>
         </div>
-        ${Explorer.dialogInfoText('Click Continue to open the hostgroup editor where you can set the name and other attributes.')}
+        ${dialogInfoText('Click Continue to open the hostgroup editor where you can set the name and other attributes.')}
     `, () => {
-        Explorer.closeDialog();
+        closeDialog();
         openHostgroupEditorForService(idx, hosts);
     }, 'Continue');
 }
 
-function openHostgroupEditorForService(suggestionIdx, hosts) {
+export function openHostgroupEditorForService(suggestionIdx, hosts) {
     const s = state.allCleanupSuggestions[suggestionIdx];
     const obj = s.object;
     const serviceDesc = obj.attributes.service_description || 'service';
@@ -1230,7 +1238,7 @@ function openHostgroupEditorForService(suggestionIdx, hosts) {
 
     // Store the link so we can update the service when the hostgroup is saved
     state.pendingHostgroupServiceLink = {
-        serviceKey: Explorer.getObjectKey(obj),
+        serviceKey: getObjectKey(obj),
         suggestionIdx: suggestionIdx
     };
 
@@ -1251,7 +1259,7 @@ function openHostgroupEditorForService(suggestionIdx, hosts) {
     openNewObjectInEditor(newHostgroup, hostgroupFile);
 }
 
-function openNewObjectInEditor(newObj, targetFile) {
+export function openNewObjectInEditor(newObj, targetFile) {
     // Set up the editor state for a new object
     state.editedObject = newObj;
     state.originalAttributes = {};
@@ -1264,7 +1272,7 @@ function openNewObjectInEditor(newObj, targetFile) {
     state.newObjectStagedIndex = null;
 
     // Stage the new object immediately so it appears in the tree
-    Explorer.stageNewObjectChanges();
+    stageNewObjectChanges();
 
     // Show center pane
     const emptyState = document.getElementById('centerEmptyState');
@@ -1276,18 +1284,18 @@ function openNewObjectInEditor(newObj, targetFile) {
     document.getElementById('centerCloseBtn').style.display = 'block';
 
     // Render the object in the center pane
-    Explorer.showCenterPaneNewObject(newObj, targetFile);
+    showCenterPaneNewObject(newObj, targetFile);
 
     // Show message about the linked service update
     if (state.pendingHostgroupServiceLink) {
-        const serviceObj = state.allObjects.find(o => Explorer.getObjectKey(o) === state.pendingHostgroupServiceLink.serviceKey);
+        const serviceObj = state.allObjects.find(o => getObjectKey(o) === state.pendingHostgroupServiceLink.serviceKey);
         if (serviceObj) {
             showToast(`Set the hostgroup name, then save. The service "${serviceObj.display_name}" will be updated automatically.`, 'info');
         }
     }
 }
 
-function handleHostgroupServiceLink() {
+export function handleHostgroupServiceLink() {
     // Called when a new hostgroup is saved that has a pending service link
     if (!state.pendingHostgroupServiceLink || !state.isNewObject || state.editedObject?.object_type !== 'hostgroup') {
         return;
@@ -1300,7 +1308,7 @@ function handleHostgroupServiceLink() {
     const suggestionIdx = state.pendingHostgroupServiceLink.suggestionIdx;
 
     // Stage edit to update the service - remove host_name, add hostgroup_name
-    const serviceObj = state.allObjects.find(o => Explorer.getObjectKey(o) === serviceKey);
+    const serviceObj = state.allObjects.find(o => getObjectKey(o) === serviceKey);
     if (serviceObj) {
         const existingEdit = state.pendingEdits.get(serviceKey);
         const edit = existingEdit || {
@@ -1332,7 +1340,7 @@ function handleHostgroupServiceLink() {
     state.pendingHostgroupServiceLink = null;
 }
 
-function updateCleanupBadge() {
+export function updateCleanupBadge() {
     const badge = document.getElementById('cleanupSectionBadge');
     if (badge) {
         if (state.allCleanupSuggestions.length > 0) {
@@ -1348,7 +1356,7 @@ function updateCleanupBadge() {
 // Notification Gap Analysis
 // ============================================================================
 
-async function loadNotificationSuggestions(forceRefresh = false) {
+export async function loadNotificationSuggestions(forceRefresh = false) {
     const container = document.getElementById('notificationsContent');
     const badge = document.getElementById('notificationsSectionBadge');
 
@@ -1384,7 +1392,7 @@ async function loadNotificationSuggestions(forceRefresh = false) {
     renderNotificationSuggestions();
 }
 
-function renderNotificationSuggestions() {
+export function renderNotificationSuggestions() {
     const container = document.getElementById('notificationsContent');
     if (!container) {return;}
 
@@ -1421,8 +1429,8 @@ function renderNotificationSuggestions() {
                 <div class="notification-suggestion" onclick="Explorer.navigateToObjectByIndex(${s.object.global_index})">
                     <span class="notification-icon">${icon}</span>
                     <div class="notification-info">
-                        <div class="notification-title">${Explorer.escapeHtml(s.title)}</div>
-                        <div class="notification-desc">${Explorer.escapeHtml(s.description)}</div>
+                        <div class="notification-title">${escapeHtml(s.title)}</div>
+                        <div class="notification-desc">${escapeHtml(s.description)}</div>
                     </div>
                 </div>
             `;
@@ -1442,37 +1450,42 @@ state.allIssues = [];
 
 // Issues functions moved to analysis-issues.js
 
-// Export all functions to Explorer namespace
-Explorer.analyzeAll = analyzeAll;
-Explorer.updateValidationSummary = updateValidationSummary;
-Explorer.updateCreatePath = updateCreatePath;
-Explorer.loadAllSuggestions = loadAllSuggestions;
-Explorer.updateSuggestionsBadge = updateSuggestionsBadge;
-// Template & grouping functions exported from analysis-suggestions.js
-Explorer.mapHealthCheckToState = mapHealthCheckToState;
-Explorer.loadCleanupSuggestions = loadCleanupSuggestions;
-Explorer.renderCleanupSuggestions = renderCleanupSuggestions;
-Explorer.toggleCleanupSection = toggleCleanupSection;
-Explorer.bulkDeleteCleanupGroup = bulkDeleteCleanupGroup;
-Explorer.showCleanupDetail = showCleanupDetail;
-Explorer.stageCleanupDelete = stageCleanupDelete;
-Explorer.resolveCleanupIssue = resolveCleanupIssue;
-Explorer.fixDuplicate = fixDuplicate;
-Explorer.findDuplicateDifferences = findDuplicateDifferences;
-Explorer.keepDuplicateAndDeleteOthers = keepDuplicateAndDeleteOthers;
-Explorer.fixLongHostList = fixLongHostList;
-Explorer.openHostgroupEditorForService = openHostgroupEditorForService;
-Explorer.openNewObjectInEditor = openNewObjectInEditor;
-Explorer.handleHostgroupServiceLink = handleHostgroupServiceLink;
-Explorer.updateCleanupBadge = updateCleanupBadge;
-Explorer.loadNotificationSuggestions = loadNotificationSuggestions;
-Explorer.renderNotificationSuggestions = renderNotificationSuggestions;
-// Issues functions exported from analysis-issues.js
+// ============================================================================
+// window.Explorer assignments for onclick HTML strings and IIFE callers
+// ============================================================================
 
-// New unified suggestions list
-Explorer.collectAllSuggestions = collectAllSuggestions;
-Explorer.renderUnifiedSuggestionsList = renderUnifiedSuggestionsList;
-Explorer.handleSuggestionClick = handleSuggestionClick;
-Explorer.handleSuggestionAction = handleSuggestionAction;
-Explorer.filterSuggestions = filterSuggestions;
-})(Explorer);
+// Functions used in onclick/oninput HTML strings within this file
+window.Explorer.handleSuggestionClick = handleSuggestionClick;
+window.Explorer.handleSuggestionAction = handleSuggestionAction;
+window.Explorer.fixDuplicate = fixDuplicate;
+window.Explorer.fixLongHostList = fixLongHostList;
+window.Explorer.resolveCleanupIssue = resolveCleanupIssue;
+window.Explorer.stageCleanupDelete = stageCleanupDelete;
+window.Explorer.showCleanupDetail = showCleanupDetail;
+window.Explorer.bulkDeleteCleanupGroup = bulkDeleteCleanupGroup;
+window.Explorer.toggleCleanupSection = toggleCleanupSection;
+window.Explorer.keepDuplicateAndDeleteOthers = keepDuplicateAndDeleteOthers;
+
+// Functions from other modules used in onclick strings within this file
+window.Explorer.navigateToObjectByIndex = navigateToObjectByIndex;
+window.Explorer.closeDialog = closeDialog;
+
+// Functions called from IIFE files (main.js, app.js, analysis-issues.js) via Explorer namespace
+window.Explorer.analyzeAll = analyzeAll;
+window.Explorer.updateValidationSummary = updateValidationSummary;
+window.Explorer.updateCreatePath = updateCreatePath;
+window.Explorer.loadAllSuggestions = loadAllSuggestions;
+window.Explorer.updateSuggestionsBadge = updateSuggestionsBadge;
+window.Explorer.mapHealthCheckToState = mapHealthCheckToState;
+window.Explorer.loadCleanupSuggestions = loadCleanupSuggestions;
+window.Explorer.renderCleanupSuggestions = renderCleanupSuggestions;
+window.Explorer.findDuplicateDifferences = findDuplicateDifferences;
+window.Explorer.openHostgroupEditorForService = openHostgroupEditorForService;
+window.Explorer.openNewObjectInEditor = openNewObjectInEditor;
+window.Explorer.handleHostgroupServiceLink = handleHostgroupServiceLink;
+window.Explorer.updateCleanupBadge = updateCleanupBadge;
+window.Explorer.loadNotificationSuggestions = loadNotificationSuggestions;
+window.Explorer.renderNotificationSuggestions = renderNotificationSuggestions;
+window.Explorer.collectAllSuggestions = collectAllSuggestions;
+window.Explorer.renderUnifiedSuggestionsList = renderUnifiedSuggestionsList;
+window.Explorer.filterSuggestions = filterSuggestions;
