@@ -83,6 +83,12 @@ True staging: NO changes written to disk until "Apply". See `.claude/STAGING_REF
 - **Use LSP (Pyright)** for code navigation: hover for types, goToDefinition, findReferences, incomingCalls/outgoingCalls, documentSymbol — prefer over grep/read/bash scripts for type lookups, symbol searches, and function discovery.
 - Use `npx pyright` via Bash for bulk type-error auditing.
 
+## Debugging
+
+**Frontend bugs**: Add `console.warn` with a stack trace (`new Error().stack`) to pinpoint the call chain. Browser stack traces reveal race conditions and unexpected callers far faster than reading code.
+
+**Backend bugs**: Check Flask server logs for HTTP status codes (404, 423, 500) and correlate timestamps with frontend actions.
+
 ## Conventions
 
 - **Python**: snake_case | **JavaScript**: camelCase | **CSS classes**: kebab-case | **CSS variables**: `--nbe-*`
