@@ -60,10 +60,18 @@ function hasUserIdentity() {
  * @returns {object} Headers object for fetch requests
  */
 function getStagingHeaders() {
-    return {
+    const identity = getUserIdentity();
+    const headers = {
         'Content-Type': 'application/json',
         'X-Session-Id': getSessionId()
     };
+    if (identity.userName) {
+        headers['X-User-Name'] = identity.userName;
+    }
+    if (identity.userEmail) {
+        headers['X-User-Email'] = identity.userEmail;
+    }
+    return headers;
 }
 
 // Export to global scope for backward compatibility

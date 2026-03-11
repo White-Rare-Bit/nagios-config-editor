@@ -69,6 +69,28 @@ def _get_host_object(client, hostname):
 class TestShadowEditApplyWorkflow:
     """Test: create shadow -> edit via API -> verify diff -> apply -> verify original updated."""
 
+    def test_shadow_lock_records_user_identity(self, client, shadow_app):
+        """First mutation records user identity from headers in lock.json."""
+        obj = _get_host_object(client, "test-host-1")
+        key = generate_stable_key_for_object_dict(obj)
+
+        resp = client.post("/api/objects/update", json={
+            "stable_key": key,
+            "attributes": {**obj["attributes"], "alias": "Identity Test"},
+        }, headers={
+            "X-Session-Id": "session-identity",
+            "X-User-Name": "Alice",
+            "X-User-Email": "alice@example.com",
+        })
+        assert resp.status_code == 200
+
+        with shadow_app.app_context():
+            sm = shadow_app.extensions["shadow"]
+            lock = sm.get_lock_status()
+            assert lock["locked"] is True
+            assert lock["user_name"] == "Alice"
+            assert lock["user_email"] == "alice@example.com"
+
     def test_edit_via_api_shows_in_diff(self, client, shadow_app):
         """Editing an object creates a shadow and shows a diff."""
         obj = _get_host_object(client, "test-host-1")

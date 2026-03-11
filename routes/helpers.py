@@ -93,12 +93,19 @@ def get_git_service():
 def get_audit_user_identity():
     """Get user identity for audit log entries.
 
-    Checks request JSON body for user_name/userEmail.
+    Checks request headers first (X-User-Name, X-User-Email),
+    then falls back to JSON body for backward compatibility.
     Returns dict with userName and userEmail keys.
     """
-    data = request.get_json(silent=True) or {}
-    user_name = data.get("user_name") or data.get("userName")
-    user_email = data.get("user_email") or data.get("userEmail")
+    # Prefer headers (sent automatically by getStagingHeaders)
+    user_name = request.headers.get("X-User-Name")
+    user_email = request.headers.get("X-User-Email")
+
+    # Fall back to request body
+    if not user_name or not user_email:
+        data = request.get_json(silent=True) or {}
+        user_name = user_name or data.get("user_name") or data.get("userName")
+        user_email = user_email or data.get("user_email") or data.get("userEmail")
 
     return {
         "userName": user_name,
