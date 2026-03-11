@@ -2,11 +2,8 @@
  * Nagios Bulk Editor - UI Notifications Module
  *
  * Handles toast notifications and confirmation dialogs.
- * Extracted from base.js to reduce complexity.
- *
- * Dependencies (from app.js, loaded before this file):
- * - escapeHtml(text) - Escape HTML special characters
  */
+import { escapeHtml } from './app.js'; // circular
 
 // =============================================================================
 // Toast Notifications
@@ -19,7 +16,7 @@
  * @param {number} [duration=3000] - Duration in ms (0 = permanent)
  * @returns {HTMLElement|null} The toast element, or null if filtered
  */
-function showToast(message, type = 'info', duration = 3000) {
+export function showToast(message, type = 'info', duration = 3000) {
     const lowerMessage = message.toLowerCase();
 
     const isImportantMessage = lowerMessage.includes('discarded') ||
@@ -87,7 +84,7 @@ function showToast(message, type = 'info', duration = 3000) {
  * @param {boolean} [options.allowHtml=false] - Allow HTML in message
  * @returns {Promise<boolean>} True if confirmed, false if cancelled
  */
-function showConfirmDialog(options = {}) {
+export function showConfirmDialog(options = {}) {
     return new Promise((resolve) => {
         const {
             title = 'Confirm',
@@ -168,6 +165,3 @@ function showConfirmDialog(options = {}) {
     });
 }
 
-// Export to global scope for backward compatibility
-window.showToast = showToast;
-window.showConfirmDialog = showConfirmDialog;

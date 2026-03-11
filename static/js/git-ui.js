@@ -3,11 +3,9 @@
  *
  * Handles git operation result panel UI.
  * Shows running state, success/failure results.
- *
- * Dependencies (loaded before this file):
- * - base-state.js: baseState object
- * - app.js: escapeHtml
  */
+import { escapeHtml } from './app.js';
+import { baseState } from './base-state.js';
 
 // =============================================================================
 // Git Result Panel
@@ -18,7 +16,7 @@
  * @param {string} title - Panel title (e.g., "Git Commit")
  * @param {string} command - Command being executed
  */
-function showGitRunningPanel(title, command) {
+export function showGitRunningPanel(title, command) {
     const overlay = document.getElementById('gitResultOverlay');
     const icon = document.getElementById('gitResultIcon');
     const titleEl = document.getElementById('gitResultTitle');
@@ -44,7 +42,7 @@ function showGitRunningPanel(title, command) {
  * @param {boolean} success - Whether operation succeeded
  * @param {string} message - Result message to display
  */
-function showGitOperationResult(title, command, success, message) {
+export function showGitOperationResult(title, command, success, message) {
     const overlay = document.getElementById('gitResultOverlay');
     const icon = document.getElementById('gitResultIcon');
     const titleEl = document.getElementById('gitResultTitle');
@@ -76,7 +74,7 @@ function showGitOperationResult(title, command, success, message) {
  * Close the git result panel.
  * If the operation required reload, triggers page reload.
  */
-function closeGitResultPanel() {
+export function closeGitResultPanel() {
     const icon = document.getElementById('gitResultIcon');
     if (icon.classList.contains('running')) {
         return;
@@ -92,12 +90,7 @@ function closeGitResultPanel() {
  * Close the git result overlay without reload check.
  * Used when we know we don't want to reload.
  */
-function closeGitResultOverlay() {
+export function closeGitResultOverlay() {
     document.getElementById('gitResultOverlay').classList.remove('visible');
 }
 
-// Export to global scope for backward compatibility
-window.showGitRunningPanel = showGitRunningPanel;
-window.showGitOperationResult = showGitOperationResult;
-window.closeGitResultPanel = closeGitResultPanel;
-window.closeGitResultOverlay = closeGitResultOverlay;
