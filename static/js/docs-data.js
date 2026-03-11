@@ -3,7 +3,7 @@
  * Source: https://assets.nagios.com/downloads/nagioscore/docs/nagioscore/4/en/objectdefinitions.html
  *
  * Structure:
- *   window.NAGIOS_OBJECT_REFERENCE = {
+ *   NAGIOS_OBJECT_REFERENCE = {
  *     object_type: {
  *       description: "...",
  *       directives: [
@@ -20,7 +20,7 @@
  *   - Contact addressN directives (address1-address6) are listed as "addressX".
  *   - Timeperiod weekday/exception directives are dynamic; representative entries shown.
  */
-window.NAGIOS_OBJECT_REFERENCE = {
+export const NAGIOS_OBJECT_REFERENCE = {
 
     _template_directives: {
         description: "These three directives are common to all object definitions and support template-based inheritance.",
@@ -1291,7 +1291,7 @@ window.NAGIOS_OBJECT_REFERENCE = {
  * Nagios 4 Object Inheritance Reference
  * Source: https://assets.nagios.com/downloads/nagioscore/docs/nagioscore/4/en/objectinheritance.html
  * ============================================================================= */
-window.NAGIOS_INHERITANCE_REFERENCE = [
+export const NAGIOS_INHERITANCE_REFERENCE = [
     {
         title: 'Template-Based Inheritance',
         content: 'Nagios allows object definitions to inherit properties from one or more template objects. Three special directives control inheritance across all object types: <code>name</code> (declares a template identity), <code>use</code> (references templates to inherit from), and <code>register</code> (controls whether the definition is instantiated or serves only as a template).',

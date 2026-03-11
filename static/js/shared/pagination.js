@@ -12,7 +12,7 @@
  * @param {string} [options.extraStyle] - Optional inline style for the container
  * @returns {string} HTML string for pagination controls
  */
-function renderPagination(options) {
+export function renderPagination(options) {
     const { currentPage, totalItems, pageSize, actionPrefix, extraClass = '', extraStyle = '' } = options;
 
     const totalPages = Math.ceil(totalItems / pageSize);
@@ -84,6 +84,3 @@ function renderPagination(options) {
         </div>
     `;
 }
-
-// Export for use in other modules
-window.renderPagination = renderPagination;

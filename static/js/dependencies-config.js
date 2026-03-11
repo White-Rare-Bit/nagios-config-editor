@@ -5,10 +5,7 @@
  * Extracted from dependencies.js to reduce file size and improve maintainability.
  */
 
-(function() {
-    'use strict';
-
-    // Layout configuration - centralized constants for all layout algorithms
+// Layout configuration - centralized constants for all layout algorithms
     const LAYOUT_CONFIG = {
         // Tree layouts (hierarchical/hierarchicalLR)
         nodeWidth: 120,           // Minimum width per node in tree
@@ -665,7 +662,7 @@
     };
 
     // Export all configuration objects
-    window.DepsConfig = {
+export const DepsConfig = {
         LAYOUT_CONFIG,
         edgeCategories,
         viewModePresets,
@@ -677,4 +674,3 @@
         edgeLabelMap,
         edgeColors
     };
-})();

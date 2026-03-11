@@ -15,7 +15,7 @@
  * Session IDs are stored in localStorage and persist across page reloads.
  * @returns {string} The session ID
  */
-function getSessionId() {
+export function getSessionId() {
     let sessionId = localStorage.getItem('nagios_session_id');
     if (!sessionId) {
         sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -28,7 +28,7 @@ function getSessionId() {
  * Get the user's identity (name and email) from localStorage.
  * @returns {{userName: string, userEmail: string}} User identity object
  */
-function getUserIdentity() {
+export function getUserIdentity() {
     return {
         userName: localStorage.getItem('nagios_user_name') || '',
         userEmail: localStorage.getItem('nagios_user_email') || ''
@@ -40,7 +40,7 @@ function getUserIdentity() {
  * @param {string} name - User's name
  * @param {string} email - User's email
  */
-function setUserIdentity(name, email) {
+export function setUserIdentity(name, email) {
     localStorage.setItem('nagios_user_name', name);
     localStorage.setItem('nagios_user_email', email);
 }
@@ -49,7 +49,7 @@ function setUserIdentity(name, email) {
  * Check if user has set their identity.
  * @returns {boolean} True if both name and email are set
  */
-function hasUserIdentity() {
+export function hasUserIdentity() {
     const identity = getUserIdentity();
     return Boolean(identity.userName && identity.userEmail);
 }
@@ -59,7 +59,7 @@ function hasUserIdentity() {
  * Includes Content-Type and session ID.
  * @returns {object} Headers object for fetch requests
  */
-function getStagingHeaders() {
+export function getStagingHeaders() {
     const identity = getUserIdentity();
     const headers = {
         'Content-Type': 'application/json',
@@ -73,10 +73,3 @@ function getStagingHeaders() {
     }
     return headers;
 }
-
-// Export to global scope for backward compatibility
-window.getSessionId = getSessionId;
-window.getUserIdentity = getUserIdentity;
-window.setUserIdentity = setUserIdentity;
-window.hasUserIdentity = hasUserIdentity;
-window.getStagingHeaders = getStagingHeaders;

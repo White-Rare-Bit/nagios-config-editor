@@ -2,6 +2,9 @@
  * Nagios Bulk Editor - Frontend JavaScript
  */
 
+import { ApiClient } from './api-client.js';
+import { showConfirmDialog } from './ui-notifications.js'; // circular
+
 // ============================================================================
 // Global Functions
 // ============================================================================
@@ -9,7 +12,7 @@
 /**
  * Reload Nagios configuration from disk
  */
-async function reloadConfig() {
+export async function reloadConfig() {
     const result = await ApiClient.post('/api/reload', {}, { errorPrefix: 'Reload' });
     if (result.success) {
         location.reload();
@@ -19,7 +22,7 @@ async function reloadConfig() {
 /**
  * Create a manual backup
  */
-async function createBackup() {
+export async function createBackup() {
     const description = prompt('Enter a description for this backup (optional):');
     if (description === null) return; // Cancelled
 
@@ -41,7 +44,7 @@ async function createBackup() {
 /**
  * Escape HTML special characters
  */
-function escapeHtml(text) {
+export function escapeHtml(text) {
     if (text === null || text === undefined) return '';
     const div = document.createElement('div');
     div.textContent = String(text);
@@ -53,7 +56,7 @@ function escapeHtml(text) {
  * @param {*} str - String to escape (handles null/undefined)
  * @returns {string} Escaped string safe for use in RegExp
  */
-function escapeRegex(str) {
+export function escapeRegex(str) {
     if (str === null || str === undefined) return '';
     return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -62,7 +65,7 @@ function escapeRegex(str) {
  * Generate a unique ID for staged operations
  * @returns {string} A unique identifier string
  */
-function generateUniqueId() {
+export function generateUniqueId() {
     return Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
 }
 
@@ -72,7 +75,7 @@ function generateUniqueId() {
  * @param {boolean} useRelative - If true, use relative time ("2 hours ago"). Default: true
  * @returns {string} Formatted date string
  */
-function formatDate(dateStr, useRelative = true) {
+export function formatDate(dateStr, useRelative = true) {
     if (!dateStr) return '-';
     try {
         const date = new Date(dateStr);
@@ -115,7 +118,7 @@ function formatDate(dateStr, useRelative = true) {
  * @param {boolean} isLoading - Whether to show loading state
  * @param {string} [loadingText] - Optional text to show while loading
  */
-function setButtonLoading(buttonOrSelector, isLoading, loadingText = null) {
+export function setButtonLoading(buttonOrSelector, isLoading, loadingText = null) {
     const button = typeof buttonOrSelector === 'string'
         ? document.querySelector(buttonOrSelector)
         : buttonOrSelector;
@@ -142,7 +145,7 @@ function setButtonLoading(buttonOrSelector, isLoading, loadingText = null) {
 /**
  * Copy text to clipboard
  */
-async function copyToClipboard(text) {
+export async function copyToClipboard(text) {
     try {
         await navigator.clipboard.writeText(text);
         return true;
@@ -166,29 +169,10 @@ async function copyToClipboard(text) {
 }
 
 // ============================================================================
-// API Helper Functions
-// ============================================================================
-
-// API requests should use ApiClient (defined in api-client.js) which provides:
-// - Standardized error handling with toast notifications
-// - Automatic session headers for staging lock management
-// - Consistent {success, data, error} response format
-//
-// Example: const result = await ApiClient.post('/api/endpoint', data, { silent: false });
-
-// ============================================================================
-// Notification Functions
-// ============================================================================
-
-// showToast() is defined in base.js (loaded after app.js but provides the
-// authoritative implementation with message filtering). Use that global function.
-
-// ============================================================================
 // Keyboard Shortcuts
 // ============================================================================
 
-// Use a named function and guard to prevent duplicate listeners
-function handleGlobalKeydown(e) {
+export function handleGlobalKeydown(e) {
     // Ctrl/Cmd + R: Reload config (prevent browser refresh)
     if ((e.ctrlKey || e.metaKey) && e.key === 'r' && e.shiftKey) {
         e.preventDefault();
@@ -211,11 +195,7 @@ function handleGlobalKeydown(e) {
     }
 }
 
-// Only add listener once
-if (!window._globalKeydownAdded) {
-    document.addEventListener('keydown', handleGlobalKeydown);
-    window._globalKeydownAdded = true;
-}
+document.addEventListener('keydown', handleGlobalKeydown);
 
 // ============================================================================
 // Initialization

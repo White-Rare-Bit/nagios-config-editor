@@ -12,7 +12,7 @@
 // Consolidated State
 // =============================================================================
 
-const baseState = {
+export const baseState = {
     // Commit dialog
     commitContextLines: 3,
     diffData: null,
@@ -29,6 +29,3 @@ const baseState = {
     // C-10: Pending commit message for retry after failed git commit
     pendingCommitMessage: null
 };
-
-// Export to global scope for other modules
-window.baseState = baseState;
