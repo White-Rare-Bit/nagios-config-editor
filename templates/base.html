@@ -70,13 +70,6 @@
         </div>
     </nav>
 
-    <!-- Lock Banner - shown when another user has pending changes -->
-    <div id="lockBanner" class="lock-banner u-hidden">
-        <span class="lock-banner-icon"><i class="fa-solid fa-lock"></i></span>
-        <span id="lockBannerText"><strong>Another user has pending changes.</strong> Commit or discard to edit.</span>
-        <button class="lock-break-btn" id="breakLockBtn" data-action="break-lock" title="Admin action: Discard the other user's pending changes and release the lock">Break Lock (Admin)</button>
-    </div>
-
     <div class="container-fluid mt-4">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -1971,7 +1964,6 @@
     <script src="{{ url_for('static', filename='js/stable-key.js') }}"></script>
     <script src="{{ url_for('static', filename='js/api-client.js') }}"></script>
     <script src="{{ url_for('static', filename='js/commit-dialog.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/lock-manager.js') }}"></script>
     <script src="{{ url_for('static', filename='js/base.js') }}"></script>
     <script src="{{ url_for('static', filename='js/shared/pagination.js') }}"></script>
 

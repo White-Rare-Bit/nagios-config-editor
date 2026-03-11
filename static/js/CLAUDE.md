@@ -11,8 +11,7 @@ All page modules use IIFE pattern. Explorer modules in `explorer/` (see `explore
 | `session-manager.js` | Session ID and user identity management |
 | `ui-notifications.js` | Toast notifications, flash messages |
 | `git-ui.js` | Git result panel UI |
-| `commit-dialog.js` | Commit overlay, staged changes display |
-| `lock-manager.js` | Staging lock polling and banner |
+| `commit-dialog.js` | Commit overlay, shadow diff display |
 | `base.js` | Initialization, event delegation, keyboard shortcuts, DebugLogger |
 
 ## Page Modules

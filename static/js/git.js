@@ -22,7 +22,6 @@ let gitStatus = null;
 let selectedGitFile = null;
 let gitHistory = null;
 let currentTab = 'changes';
-let stagingInfo = null;
 
 // History sort state
 let historySortColumn = 'date';
@@ -43,10 +42,7 @@ async function loadGitStatus(forceRefresh = false) {
 
     content.innerHTML = '<div class="git-loading">Loading git status...</div>';
 
-    const [statusResult, stagingResult] = await Promise.all([
-        ApiClient.get('/api/git/status', { silent: true }),
-        ApiClient.get('/api/staging/diff', { silent: true })
-    ]);
+    const statusResult = await ApiClient.get('/api/git/status', { silent: true });
 
     // Only show error if we have no data at all (network error)
     if (!statusResult.data) {
@@ -56,7 +52,6 @@ async function loadGitStatus(forceRefresh = false) {
     }
 
     const data = statusResult.data;
-    stagingInfo = stagingResult.data || {};
 
     if (data.error && !data.is_repo) {
         branchDisplay.style.display = 'none';
@@ -96,28 +91,6 @@ async function loadGitStatus(forceRefresh = false) {
 }
 
 /**
- * Builds HTML for the staging preview section showing pending staged changes.
- */
-function buildStagingPreviewHtml(staging) {
-    if (!staging || !staging.hasStagedChanges || !staging.stagedChanges) {
-        return '';
-    }
-    const items = staging.stagedChanges.map(c => `<li>${escapeHtml(c.label)}</li>`).join('');
-    return `
-        <div class="git-staging-preview">
-            <div class="git-staging-preview-header">
-                <i class="fa-solid fa-layer-group"></i>
-                <span>Pending Staged Changes</span>
-                <span class="git-staging-preview-count">${staging.totalStagedCount}</span>
-            </div>
-            <ul class="git-staging-preview-list">${items}</ul>
-            <div class="git-staging-preview-note">These changes have not been written to disk yet.</div>
-            <button class="git-staging-preview-commit" data-action="commit">Review &amp; Commit</button>
-        </div>
-    `;
-}
-
-/**
  * Builds HTML for the git file list showing changed files.
  */
 function buildGitFilesHtml(files, selectedPath) {
@@ -153,10 +126,7 @@ function renderGitStatus() {
         return;
     }
 
-    const hasStagedChanges = stagingInfo && stagingInfo.hasStagedChanges;
-
-    // Clean state - no changes at all
-    if (!gitStatus.has_changes && !hasStagedChanges) {
+    if (!gitStatus.has_changes) {
         content.innerHTML = `
             <div class="empty-state empty-state--dark empty-state--flex">
                 <div class="empty-icon"><i class="fa-solid fa-circle-check"></i></div>
@@ -171,22 +141,9 @@ function renderGitStatus() {
         return;
     }
 
-    const stagingPreviewHtml = buildStagingPreviewHtml(stagingInfo);
     const filesHtml = buildGitFilesHtml(gitStatus.files, selectedGitFile);
 
-    // Only staged changes, no filesystem changes
-    if (!gitStatus.has_changes && hasStagedChanges) {
-        content.innerHTML = `
-            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px;">
-                ${stagingPreviewHtml}
-            </div>
-        `;
-        return;
-    }
-
-    // Mixed view with files and optional staging preview
     content.innerHTML = `
-        ${stagingPreviewHtml ? `<div class="git-staging-preview-wrapper">${stagingPreviewHtml}</div>` : ''}
         <div class="git-files-panel">
             <div class="git-files-header">Files</div>
             <ul class="git-file-list">${filesHtml}</ul>

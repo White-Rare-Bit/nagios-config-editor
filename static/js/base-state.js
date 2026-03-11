@@ -2,7 +2,6 @@
  * Nagios Bulk Editor - Base State Module
  *
  * Centralized state object shared across base modules:
- * - Lock status
  * - Commit dialog state
  * - Git operations state
  *
@@ -14,13 +13,6 @@
 // =============================================================================
 
 const baseState = {
-    // Lock status
-    isEditingLocked: false,
-    lockOwner: null,
-    lockUserName: null,
-    lockUserEmail: null,
-    lockPollInterval: null,
-
     // Commit dialog
     commitContextLines: 3,
     diffData: null,
@@ -37,9 +29,6 @@ const baseState = {
     // C-10: Pending commit message for retry after failed git commit
     pendingCommitMessage: null
 };
-
-// Global lock state alias - used by explorer/data-loading.js for lock status checks
-window.isEditingLocked = false;
 
 // Export to global scope for other modules
 window.baseState = baseState;

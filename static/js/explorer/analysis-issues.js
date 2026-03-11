@@ -101,9 +101,8 @@
     function filterIssues() {
         const container = document.getElementById('issuesContent');
 
-        // Combine server issues with staged issues
         // Only show errors (issues that prevent Nagios from running)
-        const combined = [...state.allIssues, ...Explorer.stagedIssues].filter(i => i.severity === 'error');
+        const combined = state.allIssues.filter(i => i.severity === 'error');
 
         if (combined.length === 0) {
             state.groupedErrors = [];
@@ -357,7 +356,7 @@
     }
 
     /**
-     * Execute batch creation of multiple objects
+     * Execute batch creation of multiple objects via API
      */
     async function executeBatchCreate(groups, targetFile) {
         Explorer.closeDialog();
@@ -370,54 +369,31 @@
             const isTemplate = issue.type === 'missing_template';
             const objectType = isTemplate ? issue.object_type : group.objectType;
 
-            // Build attributes for this object
             const attributes = buildDefaultAttributes(objectType, group.missingName, isTemplate);
 
-            try {
-                // Stage the creation (same as createObjectForIssue)
-                const newObj = {
-                    object_type: objectType,
-                    display_name: group.missingName,
-                    attributes: attributes,
-                    source_file: targetFile,
-                    line_number: 0,
-                    global_index: -1
-                };
+            const result = await ApiClient.post('/api/objects/create', {
+                source_file: targetFile,
+                object_type: objectType,
+                attributes: attributes
+            }, { silent: true });
 
-                // Generate a temporary index for the new object
-                const tempIndex = -(Date.now() + created);
-                newObj.global_index = tempIndex;
-
-                // Add to staged creations
-                const creation = {
-                    object_type: objectType,
-                    attributes: {...attributes},
-                    targetFile: targetFile,
-                    tempIndex: tempIndex,
-                    display_name: group.missingName
-                };
-
-                state.stagedCreations.push(creation);
-
-                // Add to allObjects for UI display
-                state.allObjects.push(newObj);
-
+            if (result.success) {
                 created++;
-            } catch (e) {
+            } else {
                 failed++;
-                console.error('Failed to stage creation:', group.missingName, e);
+                console.error('Failed to create:', group.missingName, result.error);
             }
         }
 
         // Refresh UI
         state.healthCheckData = null;
-        Explorer.afterFrontendMutation();
+        await Explorer.afterFrontendMutation();
         loadIssues();
 
         if (failed === 0) {
-            showToast(`Staged ${created} new object${created !== 1 ? 's' : ''} for creation`, 'success');
+            showToast(`Created ${created} new object${created !== 1 ? 's' : ''}`, 'success');
         } else {
-            showToast(`Staged ${created} objects, ${failed} failed`, 'warning');
+            showToast(`Created ${created} objects, ${failed} failed`, 'warning');
         }
     }
 
@@ -560,11 +536,7 @@
         // Open in editor so user can modify before staging
         Explorer.openNewObjectInEditor(newObj, targetFile);
 
-        showToast(`Edit the ${objectType} and save to stage the creation`, 'info');
-
-        // Refresh issues to update the display
-        Explorer.computeStagedIssues();
-        loadIssues();
+        showToast(`Edit the ${objectType} and save to create it`, 'info');
     }
 
     // ==========================================================================

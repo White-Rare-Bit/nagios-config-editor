@@ -117,7 +117,6 @@ const configRootName = Explorer.getConfigRootName();
 const mySessionId = getSessionId();
 
 // resetStagingState is now defined in state-management.js
-// It already handles isEditingLocked = false
 
 // Update UI to show/hide editing lock state (banner is handled by base.html)
 // Lock check is now server-side (ensure_shadow_lock). These are kept for API compatibility.

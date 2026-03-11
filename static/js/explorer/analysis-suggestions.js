@@ -14,7 +14,6 @@
  * - Explorer.showDialog, Explorer.closeDialog (from dialogs.js)
  * - ApiClient (from api-client.js)
  * - showToast (from base.js)
- * - generateUniqueId (from main.js)
  */
 
 (function(Explorer) {
@@ -353,64 +352,41 @@
                 return;
             }
 
-            // Stage the template creation
+            // Create template via API
             const templateAttrs = { ...suggestion.attributes, name: name, register: '0' };
-            state.stagedCreations.push({
-                id: generateUniqueId(),
+            const createResult = await ApiClient.post('/api/objects/create', {
+                source_file: targetFile,
                 object_type: suggestion.type,
-                attributes: templateAttrs,
-                targetFile: targetFile,
-                displayName: name
-            });
-            const newStagedIdx = state.stagedCreations.length - 1;
+                attributes: templateAttrs
+            }, { silent: true });
 
-            // If updating objects, stage edits to add 'use' and remove common attrs
+            if (!createResult.success) {
+                showToast(`Failed to create template: ${createResult.error}`, 'error');
+                return;
+            }
+
+            // If updating objects, edit each to add 'use' and remove common attrs
             if (updateObjects) {
                 for (const obj of suggestion.objects) {
                     const newAttrs = { ...obj.attributes };
-
-                    // Add 'use' directive
                     newAttrs.use = name;
-
-                    // Remove attributes that are now in the template
                     for (const key of Object.keys(suggestion.attributes)) {
                         delete newAttrs[key];
                     }
 
-                    // Stage the edit
-                    state.pendingEdits.set(Explorer.getObjectKey(obj), {
-                        original: { ...obj.attributes },
-                        edited: newAttrs,
-                        object: {
-                            source_file: obj.source_file,
-                            line_number: obj.line_number,
-                            object_type: obj.object_type,
-                            display_name: obj.display_name
-                        }
-                    });
+                    await ApiClient.post('/api/objects/update', {
+                        stable_key: Explorer.getObjectKey(obj),
+                        attributes: newAttrs
+                    }, { silent: true });
                 }
             }
 
             Explorer.closeDialog();
-            Explorer.afterFrontendMutation();
-
-            // Select the newly created staged item to show in center pane
-            setTimeout(() => {
-                state.selectedStagedIndices.clear();
-                state.selectedStagedIndices.add(newStagedIdx);
-                Explorer.selectStagedCreationForEdit(newStagedIdx);
-
-                // Scroll to and highlight in tree
-                const item = document.querySelector(`[data-staged-index="${newStagedIdx}"]`);
-                if (item) {
-                    item.classList.add('selected');
-                    item.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-            }, 50);
+            await Explorer.afterFrontendMutation();
 
             const msg = updateObjects
-                ? `Staged template "${name}" and updated ${suggestion.count} objects. Use Commit to apply.`
-                : `Staged template "${name}". Use Commit to apply.`;
+                ? `Created template "${name}" and updated ${suggestion.count} objects`
+                : `Created template "${name}"`;
             showToast(msg, 'success');
 
             // Remove this suggestion from the list
@@ -418,7 +394,6 @@
             if (suggestionIdx > -1) {
                 state.allTemplateSuggestions.splice(suggestionIdx, 1);
             }
-            // Refresh suggestions to update counts
             Explorer.renderUnifiedSuggestionsList();
         });
     }
@@ -459,52 +434,32 @@
                 return;
             }
 
-            // Check if already staged
-            const alreadyStaged = state.stagedCreations.find(c => c.object_type === 'hostgroup' && c.attributes.hostgroup_name === name);
-            if (alreadyStaged) {
-                showToast(`Hostgroup "${name}" is already staged for creation`, 'warning');
-                return;
-            }
-
-            // Stage the creation instead of immediately creating
-            state.stagedCreations.push({
-                id: generateUniqueId(),
+            // Create via API
+            const result = await ApiClient.post('/api/objects/create', {
+                source_file: targetFile,
                 object_type: 'hostgroup',
                 attributes: {
                     hostgroup_name: name,
                     alias: name,
                     members: suggestion.members.join(',')
-                },
-                targetFile: targetFile,
-                displayName: name
-            });
-            const newStagedIdx = state.stagedCreations.length - 1;
+                }
+            }, { silent: true });
+
+            if (!result.success) {
+                showToast(`Failed to create hostgroup: ${result.error}`, 'error');
+                return;
+            }
 
             Explorer.closeDialog();
-            Explorer.afterFrontendMutation();
+            await Explorer.afterFrontendMutation();
 
-            // Select the newly created staged item to show in center pane
-            setTimeout(() => {
-                state.selectedStagedIndices.clear();
-                state.selectedStagedIndices.add(newStagedIdx);
-                Explorer.selectStagedCreationForEdit(newStagedIdx);
-
-                // Scroll to and highlight in tree
-                const item = document.querySelector(`[data-staged-index="${newStagedIdx}"]`);
-                if (item) {
-                    item.classList.add('selected');
-                    item.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-            }, 50);
-
-            showToast(`Staged hostgroup "${name}" for creation. Use Commit to apply.`, 'success');
+            showToast(`Created hostgroup "${name}"`, 'success');
 
             // Remove this suggestion from the list since it's been acted on
             const suggestionIdx = state.allGroupingSuggestions.indexOf(suggestion);
             if (suggestionIdx > -1) {
                 state.allGroupingSuggestions.splice(suggestionIdx, 1);
             }
-            // Refresh suggestions to update counts
             Explorer.renderUnifiedSuggestionsList();
         });
     }

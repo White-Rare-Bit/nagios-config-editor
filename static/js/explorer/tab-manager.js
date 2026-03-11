@@ -67,7 +67,6 @@
     // =========================================================================
 
     function refreshBadgesForActiveTab() {
-        if (Explorer.computeStagedIssues) Explorer.computeStagedIssues();
         if (Explorer.updateSuggestionsBadge) Explorer.updateSuggestionsBadge();
     }
 

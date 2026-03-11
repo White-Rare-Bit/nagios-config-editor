@@ -2,7 +2,6 @@
  * Nagios Bulk Editor - Base JavaScript
  *
  * Shared functionality across all pages:
- * - Lock status handling
  * - Global commit dialog
  * - Git operations UI
  *
@@ -266,18 +265,6 @@ function checkIdentityRequired() {
 }
 
 // =============================================================================
-// Polling
-// =============================================================================
-
-function startLockPoll() {
-    if (baseState.lockPollInterval) {return;}
-    baseState.lockPollInterval = setInterval(async () => {
-        await checkLockStatus();
-        await checkPendingChanges();
-    }, 5000);
-}
-
-// =============================================================================
 // Initialization
 // =============================================================================
 
@@ -291,7 +278,6 @@ const actionHandlers = {
     'show-shortcuts': showKeyboardShortcuts,
     'close-shortcuts': closeKeyboardShortcuts,
     'reload-config': reloadConfig,
-    'break-lock': breakLock,
     'close-git-result': closeGitResultPanel,
     'close-toast': (e) => e.target.closest('.toast')?.remove()
 };
@@ -299,9 +285,6 @@ const actionHandlers = {
 document.addEventListener('DOMContentLoaded', () => {
     // Always check for pending changes and update commit button
     checkPendingChanges();
-    checkLockStatus();
-    // Start polling for lock status and pending changes
-    startLockPoll();
 
     // Check identity - if not set, show popup (but don't block the above checks)
     checkIdentityRequired();

@@ -158,11 +158,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// Called by base.html when lock is broken
-function onLockCleared() {
-    loadGitIdentity();
-}
-
 function switchTab(tabName) {
     // Update tab buttons
     document.querySelectorAll('.nbe-tab').forEach(tab => {
@@ -245,26 +240,10 @@ async function saveIdentity() {
     info.textContent = 'Your identity is configured and saved to this browser.';
     info.style.color = 'var(--color-create)';
 
-    // Also update staging data if we have the lock
-    const lockResult = await ApiClient.get('/api/staging/lock', { silent: true });
-    if (lockResult.success && lockResult.data.locked && lockResult.data.isOwner) {
-        await ApiClient.post('/api/git/identity', {
-            user_name: userName,
-            user_email: userEmail
-        }, { silent: true });
-    }
-
     showToast('Identity saved to this browser', 'success');
 }
 
 async function saveServerSettings() {
-    // Check if locked by another user - server settings should not be saved
-    const lockResult = await ApiClient.get('/api/staging/lock', { silent: true });
-    if (lockResult.success && lockResult.data.locked && !lockResult.data.isOwner) {
-        showToast('Cannot save server settings while another user has pending changes', 'error');
-        return;
-    }
-
     // C-03: Client-side path validation before sending to server
     const validation = validateAllPaths();
     if (!validation.valid) {
@@ -436,17 +415,6 @@ async function loadGitIdentity() {
         info.style.color = '';
     }
 
-    // Check if another user has the lock - show their info
-    const lockResult = await ApiClient.get('/api/staging/lock', { silent: true });
-
-    if (lockResult.success && lockResult.data.locked && !lockResult.data.isOwner) {
-        let lockedBy = lockResult.data.userName || 'Another user';
-        if (lockResult.data.userEmail) {
-            lockedBy += ` (${lockResult.data.userEmail})`;
-        }
-        info.innerHTML = `<strong>${escapeHtml(lockedBy)}</strong> has pending changes. You can still set your own identity.`;
-        info.style.color = 'var(--color-edit)';
-    }
 }
 
 // ============================================================================
@@ -490,7 +458,4 @@ function downloadLog() {
     window.location.href = '/api/logs/operations/download';
 }
 
-    // Export functions that need to be accessible externally
-    // onLockCleared is called by base.js when lock is broken
-    window.onLockCleared = onLockCleared;
 })();
