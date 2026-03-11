@@ -237,7 +237,8 @@ def api_staging_diff():
     sm = get_shadow_manager()
     if not sm.has_shadow():
         return jsonify({"success": True, "data": {"files": []}})
+    context_lines = request.args.get("context_lines", 3, type=int)
     files = sm.get_changed_files()
     for f in files:
-        f["diff"] = sm.get_file_diff(f["path"])
+        f["diff"] = sm.get_file_diff(f["path"], context_lines=context_lines)
     return jsonify({"success": True, "data": {"files": files}})

@@ -110,8 +110,7 @@ function handleAutocompleteKeyNav(event, config) {
     return false;
 }
 
-// Use loadObjects, saveStagedChanges, loadStagedChanges, clearStagedChanges from data-loading.js
-// Use toDisplayPath from data-loading.js
+// Use loadObjects, clearStagedChanges from data-loading.js
 const configRootName = Explorer.getConfigRootName();
 
 // Session ID for staging

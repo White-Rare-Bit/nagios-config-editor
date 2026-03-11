@@ -359,11 +359,12 @@ class ShadowCopyManager:
 
         return changes
 
-    def get_file_diff(self, relative_path: str) -> dict:
+    def get_file_diff(self, relative_path: str, context_lines: int = 3) -> dict:
         """Compute unified diff for a single file.
 
         Args:
             relative_path: Path relative to config root
+            context_lines: Number of context lines around changes (default 3)
 
         Returns:
             Dict with 'diff_text' containing unified diff string
@@ -387,6 +388,7 @@ class ShadowCopyManager:
             shad_lines,
             fromfile=f"a/{relative_path}",
             tofile=f"b/{relative_path}",
+            n=context_lines,
         )
         return {"diff_text": "".join(diff)}
 
