@@ -1,93 +1,92 @@
 /**
  * Nagios Bulk Editor - Base JavaScript
  *
- * Shared functionality across all pages:
- * - Global commit dialog
- * - Git operations UI
- *
- * Dependencies (loaded before this file):
- * - base-state.js: baseState object
- * - session-manager.js: getSessionId, getUserIdentity, etc.
- * - ui-notifications.js: showToast, showConfirmDialog
- * - api-client.js: ApiClient
+ * Shared functionality across all pages.
  */
+import { escapeHtml, handleGlobalKeydown, reloadConfig } from './app.js';
+import { baseState } from './base-state.js';
+import { getSessionId, getUserIdentity, setUserIdentity, hasUserIdentity } from './session-manager.js';
+import { showToast, showConfirmDialog } from './ui-notifications.js';
+import { ApiClient } from './api-client.js';
+import { closeGitResultPanel } from './git-ui.js';
+import { handleCommitClick, closeGlobalCommitDialog } from './commit-dialog.js';
+
+let explorerCallbacks = null;
+
+export function registerExplorerCallbacks(callbacks) {
+    explorerCallbacks = callbacks;
+}
 
 // =============================================================================
 // Debug Logger - sends debug logs to backend for file logging
 // =============================================================================
 
-const DebugLogger = (function() {
-    'use strict';
+// Set to true to enable debug logging to backend
+const ENABLED = true;
 
-    // Set to true to enable debug logging to backend
-    const ENABLED = true;
+// Buffer logs and send in batches to reduce HTTP requests
+let logBuffer = [];
+let flushTimeout = null;
+const FLUSH_INTERVAL = 2000; // 2 seconds
 
-    // Buffer logs and send in batches to reduce HTTP requests
-    let logBuffer = [];
-    let flushTimeout = null;
-    const FLUSH_INTERVAL = 2000; // 2 seconds
+function log(level, message, context = {}) {
+    if (!ENABLED) {return;}
 
-    function log(level, message, context = {}) {
-        if (!ENABLED) {return;}
+    logBuffer.push({ level, message, context, timestamp: new Date().toISOString() });
 
-        logBuffer.push({ level, message, context, timestamp: new Date().toISOString() });
+    // Schedule flush if not already scheduled
+    if (!flushTimeout) {
+        flushTimeout = setTimeout(flush, FLUSH_INTERVAL);
+    }
+}
 
-        // Schedule flush if not already scheduled
-        if (!flushTimeout) {
-            flushTimeout = setTimeout(flush, FLUSH_INTERVAL);
+async function flush() {
+    flushTimeout = null;
+    if (logBuffer.length === 0) {return;}
+
+    const logsToSend = logBuffer;
+    logBuffer = [];
+
+    // Send each log entry (could batch in future if needed)
+    for (const entry of logsToSend) {
+        try {
+            await fetch('/api/logs/frontend', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(entry)
+            });
+        } catch (e) {
+            // Silently fail - don't break the app for logging failures
         }
     }
+}
 
-    async function flush() {
-        flushTimeout = null;
-        if (logBuffer.length === 0) {return;}
-
-        const logsToSend = logBuffer;
-        logBuffer = [];
-
-        // Send each log entry (could batch in future if needed)
-        for (const entry of logsToSend) {
-            try {
-                await fetch('/api/logs/frontend', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(entry)
-                });
-            } catch (e) {
-                // Silently fail - don't break the app for logging failures
-            }
-        }
+// Flush on page unload
+window.addEventListener('beforeunload', () => {
+    if (logBuffer.length > 0) {
+        // Use sendBeacon for reliable delivery on page unload
+        const data = JSON.stringify(logBuffer.map(entry => ({
+            level: entry.level,
+            message: entry.message,
+            context: entry.context
+        })));
+        navigator.sendBeacon('/api/logs/frontend', new Blob([data], { type: 'application/json' }));
     }
+});
 
-    // Flush on page unload
-    window.addEventListener('beforeunload', () => {
-        if (logBuffer.length > 0) {
-            // Use sendBeacon for reliable delivery on page unload
-            const data = JSON.stringify(logBuffer.map(entry => ({
-                level: entry.level,
-                message: entry.message,
-                context: entry.context
-            })));
-            navigator.sendBeacon('/api/logs/frontend', new Blob([data], { type: 'application/json' }));
-        }
-    });
-
-    return {
-        debug: (message, context) => log('debug', message, context),
-        info: (message, context) => log('info', message, context),
-        warning: (message, context) => log('warning', message, context),
-        error: (message, context) => log('error', message, context)
-    };
-})();
+// After all the functions are defined at module scope:
+export const DebugLogger = {
+    debug: (message, context) => log('debug', message, context),
+    info: (message, context) => log('info', message, context),
+    warning: (message, context) => log('warning', message, context),
+    error: (message, context) => log('error', message, context)
+};
 
 // =============================================================================
 // Utility Functions
 // =============================================================================
 
-// escapeHtml() is defined in app.js (loaded first) - use that global function
-// escapeRegex() is defined in app.js (loaded first) - use that global function
-
-function escapeJs(text) {
+export function escapeJs(text) {
     if (text === null || text === undefined) {return '';}
     return String(text)
         .replace(/\\/g, '\\\\')
@@ -104,7 +103,7 @@ function escapeJs(text) {
  * @param {string} [plural] - Plural form (defaults to singular + 's')
  * @returns {string} Formatted string like "3 items" or "1 item"
  */
-function pluralize(count, singular, plural) {
+export function pluralize(count, singular, plural) {
     const word = count === 1 ? singular : (plural || singular + 's');
     return `${count} ${word}`;
 }
@@ -113,13 +112,11 @@ function pluralize(count, singular, plural) {
 // Loading State Utilities
 // =============================================================================
 
-// setButtonLoading() is defined in app.js (loaded first) - use that global function
-
 // =============================================================================
 // Nav Commit Button
 // =============================================================================
 
-function updateNavCommitButton(changeCount) {
+export function updateNavCommitButton(changeCount) {
     const btn = document.getElementById('navCommitBtn');
     const gitIndicator = document.getElementById('gitPendingIndicator');
 
@@ -149,7 +146,7 @@ function updateNavCommitButton(changeCount) {
     }
 }
 
-function updateUndoButton(undoCount) {
+export function updateUndoButton(undoCount) {
     const btn = document.getElementById('navUndoBtn');
     if (!btn) {return;}
 
@@ -168,11 +165,11 @@ function updateUndoButton(undoCount) {
 
 let _undoInProgress = false;  // H-028: Guard against concurrent undo
 
-async function handleUndoClick() {
-    if (typeof Explorer !== 'undefined' && Explorer.undoLastAction) {
+export async function handleUndoClick() {
+    if (explorerCallbacks?.undoLastAction) {
         // Explorer.undoLastAction has its own concurrency guard
         // afterServerSync inside undoLastAction handles badges — no checkPendingChanges needed
-        await Explorer.undoLastAction();
+        await explorerCallbacks.undoLastAction();
     } else {
         // Fallback: call API directly with concurrency guard
         if (_undoInProgress) {return;}
@@ -198,7 +195,7 @@ async function handleUndoClick() {
 }
 
 // Keyboard Shortcuts Help Dialog
-function showKeyboardShortcuts() {
+export function showKeyboardShortcuts() {
     const overlay = document.getElementById('keyboardShortcutsOverlay');
     if (overlay) {
         // Update modifier key labels for macOS
@@ -211,12 +208,12 @@ function showKeyboardShortcuts() {
     }
 }
 
-function closeKeyboardShortcuts() {
+export function closeKeyboardShortcuts() {
     const overlay = document.getElementById('keyboardShortcutsOverlay');
     if (overlay) {overlay.classList.remove('visible');}
 }
 
-async function checkPendingChanges() {
+export async function checkPendingChanges() {
     // Use extended staging info to get accurate count of staged changes
     const infoResult = await ApiClient.get('/api/staging/info', { silent: true });
 
@@ -238,10 +235,10 @@ async function checkPendingChanges() {
     }
 
     // Fallback: count from Explorer state if available
-    if (typeof Explorer !== 'undefined' && Explorer.getTotalStagedCount) {
-        const count = Explorer.getTotalStagedCount();
+    if (explorerCallbacks?.getTotalStagedCount) {
+        const count = explorerCallbacks.getTotalStagedCount();
         updateNavCommitButton(count);
-        updateUndoButton(Explorer.getUndoCount ? Explorer.getUndoCount() : 0);
+        updateUndoButton(explorerCallbacks.getUndoCount ? explorerCallbacks.getUndoCount() : 0);
         return;
     }
 
@@ -251,7 +248,7 @@ async function checkPendingChanges() {
     updateNavCommitButton(count);
 }
 
-function checkIdentityRequired() {
+export function checkIdentityRequired() {
     const isSettingsPage = window.location.pathname.includes('/settings');
     if (isSettingsPage) {
         return false;
@@ -272,7 +269,7 @@ function checkIdentityRequired() {
  * Action handlers for data-action elements (used by event delegation).
  * Maps action names to handler functions.
  */
-const actionHandlers = {
+export const actionHandlers = {
     'undo': handleUndoClick,
     'commit': handleCommitClick,
     'show-shortcuts': showKeyboardShortcuts,

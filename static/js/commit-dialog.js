@@ -1,31 +1,19 @@
 /**
  * Nagios Bulk Editor - Commit Dialog Module
- *
- * Handles the global commit dialog UI for the shadow copy architecture:
- * - Fetches file-level diffs from shadow copy (GET /api/staging/diff)
- * - Renders unified diffs for changed files
- * - Apply shadow -> original, then git commit
- * - Discard shadow changes
- * - Git-only changes fallback when no shadow changes exist
- *
- * Dependencies (loaded before this file):
- * - base-state.js: baseState object
- * - session-manager.js: getUserIdentity, hasUserIdentity
- * - ui-notifications.js: showToast, showConfirmDialog
- * - git-ui.js: showGitRunningPanel, showGitOperationResult, closeGitResultOverlay
- * - api-client.js: ApiClient
- * - app.js: escapeHtml
  */
+import { baseState } from './base-state.js';
+import { getUserIdentity, hasUserIdentity } from './session-manager.js';
+import { showToast, showConfirmDialog } from './ui-notifications.js';
+import { showGitRunningPanel, showGitOperationResult, closeGitResultOverlay } from './git-ui.js';
+import { ApiClient } from './api-client.js';
+import { escapeHtml } from './app.js';
+import { pluralize, updateNavCommitButton, updateUndoButton } from './base.js'; // circular
 
-// =============================================================================
-// Global Commit Dialog
-// =============================================================================
-
-function handleCommitClick() {
+export function handleCommitClick() {
     showGlobalCommitDialog();
 }
 
-async function showGlobalCommitDialog() {
+export async function showGlobalCommitDialog() {
     const overlay = document.getElementById('globalCommitOverlay');
     const content = document.getElementById('globalCommitContent');
 
@@ -445,7 +433,7 @@ async function buildChangesFilesHtml(gitChanges, contextLines, options = {}) {
     return filesHtml;
 }
 
-async function updateGitOnlyContextLines(value) {
+export async function updateGitOnlyContextLines(value) {
     const intValue = parseInt(value, 10);
     baseState.gitOnlyContextLines = intValue === 10 ? 9999 : intValue;
     document.getElementById('gitOnlyContextLinesValue').textContent = intValue === 10 ? 'All' : value;
@@ -470,11 +458,7 @@ async function updateGitOnlyContextLines(value) {
     });
 }
 
-// =============================================================================
-// Git Operations
-// =============================================================================
-
-async function discardGitChanges() {
+export async function discardGitChanges() {
     closeGlobalCommitDialog();
     showGitRunningPanel('Discard All Changes', 'git checkout -- . && git clean -fd');
 
@@ -490,7 +474,7 @@ async function discardGitChanges() {
     showGitDiscardResultPanel(result.success && result.data?.success, result.data || { error: result.error });
 }
 
-function showResultPanel({ command, success, title, outputHtml, needsReload = true, showRetryCommit = false }) {
+export function showResultPanel({ command, success, title, outputHtml, needsReload = true, showRetryCommit = false }) {
     const overlay = document.getElementById('gitResultOverlay');
     const icon = document.getElementById('gitResultIcon');
     const titleEl = document.getElementById('gitResultTitle');
@@ -527,7 +511,7 @@ function showResultPanel({ command, success, title, outputHtml, needsReload = tr
  * Retry git commit after a failed attempt.
  * Staging was preserved after apply, so we can retry the commit.
  */
-async function retryGitCommit() {
+export async function retryGitCommit() {
     const message = baseState.pendingCommitMessage;
     if (!message) {
         showToast('No pending commit message found', 'error');
@@ -544,7 +528,7 @@ async function retryGitCommit() {
  * Discard staging after a failed commit.
  * User chose not to retry, so clear the preserved staging.
  */
-async function discardStagingAfterFailedCommit() {
+export async function discardStagingAfterFailedCommit() {
     const confirmed = await showConfirmDialog({
         title: 'Discard Staging?',
         message: 'Your changes have been written to disk but not committed to git. Discarding staging will clear the staging state. The files on disk will remain changed.',
@@ -600,7 +584,7 @@ function showGitDiscardResultPanel(success, result) {
     });
 }
 
-async function applyGitCommit() {
+export async function applyGitCommit() {
     const messageInput = document.getElementById('globalGitCommitMessage');
     const message = messageInput?.value?.trim();
 
@@ -629,14 +613,10 @@ async function applyGitCommit() {
     showGitResultPanel(message, result.success && result.data?.success, result.data || { error: result.error });
 }
 
-// =============================================================================
-// Shadow Commit Dialog — Context Lines & Actions
-// =============================================================================
-
 /**
  * Re-fetch shadow diff with updated context lines and re-render the changes list.
  */
-async function updateGlobalContextLines(value) {
+export async function updateGlobalContextLines(value) {
     const intValue = parseInt(value, 10);
     baseState.commitContextLines = intValue === 10 ? 9999 : intValue;
     document.getElementById('globalContextLinesValue').textContent = intValue === 10 ? 'All' : value;
@@ -679,11 +659,11 @@ async function updateGlobalContextLines(value) {
     restoreCommitItemExpansionState(expandedIndices);
 }
 
-function closeGlobalCommitDialog() {
+export function closeGlobalCommitDialog() {
     document.getElementById('globalCommitOverlay').classList.remove('visible');
 }
 
-async function discardGlobalChanges() {
+export async function discardGlobalChanges() {
     closeGlobalCommitDialog();
     showGitRunningPanel('Discard Changes', 'Clearing staged changes...');
 
@@ -717,7 +697,7 @@ function showStagingDiscardResultPanel(success, errorMsg = null) {
  * Apply shadow changes then git commit.
  * Always applies shadow first (shadow copy system handles all change types).
  */
-async function applyGlobalCommit() {
+export async function applyGlobalCommit() {
     const commitMessage = validateCommitInput();
     if (!commitMessage) {return;}
 
@@ -741,7 +721,7 @@ function showStagingResultPanel(success, message) {
     });
 }
 
-async function autoGitCommitGlobal(message, clearStagingOnSuccess = false, applyData = null) {
+export async function autoGitCommitGlobal(message, clearStagingOnSuccess = false, applyData = null) {
     if (!message) {return;}
 
     const identity = getUserIdentity();
@@ -819,7 +799,7 @@ function buildVerificationHtml(verification) {
     return html;
 }
 
-function showGitResultPanel(message, success, result, showRetryOption = false, verification = null) {
+export function showGitResultPanel(message, success, result, showRetryOption = false, verification = null) {
     const identity = getUserIdentity();
     const displayMessage = message.length > 60 ? message.substring(0, 60) + '...' : message;
     const command = `git -c user.name="${identity.userName || '?'}" -c user.email="${identity.userEmail || '?'}" commit -m "${displayMessage}"`;
@@ -866,18 +846,13 @@ function showGitResultPanel(message, success, result, showRetryOption = false, v
 }
 
 
-// Export functions to global scope for backward compatibility
-window.handleCommitClick = handleCommitClick;
-window.showGlobalCommitDialog = showGlobalCommitDialog;
-window.closeGlobalCommitDialog = closeGlobalCommitDialog;
+// onclick handler — must be global
 window.discardGlobalChanges = discardGlobalChanges;
+window.closeGlobalCommitDialog = closeGlobalCommitDialog;
 window.applyGlobalCommit = applyGlobalCommit;
 window.updateGlobalContextLines = updateGlobalContextLines;
+window.updateGitOnlyContextLines = updateGitOnlyContextLines;
 window.discardGitChanges = discardGitChanges;
 window.applyGitCommit = applyGitCommit;
-window.updateGitOnlyContextLines = updateGitOnlyContextLines;
 window.retryGitCommit = retryGitCommit;
 window.discardStagingAfterFailedCommit = discardStagingAfterFailedCommit;
-window.autoGitCommitGlobal = autoGitCommitGlobal;
-window.showGitResultPanel = showGitResultPanel;
-window.showResultPanel = showResultPanel;
