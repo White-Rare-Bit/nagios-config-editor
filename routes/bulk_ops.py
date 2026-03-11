@@ -7,10 +7,11 @@ import os
 from flask import Blueprint, jsonify, request
 
 import file_operations
-from nagios_model import NAME_FIELDS
+from nagios_model import NAME_FIELDS, REFERENCE_FIELDS
 from nagios_writer import NagiosConfigWriter
 
-from .helpers import get_service
+from .files import ensure_shadow_lock
+from .helpers import get_service, get_shadow_manager
 
 bp = Blueprint("bulk_ops", __name__)
 logger = logging.getLogger("nagios_bulk_editor.bulk_ops")
@@ -143,3 +144,133 @@ def api_diff_rename():
     diffs = _generate_file_diffs(original_by_file, original_content, modified_by_file, writer)
 
     return jsonify({"diffs": diffs})
+
+
+@bp.route("/api/apply-rename", methods=["POST"])
+def api_apply_rename():
+    """Apply bulk rename to shadow copy.
+
+    Expects same params as preview-rename plus optional updateReferences.
+    """
+    data = request.get_json() or {}
+    object_type = data.get("type")
+    find_pattern = data.get("find", "")
+    replace_with = data.get("replace", "")
+    use_regex = data.get("regex", False)
+    add_prefix = data.get("prefix", "")
+    add_suffix = data.get("suffix", "")
+    should_update_refs = data.get("updateReferences", data.get("update_references", False))
+
+    if not object_type:
+        return jsonify({"error": "Object type required"}), 400
+
+    session_id = request.headers.get("X-Session-Id")
+    success, error = ensure_shadow_lock(session_id)
+    if not success:
+        return error
+
+    service = get_service()
+    sm = get_shadow_manager()
+    p = service.parser
+    name_field = NAME_FIELDS.get(object_type, "name")
+
+    # Compute renames
+    renames = []  # (obj, old_name, new_name)
+    for obj in p.objects:
+        if obj.object_type != object_type or name_field not in obj.attributes:
+            continue
+        old_name = obj.attributes[name_field]
+        new_name = service.transform_name(
+            old_name, find_pattern, replace_with,
+            add_prefix, add_suffix, use_regex,
+        )
+        if new_name is not None and new_name != old_name:
+            renames.append((obj, old_name, new_name))
+
+    if not renames:
+        return jsonify({"success": True, "renamed": 0, "references_updated": 0})
+
+    # Compute reference updates
+    ref_updates = []  # (obj, new_attrs)
+    if should_update_refs:
+        rename_map = {old: new for _, old, new in renames}
+        for obj in p.objects:
+            new_attrs = None
+            for field_name in REFERENCE_FIELDS:
+                val = obj.attributes.get(field_name)
+                if not val:
+                    continue
+                parts = [v.strip() for v in val.split(",")]
+                new_parts = [rename_map.get(part, part) for part in parts]
+                if new_parts != parts:
+                    if new_attrs is None:
+                        new_attrs = dict(obj.attributes)
+                    new_attrs[field_name] = ",".join(new_parts)
+            if new_attrs is not None:
+                ref_updates.append((obj, new_attrs))
+
+    # Snapshot all affected files
+    affected_files = set()
+    for obj, _, _ in renames:
+        affected_files.add(os.path.relpath(obj.source_file, sm._config_dir))
+    for obj, _ in ref_updates:
+        affected_files.add(os.path.relpath(obj.source_file, sm._config_dir))
+    sm.snapshot_files(list(affected_files), f"bulk rename {object_type}")
+
+    # Build complete edits: merge renames and reference updates per object
+    edits = {}  # source_file -> [(line_number, new_attrs, obj_type)]
+    for obj, _old_name, new_name in renames:
+        attrs = dict(obj.attributes)
+        attrs[name_field] = new_name
+        # Check if this object also has reference updates
+        ref_match = next((na for o, na in ref_updates if o is obj), None)
+        if ref_match:
+            attrs.update(ref_match)
+        edits.setdefault(obj.source_file, []).append(
+            (obj.line_number, attrs, obj.object_type)
+        )
+
+    for obj, new_attrs in ref_updates:
+        # Skip objects already covered by renames
+        if any(o is obj for o, _, _ in renames):
+            continue
+        edits.setdefault(obj.source_file, []).append(
+            (obj.line_number, new_attrs, obj.object_type)
+        )
+
+    # Apply edits: reverse line order within each file
+    errors = []
+    for source_file, file_edits in edits.items():
+        for line_number, new_attrs, obj_type in sorted(file_edits, key=lambda e: -e[0]):
+            result = file_operations.edit_object_in_file(
+                source_file, line_number, new_attrs, obj_type,
+            )
+            if not result.success:
+                errors.append(result.error)
+
+    if errors:
+        service.reload()
+        return jsonify({
+            "success": False,
+            "error": f"Some edits failed: {'; '.join(errors)}",
+        }), 500
+
+    service.reload()
+
+    # Count individual reference field updates
+    references_updated = 0
+    if should_update_refs:
+        rename_map = {old: new for _, old, new in renames}
+        for obj, new_attrs in ref_updates:
+            for field_name in REFERENCE_FIELDS:
+                old_val = obj.attributes.get(field_name)
+                new_val = new_attrs.get(field_name)
+                if old_val and new_val and old_val != new_val:
+                    old_parts = [v.strip() for v in old_val.split(",")]
+                    references_updated += sum(1 for p in old_parts if p in rename_map)
+
+    return jsonify({
+        "success": True,
+        "renamed": len(renames),
+        "references_updated": references_updated,
+    })
