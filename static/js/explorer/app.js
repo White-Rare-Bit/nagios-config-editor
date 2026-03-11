@@ -92,9 +92,6 @@ export function handleAutocompleteKeyNav(event, config) {
     return false;
 }
 
-// Use loadObjects, clearStagedChanges from data-loading.js
-const configRootName = getConfigRootName();
-
 // Session ID for staging
 const mySessionId = getSessionId();
 
