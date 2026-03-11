@@ -4,25 +4,21 @@
  * Cytoscape.js network graph for exploring Nagios object relationships.
  */
 
-console.log('dependencies.js loaded');
+import { DepsConfig } from './dependencies-config.js';
 
-(function() {
-    try {
-    console.log('dependencies.js IIFE started');
-
-    // Import configuration from dependencies-config.js
-    const {
-        LAYOUT_CONFIG,
-        edgeCategories,
-        viewModePresets,
-        quickViewPresets,
-        expansionRules,
-        typeColors,
-        typeIconSvg,
-        defaultIconSvg,
-        edgeLabelMap,
-        edgeColors
-    } = window.DepsConfig;
+// Import configuration from dependencies-config.js
+const {
+    LAYOUT_CONFIG,
+    edgeCategories,
+    viewModePresets,
+    quickViewPresets,
+    expansionRules,
+    typeColors,
+    typeIconSvg,
+    defaultIconSvg,
+    edgeLabelMap,
+    edgeColors
+} = DepsConfig;
 
     let cy = null;  // Cytoscape instance
     let allNodes = [];
@@ -2518,7 +2514,3 @@ console.log('dependencies.js loaded');
         getEdgeColor,
         getNodeImageUrl
     };
-    } catch (e) {
-        console.error('dependencies.js IIFE error:', e);
-    }
-})();

@@ -1,5 +1,10 @@
-// Git page JavaScript
-// Extracted from git.html
+import { ApiClient } from './api-client.js';
+import { escapeHtml, formatDate } from './app.js';
+import { showToast, showConfirmDialog } from './ui-notifications.js';
+import { getUserIdentity } from './session-manager.js';
+import { showGitRunningPanel } from './git-ui.js';
+import { showResultPanel, handleCommitClick } from './commit-dialog.js';
+import { renderPagination } from './shared/pagination.js';
 
 // Constants
 const GIT_CONFIG = {
@@ -523,8 +528,6 @@ function updateHistorySortIndicators() {
         activeHeader.classList.add('sort-active', `sort-${historySortDirection}`);
     }
 }
-
-// formatDate() is defined in app.js (loaded first) with relative time support
 
 async function restoreCommit(hash, message) {
     const confirmed = await showConfirmDialog({

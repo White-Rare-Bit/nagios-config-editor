@@ -1,9 +1,10 @@
 /* Docs page — App documentation + Nagios object reference browser */
-(function() {
-    'use strict';
+import { NAGIOS_OBJECT_REFERENCE, NAGIOS_INHERITANCE_REFERENCE } from './docs-data.js';
+import { ApiClient } from './api-client.js';
+import { escapeHtml } from './app.js';
 
-    var REF = window.NAGIOS_OBJECT_REFERENCE;
-    var INHERITANCE = window.NAGIOS_INHERITANCE_REFERENCE;
+    var REF = NAGIOS_OBJECT_REFERENCE;
+    var INHERITANCE = NAGIOS_INHERITANCE_REFERENCE;
 
     // =========================================================================
     // App Docs tree structure (labels + slugs only — content from server)
@@ -689,15 +690,6 @@
     }
 
     // =========================================================================
-    // Utilities
-    // =========================================================================
-
-    function escapeHtml(str) {
-        if (!str) {return '';}
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-
-    // =========================================================================
     // Public API
     // =========================================================================
 
@@ -745,5 +737,3 @@
         document.addEventListener('keydown', handleKeydown);
         window.addEventListener('hashchange', loadFromHash);
     });
-
-})();

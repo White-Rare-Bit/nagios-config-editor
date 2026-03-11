@@ -1,6 +1,7 @@
-// Backups page JavaScript
-// Table layout with sortable columns and pagination
-// Uses shared pagination component from shared/pagination.js
+import { getUserIdentity } from './session-manager.js';
+import { ApiClient } from './api-client.js';
+import { showToast, showConfirmDialog } from './ui-notifications.js';
+import { renderPagination } from './shared/pagination.js';
 
 // Constants
 const SORT_COLUMNS = {

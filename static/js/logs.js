@@ -6,7 +6,10 @@
  * renderPagination component.
  */
 
-/* global ApiClient, showToast, showConfirmDialog, escapeHtml, renderPagination */
+import { ApiClient } from './api-client.js';
+import { showToast, showConfirmDialog } from './ui-notifications.js';
+import { escapeHtml } from './app.js';
+import { renderPagination } from './shared/pagination.js';
 
 // ── State ──────────────────────────────────────────────────────────────────
 let activeTab = 'audit';
