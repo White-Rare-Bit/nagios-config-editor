@@ -262,6 +262,11 @@ def api_create_folder():
 @bp.route("/api/files/move", methods=["POST"])
 def api_move_file():
     """Move a file within the shadow copy directory."""
+    session_id = request.headers.get("X-Session-Id")
+    success, error = ensure_shadow_lock(session_id)
+    if not success:
+        return error
+
     data = request.get_json() or {}
     abs_source, abs_target_folder, err = _validate_move_paths(data)
     if err:
@@ -272,11 +277,6 @@ def api_move_file():
 
     file_name = os.path.basename(abs_source)
     target_path = os.path.join(abs_target_folder, file_name)
-
-    session_id = request.headers.get("X-Session-Id")
-    success, error = ensure_shadow_lock(session_id)
-    if not success:
-        return error
 
     sm = get_shadow_manager()
     config_path = sm._config_dir
@@ -301,6 +301,11 @@ def api_move_file():
 @bp.route("/api/folders/move", methods=["POST"])
 def api_move_folder():
     """Move a folder within the shadow copy directory."""
+    session_id = request.headers.get("X-Session-Id")
+    success, error = ensure_shadow_lock(session_id)
+    if not success:
+        return error
+
     data = request.get_json() or {}
     abs_source, abs_target_folder, err = _validate_move_paths(data)
     if err:
@@ -314,11 +319,6 @@ def api_move_folder():
 
     folder_name = os.path.basename(abs_source)
     target_path = os.path.join(abs_target_folder, folder_name)
-
-    session_id = request.headers.get("X-Session-Id")
-    success, error = ensure_shadow_lock(session_id)
-    if not success:
-        return error
 
     sm = get_shadow_manager()
     config_path = sm._config_dir
@@ -348,9 +348,14 @@ def api_move_folder():
 @bp.route("/api/files/<path:file_path>", methods=["DELETE"])
 def api_delete_file(file_path):
     """Delete a file from the shadow copy directory."""
-    config_path = _get_active_config_path()
-    abs_path = os.path.join(config_path, file_path)
-    abs_path = os.path.abspath(abs_path)
+    session_id = request.headers.get("X-Session-Id")
+    success, error = ensure_shadow_lock(session_id)
+    if not success:
+        return error
+
+    sm = get_shadow_manager()
+    config_path = sm._config_dir
+    abs_path = os.path.abspath(os.path.join(config_path, file_path))
 
     if not abs_path.startswith(os.path.abspath(config_path)):
         return jsonify({"error": "Path must be within config directory"}), 400
@@ -358,14 +363,7 @@ def api_delete_file(file_path):
     if not os.path.isfile(abs_path):
         return jsonify({"error": "File does not exist"}), 404
 
-    session_id = request.headers.get("X-Session-Id")
-    success, error = ensure_shadow_lock(session_id)
-    if not success:
-        return error
-
-    sm = get_shadow_manager()
-    shadow_config = sm._config_dir
-    rel_path = os.path.relpath(abs_path, shadow_config)
+    rel_path = os.path.relpath(abs_path, config_path)
     sm.snapshot_files([rel_path], f"delete file {rel_path}")
 
     os.remove(abs_path)
@@ -381,9 +379,14 @@ def api_delete_file(file_path):
 @bp.route("/api/folders/<path:folder_path>", methods=["DELETE"])
 def api_delete_folder(folder_path):
     """Delete a folder from the shadow copy directory."""
-    config_path = _get_active_config_path()
-    abs_path = os.path.join(config_path, folder_path)
-    abs_path = os.path.abspath(abs_path)
+    session_id = request.headers.get("X-Session-Id")
+    success, error = ensure_shadow_lock(session_id)
+    if not success:
+        return error
+
+    sm = get_shadow_manager()
+    config_path = sm._config_dir
+    abs_path = os.path.abspath(os.path.join(config_path, folder_path))
 
     if not abs_path.startswith(os.path.abspath(config_path)):
         return jsonify({"error": "Path must be within config directory"}), 400
@@ -394,22 +397,14 @@ def api_delete_folder(folder_path):
     if not os.path.isdir(abs_path):
         return jsonify({"error": "Folder does not exist"}), 404
 
-    session_id = request.headers.get("X-Session-Id")
-    success, error = ensure_shadow_lock(session_id)
-    if not success:
-        return error
-
-    sm = get_shadow_manager()
-    shadow_config = sm._config_dir
-
     # Snapshot all .cfg files in the folder
     files_to_snapshot = []
     for root, _dirs, filenames in os.walk(abs_path):
         for fn in filenames:
             if fn.endswith(".cfg"):
                 abs_f = os.path.join(root, fn)
-                files_to_snapshot.append(os.path.relpath(abs_f, shadow_config))
-    rel_path = os.path.relpath(abs_path, shadow_config)
+                files_to_snapshot.append(os.path.relpath(abs_f, config_path))
+    rel_path = os.path.relpath(abs_path, config_path)
     sm.snapshot_files(files_to_snapshot, f"delete folder {rel_path}")
 
     shutil.rmtree(abs_path)
