@@ -1,66 +1,48 @@
 /**
  * Nagios Bulk Editor - Explorer Application Module
- * 
- * This module contains all the explorer functionality.
- * Functions are attached to the Explorer namespace.
+ *
+ * This module contains tree rendering, selection, filtering, and UI coordination.
  */
 
-(function(Explorer) {
-    'use strict';
+import { state } from './state.js';
+import { constants, isObjectTemplate, getTypeBadge, getTypeBadgeTier } from './constants.js';
+import { getObjectKey, findObjectByKey, getSelectedIndices, getConfigRootName } from './main.js';
+import { isSelectedByIndex, removeFromSelectionByIndex, clearSelection } from './state-management.js';
+import { loadObjects, loadChangedFiles, updateBadges, getTotalStagedCount } from './data-loading.js'; // circular — safe (function-level)
+import { openTab, renderTabBar, restoreTabs } from './tab-manager.js'; // circular — safe (function-level)
+import { loadIssuesForBadges, loadSuggestionsForBadges } from './badge-issues.js'; // circular — safe (function-level)
+import { loadAllSuggestions, loadCleanupSuggestions, renderCleanupSuggestions, collectAllSuggestions, renderUnifiedSuggestionsList } from './analysis.js'; // circular — safe (function-level)
+import { showCenterPaneObject, hideCenterPaneObject, showCenterPaneMultiple, renderCenterAttributes } from './object-editor.js'; // circular — safe (function-level)
+import { stageObjectDeletions, stageNewObjectChanges, createNewObject } from './dialogs.js'; // circular — safe (function-level)
+import { hideContextMenu, closeDialog, showDialog, showPreview, closePreview, handleDragStart, handleDragEnd, handleContextMenu, handleDragOver, handleDrop } from './context-menu.js'; // circular — safe (function-level)
+import { initTargetPane, renderTargetPane, navigateToObjectByIndex } from './file-operations.js'; // circular — safe (function-level)
+import { loadImpactAndRelationships } from './impact-section.js'; // circular — safe (function-level)
+import { cleanupDragState } from './drag-drop.js';
+import { refreshPanelTiers } from './panel-resizer.js';
+import { switchTabs, getIcon } from './ui-utils.js';
+import { escapeHtml } from '../app.js';
+import { escapeJs } from '../base.js';
+import { showToast } from '../ui-notifications.js';
+import { showGlobalCommitDialog } from '../commit-dialog.js';
+import { getSessionId } from '../session-manager.js';
 
-    const state = Explorer.state;
-    const constants = Explorer.constants;
-    
-    // Convenience aliases
-    const typeLabels = constants.typeLabels;
-    const identityFields = constants.identityFields;
-    const inheritanceAttrs = constants.inheritanceAttrs;
+// Convenience aliases (read at call time, not cached — applyMetadata replaces these)
+const typeLabels = constants.typeLabels;
+const identityFields = constants.identityFields;
+const inheritanceAttrs = constants.inheritanceAttrs;
 
-
-// Delegates to functions defined in object-editor.js and dialogs.js modules
-function showCenterPaneObject(obj) { Explorer.showCenterPaneObject(obj); }
-function hideCenterPaneObject() { Explorer.hideCenterPaneObject(); }
-function showCenterPaneMultiple(count) { Explorer.showCenterPaneMultiple(count); }
-function showCenterPaneNewObject(obj, targetFile) { Explorer.showCenterPaneNewObject(obj, targetFile); }
-function renderCenterAttributes() { Explorer.renderCenterAttributes(); }
-function getNewObjectNameField(objectType) { return Explorer.getNewObjectNameField(objectType); }
-function stageObjectDeletions() { Explorer.stageObjectDeletions(); }
-function stageNewObjectChanges() { Explorer.stageNewObjectChanges(); }
-
-// Delegates to functions in context-menu.js
-function hideContextMenu() { Explorer.hideContextMenu(); }
-function closeDialog() { Explorer.closeDialog(); }
-function showDialog(title, bodyHtml, onConfirm) { return Explorer.showDialog(title, bodyHtml, onConfirm); }
-function showPreview() { Explorer.showPreview(); }
-function closePreview() { Explorer.closePreview(); }
-
-// Delegates to functions in file-operations.js
-function initTargetPane() { Explorer.initTargetPane(); }
-function renderTargetPane() { Explorer.renderTargetPane(); }
-function navigateToObjectByIndex(index) { Explorer.navigateToObjectByIndex(index); }
-
-// Delegates to functions in analysis.js
-function isObjectTemplate(obj) { return Explorer.isObjectTemplate(obj); }
-function loadAllSuggestions(forceRefresh) { return Explorer.loadAllSuggestions(forceRefresh); }
-function loadIssues() { return Explorer.loadIssues(); }
-function analyzeAll(forceRefresh) { return Explorer.analyzeAll(forceRefresh); }
-function switchSuggestionsSubtab(subtab) { Explorer.switchSuggestionsSubtab(subtab); }
-function navigateToIssue(search, type) { Explorer.navigateToIssue(search, type); }
-function loadCleanupSuggestions() { return Explorer.loadCleanupSuggestions(); }
-function renderCleanupSuggestions() { Explorer.renderCleanupSuggestions(); }
-
-// Local state not in Explorer.state (UI-specific)
+// Local state (UI-specific)
 
 // Utility: Refresh Impact & Relationships when relevant attributes change
-function refreshRelatedSections(key, obj) {
+export function refreshRelatedSections(key, obj) {
     // If any reference-related attribute changes, refresh the unified section
     if (inheritanceAttrs.includes(key) || constants.referenceAttrs.includes(key) || key === 'members' || key === 'use') {
-        Explorer.loadImpactAndRelationships(obj);
+        loadImpactAndRelationships(obj);
     }
 }
 
 // Utility: Hide autocomplete dropdown with delay
-function hideAutocompleteDropdown(selector, resetCallback) {
+export function hideAutocompleteDropdown(selector, resetCallback) {
     setTimeout(() => {
         const dropdown = selector.startsWith('#')
             ? document.getElementById(selector.slice(1))
@@ -71,7 +53,7 @@ function hideAutocompleteDropdown(selector, resetCallback) {
 }
 
 // Utility: Handle autocomplete keyboard navigation
-function handleAutocompleteKeyNav(event, config) {
+export function handleAutocompleteKeyNav(event, config) {
     const dropdown = config.selector.startsWith('#')
         ? document.getElementById(config.selector.slice(1))
         : document.querySelector(config.selector);
@@ -111,7 +93,7 @@ function handleAutocompleteKeyNav(event, config) {
 }
 
 // Use loadObjects, clearStagedChanges from data-loading.js
-const configRootName = Explorer.getConfigRootName();
+const configRootName = getConfigRootName();
 
 // Session ID for staging
 const mySessionId = getSessionId();
@@ -120,19 +102,19 @@ const mySessionId = getSessionId();
 
 // Update UI to show/hide editing lock state (banner is handled by base.html)
 // Lock check is now server-side (ensure_shadow_lock). These are kept for API compatibility.
-function updateEditingLockedUI() {}
-function canEdit() { return true; }
+export function updateEditingLockedUI() {}
+export function canEdit() { return true; }
 
 // Load data
 document.addEventListener('DOMContentLoaded', async () => {
     // Load objects, files, and folders from backend
-    await Explorer.loadObjects();
+    await loadObjects();
 
     // Load changed files from shadow copy diff (for tree indicators)
-    await Explorer.loadChangedFiles();
+    await loadChangedFiles();
 
     // Restore tabs from sessionStorage
-    Explorer.restoreTabs();
+    restoreTabs();
 
     // Restore tree folder expanded state from localStorage
     restoreTreeFolderState();
@@ -143,24 +125,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Restore active tab or fall back to saved selection
     if (state.openTabs.length > 0 && state.activeTabKey) {
-        const obj = Explorer.findObjectByKey(state.activeTabKey);
+        const obj = findObjectByKey(state.activeTabKey);
         if (obj) {
-            Explorer.openTab(obj);
+            openTab(obj);
             selectionRestored = true;
         }
     } else {
         const savedKey = sessionStorage.getItem('explorerSelectedKey');
         if (savedKey) {
-            const obj = Explorer.findObjectByKey(savedKey);
+            const obj = findObjectByKey(savedKey);
             if (obj) {
-                Explorer.openTab(obj);
+                openTab(obj);
                 selectionRestored = true;
             }
         }
     }
 
     // Render tab bar (may be empty if no tabs restored)
-    Explorer.renderTabBar();
+    renderTabBar();
 
     // Show empty state if no selection was restored
     if (!selectionRestored) {
@@ -170,7 +152,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Update badges (commit count, undo button)
-    Explorer.updateBadges();
+    updateBadges();
     initTargetPane();
 
     // Restore suggestion section expanded/collapsed state
@@ -193,14 +175,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (treeItem) {
                 const index = parseInt(treeItem.dataset.index, 10);
                 if (!isNaN(index)) {
-                    Explorer.handleDragStart(event, index);
+                    handleDragStart(event, index);
                 }
             }
         });
 
         objectTree.addEventListener('dragend', (event) => {
             // Always clean up on dragend, regardless of target
-            Explorer.handleDragEnd(event);
+            handleDragEnd(event);
         });
 
         // Track hovered item for spacebar preview
@@ -227,18 +209,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     // This catches drags that end outside the tree container
     document.addEventListener('dragend', (event) => {
         if (document.body.classList.contains('dragging-objects')) {
-            Explorer.cleanupDragState();
+            cleanupDragState();
         }
     });
 
     // Update commit button with any persisted changes
-    Explorer.updateBadges();
+    updateBadges();
 
     // Load issues in background for badges
-    Explorer.loadIssuesForBadges();
+    loadIssuesForBadges();
 
     // Load suggestions in background for badges
-    Explorer.loadSuggestionsForBadges();
+    loadSuggestionsForBadges();
 
     // Pre-load full suggestions content so it's ready when user navigates to the tab
     loadAllSuggestions();
@@ -265,7 +247,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.history.replaceState({}, '', window.location.pathname);
         // Open commit dialog after a short delay to ensure everything is loaded
         setTimeout(async () => {
-            const count = await Explorer.getTotalStagedCount();
+            const count = await getTotalStagedCount();
             if (count > 0) {
                 showGlobalCommitDialog();
             }
@@ -278,7 +260,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.history.replaceState({}, '', window.location.pathname);
         // Open commit dialog after a short delay to ensure data is loaded
         setTimeout(async () => {
-            const count = await Explorer.getTotalStagedCount();
+            const count = await getTotalStagedCount();
             if (count > 0) {
                 showGlobalCommitDialog();
             }
@@ -310,7 +292,7 @@ document.addEventListener('keydown', (e) => {
         hideContextMenu();
         // Only clear selection if no object is being edited
         if (!state.editedObject) {
-            Explorer.clearSelection();
+            clearSelection();
             updateSelection();
         }
     } else if (e.code === 'Space' && !isTyping) {
@@ -328,7 +310,7 @@ document.addEventListener('click', () => hideContextMenu());
 // Hide context menu on scroll in tree panel
 document.querySelector('.tree-panel').addEventListener('scroll', () => hideContextMenu(), true);
 
-function setView(view) {
+export function setView(view) {
     state.currentView = view;
     document.querySelectorAll('.tree-panel .panel-tab-header .nbe-tab').forEach(btn => {
         const isActive = btn.dataset.view === view;
@@ -340,7 +322,7 @@ function setView(view) {
 
 let currentSearchTerm = '';
 
-function buildTree() {
+export function buildTree() {
     const container = document.getElementById('treeContent');
     const search = document.getElementById('treeSearch').value.toLowerCase();
     currentSearchTerm = search;
@@ -371,10 +353,10 @@ function buildTree() {
     // Filter by orphans and/or issues (OR logic when both checked)
     if (orphansOnly && issuesOnly) {
         filtered = filtered.filter(o =>
-            state.orphanIndices.has(Explorer.getObjectKey(o)) || getObjectIssue(o) !== null
+            state.orphanIndices.has(getObjectKey(o)) || getObjectIssue(o) !== null
         );
     } else if (orphansOnly) {
-        filtered = filtered.filter(o => state.orphanIndices.has(Explorer.getObjectKey(o)));
+        filtered = filtered.filter(o => state.orphanIndices.has(getObjectKey(o)));
     } else if (issuesOnly) {
         filtered = filtered.filter(o => getObjectIssue(o) !== null);
     }
@@ -382,7 +364,7 @@ function buildTree() {
     // Show empty state when no results
     if (filtered.length === 0 && (search || orphansOnly || issuesOnly)) {
         const msg = search
-            ? `No objects matching "${Explorer.escapeHtml(search)}"`
+            ? `No objects matching "${escapeHtml(search)}"`
             : 'No matching objects';
         container.innerHTML = `<div class="empty-state"><span class="empty-icon"><i class="fa-solid fa-search"></i></span><div class="empty-title">${msg}</div><div class="empty-desc">${state.allObjects.length} objects in configuration</div></div>`;
         return;
@@ -395,12 +377,12 @@ function buildTree() {
     }
 
     // Update badge tiers after tree re-render
-    if (Explorer.refreshPanelTiers) {
-        Explorer.refreshPanelTiers();
+    if (refreshPanelTiers) {
+        refreshPanelTiers();
     }
 }
 
-function buildFileTree(container, objects) {
+export function buildFileTree(container, objects) {
     const byFile = {};
     objects.forEach(obj => {
         const file = obj.source_file.split('/').pop();
@@ -420,13 +402,13 @@ function buildFileTree(container, objects) {
                 .join('');
 
             return `
-            <div class="tree-folder${isOpen ? ' open' : ''}" data-file="${Explorer.escapeHtml(filePath)}">
+            <div class="tree-folder${isOpen ? ' open' : ''}" data-file="${escapeHtml(filePath)}">
                 <div class="tree-folder-header" onclick="Explorer.toggleFolder(this.parentElement)"
-                     ondragover="Explorer.handleDragOver(event)" ondrop="Explorer.handleDrop(event, '${Explorer.escapeJs(filePath)}')"
+                     ondragover="Explorer.handleDragOver(event)" ondrop="Explorer.handleDrop(event, '${escapeJs(filePath)}')"
                      ondragleave="if(!this.contains(event.relatedTarget))this.closest('.tree-folder')?.classList.remove('drop-target')">
                     <span class="tree-folder-icon"><i class="fa-solid fa-chevron-right"></i></span>
-                    <span class="tree-folder-name">${Explorer.escapeHtml(file)}</span>
-                    <button class="tree-folder-add-btn" onclick="event.stopPropagation(); Explorer.createNewObject('${Explorer.escapeJs(filePath)}')" title="Add new object">+</button>
+                    <span class="tree-folder-name">${escapeHtml(file)}</span>
+                    <button class="tree-folder-add-btn" onclick="event.stopPropagation(); Explorer.createNewObject('${escapeJs(filePath)}')" title="Add new object">+</button>
                     <span class="tree-folder-count">${objs.length}</span>
                 </div>
                 <div class="tree-folder-children">
@@ -436,7 +418,7 @@ function buildFileTree(container, objects) {
         `}).join('');
 }
 
-function buildTypeTree(container, objects) {
+export function buildTypeTree(container, objects) {
     const byType = {};
     objects.forEach(obj => {
         if (!byType[obj.object_type]) {byType[obj.object_type] = [];}
@@ -452,7 +434,7 @@ function buildTypeTree(container, objects) {
             <div class="tree-folder${isOpen ? ' open' : ''}" data-file="${folderKey}">
                 <div class="tree-folder-header" onclick="Explorer.toggleFolder(this.parentElement)">
                     <span class="tree-folder-icon"><i class="fa-solid fa-chevron-right"></i></span>
-                    <span class="tree-folder-name">${Explorer.escapeHtml(type)}</span>
+                    <span class="tree-folder-name">${escapeHtml(type)}</span>
                     <span class="tree-folder-count">${objs.length}</span>
                 </div>
                 <div class="tree-folder-children">
@@ -462,18 +444,18 @@ function buildTypeTree(container, objects) {
         `}).join('');
 }
 
-function renderTreeItem(obj, showType = false) {
-    const selected = Explorer.isSelectedByIndex(obj.global_index) ? 'selected' : '';
+export function renderTreeItem(obj, showType = false) {
+    const selected = isSelectedByIndex(obj.global_index) ? 'selected' : '';
     const isTemplate = isTreeItemTemplate(obj);
-    const isOrphan = state.orphanIndices.has(Explorer.getObjectKey(obj));
+    const isOrphan = state.orphanIndices.has(getObjectKey(obj));
     const hostListInfo = getHostListInfo(obj);
     const issue = getObjectIssue(obj);
     const orphanClass = isOrphan ? 'is-orphan' : '';
     const longListClass = hostListInfo.shouldGroup ? 'has-long-list' : '';
-    const typeLabel = Explorer.getTypeBadge(obj.object_type, isTemplate);
-    const badgeCompact = Explorer.getTypeBadgeTier(obj.object_type, isTemplate, 'compact');
-    const badgeMedium = Explorer.getTypeBadgeTier(obj.object_type, isTemplate, 'medium');
-    const badgeFull = Explorer.getTypeBadgeTier(obj.object_type, isTemplate, 'full');
+    const typeLabel = getTypeBadge(obj.object_type, isTemplate);
+    const badgeCompact = getTypeBadgeTier(obj.object_type, isTemplate, 'compact');
+    const badgeMedium = getTypeBadgeTier(obj.object_type, isTemplate, 'medium');
+    const badgeFull = getTypeBadgeTier(obj.object_type, isTemplate, 'full');
     const matchField = getSearchMatchField(obj);
     const displayName = obj.display_name || obj.name || '(unnamed)';
 
@@ -483,11 +465,11 @@ function renderTreeItem(obj, showType = false) {
              draggable="true"
              onclick="Explorer.handleItemClick(event, ${obj.global_index})"
              oncontextmenu="Explorer.handleContextMenu(event, ${obj.global_index})">
-            <span class="tree-item-drag-handle" title="Drag to move to another file">${Explorer.getIcon('grip-vertical')}</span>
-            ${issue ? `<span class="tree-item-issue-badge ${issue.severity}" title="${Explorer.escapeHtml(issue.message)}">${Explorer.getIssueIcon(issue)}</span>` : ''}
+            <span class="tree-item-drag-handle" title="Drag to move to another file">${getIcon('grip-vertical')}</span>
+            ${issue ? `<span class="tree-item-issue-badge ${issue.severity}" title="${escapeHtml(issue.message)}">${getIssueIcon(issue)}</span>` : ''}
             ${hostListInfo.shouldGroup ? `<span class="tree-item-group-badge" title="Consider using a hostgroup (${hostListInfo.count} hosts)"><i class="fa-solid fa-list"></i></span>` : ''}
-            <span class="tree-item-name" title="${Explorer.escapeHtml(displayName)}">${Explorer.escapeHtml(displayName)}</span>
-            ${matchField ? `<span class="tree-item-match-field" title="Matched in ${Explorer.escapeHtml(matchField)}">${Explorer.escapeHtml(matchField)}</span>` : ''}
+            <span class="tree-item-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</span>
+            ${matchField ? `<span class="tree-item-match-field" title="Matched in ${escapeHtml(matchField)}">${escapeHtml(matchField)}</span>` : ''}
             ${showType ? '' : `<span class="tree-item-type type-${obj.object_type}" title="${obj.object_type}" data-badge-compact="${badgeCompact}" data-badge-medium="${badgeMedium}" data-badge-full="${badgeFull}">${typeLabel}</span>`}
         </div>
     `;
@@ -513,17 +495,17 @@ function getSearchMatchField(obj) {
 }
 
 // Get display name for an object (shadow copy: attributes are always current)
-function getStagedDisplayName(obj) {
+export function getStagedDisplayName(obj) {
     return obj.display_name || obj.name || '(unnamed)';
 }
 
-function getObjectIssue(obj) {
+export function getObjectIssue(obj) {
     const key = `${obj.object_type}:${obj.display_name}`;
     return state.issuesByObject.get(key) || null;
 }
 
 // Check if object has a long host list that should probably be a hostgroup
-function getHostListInfo(obj) {
+export function getHostListInfo(obj) {
     const HOST_LIST_THRESHOLD = 4; // Suggest grouping if more than this many hosts
 
     // Only check services and other objects that can have host_name lists
@@ -547,18 +529,18 @@ function getHostListInfo(obj) {
 }
 
 // Check if tree item is a template (delegates to shared implementation)
-function isTreeItemTemplate(obj) {
-    return Explorer.isObjectTemplate(obj);
+export function isTreeItemTemplate(obj) {
+    return isObjectTemplate(obj);
 }
 
 // Helper to get effective attributes for an object (shadow copy: always current)
-function getEffectiveAttributes(obj) {
+export function getEffectiveAttributes(obj) {
     return obj.attributes;
 }
 
 // Helper to get the name field that should be used for an object
 // Templates use 'name', regular objects use type-specific field (host_name, etc.)
-function getNameFieldForObject(obj) {
+export function getNameFieldForObject(obj) {
     const typeField = constants.nameFields[obj.object_type];
     const attrs = getEffectiveAttributes(obj);
 
@@ -575,13 +557,13 @@ function getNameFieldForObject(obj) {
 }
 
 // Helper to get effective name for an object (considering pending edits)
-function getEffectiveName(obj) {
+export function getEffectiveName(obj) {
     const attrs = getEffectiveAttributes(obj);
     const nameField = getNameFieldForObject(obj);
     return attrs[nameField] || obj.name || obj.display_name;
 }
 
-function toggleFolder(folder) {
+export function toggleFolder(folder) {
     folder.classList.toggle('open');
     // Track folder state for persistence across tree rebuilds
     const filePath = folder.dataset.file;
@@ -618,31 +600,31 @@ function restoreTreeFolderState() {
     }
 }
 
-function filterTree() {
+export function filterTree() {
     buildTree();
 }
 
-function handleItemClick(event, index) {
+export function handleItemClick(event, index) {
     event.stopPropagation();
     hideContextMenu();
 
     if (event.ctrlKey || event.metaKey) {
-        if (Explorer.isSelectedByIndex(index)) {
-            Explorer.removeFromSelectionByIndex(index);
+        if (isSelectedByIndex(index)) {
+            removeFromSelectionByIndex(index);
         } else {
             selectObjectByIndex(index);
         }
     } else if (event.shiftKey && state.selectedKeys.size > 0) {
         // Range select
         const all = Array.from(document.querySelectorAll('.tree-item:not(.staged-creation)')).map(el => parseInt(el.dataset.index, 10));
-        const selectedIndices = Explorer.getSelectedIndices();
-        const lastSelected = Array.from(Explorer.getSelectedIndices()).pop();
+        const selectedIndices = getSelectedIndices();
+        const lastSelected = Array.from(getSelectedIndices()).pop();
         const start = all.indexOf(lastSelected);
         const end = all.indexOf(index);
         const range = all.slice(Math.min(start, end), Math.max(start, end) + 1);
         range.forEach(i => selectObjectByIndex(i));
     } else {
-        Explorer.clearSelection();
+        clearSelection();
         selectObjectByIndex(index);
     }
 
@@ -650,10 +632,10 @@ function handleItemClick(event, index) {
 }
 
 // Simple selection helpers using stable keys
-function selectObjectByIndex(index) {
+export function selectObjectByIndex(index) {
     const obj = state.allObjects.find(o => o.global_index === index);
     if (obj) {
-        state.selectedKeys.add(Explorer.getObjectKey(obj));
+        state.selectedKeys.add(getObjectKey(obj));
             }
 }
 
@@ -662,7 +644,7 @@ function selectObjectByIndex(index) {
  * Clears current selection and selects the matching object.
  * @param {string} stableKey - "source_file|object_type|name" format
  */
-function selectObjectByStableKey(stableKey) {
+export function selectObjectByStableKey(stableKey) {
     if (!stableKey) {return;}
 
     // Parse stable key: "source_file|object_type|name"
@@ -686,8 +668,8 @@ function selectObjectByStableKey(stableKey) {
 
     if (obj) {
         // Clear current selection and select this object
-        Explorer.clearSelection();
-        state.selectedKeys.add(Explorer.getObjectKey(obj));
+        clearSelection();
+        state.selectedKeys.add(getObjectKey(obj));
         updateSelection();
         // Scroll to the object in the tree
         scrollToObject(obj.global_index);
@@ -698,11 +680,11 @@ function selectObjectByStableKey(stableKey) {
 
 // clearSelection, removeFromSelectionByIndex, isSelectedByIndex now in state-management.js
 
-function updateSelection(options = {}) {
+export function updateSelection(options = {}) {
     // Update tree items - highlight selected
     document.querySelectorAll('.tree-item').forEach(el => {
         const index = parseInt(el.dataset.index, 10);
-        el.classList.toggle('selected', Explorer.isSelectedByIndex(index));
+        el.classList.toggle('selected', isSelectedByIndex(index));
     });
 
     // When called from handleDragEnd, only update CSS — the drop handler
@@ -714,11 +696,11 @@ function updateSelection(options = {}) {
     // Update center pane based on selection
     if (state.selectedKeys.size === 1) {
         const key = Array.from(state.selectedKeys)[0];
-        const obj = Explorer.findObjectByKey(key);
+        const obj = findObjectByKey(key);
         if (obj) {
             // If this is a tab switch, center pane is already handled
             if (!state.isTabSwitch) {
-                Explorer.openTab(obj);
+                openTab(obj);
             }
             sessionStorage.setItem('explorerSelectedKey', key);
         }
@@ -736,7 +718,7 @@ function updateSelection(options = {}) {
 
 // getObjectKeyByIndex now in main.js module
 
-function getIssueShortLabel(issue) {
+export function getIssueShortLabel(issue) {
     const labels = {
         'orphan': 'Orphan',
         'missing_template': 'Missing Template',
@@ -773,7 +755,7 @@ function getIssueShortLabel(issue) {
 }
 
 // Shared icon for Nagios object types (used in errors tab, references, etc.)
-function getObjectTypeIcon(objectType) {
+export function getObjectTypeIcon(objectType) {
     const typeIcons = {
         'host': '<i class="fa-solid fa-desktop"></i>',
         'hostgroup': '<i class="fa-solid fa-layer-group"></i>',
@@ -792,7 +774,7 @@ function getObjectTypeIcon(objectType) {
     return typeIcons[objectType] || '<i class="fa-solid fa-file"></i>';
 }
 
-function getIssueIcon(issue) {
+export function getIssueIcon(issue) {
     // Use type-specific icons for cleanup issues (matching groupConfig in renderCleanupSuggestions)
     const typeIcons = {
         'duplicate': '<i class="fa-solid fa-copy"></i>',
@@ -845,15 +827,15 @@ function findMatchingSuggestion(obj, issue, hostListInfo, allSuggestions) {
     return null;
 }
 
-async function navigateToObjectIssue() {
+export async function navigateToObjectIssue() {
     if (!state.currentCenterObject) {return;}
 
     const obj = state.currentCenterObject;
 
-    Explorer.switchTabs('.nbe-tab', '.right-tab-content', 'suggestions', 'tab', 'Tab');
+    switchTabs('.nbe-tab', '.right-tab-content', 'suggestions', 'tab', 'Tab');
     await loadAllSuggestions();
 
-    const allSuggestions = Explorer.collectAllSuggestions();
+    const allSuggestions = collectAllSuggestions();
     const matchId = findMatchingSuggestion(obj, state.currentCenterIssue, state.currentCenterHostListInfo, allSuggestions);
 
     if (matchId) {
@@ -880,13 +862,13 @@ function highlightSuggestionRow(id) {
 }
 
 // Open current object in Graph View with all connections expanded
-function openInGraphView() {
+export function openInGraphView() {
     if (!state.currentCenterObject) {return;}
 
     const attrs = state.currentCenterObject.attributes || {};
     const objName = state.currentCenterObject.name || state.currentCenterObject.display_name;
     if (!objName) {
-        Explorer.showToast('Cannot determine object name for graph view', 'warning');
+        showToast('Cannot determine object name for graph view', 'warning');
         return;
     }
 
@@ -915,7 +897,7 @@ function openInGraphView() {
 }
 
 // Ensure cleanup suggestions are rendered, then call callback
-function ensureCleanupRendered(callback) {
+export function ensureCleanupRendered(callback) {
     const container = document.getElementById('cleanupContent');
     // Check if cleanup suggestions are already rendered
     if (container && container.querySelector('.cleanup-suggestion')) {
@@ -935,7 +917,7 @@ function ensureCleanupRendered(callback) {
     }
 }
 
-function highlightAnalysisItem(tab, objectType, objectName) {
+export function highlightAnalysisItem(tab, objectType, objectName) {
     // Find the matching item in the Errors tab and scroll to it
     // Errors are grouped by the missing object, so we need to search through state.groupedErrors
     setTimeout(() => {
@@ -967,7 +949,7 @@ function highlightAnalysisItem(tab, objectType, objectName) {
     }, 200);
 }
 
-function highlightCleanupItem(globalIndex, suggestionType, checkObjectsArray = false) {
+export function highlightCleanupItem(globalIndex, suggestionType, checkObjectsArray = false) {
     // Find the matching cleanup item using data-index attribute
     setTimeout(() => {
         const idx = state.allCleanupSuggestions.findIndex(s => {
@@ -998,7 +980,7 @@ function highlightCleanupItem(globalIndex, suggestionType, checkObjectsArray = f
 }
 
 // Alias for backwards compatibility
-function highlightCleanupItemByObject(globalIndex, suggestionType) {
+export function highlightCleanupItemByObject(globalIndex, suggestionType) {
     highlightCleanupItem(globalIndex, suggestionType, true);
 }
 
@@ -1017,7 +999,7 @@ function highlightCleanupItemByObject(globalIndex, suggestionType) {
 // Object Detail Modal
 // ============================================================================
 
-function closeObjectDetail() {
+export function closeObjectDetail() {
     document.getElementById('objectDetailModal').classList.remove('visible');
 }
 
@@ -1025,14 +1007,14 @@ function closeObjectDetail() {
 // Right Pane Tabs
 // ============================================================================
 
-function switchRightTab(tabName) {
-    Explorer.switchTabs('.nbe-tab', '.right-tab-content', tabName, 'tab', 'Tab');
+export function switchRightTab(tabName) {
+    switchTabs('.nbe-tab', '.right-tab-content', tabName, 'tab', 'Tab');
 
     // Auto-load data for tabs
     if (tabName === 'suggestions') {
         // Always render the list when switching to suggestions tab
         // Data may have been loaded during init but not rendered yet
-        Explorer.renderUnifiedSuggestionsList();
+        renderUnifiedSuggestionsList();
         loadAllSuggestions();
     } else if (tabName === 'issues') {
         loadIssues();
@@ -1049,7 +1031,7 @@ function switchRightTab(tabName) {
 // Actions Menu
 // ============================================================================
 
-function toggleActionsMenu(event) {
+export function toggleActionsMenu(event) {
     event.stopPropagation();
     const menu = document.getElementById('actionsMenu');
     const wasVisible = menu.classList.contains('visible');
@@ -1065,7 +1047,7 @@ function toggleActionsMenu(event) {
     }
 }
 
-function closeActionsMenu() {
+export function closeActionsMenu() {
     document.getElementById('actionsMenu').classList.remove('visible');
     // Ensure listener is removed
     document.removeEventListener('click', closeActionsMenu);
@@ -1078,7 +1060,7 @@ function closeActionsMenu() {
 /**
  * Toggle a collapsible suggestion section
  */
-function toggleSuggestionSection(sectionName) {
+export function toggleSuggestionSection(sectionName) {
     const section = document.querySelector(`.suggestion-section[data-section="${sectionName}"]`);
     if (!section) {return;}
 
@@ -1095,7 +1077,7 @@ function toggleSuggestionSection(sectionName) {
 /**
  * Save suggestion section expanded/collapsed state
  */
-function saveSuggestionSectionState() {
+export function saveSuggestionSectionState() {
     const sectionState = {};
     document.querySelectorAll('.suggestion-section').forEach(section => {
         const name = section.dataset.section;
@@ -1111,7 +1093,7 @@ function saveSuggestionSectionState() {
 /**
  * Restore suggestion section expanded/collapsed state
  */
-function restoreSuggestionSectionState() {
+export function restoreSuggestionSectionState() {
     try {
         const saved = localStorage.getItem('suggestionSectionState');
         if (!saved) {return;}
@@ -1140,57 +1122,12 @@ function restoreSuggestionSectionState() {
 // Analysis functions (suggestions, cleanup, issues, templates, grouping, notification gaps) - moved to analysis.js
 // Bulk operations, validation, commit UI, save/cancel - moved to dialogs.js
 
-    // =============================================================================
-    // Export Functions to Explorer Namespace
-    // =============================================================================
 
-    // Utility functions
-    Explorer.refreshRelatedSections = refreshRelatedSections;
-    Explorer.hideAutocompleteDropdown = hideAutocompleteDropdown;
-    Explorer.handleAutocompleteKeyNav = handleAutocompleteKeyNav;
-    Explorer.updateEditingLockedUI = updateEditingLockedUI;
-    Explorer.canEdit = canEdit;
-
-    // Tree view functions
-    Explorer.setView = setView;
-    Explorer.buildTree = buildTree;
-    Explorer.buildFileTree = buildFileTree;
-    Explorer.buildTypeTree = buildTypeTree;
-    Explorer.renderTreeItem = renderTreeItem;
-    Explorer.getStagedDisplayName = getStagedDisplayName;
-    Explorer.getObjectIssue = getObjectIssue;
-    Explorer.getHostListInfo = getHostListInfo;
-    Explorer.isTreeItemTemplate = isTreeItemTemplate;
-    Explorer.getEffectiveAttributes = getEffectiveAttributes;
-    Explorer.getNameFieldForObject = getNameFieldForObject;
-    Explorer.getEffectiveName = getEffectiveName;
-    Explorer.toggleFolder = toggleFolder;
-    Explorer.filterTree = filterTree;
-    Explorer.handleItemClick = handleItemClick;
-    Explorer.selectObjectByIndex = selectObjectByIndex;
-    Explorer.selectObjectByStableKey = selectObjectByStableKey;
-    Explorer.updateSelection = updateSelection;
-    Explorer.getIssueShortLabel = getIssueShortLabel;
-    Explorer.getObjectTypeIcon = getObjectTypeIcon;
-    Explorer.getIssueIcon = getIssueIcon;
-
-    // Navigation functions
-    Explorer.navigateToObjectIssue = navigateToObjectIssue;
-    Explorer.openInGraphView = openInGraphView;
-    Explorer.ensureCleanupRendered = ensureCleanupRendered;
-    Explorer.highlightAnalysisItem = highlightAnalysisItem;
-    Explorer.highlightCleanupItem = highlightCleanupItem;
-    Explorer.highlightCleanupItemByObject = highlightCleanupItemByObject;
-
-    // Center pane reference/inheritance functions - see relations-loader.js and impact-section.js
-
-    // UI functions
-    Explorer.closeObjectDetail = closeObjectDetail;
-    Explorer.switchRightTab = switchRightTab;
-    Explorer.toggleActionsMenu = toggleActionsMenu;
-    Explorer.closeActionsMenu = closeActionsMenu;
-    Explorer.toggleSuggestionSection = toggleSuggestionSection;
-    Explorer.saveSuggestionSectionState = saveSuggestionSectionState;
-    Explorer.restoreSuggestionSectionState = restoreSuggestionSectionState;
-
-})(window.Explorer);
+// onclick/oncontextmenu handlers in generated HTML — must be on window.Explorer
+window.Explorer = window.Explorer || {};
+window.Explorer.toggleFolder = toggleFolder;
+window.Explorer.handleItemClick = handleItemClick;
+window.Explorer.handleContextMenu = handleContextMenu;
+window.Explorer.handleDragOver = handleDragOver;
+window.Explorer.handleDrop = handleDrop;
+window.Explorer.createNewObject = createNewObject;

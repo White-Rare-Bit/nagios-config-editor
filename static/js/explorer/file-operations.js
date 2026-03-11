@@ -7,7 +7,7 @@
 
 import { state } from './state.js';
 import { constants, isObjectTemplate, getTypeBadge, getTypeBadgeTier } from './constants.js';
-import { getObjectKey, findObjectByKey, getSelectedIndices, groupByType } from './main.js';
+import { getObjectKey, findObjectByKey, getSelectedIndices, groupByType, getConfigRootName } from './main.js';
 import { isSelectedByIndex, clearSelection, addToSelectionByIndex, removeFromSelectionByIndex } from './state-management.js';
 import { afterFrontendMutation, loadObjects, getStagingHeaders } from './data-loading.js'; // circular — safe (function-level)
 import { showCenterPaneObject, hideCenterPaneObject, checkForChanges, getEffectiveAttributes, getEffectiveName } from './object-editor.js'; // circular — safe (function-level)
@@ -15,7 +15,7 @@ import { openTab } from './tab-manager.js'; // circular — safe (function-level
 import { getIcon, handleApiError, toRelativePath, toDisplayPath, extractFileName, updateBadge } from './ui-utils.js';
 import { refreshPanelTiers } from './panel-resizer.js';
 import { cleanupDragState } from './drag-drop.js';
-import { buildTree, updateSelection, selectObjectByIndex, getConfigRootName } from './app.js'; // circular — safe (function-level)
+import { buildTree, updateSelection, selectObjectByIndex } from './app.js'; // circular — safe (function-level)
 import { ApiClient } from '../api-client.js';
 import { showToast, showConfirmDialog } from '../ui-notifications.js';
 import { escapeHtml } from '../app.js';
@@ -531,9 +531,7 @@ export function renderTargetPane() {
 
     container.innerHTML = html;
 
-    if (Explorer.refreshPanelTiers) {
-        refreshPanelTiers();
-    }
+    refreshPanelTiers();
 }
 
 export function toggleFolderExpand(folderPath) {
