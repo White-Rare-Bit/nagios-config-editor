@@ -417,6 +417,61 @@ class TestStagingInfoEndpoints:
             assert not sm.has_shadow()
 
 
+class TestMoveObject:
+    """Test single-object move via /api/objects/move."""
+
+    def test_move_object_same_file_reorder(self, client, shadow_app):
+        """Moving an object earlier in the same file actually moves it."""
+        obj = _get_host_object(client, "test-host-2")
+        key = generate_stable_key_for_object_dict(obj)
+
+        # Move test-host-2 to before test-host-1 (after_line=0 = beginning of file)
+        resp = client.post("/api/objects/move", json={
+            "stable_key": key,
+            "target_file": obj["source_file"],
+            "after_line": 0,
+        }, headers={"X-Session-Id": "session-1"})
+        assert resp.status_code == 200
+        assert resp.json["success"] is True
+
+        # Verify test-host-2 now appears before test-host-1
+        resp = client.get("/api/objects?type=host")
+        hosts = resp.json
+        host_names = [h["attributes"]["host_name"] for h in hosts
+                      if h["source_file"].endswith("hosts.cfg")]
+        assert host_names.index("test-host-2") < host_names.index("test-host-1")
+
+    def test_move_object_cross_file(self, client, shadow_app):
+        """Moving an object to a different file works and removes from source."""
+        obj = _get_host_object(client, "test-host-2")
+        key = generate_stable_key_for_object_dict(obj)
+        source_file = obj["source_file"]
+
+        # Create target file in same directory
+        target_file = source_file.replace("hosts.cfg", "hosts2.cfg")
+
+        resp = client.post("/api/objects/move", json={
+            "stable_key": key,
+            "target_file": target_file,
+        }, headers={"X-Session-Id": "session-1"})
+        assert resp.status_code == 200
+        assert resp.json["success"] is True
+
+        # Verify moved: exists in target, not in source
+        resp = client.get("/api/objects?type=host")
+        hosts = resp.json
+        for h in hosts:
+            if h["attributes"]["host_name"] == "test-host-2":
+                assert h["source_file"].endswith("hosts2.cfg")
+                break
+        else:
+            pytest.fail("test-host-2 not found after move")
+
+        source_hosts = [h for h in hosts if h["source_file"].endswith("hosts.cfg")
+                        and not h["source_file"].endswith("hosts2.cfg")]
+        assert all(h["attributes"]["host_name"] != "test-host-2" for h in source_hosts)
+
+
 def generate_stable_key_for_object_dict(obj_dict: dict) -> str:
     """Build a stable key from an API object dict."""
     name = obj_dict.get("display_name") or obj_dict.get("name") or ""

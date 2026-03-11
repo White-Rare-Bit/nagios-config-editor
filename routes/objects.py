@@ -187,10 +187,7 @@ def api_delete_object():
 
 @bp.route("/api/objects/move", methods=["POST"])
 def api_move_object():
-    """Move an object to a new position (create at target, delete original).
-
-    Atomic single-request alternative to separate create+delete calls.
-    Handles same-file reorder and cross-file moves.
+    """Move an object to a new position (same-file reorder or cross-file).
 
     Expects JSON:
     - stable_key: Source object's stable key
@@ -230,26 +227,12 @@ def api_move_object():
     files_to_snapshot.add(os.path.relpath(target_file, sm._config_dir))
     sm.snapshot_files(list(files_to_snapshot), f"move {obj.object_type} {obj.get_display_name()}")
 
-    # Create at target position first (preserves line numbers)
-    create_result = service.create_object(
-        target_file, obj.object_type, dict(obj.attributes),
-        after_block_line=after_line,
+    result = service.move_object(
+        obj.source_file, obj.line_number, target_file,
+        obj.object_type, dict(obj.attributes),
+        insert_line=after_line,
     )
-    if not create_result.success:
-        return operation_response(create_result)
-
-    # Reload so we can find the original by line number (may have shifted)
-    service.reload()
-
-    # Re-find the original object to get its updated line number
-    refound = service.find_object_by_stable_key(stable_key)
-    if refound:
-        _, orig_obj = refound
-        delete_result = service.delete_object(orig_obj.source_file, orig_obj.line_number)
-        if not delete_result.success:
-            return operation_response(delete_result)
-
-    return jsonify({"success": True})
+    return operation_response(result)
 
 
 @bp.route("/api/objects/delete-multiple", methods=["POST"])

@@ -14,6 +14,7 @@ from file_operations import (
     delete_object_from_file,
     edit_object_in_file,
     is_safe_path,
+    move_object_between_files,
 )
 from nagios_model import NAME_FIELDS, NagiosObject, OperationResult
 from nagios_parser import NagiosConfigParser
@@ -482,3 +483,60 @@ class NagiosService:
                     line_number,
                 )
                 return OperationResult(False, f"Delete failed: {e}")
+
+    def move_object(
+        self,
+        source_file: str,
+        source_line: int,
+        target_file: str,
+        obj_type: str,
+        attrs: dict[str, str],
+        insert_line: int | None = None,
+    ) -> OperationResult:
+        """Move an object from one file to another (or reorder within same file).
+
+        Args:
+            source_file: Path to the file containing the object
+            source_line: Line number where object starts
+            target_file: Path to the destination file
+            obj_type: Object type (for formatting fallback)
+            attrs: Object attributes (for formatting fallback)
+            insert_line: Line number to insert after in target (None = end)
+
+        Returns:
+            OperationResult with success status
+
+        """
+        with self._lock:
+            corrupted_error = self._check_parser_state()
+            if corrupted_error:
+                return corrupted_error
+
+            try:
+                result = move_object_between_files(
+                    source_file, source_line, target_file,
+                    obj_type, attrs, insert_line,
+                )
+                if not result.success:
+                    logger.error(
+                        "move_object failed: %s:%s -> %s error=%s",
+                        source_file, source_line, target_file, result.error,
+                    )
+                    return result
+                old_parser = self._parser
+                reload_result = self._reload_parser_safe(
+                    old_parser, file_path=source_file,
+                )
+                if not reload_result.success:
+                    return reload_result
+                logger.info(
+                    "move_object: %s:%s -> %s result=success",
+                    source_file, source_line, target_file,
+                )
+                return OperationResult(True)
+            except Exception as e:  # noqa: BLE001
+                logger.exception(
+                    "move_object failed: %s:%s -> %s",
+                    source_file, source_line, target_file,
+                )
+                return OperationResult(False, f"Move failed: {e}")
