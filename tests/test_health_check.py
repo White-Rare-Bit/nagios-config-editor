@@ -1,6 +1,5 @@
 """Tests for health check endpoint."""
 
-import json
 import os
 import shutil
 import tempfile
@@ -12,7 +11,7 @@ from app import create_app
 from file_operations import edit_object_in_file
 from git_service import GitService
 from nagios_model import REQUIRED_FIELDS
-from staging_manager import generate_stable_key
+from stable_keys import generate_stable_key
 
 
 @pytest.fixture
@@ -638,8 +637,8 @@ define timeperiod {
 
 
 def test_apply_staging_with_validate_flag():
-    """Apply staging should include validation result when validate=true."""
-    test_dir = tempfile.mkdtemp()
+    """Apply staging should include validation result."""
+    test_dir = os.path.realpath(tempfile.mkdtemp())
     try:
         test_config_path = Path(test_dir) / "nagios"
         test_config_path.mkdir()
@@ -656,9 +655,8 @@ define host {
         app.config["TESTING"] = True
         client = app.test_client()
 
-        # Stage an edit
         session_id = "test-session"
-        headers = {"X-Session-Id": session_id, "Content-Type": "application/json"}
+        headers = {"X-Session-Id": session_id}
 
         # Get objects to find stable key
         resp = client.get("/api/objects")
@@ -666,37 +664,24 @@ define host {
         objects = resp.json
         assert len(objects) > 0
         obj = objects[0]
+        name = obj.get("display_name") or obj.get("name") or ""
+        stable_key = f"{obj['source_file']}|{obj['object_type']}|{name}"
 
-        # Stage an edit
-        staging_data = {
-            "sessionId": session_id,
-            "userName": "Test User",
-            "userEmail": "test@example.com",
-            "pendingEdits": {
-                str(obj["global_index"]): {
-                    "object": obj,
-                    "original": obj["attributes"],
-                    "edited": {**obj["attributes"], "alias": "Modified"},
-                },
-            },
-        }
-
-        resp = client.post("/api/staging",
-                           data=json.dumps(staging_data),
-                           content_type="application/json",
-                           headers=headers)
+        # Edit via shadow copy API
+        resp = client.post("/api/objects/update", json={
+            "stable_key": stable_key,
+            "attributes": {**obj["attributes"], "alias": "Modified"},
+        }, headers=headers)
         assert resp.status_code == 200  # noqa: PLR2004
 
-        # Apply with validate flag
-        resp = client.post("/api/staging/apply", headers=headers, json={
-            "validate": True,
-        })
+        # Apply
+        resp = client.post("/api/staging/apply")
         assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json
 
         # Response should include a validation field
         assert "validation" in data, \
-            f"Response should include 'validation' when validate=true, got keys: {list(data.keys())}"
+            f"Response should include 'validation', got keys: {list(data.keys())}"
     finally:
         shutil.rmtree(test_dir, ignore_errors=True)
 

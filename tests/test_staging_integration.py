@@ -1,36 +1,29 @@
-"""Integration tests for staging system after backward compatibility removal.
+"""Integration tests for shadow copy staging workflow.
 
-Tests full staging workflow with dict format only.
+Tests the full shadow copy lifecycle through the Flask API:
+create shadow -> mutations via API -> diff/undo/apply -> verify.
 """
 
-import json
+import os
 import shutil
 import tempfile
 from pathlib import Path
 
 import pytest
 
-from app import create_app, get_config_path
-from staging_manager import generate_stable_key_for_object
-
-
-def _obj_stable_key(obj):
-    """Build a stable key from an API object dict."""
-    name = obj.get("display_name") or obj.get("name") or ""
-    return f"{obj['source_file']}|{obj['object_type']}|{name}"
+from app import create_app
 
 
 @pytest.fixture
-def app():
-    """Create Flask app with test config."""
-    # Create temp directory for test config
-    test_dir = tempfile.mkdtemp()
-    test_config_path = Path(test_dir) / "nagios"
-    test_config_path.mkdir()
+def shadow_app():
+    """Create Flask app with isolated temp config for shadow copy testing."""
+    # Use realpath to resolve symlinks (macOS: /var -> /private/var)
+    # so paths match what NagiosParser produces.
+    test_dir = os.path.realpath(tempfile.mkdtemp())
+    config_path = Path(test_dir) / "nagios"
+    config_path.mkdir()
 
-    # Create sample config file
-    sample_cfg = test_config_path / "hosts.cfg"
-    sample_cfg.write_text("""
+    (config_path / "hosts.cfg").write_text("""\
 define host {
     host_name       test-host-1
     alias           Test Host 1
@@ -46,577 +39,385 @@ define host {
 }
 """)
 
-    app = create_app(config_path=str(test_config_path))
+    app = create_app(config_path=str(config_path))
     app.config["TESTING"] = True
 
     yield app
 
-    # Cleanup
+    # Cleanup: destroy shadow if still active, then remove temp dir
+    with app.app_context():
+        sm = app.extensions.get("shadow")
+        if sm and sm.has_shadow():
+            sm.destroy_shadow()
     shutil.rmtree(test_dir, ignore_errors=True)
 
 
 @pytest.fixture
-def client(app):
-    """Create test client with clean staging state."""
-    test_client = app.test_client()
-
-    # Clear any existing staging to ensure clean state
-    with app.app_context():
-        sm = app.extensions.get("staging")
-        if sm:
-            sm.clear_staging()
-
-    yield test_client
-
-    # Cleanup staging after test
-    with app.app_context():
-        sm = app.extensions.get("staging")
-        if sm:
-            sm.clear_staging()
+def client(shadow_app):
+    """Flask test client."""
+    return shadow_app.test_client()
 
 
-def test_staging_round_trip_dict_format(client, app):
-    """Test full staging round-trip with dict format."""
-    # Get initial objects
+def _get_host_object(client, hostname):
+    """Get a host object dict by host_name from the API."""
     resp = client.get("/api/objects")
-    assert resp.status_code == 200  # noqa: PLR2004
+    assert resp.status_code == 200
     objects = resp.json
-    assert len(objects) > 0
-
-    # Stage an edit in dict format (uses 'original' and 'edited' field names)
-    obj = objects[0]
-    stable_key = _obj_stable_key(obj)
-    edit_data = {
-        "sessionId": "test-session",
-        "userName": "Test User",
-        "userEmail": "test@example.com",
-        "pendingEdits": {
-            stable_key: {
-                "object": obj,
-                "original": obj["attributes"],
-                "edited": {**obj["attributes"], "alias": "Updated Alias"},
-            },
-        },
-    }
-
-    resp = client.post("/api/staging",
-                       data=json.dumps(edit_data),
-                       content_type="application/json",
-                       headers={"X-Session-Id": "test-session"})
-    assert resp.status_code == 200  # noqa: PLR2004
-
-    # Verify staging was saved
-    resp = client.get("/api/staging",
-                      headers={"X-Session-Id": "test-session"})
-    assert resp.status_code == 200  # noqa: PLR2004
-    data = resp.json
-    staging = data.get("staging", data)  # Handle both response formats
-    assert "pendingEdits" in staging
-    assert isinstance(staging["pendingEdits"], dict)
-
-    # Apply changes
-    resp = client.post("/api/staging/apply",
-                       data=json.dumps({}),
-                       content_type="application/json",
-                       headers={"X-Session-Id": "test-session"})
-    assert resp.status_code == 200  # noqa: PLR2004
-
-    # Verify the edit was written to disk
-    config_path = Path(get_config_path())
-    written_content = (config_path / "hosts.cfg").read_text()
-    assert "Updated Alias" in written_content
-    assert "Test Host 1" not in written_content  # Original alias replaced
-
-    # Verify re-parsed objects reflect the edit
-    resp = client.get("/api/objects")
-    assert resp.status_code == 200  # noqa: PLR2004
-    updated_objects = resp.json
-    edited_obj = next(o for o in updated_objects
-                      if o["attributes"].get("host_name") == "test-host-1")
-    assert edited_obj["attributes"]["alias"] == "Updated Alias"
+    return next(o for o in objects if o["attributes"].get("host_name") == hostname)
 
 
-def test_reject_old_list_format(client):
-    """Test that list format for pendingEdits is rejected with clear error."""
-    # Try to save staging with old list format
-    old_format_data = {
-        "sessionId": "test-session",
-        "pendingEdits": [
-            {"object": {}, "edited": {}},
-        ],
-    }
+class TestShadowEditApplyWorkflow:
+    """Test: create shadow -> edit via API -> verify diff -> apply -> verify original updated."""
 
-    resp = client.post("/api/staging",
-                       data=json.dumps(old_format_data),
-                       content_type="application/json",
-                       headers={"X-Session-Id": "test-session"})
-    assert resp.status_code == 400  # noqa: PLR2004
-    assert "Invalid staging format" in resp.json["error"]
-    assert "dict" in resp.json["error"]
+    def test_edit_via_api_shows_in_diff(self, client, shadow_app):
+        """Editing an object creates a shadow and shows a diff."""
+        obj = _get_host_object(client, "test-host-1")
+        key = generate_stable_key_for_object_dict(obj)
 
+        resp = client.post("/api/objects/update", json={
+            "stable_key": key,
+            "attributes": {**obj["attributes"], "alias": "Updated Alias"},
+        }, headers={"X-Session-Id": "session-1"})
+        assert resp.status_code == 200
 
-def test_undo_operations_dict_format(client):
-    """Test undo operations work with dict format."""
-    # Get initial objects
-    resp = client.get("/api/objects")
-    objects = resp.json
-    obj = objects[0]
+        # Shadow should now exist
+        with shadow_app.app_context():
+            sm = shadow_app.extensions["shadow"]
+            assert sm.has_shadow()
 
-    # Stage multiple operations
-    stable_key = _obj_stable_key(obj)
-    staging_data = {
-        "sessionId": "test-session",
-        "userName": "Test User",
-        "userEmail": "test@example.com",
-        "pendingEdits": {
-            stable_key: {
-                "object": obj,
-                "original": obj["attributes"],
-                "edited": {**obj["attributes"], "alias": "Edit 1"},
-            },
-        },
-    }
+        # Diff should show the change
+        resp = client.get("/api/staging/diff")
+        assert resp.status_code == 200
+        files = resp.json["data"]["files"]
+        assert len(files) > 0
+        diff_text = files[0]["diff"]["diff_text"]
+        assert "Updated Alias" in diff_text
 
-    client.post("/api/staging",
-                data=json.dumps(staging_data),
-                content_type="application/json",
-                headers={"X-Session-Id": "test-session"})
+    def test_apply_writes_to_original_config(self, client, shadow_app):
+        """Apply copies shadow changes back to the original config directory."""
+        obj = _get_host_object(client, "test-host-1")
+        key = generate_stable_key_for_object_dict(obj)
 
-    # Get staging info
-    resp = client.get("/api/staging/info",
-                      headers={"X-Session-Id": "test-session"})
-    info = resp.json
-    assert info["undoCount"] > 0
+        # Edit
+        client.post("/api/objects/update", json={
+            "stable_key": key,
+            "attributes": {**obj["attributes"], "alias": "Applied Alias"},
+        }, headers={"X-Session-Id": "session-1"})
 
-    # Undo operation
-    resp = client.post("/api/staging/undo",
-                       data=json.dumps({}),
-                       content_type="application/json",
-                       headers={"X-Session-Id": "test-session"})
-    assert resp.status_code == 200  # noqa: PLR2004
+        # Apply
+        resp = client.post("/api/staging/apply")
+        assert resp.status_code == 200
+        assert resp.json["success"] is True
 
-    # Verify undo worked
-    resp = client.get("/api/staging/info",
-                      headers={"X-Session-Id": "test-session"})
-    info = resp.json
-    assert info["undoCount"] == 0
-    assert info["totalCount"] == 0
+        # Shadow destroyed after apply
+        with shadow_app.app_context():
+            sm = shadow_app.extensions["shadow"]
+            assert not sm.has_shadow()
 
+        # Verify original config file updated
+        with shadow_app.app_context():
+            sm = shadow_app.extensions["shadow"]
+            content = Path(sm.config_path).joinpath("hosts.cfg").read_text()
+            assert "Applied Alias" in content
+            assert "Test Host 1" not in content  # Old alias replaced
 
-def test_multi_operation_workflow(client, app):
-    """Test create, edit, move, delete workflow."""
-    session_id = "test-session"
-    headers = {"X-Session-Id": session_id}
+    def test_applied_changes_visible_in_api(self, client, shadow_app):
+        """After apply, the objects API reflects the changes."""
+        obj = _get_host_object(client, "test-host-1")
+        key = generate_stable_key_for_object_dict(obj)
 
-    # Get initial state
-    resp = client.get("/api/objects")
-    objects = resp.json
+        client.post("/api/objects/update", json={
+            "stable_key": key,
+            "attributes": {**obj["attributes"], "alias": "API Visible"},
+        }, headers={"X-Session-Id": "session-1"})
 
-    obj = objects[0]
+        client.post("/api/staging/apply")
 
-    # Stage both creation and edit in one request
-    stable_key = _obj_stable_key(obj)
-    staging_data = {
-        "sessionId": session_id,
-        "stagedCreations": [{
-            "id": "create-1",
+        # Re-fetch from API
+        updated = _get_host_object(client, "test-host-1")
+        assert updated["attributes"]["alias"] == "API Visible"
+
+    def test_create_object_then_apply(self, client, shadow_app):
+        """Creating a new object via API then applying writes it to disk."""
+        with shadow_app.app_context():
+            sm = shadow_app.extensions["shadow"]
+            config_path = sm.config_path
+
+        # Find the target file path from an existing object
+        obj = _get_host_object(client, "test-host-1")
+        target_file = obj["source_file"]
+
+        resp = client.post("/api/objects/create", json={
+            "target_file": target_file,
             "object_type": "host",
-            "targetFile": "hosts.cfg",
             "attributes": {
                 "host_name": "new-host",
-                "alias": "New Host",
-                "address": "192.168.1.100",
+                "alias": "Brand New Host",
+                "address": "10.0.0.99",
             },
-        }],
-        "pendingEdits": {
-            stable_key: {
-                "object": obj,
-                "original": obj["attributes"],
-                "edited": {**obj["attributes"], "alias": "Modified"},
-            },
-        },
-    }
+        }, headers={"X-Session-Id": "session-1"})
+        assert resp.status_code == 200
 
-    resp = client.post("/api/staging",
-                       data=json.dumps(staging_data),
-                       content_type="application/json",
-                       headers=headers)
-    assert resp.status_code == 200  # noqa: PLR2004
+        # Apply
+        resp = client.post("/api/staging/apply")
+        assert resp.status_code == 200
 
-    # Verify counts
-    resp = client.get("/api/staging/info", headers=headers)
-    info = resp.json
-    counts = info.get("counts", {})
-    assert counts.get("creations", 0) == 1
-    assert counts.get("edits", 0) == 1
+        # Verify written to original
+        content = Path(config_path).joinpath("hosts.cfg").read_text()
+        assert "new-host" in content
+        assert "Brand New Host" in content
 
-    # Apply all changes
-    resp = client.post("/api/staging/apply",
-                       data=json.dumps({}),
-                       content_type="application/json",
-                       headers=headers)
-    assert resp.status_code == 200  # noqa: PLR2004
+    def test_delete_object_then_apply(self, client, shadow_app):
+        """Deleting an object via API then applying removes it from disk."""
+        obj = _get_host_object(client, "test-host-2")
+        key = generate_stable_key_for_object_dict(obj)
 
-    # Verify changes were written to disk
-    config_path = Path(get_config_path())
-    written_content = (config_path / "hosts.cfg").read_text()
-    assert "Modified" in written_content        # Edit applied
-    assert "new-host" in written_content        # Creation applied
-    assert "192.168.1.100" in written_content   # New host address
+        resp = client.post("/api/objects/delete", json={
+            "stable_key": key,
+        }, headers={"X-Session-Id": "session-1"})
+        assert resp.status_code == 200
 
-    # Verify re-parsed objects reflect both changes
-    resp = client.get("/api/objects")
-    assert resp.status_code == 200  # noqa: PLR2004
-    updated_objects = resp.json
+        # Apply
+        resp = client.post("/api/staging/apply")
+        assert resp.status_code == 200
 
-    edited_obj = next(o for o in updated_objects
-                      if o["attributes"].get("host_name") == "test-host-1")
-    assert edited_obj["attributes"]["alias"] == "Modified"
-
-    created_obj = next(o for o in updated_objects
-                       if o["attributes"].get("host_name") == "new-host")
-    assert created_obj["attributes"]["alias"] == "New Host"
-    assert created_obj["attributes"]["address"] == "192.168.1.100"
+        # Verify removed from API
+        resp = client.get("/api/objects")
+        hostnames = [o["attributes"].get("host_name") for o in resp.json]
+        assert "test-host-2" not in hostnames
 
 
-def test_conflict_detection(client):
-    """Test conflict detection on external file changes."""
-    session_id = "test-session"
-    headers = {"X-Session-Id": session_id}
+class TestShadowUndoWorkflow:
+    """Test: create shadow -> edit -> undo -> verify reverted."""
 
-    # Get objects and make edit
-    resp = client.get("/api/objects")
-    obj = resp.json[0]
+    def test_undo_reverts_edit(self, client, shadow_app):
+        """Undo after an edit restores the original content."""
+        obj = _get_host_object(client, "test-host-1")
+        key = generate_stable_key_for_object_dict(obj)
 
-    stable_key = _obj_stable_key(obj)
-    edit_data = {
-        "sessionId": session_id,
-        "pendingEdits": {
-            stable_key: {
-                "object": obj,
-                "original": obj["attributes"],
-                "edited": {**obj["attributes"], "alias": "Changed"},
-            },
-        },
-    }
+        # Edit
+        client.post("/api/objects/update", json={
+            "stable_key": key,
+            "attributes": {**obj["attributes"], "alias": "Will Be Undone"},
+        }, headers={"X-Session-Id": "session-1"})
 
-    client.post("/api/staging",
-                data=json.dumps(edit_data),
-                content_type="application/json",
-                headers=headers)
+        # Verify edit took effect in shadow
+        edited = _get_host_object(client, "test-host-1")
+        assert edited["attributes"]["alias"] == "Will Be Undone"
 
-    # Check for conflicts (should be none initially)
-    resp = client.get("/api/staging/conflicts", headers=headers)
-    assert resp.status_code == 200  # noqa: PLR2004
-    assert len(resp.json.get("conflicts", [])) == 0
+        # Undo
+        resp = client.post("/api/staging/undo",
+                           headers={"X-Session-Id": "session-1"})
+        assert resp.status_code == 200
+
+        # Verify reverted
+        reverted = _get_host_object(client, "test-host-1")
+        assert reverted["attributes"]["alias"] == "Test Host 1"
+
+    def test_undo_count_decrements(self, client, shadow_app):
+        """Undo count goes down after each undo."""
+        obj = _get_host_object(client, "test-host-1")
+        key = generate_stable_key_for_object_dict(obj)
+
+        # Two edits
+        client.post("/api/objects/update", json={
+            "stable_key": key,
+            "attributes": {**obj["attributes"], "alias": "Edit 1"},
+        }, headers={"X-Session-Id": "session-1"})
+
+        # Re-fetch object (key may have changed if alias is in display name)
+        obj2 = _get_host_object(client, "test-host-1")
+        key2 = generate_stable_key_for_object_dict(obj2)
+
+        client.post("/api/objects/update", json={
+            "stable_key": key2,
+            "attributes": {**obj2["attributes"], "alias": "Edit 2"},
+        }, headers={"X-Session-Id": "session-1"})
+
+        resp = client.get("/api/staging/info")
+        info = resp.json["data"]
+        assert info["undoCount"] == 2
+
+        # Undo once
+        client.post("/api/staging/undo", headers={"X-Session-Id": "session-1"})
+        resp = client.get("/api/staging/info")
+        assert resp.json["data"]["undoCount"] == 1
+
+    def test_no_changes_after_full_undo(self, client, shadow_app):
+        """After undoing all edits, diff should show no changed files."""
+        obj = _get_host_object(client, "test-host-1")
+        key = generate_stable_key_for_object_dict(obj)
+
+        client.post("/api/objects/update", json={
+            "stable_key": key,
+            "attributes": {**obj["attributes"], "alias": "Temporary Edit"},
+        }, headers={"X-Session-Id": "session-1"})
+
+        client.post("/api/staging/undo", headers={"X-Session-Id": "session-1"})
+
+        resp = client.get("/api/staging/diff")
+        files = resp.json["data"]["files"]
+        # No changed files after full undo
+        assert len(files) == 0
 
 
-class TestBulkOpsUseStagingSystem:
-    """Verify that bulk operations flow through staging (SAFETY-4 regression test)."""
+class TestSessionLocking:
+    """Test: shadow lock prevents other sessions from modifying."""
 
-    def test_bulk_rename_does_not_write_to_disk_without_apply(self, client, app):
-        """Bulk rename via staging save should not modify disk files."""
-        with app.app_context():
-            service = app.extensions["service"]
-            original_objects = service.get_objects()
+    def test_second_session_blocked(self, client, shadow_app):
+        """A second session cannot edit while first session holds the lock."""
+        obj = _get_host_object(client, "test-host-1")
+        key = generate_stable_key_for_object_dict(obj)
 
-            # Find a host to rename
-            host = None
-            for obj in original_objects:
-                if obj.object_type == "host":
-                    host = obj
-                    break
+        # First session creates shadow
+        resp = client.post("/api/objects/update", json={
+            "stable_key": key,
+            "attributes": {**obj["attributes"], "alias": "Session 1 Edit"},
+        }, headers={"X-Session-Id": "session-1"})
+        assert resp.status_code == 200
 
-            if host is None:
-                pytest.skip("No host objects in test config")
+        # Second session tries to edit — should be blocked (423)
+        resp = client.post("/api/objects/update", json={
+            "stable_key": key,
+            "attributes": {**obj["attributes"], "alias": "Session 2 Edit"},
+        }, headers={"X-Session-Id": "session-2"})
+        assert resp.status_code == 423
 
-            original_content = Path(host.source_file).read_text()
+    def test_lock_status_shows_owner(self, client, shadow_app):
+        """Lock status API shows the session owner."""
+        obj = _get_host_object(client, "test-host-1")
+        key = generate_stable_key_for_object_dict(obj)
 
-        # Stage a rename edit (don't apply)
-        stable_key = generate_stable_key_for_object(host)
-        resp = client.post("/api/staging", json={
-            "pendingEdits": {
-                stable_key: {
-                    "object": host.to_dict(),
-                    "original": host.attributes.copy(),
-                    "edited": {**host.attributes, "alias": "RENAMED-ALIAS"},
-                },
-            },
-        }, headers={"X-Session-Id": "test-session"})
-        assert resp.status_code == 200  # noqa: PLR2004
+        client.post("/api/objects/update", json={
+            "stable_key": key,
+            "attributes": {**obj["attributes"], "alias": "Lock Test"},
+        }, headers={"X-Session-Id": "session-owner"})
 
-        # Verify disk file is UNCHANGED
-        with app.app_context():
-            service = app.extensions["service"]
-            host_obj = None
-            for obj in service.get_objects():
-                if obj.object_type == "host":
-                    host_obj = obj
-                    break
-            current_content = Path(host_obj.source_file).read_text()
+        resp = client.get("/api/staging/lock")
+        assert resp.status_code == 200
+        data = resp.json["data"]
+        assert data["locked"] is True
+        assert data["session_id"] == "session-owner"
+
+
+class TestBreakLock:
+    """Test: break lock destroys shadow copy."""
+
+    def test_break_lock_destroys_shadow(self, client, shadow_app):
+        """Breaking the lock destroys the shadow and allows new sessions."""
+        obj = _get_host_object(client, "test-host-1")
+        key = generate_stable_key_for_object_dict(obj)
+
+        # Create shadow via edit
+        client.post("/api/objects/update", json={
+            "stable_key": key,
+            "attributes": {**obj["attributes"], "alias": "Before Break"},
+        }, headers={"X-Session-Id": "session-1"})
+
+        # Break lock
+        resp = client.post("/api/staging/lock/break")
+        assert resp.status_code == 200
+        assert resp.json["success"] is True
+
+        # Shadow should be gone
+        with shadow_app.app_context():
+            sm = shadow_app.extensions["shadow"]
+            assert not sm.has_shadow()
+
+    def test_after_break_new_session_can_edit(self, client, shadow_app):
+        """After breaking lock, a different session can create a new shadow."""
+        obj = _get_host_object(client, "test-host-1")
+        key = generate_stable_key_for_object_dict(obj)
+
+        # Session 1 creates shadow
+        client.post("/api/objects/update", json={
+            "stable_key": key,
+            "attributes": {**obj["attributes"], "alias": "Session 1"},
+        }, headers={"X-Session-Id": "session-1"})
+
+        # Break lock
+        client.post("/api/staging/lock/break")
+
+        # Session 2 should now be able to edit (re-fetch object since service reloaded)
+        obj2 = _get_host_object(client, "test-host-1")
+        key2 = generate_stable_key_for_object_dict(obj2)
+        resp = client.post("/api/objects/update", json={
+            "stable_key": key2,
+            "attributes": {**obj2["attributes"], "alias": "Session 2"},
+        }, headers={"X-Session-Id": "session-2"})
+        assert resp.status_code == 200
+
+    def test_break_discards_unsaved_changes(self, client, shadow_app):
+        """Breaking lock discards changes — original config unchanged."""
+        with shadow_app.app_context():
+            sm = shadow_app.extensions["shadow"]
+            original_content = Path(sm.config_path).joinpath("hosts.cfg").read_text()
+
+        obj = _get_host_object(client, "test-host-1")
+        key = generate_stable_key_for_object_dict(obj)
+
+        client.post("/api/objects/update", json={
+            "stable_key": key,
+            "attributes": {**obj["attributes"], "alias": "Discarded Edit"},
+        }, headers={"X-Session-Id": "session-1"})
+
+        client.post("/api/staging/lock/break")
+
+        # Original config should be unchanged
+        with shadow_app.app_context():
+            sm = shadow_app.extensions["shadow"]
+            current_content = Path(sm.config_path).joinpath("hosts.cfg").read_text()
             assert current_content == original_content
 
 
+class TestStagingInfoEndpoints:
+    """Test staging info and status endpoints."""
 
-class TestAnalyzeReferences:
-    """Tests for the analyze-references endpoint."""
-
-    def test_analyze_references_finds_all_direct_refs(self, client, app):
-        """analyze-references should find refs in all attribute fields, not just REFERENCE_FIELDS."""
-        with app.app_context():
-            config_path = Path(get_config_path())
-            (config_path / "hosts.cfg").write_text("""
-define host {
-    host_name       web-server-01
-    alias           Web Server
-    address         10.0.0.1
-}
-
-define host {
-    host_name       db-server-01
-    alias           DB Server
-    address         10.0.0.2
-}
-""")
-            (config_path / "services.cfg").write_text("""
-define service {
-    host_name               web-server-01
-    service_description     HTTP
-    check_command           check_http
-}
-
-define service {
-    host_name               web-server-01,db-server-01
-    service_description     PING
-    check_command           check_ping
-}
-""")
-            (config_path / "dependencies.cfg").write_text("""
-define hostdependency {
-    host_name               db-server-01
-    dependent_host_name     web-server-01
-}
-""")
-            service = app.extensions["service"]
-            service.reload()
-
-        session_id = "test-session"
-        headers = {"X-Session-Id": session_id}
-
-        resp = client.get("/api/objects")
-        objects = resp.json
-        host_obj = next(o for o in objects
-                        if o["attributes"].get("host_name") == "web-server-01")
-
-        stable_key = _obj_stable_key(host_obj)
-        edit_data = {
-            "sessionId": session_id,
-            "pendingEdits": {
-                stable_key: {
-                    "object": host_obj,
-                    "original": host_obj["attributes"],
-                    "edited": {**host_obj["attributes"], "host_name": "web-server-renamed"},
-                },
-            },
-        }
-        resp = client.post("/api/staging",
-                           data=json.dumps(edit_data),
-                           content_type="application/json",
-                           headers=headers)
+    def test_staging_info_empty_when_no_shadow(self, client):
+        """Staging info returns zeros when no shadow exists."""
+        resp = client.get("/api/staging/info")
         assert resp.status_code == 200
+        data = resp.json["data"]
+        assert data["totalCount"] == 0
+        assert data["undoCount"] == 0
+        assert data["changedFiles"] == 0
 
-        resp = client.get("/api/staging/analyze-references", headers=headers)
+    def test_staging_info_counts_after_edit(self, client, shadow_app):
+        """Staging info shows correct counts after an edit."""
+        obj = _get_host_object(client, "test-host-1")
+        key = generate_stable_key_for_object_dict(obj)
+
+        client.post("/api/objects/update", json={
+            "stable_key": key,
+            "attributes": {**obj["attributes"], "alias": "Count Test"},
+        }, headers={"X-Session-Id": "session-1"})
+
+        resp = client.get("/api/staging/info")
+        data = resp.json["data"]
+        assert data["totalCount"] >= 1
+        assert data["undoCount"] >= 1
+        assert data["changedFiles"] >= 1
+
+    def test_clear_staging_destroys_shadow(self, client, shadow_app):
+        """DELETE /api/staging destroys the shadow copy."""
+        obj = _get_host_object(client, "test-host-1")
+        key = generate_stable_key_for_object_dict(obj)
+
+        client.post("/api/objects/update", json={
+            "stable_key": key,
+            "attributes": {**obj["attributes"], "alias": "Will Be Cleared"},
+        }, headers={"X-Session-Id": "session-1"})
+
+        resp = client.delete("/api/staging")
         assert resp.status_code == 200
-        data = resp.json
+        assert resp.json["success"] is True
 
-        assert data["hasNameChanges"] is True
-        assert len(data["nameChanges"]) == 1
-
-        change = data["nameChanges"][0]
-        assert change["oldName"] == "web-server-01"
-        assert change["newName"] == "web-server-renamed"
-
-        # Should find 3 references:
-        # 1. SERVICE HTTP (host_name = web-server-01)
-        # 2. SERVICE PING (host_name = web-server-01,db-server-01)
-        # 3. HOSTDEPENDENCY (dependent_host_name = web-server-01)
-        assert change["referenceCount"] == 3
-        assert data["totalReferences"] == 3
-
-    def test_analyze_references_returns_diff_data(self, client, app):
-        """analyze-references should return old/new values and source_file for each ref."""
-        with app.app_context():
-            config_path = Path(get_config_path())
-            (config_path / "hosts.cfg").write_text("""
-define host {
-    host_name       myhost
-    alias           My Host
-    address         10.0.0.1
-}
-""")
-            (config_path / "services.cfg").write_text("""
-define service {
-    host_name               myhost
-    service_description     HTTP
-    check_command           check_http
-}
-""")
-            service = app.extensions["service"]
-            service.reload()
-
-        session_id = "test-session"
-        headers = {"X-Session-Id": session_id}
-
-        resp = client.get("/api/objects")
-        objects = resp.json
-        host_obj = next(o for o in objects
-                        if o["attributes"].get("host_name") == "myhost")
-
-        stable_key = _obj_stable_key(host_obj)
-        edit_data = {
-            "sessionId": session_id,
-            "pendingEdits": {
-                stable_key: {
-                    "object": host_obj,
-                    "original": host_obj["attributes"],
-                    "edited": {**host_obj["attributes"], "host_name": "myhost-renamed"},
-                },
-            },
-        }
-        client.post("/api/staging",
-                     data=json.dumps(edit_data),
-                     content_type="application/json",
-                     headers=headers)
-
-        resp = client.get("/api/staging/analyze-references", headers=headers)
-        data = resp.json
-        change = data["nameChanges"][0]
-
-        ref = change["references"][0]
-        assert "sourceFile" in ref
-        assert "field" in ref
-        assert "oldValue" in ref
-        assert "newValue" in ref
-        assert "objectType" in ref
-        assert "objectName" in ref
-
-        assert "myhost" in ref["oldValue"]
-        assert "myhost-renamed" in ref["newValue"]
+        with shadow_app.app_context():
+            sm = shadow_app.extensions["shadow"]
+            assert not sm.has_shadow()
 
 
-def test_apply_includes_verification(client, app):
-    """Apply response includes verification report."""
-    resp = client.get("/api/objects")
-    objects = resp.json
-    obj = objects[0]
-
-    stable_key = _obj_stable_key(obj)
-    edit_data = {
-        "sessionId": "test-session",
-        "pendingEdits": {
-            stable_key: {
-                "object": obj,
-                "original": obj["attributes"],
-                "edited": {**obj["attributes"], "alias": "Verified Alias"},
-            },
-        },
-    }
-
-    client.post("/api/staging",
-                data=json.dumps(edit_data),
-                content_type="application/json",
-                headers={"X-Session-Id": "test-session"})
-
-    resp = client.post("/api/staging/apply",
-                       data=json.dumps({}),
-                       content_type="application/json",
-                       headers={"X-Session-Id": "test-session"})
-    assert resp.status_code == 200
-
-    data = resp.json
-    assert "verification" in data
-    v = data["verification"]
-    assert v["objectLevel"]["passed"] is True
-    assert v["objectLevel"]["editsVerified"] == 1
-
-
-def test_apply_verification_multi_operation(client, app):
-    """Verification works with create + edit together."""
-    session_id = "test-session"
-    headers = {"X-Session-Id": session_id}
-
-    resp = client.get("/api/objects")
-    objects = resp.json
-    obj = objects[0]
-
-    # Use the same absolute source_file path so verification can match
-    target_file = obj["source_file"]
-
-    stable_key = _obj_stable_key(obj)
-    staging_data = {
-        "sessionId": session_id,
-        "stagedCreations": [{
-            "id": "create-v1",
-            "object_type": "host",
-            "targetFile": target_file,
-            "attributes": {
-                "host_name": "verified-host",
-                "alias": "Verified",
-                "address": "10.0.0.99",
-            },
-        }],
-        "pendingEdits": {
-            stable_key: {
-                "object": obj,
-                "original": obj["attributes"],
-                "edited": {**obj["attributes"], "alias": "Also Verified"},
-            },
-        },
-    }
-
-    client.post("/api/staging",
-                data=json.dumps(staging_data),
-                content_type="application/json",
-                headers=headers)
-
-    resp = client.post("/api/staging/apply",
-                       data=json.dumps({}),
-                       content_type="application/json",
-                       headers=headers)
-    assert resp.status_code == 200
-
-    data = resp.json
-    v = data["verification"]
-    assert v["objectLevel"]["passed"] is True
-    assert v["objectLevel"]["editsVerified"] == 1
-    assert v["objectLevel"]["creationsVerified"] == 1
-
-
-def test_unknown_staging_fields_logged_but_accepted(client):
-    """POST /api/staging with unknown fields should succeed (just logs a warning)."""
-    resp = client.get("/api/objects")
-    objects = resp.json
-    obj = objects[0]
-
-    stable_key = _obj_stable_key(obj)
-    staging_data = {
-        "sessionId": "test-session",
-        "pendingEdits": {
-            stable_key: {
-                "object": obj,
-                "original": obj["attributes"],
-                "edited": {**obj["attributes"], "alias": "Unknown Field Test"},
-            },
-        },
-        "totallyBogusField": True,
-        "anotherUnknownField": [1, 2, 3],
-    }
-
-    resp = client.post(
-        "/api/staging",
-        data=json.dumps(staging_data),
-        content_type="application/json",
-        headers={"X-Session-Id": "test-session"},
-    )
-    assert resp.status_code == 200
-    assert resp.json.get("success") is True
+def generate_stable_key_for_object_dict(obj_dict: dict) -> str:
+    """Build a stable key from an API object dict."""
+    name = obj_dict.get("display_name") or obj_dict.get("name") or ""
+    return f"{obj_dict['source_file']}|{obj_dict['object_type']}|{name}"

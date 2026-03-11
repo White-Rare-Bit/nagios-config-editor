@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from app import create_app
-from staging_manager import generate_stable_key
+from stable_keys import generate_stable_key
 
 
 @pytest.fixture

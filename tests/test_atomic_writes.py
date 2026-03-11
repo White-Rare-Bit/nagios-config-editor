@@ -1,44 +1,9 @@
 """Tests for atomic write patterns across the codebase (Issue #13)."""
 
-import json
 import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
-
-import pytest
-
-
-class TestStagingSaveAtomic:
-    """Verify staging_manager.save_staging() produces a readable file."""
-
-    def test_staging_save_round_trip(self, app):
-        """save_staging() must produce a file that get_staging() can read back."""
-        from staging_manager import StagingManager
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            sm = StagingManager(tmpdir)
-            sm.staging_dir = Path(tmpdir)
-            sm.staging_file = Path(tmpdir) / "staging.json"
-
-            data = {
-                "sessionId": "test-session",
-                "pendingEdits": {
-                    "file.cfg|host|web-01": {
-                        "address": "10.0.0.1",
-                    },
-                },
-            }
-
-            result = sm.save_staging(data)
-            assert result.success, f"save_staging failed: {result.error}"
-
-            loaded = sm.get_staging()
-            assert loaded is not None, "get_staging returned None after save"
-            assert loaded["sessionId"] == "test-session"
-            assert "file.cfg|host|web-01" in loaded["pendingEdits"]
-            assert loaded["pendingEdits"]["file.cfg|host|web-01"]["address"] == "10.0.0.1"
-
 
 
 class TestServerConfigSaveAtomic:
