@@ -463,18 +463,15 @@
             const obj = state.allObjects.find(o => o.global_index === idx);
             if (!obj || obj.source_file === targetFile) {continue;}
 
-            // Move = create in target + delete from source
-            const createResult = await ApiClient.post('/api/objects/create', {
-                target_file: targetFile,
-                object_type: obj.object_type,
-                attributes: obj.attributes
+            const result = await ApiClient.post('/api/objects/move', {
+                stable_key: Explorer.getObjectKey(obj),
+                target_file: targetFile
             }, { silent: true });
 
-            if (createResult.success) {
-                const deleteResult = await ApiClient.post('/api/objects/delete', {
-                    stable_key: Explorer.getObjectKey(obj)
-                }, { silent: true });
-                if (deleteResult.success) {moved++;}
+            if (result.success) {
+                moved++;
+            } else {
+                showToast(result.error || `Failed to move ${obj.display_name || obj.name}`, 'error');
             }
         }
 
