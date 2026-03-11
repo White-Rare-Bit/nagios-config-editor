@@ -562,6 +562,41 @@ class TestBulkOperations:
         }, headers={"X-Session-Id": "session-bulk-err"})
         assert resp.status_code == 400
 
+    def test_move_objects_to_new_file(self, client, shadow_app):
+        """POST /api/move-objects moves objects to target file."""
+        obj = _get_host_object(client, "test-host-2")
+        target_file = obj["source_file"].replace("hosts.cfg", "hosts-moved.cfg")
+
+        resp = client.post("/api/move-objects", json={
+            "stable_keys": [generate_stable_key_for_object_dict(obj)],
+            "target_file": target_file,
+        }, headers={"X-Session-Id": "session-move-bulk"})
+        assert resp.status_code == 200
+        data = resp.json
+        assert data["success"] is True
+        assert data["moved"] == 1
+
+        # Verify moved
+        resp = client.get("/api/objects?type=host")
+        for h in resp.json:
+            if h["attributes"]["host_name"] == "test-host-2":
+                assert h["source_file"].endswith("hosts-moved.cfg")
+                break
+        else:
+            pytest.fail("test-host-2 not found after bulk move")
+
+    def test_move_objects_skips_same_file(self, client, shadow_app):
+        """Objects already in target file are skipped."""
+        obj = _get_host_object(client, "test-host-1")
+
+        resp = client.post("/api/move-objects", json={
+            "stable_keys": [generate_stable_key_for_object_dict(obj)],
+            "target_file": obj["source_file"],
+        }, headers={"X-Session-Id": "session-move-skip"})
+        assert resp.status_code == 200
+        assert resp.json["moved"] == 0
+        assert resp.json["skipped"] == 1
+
 
 def generate_stable_key_for_object_dict(obj_dict: dict) -> str:
     """Build a stable key from an API object dict."""

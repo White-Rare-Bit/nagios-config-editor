@@ -274,3 +274,102 @@ def api_apply_rename():
         "renamed": len(renames),
         "references_updated": references_updated,
     })
+
+
+@bp.route("/api/move-objects", methods=["POST"])
+def api_move_objects():
+    """Move multiple objects to a target file via shadow copy.
+
+    Expects JSON:
+    - stable_keys: Array of stable keys to move
+    - target_file: Destination file path
+    """
+    data = request.get_json() or {}
+    stable_keys = data.get("stable_keys", [])
+    target_file = data.get("target_file", "")
+
+    if not stable_keys:
+        return jsonify({"error": "stable_keys required"}), 400
+    if not target_file:
+        return jsonify({"error": "target_file required"}), 400
+
+    session_id = request.headers.get("X-Session-Id")
+    success, error = ensure_shadow_lock(session_id)
+    if not success:
+        return error
+
+    service = get_service()
+    sm = get_shadow_manager()
+
+    # Resolve target file path into shadow directory
+    from .objects import _resolve_target_file, _resolve_stable_key
+    target_file = _resolve_target_file(target_file)
+
+    # Find all objects to move
+    to_move = []
+    not_found = []
+    skipped = 0
+    for key in stable_keys:
+        key = _resolve_stable_key(key)
+        found = service.find_object_by_stable_key(key)
+        if not found:
+            not_found.append(key)
+            continue
+        _, obj = found
+        if os.path.realpath(obj.source_file) == os.path.realpath(target_file):
+            skipped += 1
+            continue
+        to_move.append(obj)
+
+    if not to_move:
+        return jsonify({
+            "success": True,
+            "moved": 0,
+            "skipped": skipped,
+            "not_found": len(not_found),
+        })
+
+    # Snapshot all affected files
+    affected_files = set()
+    affected_files.add(os.path.relpath(target_file, sm._config_dir))
+    for obj in to_move:
+        affected_files.add(os.path.relpath(obj.source_file, sm._config_dir))
+    sm.snapshot_files(list(affected_files), f"bulk move {len(to_move)} objects")
+
+    # Move each object using service.move_object (reloads after each)
+    moved = 0
+    errors = []
+    for obj in to_move:
+        # Re-find by stable key since reloads may shift state
+        from stable_keys import generate_stable_key_for_object
+        key = generate_stable_key_for_object(obj)
+        refound = service.find_object_by_stable_key(key)
+        if not refound:
+            errors.append(f"Lost object after reload: {key}")
+            continue
+        _, current_obj = refound
+        result = service.move_object(
+            current_obj.source_file, current_obj.line_number,
+            target_file, current_obj.object_type,
+            dict(current_obj.attributes),
+        )
+        if result.success:
+            moved += 1
+        else:
+            errors.append(result.error)
+
+    if errors:
+        return jsonify({
+            "success": False,
+            "error": f"Moved {moved}/{len(to_move)}. Errors: {'; '.join(errors)}",
+            "moved": moved,
+            "skipped": skipped,
+        }), 500
+
+    return jsonify({
+        "success": True,
+        "moved": moved,
+        "skipped": skipped,
+        "not_found": len(not_found),
+        "target_file": target_file,
+    })
