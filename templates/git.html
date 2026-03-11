@@ -79,6 +79,9 @@
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/git.js') }}"></script>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ url_for('static', filename='js/git.js') }}"></script>
 {% endblock %}
 

@@ -290,31 +290,8 @@
 {% endblock %}
 
 {% block scripts %}
-<!-- Docs reference data for attribute popovers -->
-<script src="{{ url_for('static', filename='js/docs-data.js') }}"></script>
-<!-- Explorer Modules (load order matters: namespace first, then utilities, then core, then features) -->
-<script src="{{ url_for('static', filename='js/explorer/main.js') }}"></script>
-<script src="{{ url_for('static', filename='js/explorer/constants.js') }}"></script>
-<script src="{{ url_for('static', filename='js/explorer/panel-resizer.js') }}"></script>
-<script src="{{ url_for('static', filename='js/explorer/state-management.js') }}"></script>
-<script src="{{ url_for('static', filename='js/explorer/tab-manager.js') }}"></script>
-<script src="{{ url_for('static', filename='js/explorer/ui-utils.js') }}"></script>
-<script src="{{ url_for('static', filename='js/explorer/data-loading.js') }}"></script>
-<script src="{{ url_for('static', filename='js/explorer/drag-drop.js') }}"></script>
-<script src="{{ url_for('static', filename='js/explorer/context-menu.js') }}"></script>
-<script src="{{ url_for('static', filename='js/explorer/file-operations.js') }}"></script>
-<script src="{{ url_for('static', filename='js/explorer/analysis-issues.js') }}"></script>
-<script src="{{ url_for('static', filename='js/explorer/analysis-suggestions.js') }}"></script>
-<script src="{{ url_for('static', filename='js/explorer/analysis.js') }}"></script>
-<script src="{{ url_for('static', filename='js/explorer/badge-issues.js') }}"></script>
-<script src="{{ url_for('static', filename='js/explorer/relations-loader.js') }}"></script>
-<script src="{{ url_for('static', filename='js/explorer/impact-section.js') }}"></script>
-<script src="{{ url_for('static', filename='js/explorer/app.js') }}"></script>
-<script src="{{ url_for('static', filename='js/explorer/object-editor.js') }}"></script>
-<script src="{{ url_for('static', filename='js/explorer/dialogs.js') }}"></script>
-
-<script>
-// Initialize Explorer with config path
-Explorer.init('{{ config_path }}');
+<script type="module">
+import { init } from '{{ url_for("static", filename="js/explorer/main.js") }}';
+init('{{ config_path }}');
 </script>
 {% endblock %}
