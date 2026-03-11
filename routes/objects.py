@@ -282,8 +282,6 @@ def api_delete_multiple_objects():
         result = service.delete_object(obj.source_file, obj.line_number)
         if result.success:
             deleted += 1
-            # Must reload after each delete since line numbers shift
-            service.reload()
         else:
             errors.append(result.error)
 
