@@ -6,14 +6,12 @@ import os
 from flask import Blueprint, jsonify, request
 
 from audit_service import log_audit
-from staging_manager import StagingStatus
 
 from .helpers import (
     format_audit_user,
     get_audit_user_identity,
     get_backup_manager,
     get_service,
-    get_staging_manager,
 )
 
 bp = Blueprint("backups", __name__)
@@ -58,43 +56,17 @@ def api_create_backup():
 def api_restore_backup(backup_name):
     """Restore from a backup."""
     logger.info("Restore backup: backup_name=%s", backup_name)
-    # Check staging lock - restore requires lock ownership or no lock
-    session_id = request.headers.get("X-Session-Id")
     data = request.get_json() or {}
-    if session_id:
-        staging_mgr = get_staging_manager()
-        lock_owner = staging_mgr.get_lock_owner()
-        if lock_owner and lock_owner != session_id:
-            return jsonify({
-                "error": "Another user has pending changes. Wait for them to commit or discard.",
-                "locked": True,
-            }), 423
 
     bm = get_backup_manager()
     try:
-        # Get user identity from request body for the safety backup
         user_name = data.get("userName", "")
         user_email = data.get("userEmail", "")
 
         result = bm.restore_backup(backup_name, user_name=user_name, user_email=user_email)
         get_service().reload()
 
-        # Get user identity for audit log
         identity = get_audit_user_identity()
-
-        # Create staging lock so other sessions see the pending restore changes
-        if session_id:
-            staging_mgr = get_staging_manager()
-            staging_mgr.save_staging({
-                "sessionId": session_id,
-                "userName": identity.get("userName", ""),
-                "userEmail": identity.get("userEmail", ""),
-                "status": StagingStatus.RESTORE_PENDING.value,
-                "restoreType": "backup",
-                "restoreFrom": backup_name,
-            })
-
-        # Write audit log entry
         log_audit(
             action="backup_restored",
             user=format_audit_user(identity),

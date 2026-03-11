@@ -74,11 +74,6 @@ def get_parser_for_modification():
     return get_service().modification_context()
 
 
-def get_staging_manager():
-    """Get the staging manager."""
-    return current_app.extensions["staging"]
-
-
 def get_shadow_manager():
     """Get the shadow copy manager."""
     return current_app.extensions["shadow"]
@@ -98,22 +93,12 @@ def get_git_service():
 def get_audit_user_identity():
     """Get user identity for audit log entries.
 
-    Checks request JSON body first, then staging data.
+    Checks request JSON body for user_name/userEmail.
     Returns dict with userName and userEmail keys.
     """
     data = request.get_json(silent=True) or {}
     user_name = data.get("user_name") or data.get("userName")
     user_email = data.get("user_email") or data.get("userEmail")
-
-    if not user_name or not user_email:
-        try:
-            sm = get_staging_manager()
-            staging = sm.get_staging()
-            if staging:
-                user_name = user_name or staging.get("userName")
-                user_email = user_email or staging.get("userEmail")
-        except Exception:  # noqa: BLE001, S110
-            pass  # Best-effort fallback to staging data for user identity
 
     return {
         "userName": user_name,

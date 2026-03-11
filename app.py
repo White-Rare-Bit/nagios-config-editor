@@ -16,7 +16,6 @@ from nagios_service import NagiosService
 from server_config import ServerConfig
 from server_config import load_config as load_server_config
 from shadow_copy_manager import ShadowCopyManager
-from staging_manager import StagingManager
 
 logger = logging.getLogger("nagios_bulk_editor")
 
@@ -126,11 +125,6 @@ def create_app(config_path: str | None = None, log_dir_override: str | None = No
     _setup_logging(_server_config, log_dir_override)
 
     # Initialize service instances
-    staging_manager = StagingManager(nagios_config_path)
-    # Clear stale locks from previous server session — no active sessions at startup
-    if staging_manager.has_staging():
-        logger.info("Clearing stale staging lock from previous session")
-        staging_manager.clear_staging()
     service = NagiosService(nagios_config_path)
     backup_manager = BackupManager(nagios_config_path, backup_path)
 
@@ -149,7 +143,6 @@ def create_app(config_path: str | None = None, log_dir_override: str | None = No
 
     # Store in app.extensions for access via current_app
     app.extensions["service"] = service
-    app.extensions["staging"] = staging_manager
     app.extensions["shadow"] = shadow_manager
     app.extensions["backup"] = backup_manager
     app.extensions["git"] = git_service
