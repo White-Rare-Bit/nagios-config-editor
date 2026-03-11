@@ -420,7 +420,7 @@ export function showBulkAction(action) {
         ].join('');
         showDialog('Move to File', `
             <label>Target file</label>
-            <select id="moveTarget" onchange="toggleNewFileInput()">
+            <select id="moveTarget" onchange="Explorer.toggleNewFileInput()">
                 ${options}
             </select>
             <div id="newFileInputWrapper" class="u-hidden u-mt-md">

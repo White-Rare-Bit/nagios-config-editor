@@ -283,9 +283,9 @@ function addFileToTree(path, ensureFolderPath, props) {
 function buildDeleteButton(path, isFolder) {
     const escaped = escapeJs(path);
     if (isFolder) {
-        return `<button class="tree-action-btn tree-action-btn--danger" onclick="event.stopPropagation(); deleteFolder('${escaped}', event)" title="Delete folder">${getIcon('trash-2')}</button>`;
+        return `<button class="tree-action-btn tree-action-btn--danger" onclick="event.stopPropagation(); Explorer.deleteFolder('${escaped}', event)" title="Delete folder">${getIcon('trash-2')}</button>`;
     }
-    return `<button class="tree-action-btn tree-action-btn--danger" onclick="event.stopPropagation(); deleteFile('${escaped}', event)" title="Delete file">${getIcon('trash-2')}</button>`;
+    return `<button class="tree-action-btn tree-action-btn--danger" onclick="event.stopPropagation(); Explorer.deleteFile('${escaped}', event)" title="Delete file">${getIcon('trash-2')}</button>`;
 }
 
 /**
@@ -413,13 +413,13 @@ export function renderTargetPane() {
 
         let html = `
         <div class="${rowClasses}" data-depth="${depth}" data-folder="${escapeHtml(folder.path)}"
-             onclick="selectFolder('${escapeJs(folder.path)}')"
-             ondragover="handleFolderDragOver(event, '${escapeJs(folder.path)}')"
-             ondrop="handleFolderDrop(event, '${escapeJs(folder.path)}')"
-             ondragleave="handleFolderDragLeave(event)"
+             onclick="Explorer.selectFolder('${escapeJs(folder.path)}')"
+             ondragover="Explorer.handleFolderDragOver(event, '${escapeJs(folder.path)}')"
+             ondrop="Explorer.handleFolderDrop(event, '${escapeJs(folder.path)}')"
+             ondragleave="Explorer.handleFolderDragLeave(event)"
              draggable="${canDrag ? 'true' : 'false'}"
-             ondragstart="handleFolderDragStart(event, '${escapeJs(folder.path)}')">
-            <button class="tree-expand-btn${isExpanded ? ' expanded' : ''}" onclick="event.stopPropagation(); toggleFolderExpand('${escapeJs(folder.path)}')">${expandIcon}</button>
+             ondragstart="Explorer.handleFolderDragStart(event, '${escapeJs(folder.path)}')">
+            <button class="tree-expand-btn${isExpanded ? ' expanded' : ''}" onclick="event.stopPropagation(); Explorer.toggleFolderExpand('${escapeJs(folder.path)}')">${expandIcon}</button>
             <span class="tree-icon tree-icon--folder${isExpanded ? ' expanded' : ''}">${folderIcon}</span>
             <span class="tree-label tree-label--folder">${escapeHtml(name)}</span>
             ${indicatorHtml}
@@ -463,13 +463,13 @@ export function renderTargetPane() {
 
         let html = `
         <div class="${rowClasses}" data-depth="${depth}" data-file="${escapeHtml(file.path)}"
-             onclick="toggleFileExpand('${escapeJs(file.path)}')"
-             ondragover="handleFileDragOver(event, '${escapeJs(file.path)}')"
-             ondrop="handleFileDrop(event, '${escapeJs(file.path)}')"
-             ondragleave="handleFileDragLeave(event)"
+             onclick="Explorer.toggleFileExpand('${escapeJs(file.path)}')"
+             ondragover="Explorer.handleFileDragOver(event, '${escapeJs(file.path)}')"
+             ondrop="Explorer.handleFileDrop(event, '${escapeJs(file.path)}')"
+             ondragleave="Explorer.handleFileDragLeave(event)"
              draggable="true"
-             ondragstart="handleFileDragStart(event, '${escapeJs(file.path)}')">
-            ${hasObjects ? `<button class="tree-expand-btn${isExpanded ? ' expanded' : ''}" onclick="event.stopPropagation(); toggleFileExpand('${escapeJs(file.path)}')">${expandIcon}</button>` : '<span class="tree-expand-placeholder"></span>'}
+             ondragstart="Explorer.handleFileDragStart(event, '${escapeJs(file.path)}')">
+            ${hasObjects ? `<button class="tree-expand-btn${isExpanded ? ' expanded' : ''}" onclick="event.stopPropagation(); Explorer.toggleFileExpand('${escapeJs(file.path)}')">${expandIcon}</button>` : '<span class="tree-expand-placeholder"></span>'}
             <span class="tree-icon tree-icon--file${isNew ? '-new' : ''}">${fileIcon}</span>
             <span class="tree-label${isNew ? ' tree-label--staged' : ''}${fileStatus === 'deleted' ? ' tree-label--deleted' : ''}">${escapeHtml(file.name)}</span>
             ${indicatorHtml}
@@ -505,11 +505,11 @@ export function renderTargetPane() {
 
     html += `
     <div class="workspace-tree-row workspace-tree-row--root${isRootExpanded ? ' expanded' : ''}${isRootSelected ? ' selected' : ''}" data-depth="0" data-folder="${escapeHtml(state.configPath)}"
-         onclick="selectFolder('${escapeJs(state.configPath)}')"
-         ondragover="handleFolderDragOver(event, '${escapeJs(state.configPath)}')"
-         ondrop="handleFolderDrop(event, '${escapeJs(state.configPath)}')"
-         ondragleave="handleFolderDragLeave(event)">
-        <button class="tree-expand-btn${isRootExpanded ? ' expanded' : ''}" onclick="event.stopPropagation(); toggleFolderExpand('${escapeJs(state.configPath)}')">${rootExpandIcon}</button>
+         onclick="Explorer.selectFolder('${escapeJs(state.configPath)}')"
+         ondragover="Explorer.handleFolderDragOver(event, '${escapeJs(state.configPath)}')"
+         ondrop="Explorer.handleFolderDrop(event, '${escapeJs(state.configPath)}')"
+         ondragleave="Explorer.handleFolderDragLeave(event)">
+        <button class="tree-expand-btn${isRootExpanded ? ' expanded' : ''}" onclick="event.stopPropagation(); Explorer.toggleFolderExpand('${escapeJs(state.configPath)}')">${rootExpandIcon}</button>
         <span class="tree-icon tree-icon--folder${isRootExpanded ? ' expanded' : ''}">${rootFolderIcon}</span>
         <span class="tree-label tree-label--folder tree-label--root">${escapeHtml(rootName)}</span>
         <span class="tree-count">${totalRootObjects}</span>
@@ -563,8 +563,8 @@ function buildExistingObjectRow(obj, gripIcon, filePath) {
     return `
         <div class="workspace-object-row" data-index="${obj.global_index}" data-file="${escapeHtml(filePath)}"
              draggable="true"
-             ondragstart="handleTargetObjectDragStart(event, ${obj.global_index}, 'existing', '${escapeJs(filePath)}')"
-             ondragend="handleTargetObjectDragEnd(event)">
+             ondragstart="Explorer.handleTargetObjectDragStart(event, ${obj.global_index}, 'existing', '${escapeJs(filePath)}')"
+             ondragend="Explorer.handleTargetObjectDragEnd(event)">
             <span class="tree-drag-handle">${gripIcon}</span>
             <span class="tree-object-type type-${obj.object_type}" data-badge-compact="${getTypeBadgeTier(obj.object_type, isTemplate, 'compact')}" data-badge-medium="${getTypeBadgeTier(obj.object_type, isTemplate, 'medium')}" data-badge-full="${getTypeBadgeTier(obj.object_type, isTemplate, 'full')}">${typeLabel}</span>
             <span class="tree-object-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</span>
@@ -600,9 +600,9 @@ export function renderFileObjects(filePath, fileObjects, depth = 2) {
 
 function buildDropZone(filePath, position) {
     return `<div class="workspace-drop-zone" data-file="${escapeHtml(filePath)}" data-position="${position}"
-             ondragover="handleObjectDragOver(event)"
-             ondrop="handleObjectDrop(event, '${escapeJs(filePath)}', ${position})"
-             ondragleave="handleObjectDragLeave(event)"></div>`;
+             ondragover="Explorer.handleObjectDragOver(event)"
+             ondrop="Explorer.handleObjectDrop(event, '${escapeJs(filePath)}', ${position})"
+             ondragleave="Explorer.handleObjectDragLeave(event)"></div>`;
 }
 
 export function handleObjectDragOver(event) {

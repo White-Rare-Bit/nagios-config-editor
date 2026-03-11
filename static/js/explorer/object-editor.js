@@ -651,7 +651,7 @@ export function renderCenterAttributes() {
             const keyJsEscaped = escapeJs(key);
             const keyHtmlAttr = escapeHtml(keyJsEscaped);
             const inputEvents = hasSuggestions && !isLocked
-                ? `oninput="showAttrAutocomplete(this, '${keyHtmlAttr}')" onblur="hideAttrAutocomplete(event)" onkeydown="handleAttrAutocompleteKey(event, '${keyHtmlAttr}')"`
+                ? `oninput="Explorer.showAttrAutocomplete(this, '${keyHtmlAttr}')" onblur="Explorer.hideAttrAutocomplete(event)" onkeydown="Explorer.handleAttrAutocompleteKey(event, '${keyHtmlAttr}')"`
                 : '';
             const placeholder = hasSuggestions ? ` placeholder="Type for suggestions..."` : '';
             const acTitle = hasSuggestions ? ` title="Arrow keys to navigate suggestions, Enter to select, Escape to close"` : '';
@@ -668,14 +668,14 @@ export function renderCenterAttributes() {
                     <span class="attr-name">${escapeHtml(key)}</span>
                     <div class="attr-value-long-wrapper">
                         <textarea class="attr-value attr-value-long"
-                               onchange="updateAttribute('${keyHtmlAttr}', this.value, this)"
-                               oninput="syncHighlight(this)"
+                               onchange="Explorer.updateAttribute('${keyHtmlAttr}', this.value, this)"
+                               oninput="Explorer.syncHighlight(this)"
                                spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"
                                ${inputEvents}${placeholder}${acTitle}${disabledAttr}>${escapeHtml(value)}</textarea>
                         <pre class="attr-value-highlight" aria-hidden="true">${highlighted}</pre>
                     </div>
-                    <button class="attr-copy" onclick="copyAttributeValue('${keyHtmlAttr}')" title="Copy value"><i class="fa-regular fa-copy"></i></button>
-                    ${isLocked ? '' : `<button class="attr-delete" onclick="deleteAttribute('${keyHtmlAttr}')">&times;</button>`}
+                    <button class="attr-copy" onclick="Explorer.copyAttributeValue('${keyHtmlAttr}')" title="Copy value"><i class="fa-regular fa-copy"></i></button>
+                    ${isLocked ? '' : `<button class="attr-delete" onclick="Explorer.deleteAttribute('${keyHtmlAttr}')">&times;</button>`}
                 </div>
             `}
 
@@ -683,10 +683,10 @@ export function renderCenterAttributes() {
             <div class="attr-row${hasSuggestions ? ' has-autocomplete' : ''}" data-attr="${escapeHtml(key)}">
                 <span class="attr-name">${escapeHtml(key)}</span>
                 <input type="text" class="attr-value" value="${escapedValue}"
-                       onchange="updateAttribute('${keyHtmlAttr}', this.value, this)"
+                       onchange="Explorer.updateAttribute('${keyHtmlAttr}', this.value, this)"
                        ${inputEvents}${placeholder}${acTitle} autocomplete="off"${disabledAttr}>
-                <button class="attr-copy" onclick="copyAttributeValue('${keyHtmlAttr}')" title="Copy value"><i class="fa-regular fa-copy"></i></button>
-                ${isLocked ? '' : `<button class="attr-delete" onclick="deleteAttribute('${keyHtmlAttr}')">&times;</button>`}
+                <button class="attr-copy" onclick="Explorer.copyAttributeValue('${keyHtmlAttr}')" title="Copy value"><i class="fa-regular fa-copy"></i></button>
+                ${isLocked ? '' : `<button class="attr-delete" onclick="Explorer.deleteAttribute('${keyHtmlAttr}')">&times;</button>`}
             </div>
         `}).join('');
 
@@ -967,17 +967,17 @@ export function showAddAttribute() {
         <label>Name</label>
         <div class="u-relative" id="addAttrNameContainer">
             <input type="text" id="newAttrName" placeholder="Select or type attribute name" autocomplete="off"
-                   oninput="showAddAttrNameAutocomplete()"
-                   onblur="hideAddAttrNameAutocomplete()"
-                   onfocus="showAddAttrNameAutocomplete()"
-                   onkeydown="handleAddAttrNameAutocompleteKey(event)">
+                   oninput="Explorer.showAddAttrNameAutocomplete()"
+                   onblur="Explorer.hideAddAttrNameAutocomplete()"
+                   onfocus="Explorer.showAddAttrNameAutocomplete()"
+                   onkeydown="Explorer.handleAddAttrNameAutocompleteKey(event)">
         </div>
         <label>Value</label>
         <div class="u-relative" id="addAttrValueContainer">
             <input type="text" id="newAttrValue" placeholder="value" autocomplete="off"
-                   oninput="showAddAttrAutocomplete()"
-                   onblur="hideAddAttrAutocomplete()"
-                   onkeydown="handleAddAttrAutocompleteKey(event)">
+                   oninput="Explorer.showAddAttrAutocomplete()"
+                   onblur="Explorer.hideAddAttrAutocomplete()"
+                   onkeydown="Explorer.handleAddAttrAutocompleteKey(event)">
         </div>
     `, () => {
         const name = document.getElementById('newAttrName').value.trim();
