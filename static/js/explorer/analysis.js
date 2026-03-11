@@ -221,8 +221,6 @@ function mapHealthCheckToState(data) {
     // 6. Dispatch each issue to its type handler
     for (const issue of state.allIssues) {
         const obj = issue.global_index != null ? objectsByIndex.get(issue.global_index) : null;
-        if (obj && state.stagedObjectDeletions.has(Explorer.getObjectKey(obj))) {continue;}
-
         const handler = ISSUE_TYPE_HANDLERS[issue.type];
         if (handler) {
             handler(issue, obj, objectsByIndex);
@@ -305,10 +303,6 @@ function collectHealthWarningSuggestions(suggestions) {
     if (!state.allIssues) {return;}
     const warnings = state.allIssues.filter(i => i.severity === 'warning' && !CLEANUP_HANDLED_TYPES.has(i.type));
     for (const issue of warnings) {
-        if (issue.global_index != null) {
-            const issueObj = state.allObjects.find(o => o.global_index === issue.global_index);
-            if (issueObj && state.stagedObjectDeletions.has(Explorer.getObjectKey(issueObj))) {continue;}
-        }
         suggestions.push({
             id: `health-warning-${issue.type}-${issue.object}`,
             severity: 'warning',
@@ -732,24 +726,22 @@ function filterSuggestions(event) {
 /**
  * Stage deletion for a cleanup item
  */
-function stageCleanupDeletion(idx) {
+async function stageCleanupDeletion(idx) {
     const s = state.allCleanupSuggestions[idx];
     if (!s || !s.object) {return;}
 
     const obj = s.object;
+    const result = await ApiClient.post('/api/objects/delete', {
+        stable_key: Explorer.getObjectKey(obj)
+    }, { silent: true });
 
-    // Stage the deletion
-    if (!state.stagedObjectDeletions.has(Explorer.getObjectKey(obj))) {
-        state.stagedObjectDeletions.add(Explorer.getObjectKey(obj));
-        state.pendingEdits.delete(Explorer.getObjectKey(obj));
-
-        // Remove from cleanup suggestions
+    if (result.success) {
         state.allCleanupSuggestions.splice(idx, 1);
-
-        Explorer.afterFrontendMutation();
+        await Explorer.afterFrontendMutation();
         renderUnifiedSuggestionsList();
-
-        showToast(`Staged "${obj.display_name}" for deletion`, 'success');
+        showToast(`Deleted "${obj.display_name}"`, 'success');
+    } else {
+        showToast(result.error || 'Failed to delete', 'error');
     }
 }
 
@@ -976,30 +968,34 @@ function bulkDeleteCleanupGroup(groupType) {
             ${moreCount}
         </ul>
         ${Explorer.dialogInfoText('Changes will be staged and can be reviewed before committing.')}
-    `, () => {
-        // Stage deletions
-        let deletedCount = 0;
+    `, async () => {
+        // Delete via API
+        const keysToDelete = [];
         for (const idx of indicesToDelete) {
             const s = state.allCleanupSuggestions[idx];
             if (s.object) {
-                state.stagedObjectDeletions.add(Explorer.getObjectKey(s.object));
-                deletedCount++;
+                keysToDelete.push(Explorer.getObjectKey(s.object));
             }
         }
+
+        const result = await ApiClient.post('/api/objects/delete-multiple', {
+            stable_keys: keysToDelete
+        }, { silent: true });
+
+        const deletedCount = result.data?.deleted || keysToDelete.length;
 
         // Remove from suggestions (in reverse order)
         for (const idx of indicesToDelete) {
             state.allCleanupSuggestions.splice(idx, 1);
         }
 
-        // Update UI
-        Explorer.afterFrontendMutation();
+        await Explorer.afterFrontendMutation();
         Explorer.closeDialog();
         renderCleanupSuggestions();
         updateSuggestionsBadge();
         updateCleanupBadge();
 
-        showToast(`Staged deletion of ${deletedCount} ${label}`, 'success');
+        showToast(`Deleted ${deletedCount} ${label}`, 'success');
     });
 }
 
@@ -1034,24 +1030,26 @@ function showCleanupDetail(idx) {
     }
 }
 
-function stageCleanupDelete(idx) {
+async function stageCleanupDelete(idx) {
     const s = state.allCleanupSuggestions[idx];
     const obj = s.object;
 
     if (!obj) {return;}
 
-    // Stage the deletion
-    state.stagedObjectDeletions.add(Explorer.getObjectKey(obj));
-    Explorer.afterFrontendMutation();
+    const result = await ApiClient.post('/api/objects/delete', {
+        stable_key: Explorer.getObjectKey(obj)
+    }, { silent: true });
 
-    showToast(`Staged deletion of ${obj.object_type} "${obj.display_name || obj.name}"`, 'success');
+    if (!result.success) {
+        showToast(result.error || 'Failed to delete', 'error');
+        return;
+    }
 
-    // Remove from suggestions
     state.allCleanupSuggestions.splice(idx, 1);
+    await Explorer.afterFrontendMutation();
     renderCleanupSuggestions();
     updateSuggestionsBadge();
 
-    // Update cleanup section badge
     const badge = document.getElementById('cleanupSectionBadge');
     if (badge) {
         if (state.allCleanupSuggestions.length > 0) {
@@ -1060,6 +1058,8 @@ function stageCleanupDelete(idx) {
             badge.style.display = 'none';
         }
     }
+
+    showToast(`Deleted ${obj.object_type} "${obj.display_name || obj.name}"`, 'success');
 }
 
 function resolveCleanupIssue(idx) {
@@ -1151,25 +1151,29 @@ function findDuplicateDifferences(objects) {
     return differences.sort();
 }
 
-function keepDuplicateAndDeleteOthers(suggestionIdx, keepIdx) {
+async function keepDuplicateAndDeleteOthers(suggestionIdx, keepIdx) {
     const s = state.allCleanupSuggestions[suggestionIdx];
     if (!s || !s.duplicateGroup) {return;}
 
-    // Stage deletion of all except the one to keep
-    let deletedCount = 0;
+    // Delete all except the one to keep via API
+    const keysToDelete = [];
     s.duplicateGroup.forEach((obj, i) => {
         if (i !== keepIdx) {
-            state.stagedObjectDeletions.add(Explorer.getObjectKey(obj));
-            deletedCount++;
+            keysToDelete.push(Explorer.getObjectKey(obj));
         }
     });
 
-    Explorer.afterFrontendMutation();
+    const result = await ApiClient.post('/api/objects/delete-multiple', {
+        stable_keys: keysToDelete
+    }, { silent: true });
+
+    const deletedCount = result.data?.deleted || keysToDelete.length;
+
+    await Explorer.afterFrontendMutation();
     Explorer.closeDialog();
 
-    showToast(`Staged deletion of ${deletedCount} duplicate(s)`, 'success');
+    showToast(`Deleted ${deletedCount} duplicate(s)`, 'success');
 
-    // Remove from suggestions and refresh
     state.allCleanupSuggestions.splice(suggestionIdx, 1);
     renderCleanupSuggestions();
     updateSuggestionsBadge();

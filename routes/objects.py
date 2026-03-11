@@ -3,10 +3,47 @@
 All mutations operate on the shadow copy (or original if no shadow).
 """
 
+import os
+
 from flask import Blueprint, jsonify, request
 
 from .helpers import get_service, get_shadow_manager, operation_response
 from .files import ensure_shadow_lock
+
+
+def _resolve_stable_key(stable_key: str) -> str:
+    """Remap the source_file in a stable key to the active config directory."""
+    parts = stable_key.split("|")
+    if len(parts) >= 3:
+        parts[0] = _resolve_target_file(parts[0])
+        return "|".join(parts)
+    return stable_key
+
+
+def _resolve_target_file(target_file: str) -> str:
+    """Resolve target_file to be within the active config directory.
+
+    On the first mutation, ensure_shadow_lock() creates the shadow and switches
+    the service to it. But the frontend's request was built with the old path.
+    This translates that path to the shadow directory.
+    """
+    from .helpers import get_server_config
+
+    service = get_service()
+    active_dir = os.path.abspath(service.config_path)
+
+    abs_target = os.path.abspath(target_file)
+    # Already within the active config dir — return as-is (preserve relative/absolute form)
+    if abs_target.startswith(active_dir + os.sep) or abs_target == active_dir:
+        return target_file
+
+    # Remap: strip old config root prefix, join with active dir
+    original_dir = os.path.abspath(get_server_config().nagios_config_path)
+    if abs_target.startswith(original_dir + os.sep):
+        rel = abs_target[len(original_dir) + 1:]
+        return os.path.join(service.config_path, rel)
+
+    return target_file
 
 bp = Blueprint("objects", __name__)
 
@@ -56,14 +93,14 @@ def api_update_object():
 
     service = get_service()
     sm = get_shadow_manager()
+    stable_key = _resolve_stable_key(stable_key)
 
     # Snapshot the file before modifying
     found = service.find_object_by_stable_key(stable_key)
     if not found:
         return jsonify({"error": f"Object not found: {stable_key}"}), 404
 
-    idx, obj = found
-    import os
+    _, obj = found
     rel_path = os.path.relpath(obj.source_file, sm._config_dir)
     sm.snapshot_files([rel_path], f"edit {obj.object_type} {obj.get_display_name()}")
 
@@ -81,11 +118,13 @@ def api_create_object():
     - target_file: Path to the target file
     - object_type: Nagios object type
     - attributes: Attributes dict
+    - after_line: (optional) Line number to insert after
     """
     data = request.get_json() or {}
     target_file = data.get("target_file")
     obj_type = data.get("object_type")
     attrs = data.get("attributes")
+    after_line = data.get("after_line")
 
     if not target_file:
         return jsonify({"error": "target_file required"}), 400
@@ -102,11 +141,13 @@ def api_create_object():
     sm = get_shadow_manager()
     service = get_service()
 
-    import os
+    # Remap target_file into shadow directory if needed
+    target_file = _resolve_target_file(target_file)
+
     rel_path = os.path.relpath(target_file, sm._config_dir)
     sm.snapshot_files([rel_path], f"create {obj_type}")
 
-    result = service.create_object(target_file, obj_type, attrs)
+    result = service.create_object(target_file, obj_type, attrs, after_block_line=after_line)
     return operation_response(result)
 
 
@@ -130,13 +171,13 @@ def api_delete_object():
 
     service = get_service()
     sm = get_shadow_manager()
+    stable_key = _resolve_stable_key(stable_key)
 
     found = service.find_object_by_stable_key(stable_key)
     if not found:
         return jsonify({"error": f"Object not found: {stable_key}"}), 404
 
-    idx, obj = found
-    import os
+    _, obj = found
     rel_path = os.path.relpath(obj.source_file, sm._config_dir)
     sm.snapshot_files([rel_path], f"delete {obj.object_type} {obj.get_display_name()}")
 
@@ -166,13 +207,13 @@ def api_delete_multiple_objects():
     sm = get_shadow_manager()
 
     # Resolve all objects first, snapshot all affected files
-    import os
+    stable_keys = [_resolve_stable_key(k) for k in stable_keys]
     to_delete = []
     files_to_snapshot = set()
     for key in stable_keys:
         found = service.find_object_by_stable_key(key)
         if found:
-            idx, obj = found
+            _, obj = found
             to_delete.append(obj)
             rel_path = os.path.relpath(obj.source_file, sm._config_dir)
             files_to_snapshot.add(rel_path)

@@ -7,6 +7,7 @@ from flask import Blueprint, jsonify, request
 from inheritance import build_type_template_lookup, resolve_chain
 
 from .helpers import get_service
+from .objects import _resolve_stable_key
 
 bp = Blueprint("templates", __name__)
 
@@ -62,17 +63,12 @@ def _decode_and_find_object(service, stable_key):
     except (ValueError, UnicodeDecodeError):
         return None, None, (jsonify({"error": "Invalid stable key encoding"}), 400)
 
-    try:
-        source_file, obj_type, obj_name = decoded_key.split("|", 2)
-    except ValueError:
-        return None, None, (jsonify({"error": "Invalid stable key format"}), 400)
+    decoded_key = _resolve_stable_key(decoded_key)
+    result = service.find_object_by_stable_key(decoded_key)
+    if result is None:
+        return None, None, (jsonify({"error": "Object not found"}), 404)
 
-    for obj in service.get_objects():
-        if (obj.source_file == source_file and
-            obj.object_type == obj_type and
-            obj.get_display_name() == obj_name):
-            return obj, obj_type, None
-
-    return None, None, (jsonify({"error": "Object not found"}), 404)
+    _, obj = result
+    return obj, obj.object_type, None
 
 

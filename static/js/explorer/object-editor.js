@@ -226,7 +226,6 @@
         state.originalAttributes = {};
         state.isNewObject = false;
         state.newObjectStagedIndex = null;
-        Explorer.checkPendingExternalChanges();
         const emptyState = document.getElementById('centerEmptyState');
         const content = document.getElementById('centerContent');
         emptyState.classList.remove('u-hidden');
@@ -328,8 +327,9 @@
         return null;
     }
 
+    // Shadow copy: objects are deleted immediately via API, never "staged for deletion"
     function isObjectStagedForDeletion(obj) {
-        return state.stagedObjectDeletions.has(Explorer.getObjectKey(obj));
+        return false;
     }
 
     function addStagedCreationSuggestions(suggestions, refType) {

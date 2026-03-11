@@ -125,7 +125,15 @@ def api_files():
                 if filename.endswith(".cfg"):
                     files.append(os.path.join(root, filename))
 
-    return jsonify({"files": sorted(files)})
+    # Provide the original config dir name for display (shadow dir is named "config")
+    from .helpers import get_server_config
+    server_config = get_server_config()
+    original_name = os.path.basename(server_config.nagios_config_path) if server_config else ""
+    return jsonify({
+        "files": sorted(files),
+        "config_path": config_dir,
+        "config_display_name": original_name,
+    })
 
 
 @bp.route("/api/folders", methods=["GET"])

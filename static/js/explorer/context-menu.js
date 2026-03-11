@@ -1,4 +1,8 @@
-/** Explorer Context Menu Module - Context menus, bulk actions, preview, drag-drop from tree */
+/** Explorer Context Menu Module - Context menus, bulk actions, preview, drag-drop from tree
+ *
+ * Shadow copy architecture: all mutations go directly to the server via API calls.
+ * No local pendingEdits/stagedMoves/stagedCreations — the shadow copy IS the edited state.
+ */
 
 (function(Explorer) {
     'use strict';
@@ -27,26 +31,6 @@
     }
 
     /**
-     * Get or initialize pending edit data for an object
-     * Handles the common pattern of checking for existing edit and falling back to object attrs
-     * @param {Object} obj - The object to get/create pending edit for
-     * @returns {{original: Object, edited: Object}} Original and edited attributes
-     */
-    function getOrCreatePendingEdit(obj) {
-        const existingEdit = state.pendingEdits.get(Explorer.getObjectKey(obj));
-        if (existingEdit) {
-            return {
-                original: existingEdit.original,
-                edited: {...existingEdit.edited}
-            };
-        }
-        return {
-            original: {...obj.attributes},
-            edited: {...obj.attributes}
-        };
-    }
-
-    /**
      * Update a comma-separated reference value, replacing oldName with newName.
      * Preserves Nagios additive (+) and exclusion (!) prefixes.
      */
@@ -64,14 +48,13 @@
     }
 
     /**
-     * Stage reference updates for all objects that reference the old name.
-     * Creates/updates pending edits to replace oldName with newName in reference fields.
+     * Update references for all objects that reference the old name via API calls.
      * @param {string} oldName - The old name being replaced
      * @param {string} newName - The new name to replace with
      * @param {number} excludeIndex - global_index of the renamed object (to exclude)
-     * @returns {number} count of objects updated
+     * @returns {Promise<number>} count of objects updated
      */
-    function stageReferenceUpdates(oldName, newName, excludeIndex) {
+    async function updateReferencesViaApi(oldName, newName, excludeIndex) {
         const deps = Explorer.findDependencies(oldName);
         let updatedCount = 0;
 
@@ -79,7 +62,7 @@
             const obj = dep.object;
             if (obj.global_index === excludeIndex) {continue;}
 
-            const { original: originalAttrs, edited: editedAttrs } = getOrCreatePendingEdit(obj);
+            const editedAttrs = {...obj.attributes};
             let changed = false;
 
             for (const fieldName of dep.fields) {
@@ -92,18 +75,11 @@
             }
 
             if (changed) {
-                state.pendingEdits.set(Explorer.getObjectKey(obj), {
-                    original: originalAttrs,
-                    edited: editedAttrs,
-                    object: {
-                        source_file: obj.source_file,
-                        line_number: obj.line_number,
-                        object_type: obj.object_type,
-                        name: obj.name,
-                        display_name: obj.display_name
-                    }
-                });
-                updatedCount++;
+                const result = await ApiClient.post('/api/objects/update', {
+                    stable_key: Explorer.getObjectKey(obj),
+                    attributes: editedAttrs
+                }, { silent: true });
+                if (result.success) {updatedCount++;}
             }
         }
 
@@ -212,13 +188,8 @@
             return;
         }
 
-        // Helper to get current name (respecting pending edits and templates)
         function getCurrentName(obj) {
             const nameField = Explorer.getNameFieldForObject(obj);
-            const pendingEdit = state.pendingEdits.get(Explorer.getObjectKey(obj));
-            if (pendingEdit) {
-                return pendingEdit.edited[nameField] || obj.display_name || obj.name || 'unnamed';
-            }
             return obj.attributes[nameField] || obj.display_name || obj.name || 'unnamed';
         }
 
@@ -279,9 +250,7 @@
         const obj = state.allObjects.find(o => o.global_index === targetIndex);
         if (!obj) {return;}
 
-        // Use pending edit attributes if available
-        const pendingEdit = state.pendingEdits.get(Explorer.getObjectKey(obj));
-        const attrs = pendingEdit ? pendingEdit.edited : obj.attributes;
+        const attrs = obj.attributes;
         const comments = obj.inline_comments || {};
 
         let code = `define ${obj.object_type} {\n`;
@@ -471,7 +440,7 @@
         }
     }
 
-    function applyMove() {
+    async function applyMove() {
         let targetFile = document.getElementById('moveTarget').value;
 
         if (targetFile === '__new__') {
@@ -480,7 +449,6 @@
                 showToast('Please enter a filename', 'warning');
                 return;
             }
-            // Construct full path - put in same directory as first selected object
             const firstObj = state.allObjects.find(o => Explorer.isSelectedByIndex(o.global_index));
             if (firstObj) {
                 const dir = firstObj.source_file.substring(0, firstObj.source_file.lastIndexOf('/'));
@@ -490,33 +458,33 @@
             }
         }
 
-        let staged = 0;
+        let moved = 0;
         for (const idx of Explorer.getSelectedIndices()) {
             const obj = state.allObjects.find(o => o.global_index === idx);
-            if (obj && obj.source_file !== targetFile) {
-                const objKey = Explorer.getObjectKey(obj);
-                state.stagedMoves.set(objKey, {
-                    targetFile: targetFile,
-                    originalFile: obj.source_file,
-                    object: {
-                        source_file: obj.source_file,
-                        object_type: obj.object_type,
-                        name: obj.name,
-                        display_name: obj.display_name,
-                        attributes: obj.attributes
-                    }
-                });
-                staged++;
+            if (!obj || obj.source_file === targetFile) {continue;}
+
+            // Move = create in target + delete from source
+            const createResult = await ApiClient.post('/api/objects/create', {
+                target_file: targetFile,
+                object_type: obj.object_type,
+                attributes: obj.attributes
+            }, { silent: true });
+
+            if (createResult.success) {
+                const deleteResult = await ApiClient.post('/api/objects/delete', {
+                    stable_key: Explorer.getObjectKey(obj)
+                }, { silent: true });
+                if (deleteResult.success) {moved++;}
             }
         }
 
-        Explorer.afterFrontendMutation();
+        await Explorer.afterFrontendMutation();
         closeDialog();
 
-        if (staged > 0) {
-            showToast(`Staged ${staged} object(s) to move. Commit to apply.`, 'info');
+        if (moved > 0) {
+            showToast(`Moved ${moved} object(s) to ${targetFile.split('/').pop()}`, 'success');
         } else {
-            showToast('No objects to move', 'info');
+            showToast('No objects moved', 'info');
         }
     }
 
@@ -524,7 +492,7 @@
         applyClone();
     }
 
-    function applyRename() {
+    async function applyRename() {
         const newName = document.getElementById('renameValue').value.trim();
         if (!newName) {
             showToast('Please enter a name', 'warning');
@@ -538,8 +506,7 @@
         }
 
         const nameField = Explorer.getNameFieldForObject(obj);
-        const { original: originalAttrs, edited: editedAttrs } = getOrCreatePendingEdit(obj);
-        const currentName = editedAttrs[nameField] || '';
+        const currentName = obj.attributes[nameField] || '';
 
         if (newName === currentName) {
             closeDialog();
@@ -547,60 +514,39 @@
             return;
         }
 
-        editedAttrs[nameField] = newName;
-
-        state.pendingEdits.set(Explorer.getObjectKey(obj), {
-            original: originalAttrs,
-            edited: editedAttrs,
-            object: {
-                source_file: obj.source_file,
-                line_number: obj.line_number,
-                object_type: obj.object_type,
-                name: obj.name,
-                display_name: obj.display_name
-            }
+        // Update the object's name via API
+        const newAttrs = {...obj.attributes, [nameField]: newName};
+        const result = await ApiClient.post('/api/objects/update', {
+            stable_key: Explorer.getObjectKey(obj),
+            attributes: newAttrs
         });
 
-        // Stage reference updates if checkbox is checked
+        if (!result.success) {
+            showToast(result.error || 'Failed to rename', 'error');
+            return;
+        }
+
+        // Update references if checkbox is checked
         const updateRefsCheckbox = document.getElementById('renameUpdateRefs');
         const shouldUpdateRefs = updateRefsCheckbox ? updateRefsCheckbox.checked : false;
         let refUpdates = 0;
         if (shouldUpdateRefs) {
-            refUpdates = stageReferenceUpdates(currentName, newName, state.contextTarget);
+            refUpdates = await updateReferencesViaApi(currentName, newName, state.contextTarget);
         }
 
         state.healthCheckData = null;
-        Explorer.afterFrontendMutation();
+        await Explorer.afterFrontendMutation();
         closeDialog();
 
         // Refresh center pane if this object is currently displayed
         if (state.editedObject && state.editedObject.global_index === state.contextTarget) {
             Explorer.showCenterPaneObject(obj);
         } else if (state.editedObject) {
-            // Refresh Impact & Relationships even if a different object is displayed
-            // since the rename might affect what references it or its inheritance chain
             Explorer.loadImpactAndRelationships(state.editedObject);
         }
 
         const refMsg = refUpdates > 0 ? ` Updated ${refUpdates} reference${refUpdates !== 1 ? 's' : ''}.` : '';
-        showToast(`Rename staged.${refMsg} Commit to apply.`, 'info');
-    }
-
-    function buildCloneCreation(obj, newName, targetFile) {
-        const creation = {
-            id: generateUniqueId(),
-            object_type: obj.object_type,
-            attributes: {...(state.pendingEdits.get(Explorer.getObjectKey(obj))?.edited || obj.attributes)},
-            targetFile: targetFile,
-            displayName: newName,
-            insertPosition: targetFile === obj.source_file ? obj.line_number : null
-        };
-        const nameField = Explorer.getNameFieldForObject(obj);
-        creation.attributes[nameField] = newName;
-        if (obj.inline_comments && Object.keys(obj.inline_comments).length > 0) {
-            creation.inline_comments = {...obj.inline_comments};
-        }
-        return creation;
+        showToast(`Renamed successfully.${refMsg}`, 'success');
     }
 
     async function applyClone() {
@@ -611,50 +557,42 @@
         const isSingleClone = newNameInput !== null;
         const suffix = suffixInput ? (suffixInput.value || '-copy') : '-copy';
 
-        // Validate single clone has a name
         if (isSingleClone && !newNameInput.value.trim()) {
             showToast('Please enter a name', 'warning');
             return;
         }
 
         let clonedCount = 0;
-        let skippedDuplicates = 0;
         for (const idx of Explorer.getSelectedIndices()) {
             const obj = state.allObjects.find(o => o.global_index === idx);
             if (!obj) {continue;}
 
             const nameField = Explorer.getNameFieldForObject(obj);
-            const pendingEdit = state.pendingEdits.get(Explorer.getObjectKey(obj));
-            const sourceAttrs = pendingEdit ? pendingEdit.edited : obj.attributes;
-            const currentName = sourceAttrs[nameField] || obj.name || obj.display_name || 'unnamed';
+            const currentName = obj.attributes[nameField] || obj.name || obj.display_name || 'unnamed';
             const newName = isSingleClone ? newNameInput.value.trim() : currentName + suffix;
 
-            // D-03: Check for duplicate names before cloning
-            const clonedAttrs = {...sourceAttrs};
-            clonedAttrs[nameField] = newName;
-            const dupCheck = Explorer.checkDuplicateName(
-                obj.object_type, newName, clonedAttrs, null
-            );
-            if (dupCheck.isDuplicate) {
-                const loc = dupCheck.location === 'staged' ? 'in staged changes' : `in ${dupCheck.location}`;
-                showToast(`Error: ${obj.object_type} "${newName}" already exists ${loc}`, 'error');
-                skippedDuplicates++;
-                continue;
-            }
-
             const cloneTargetFile = (targetFileSelect && targetFileSelect.value) || obj.source_file;
-            state.stagedCreations.push(buildCloneCreation(obj, newName, cloneTargetFile));
-            clonedCount++;
+            const newAttrs = {...obj.attributes, [nameField]: newName};
+
+            const result = await ApiClient.post('/api/objects/create', {
+                target_file: cloneTargetFile,
+                object_type: obj.object_type,
+                attributes: newAttrs
+            }, { silent: true });
+
+            if (result.success) {
+                clonedCount++;
+            } else {
+                showToast(result.error || `Failed to clone ${currentName}`, 'error');
+                if (isSingleClone) {return;} // Don't close dialog for single clone error
+            }
         }
 
-        if (clonedCount === 0 && skippedDuplicates > 0) {
-            // Don't close dialog so user can fix the name
-            return;
-        }
+        if (clonedCount === 0) {return;}
 
-        Explorer.afterFrontendMutation();
+        await Explorer.afterFrontendMutation();
         closeDialog();
-        showToast(`Staged ${clonedCount} cloned object(s). Commit to apply.`, 'info');
+        showToast(`Cloned ${clonedCount} object(s)`, 'success');
     }
 
     function toggleNewFileInput() {
@@ -668,7 +606,7 @@
         }
     }
 
-    function applyBulkAttribute() {
+    async function applyBulkAttribute() {
         const name = document.getElementById('bulkAttrName').value.trim();
         const value = document.getElementById('bulkAttrValue').value;
         const action = document.getElementById('bulkAttrAction').value;
@@ -684,42 +622,34 @@
             const obj = state.allObjects.find(o => o.global_index === idx);
             if (!obj) {continue;}
 
-            const { original: originalAttrs, edited: editedAttrs } = getOrCreatePendingEdit(obj);
+            const newAttrs = {...obj.attributes};
             let madeChange = false;
 
             if (action === 'remove') {
-                if (name in editedAttrs) {
-                    delete editedAttrs[name];
+                if (name in newAttrs) {
+                    delete newAttrs[name];
                     madeChange = true;
-                    updatedCount++;
                 }
-            } else if (editedAttrs[name] !== value) {
-                editedAttrs[name] = value;
+            } else if (newAttrs[name] !== value) {
+                newAttrs[name] = value;
                 madeChange = true;
-                updatedCount++;
             }
 
             if (madeChange) {
-                state.pendingEdits.set(Explorer.getObjectKey(obj), {
-                    original: originalAttrs,
-                    edited: editedAttrs,
-                    object: {
-                        source_file: obj.source_file,
-                        line_number: obj.line_number,
-                        object_type: obj.object_type,
-                        name: obj.name,
-                        display_name: obj.display_name
-                    }
-                });
+                const result = await ApiClient.post('/api/objects/update', {
+                    stable_key: Explorer.getObjectKey(obj),
+                    attributes: newAttrs
+                }, { silent: true });
+                if (result.success) {updatedCount++;}
             }
         }
 
-        Explorer.afterFrontendMutation();
+        await Explorer.afterFrontendMutation();
         closeDialog();
 
         if (updatedCount > 0) {
             const actionText = action === 'remove' ? 'removed from' : 'set on';
-            showToast(`Attribute ${actionText} ${updatedCount} object(s). Commit to apply.`, 'info');
+            showToast(`Attribute ${actionText} ${updatedCount} object(s)`, 'success');
         } else {
             showToast('No changes made', 'info');
         }
@@ -866,7 +796,7 @@
         window.location.href = `/dependencies?${params.toString()}`;
     }
 
-    function addToGroup(groupName) {
+    async function addToGroup(groupName) {
         Explorer.hideContextMenu();
         Explorer.closeDialog();
 
@@ -875,8 +805,6 @@
             return;
         }
 
-        // C-01: Use extracted constants
-        // Get selected objects that can have groups
         const eligibleObjects = Array.from(Explorer.getSelectedIndices())
             .map(i => state.allObjects.find(o => o.global_index === i))
             .filter(o => o && getGroupAttrMap()[o.object_type]);
@@ -886,46 +814,32 @@
             return;
         }
 
-        // Update each object's group attribute by appending the new group
         let updatedCount = 0;
         for (const obj of eligibleObjects) {
             const groupAttr = getGroupAttrMap()[obj.object_type];
-            const { original: originalAttrs, edited: editedAttrs } = getOrCreatePendingEdit(obj);
+            const currentGroups = (obj.attributes[groupAttr] || '').split(',').map(g => g.trim()).filter(g => g);
 
-            // Parse existing groups and add new one
-            const currentGroups = (editedAttrs[groupAttr] || '').split(',').map(g => g.trim()).filter(g => g);
             if (!currentGroups.includes(groupName)) {
                 currentGroups.push(groupName);
-                editedAttrs[groupAttr] = currentGroups.join(',');
+                const newAttrs = {...obj.attributes, [groupAttr]: currentGroups.join(',')};
 
-                state.pendingEdits.set(Explorer.getObjectKey(obj), {
-                    original: originalAttrs,
-                    edited: editedAttrs,
-                    object: {
-                        source_file: obj.source_file,
-                        line_number: obj.line_number,
-                        object_type: obj.object_type,
-                        name: obj.name,
-                        display_name: obj.display_name
-                    }
-                });
-                updatedCount++;
+                const result = await ApiClient.post('/api/objects/update', {
+                    stable_key: Explorer.getObjectKey(obj),
+                    attributes: newAttrs
+                }, { silent: true });
+                if (result.success) {updatedCount++;}
             }
         }
 
-        Explorer.afterFrontendMutation();
+        await Explorer.afterFrontendMutation();
 
-        // If the currently displayed object in center panel was updated, refresh it
-        if (state.editedObject && state.editedObject.global_index !== -1) {
-            const pendingEdit = state.pendingEdits.get(Explorer.getObjectKey(state.editedObject));
-            if (pendingEdit) {
-                state.editedObject.attributes = {...pendingEdit.edited};
-                Explorer.renderCenterAttributes();
-            }
+        // Refresh center pane if the displayed object was updated
+        if (state.editedObject) {
+            Explorer.showCenterPaneObject(state.editedObject);
         }
 
         if (updatedCount > 0) {
-            showToast(`Staged adding "${groupName}" to ${updatedCount} object(s). Commit to apply.`, 'info');
+            showToast(`Added "${groupName}" to ${updatedCount} object(s)`, 'success');
         } else {
             showToast(`Selected objects already belong to "${groupName}"`, 'info');
         }
@@ -1026,10 +940,8 @@
         event.currentTarget.closest('.tree-folder')?.classList.add('drop-target');
     }
 
-    function handleDrop(event, targetFile) {
+    async function handleDrop(event, targetFile) {
         event.preventDefault();
-
-        // Clean up all drag state
         Explorer.cleanupDragState();
 
         const dataStr = event.dataTransfer.getData('text/plain');
@@ -1042,54 +954,34 @@
             return;
         }
 
-        // Handle staged creations being moved
-        if (data.type === 'staged-creations') {
-            let moved = 0;
-            data.indices.forEach(idx => {
-                const creation = state.stagedCreations[idx];
-                if (creation && creation.targetFile !== targetFile) {
-                    creation.targetFile = targetFile;
-                    moved++;
-                }
-            });
-            if (moved > 0) {
-                Explorer.afterFrontendMutation();
-                showToast(`Moved ${moved} new object(s) to ${targetFile.split('/').pop()}`, 'info');
+        if (data.type !== 'objects' || !data.objects?.length) {return;}
+
+        let moved = 0;
+        for (const objData of data.objects) {
+            if (!objData?.source_file || objData.source_file === targetFile) {continue;}
+
+            // Find the live object for its stable key
+            const nameComponent = objData.name ?? objData.display_name ?? '';
+            const objKey = `${objData.source_file}|${objData.object_type}|${nameComponent}`;
+
+            // Move = create in target + delete from source
+            const createResult = await ApiClient.post('/api/objects/create', {
+                target_file: targetFile,
+                object_type: objData.object_type,
+                attributes: objData.attributes
+            }, { silent: true });
+
+            if (createResult.success) {
+                const deleteResult = await ApiClient.post('/api/objects/delete', {
+                    stable_key: objKey
+                }, { silent: true });
+                if (deleteResult.success) {moved++;}
             }
-            return;
         }
 
-        // Handle regular objects using stable keys
-        let staged = 0;
-
-        if (data.type === 'objects' && data.objects && data.objects.length > 0) {
-            // Use stable object info directly from drag data
-            data.objects.forEach(objData => {
-                if (!objData || !objData.source_file) {return;}
-
-                if (objData.source_file !== targetFile) {
-                    // Use same fallback logic as getObjectKey for null-safe key generation
-                    const nameComponent = objData.name ?? objData.display_name ?? `idx:${objData.global_index}`;
-                    const objKey = `${objData.source_file}|${objData.object_type}|${nameComponent}`;
-                    state.stagedMoves.set(objKey, {
-                        targetFile: targetFile,
-                        originalFile: objData.source_file,
-                        object: {
-                            source_file: objData.source_file,
-                            object_type: objData.object_type,
-                            name: objData.name,
-                            display_name: objData.display_name || objData.name,
-                            attributes: objData.attributes
-                        }
-                    });
-                    staged++;
-                }
-            });
-        }
-
-        if (staged > 0) {
-            Explorer.afterFrontendMutation();
-            showToast(`Staged ${staged} object(s) to move. Use Commit to apply.`, 'info');
+        if (moved > 0) {
+            await Explorer.afterFrontendMutation();
+            showToast(`Moved ${moved} object(s) to ${targetFile.split('/').pop()}`, 'success');
         }
     }
 
@@ -1118,7 +1010,7 @@
     Explorer.handleDragEnd = handleDragEnd;
     Explorer.handleDragOver = handleDragOver;
     Explorer.handleDrop = handleDrop;
-    Explorer.stageReferenceUpdates = stageReferenceUpdates;
+    Explorer.updateReferencesViaApi = updateReferencesViaApi;
     Explorer.updateReferenceValue = updateReferenceValue;
 
 })(Explorer);

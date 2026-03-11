@@ -51,6 +51,40 @@
         Explorer.state.allFiles = filesResult.data?.files || [];
         Explorer.state.existingFolders = foldersResult.data?.folders || [];
 
+        // Store original config display name (shadow dir is named "config" internally)
+        if (filesResult.data?.config_display_name) {
+            Explorer.state.configDisplayName = filesResult.data.config_display_name;
+        }
+
+        // Sync configPath with server (may change when shadow copy is created)
+        const newConfigPath = filesResult.data?.config_path;
+        if (newConfigPath && newConfigPath !== Explorer.state.configPath) {
+            const oldPath = Explorer.state.configPath;
+            Explorer.state.configPath = newConfigPath;
+
+            // Migrate expanded folders/files and selected folder to new path prefix
+            const migrateSet = (set) => {
+                const migrated = new Set();
+                for (const p of set) {
+                    if (p === oldPath) {
+                        migrated.add(newConfigPath);
+                    } else if (p.startsWith(oldPath + '/')) {
+                        migrated.add(newConfigPath + p.substring(oldPath.length));
+                    } else {
+                        migrated.add(p);
+                    }
+                }
+                return migrated;
+            };
+            Explorer.state.expandedFolders = migrateSet(Explorer.state.expandedFolders);
+            Explorer.state.expandedFiles = migrateSet(Explorer.state.expandedFiles);
+            if (Explorer.state.selectedFolder === oldPath) {
+                Explorer.state.selectedFolder = newConfigPath;
+            } else if (Explorer.state.selectedFolder?.startsWith(oldPath + '/')) {
+                Explorer.state.selectedFolder = newConfigPath + Explorer.state.selectedFolder.substring(oldPath.length);
+            }
+        }
+
         // Populate constants from backend metadata (once)
         if (metadataResult && metadataResult.success) {
             Explorer.applyMetadata(metadataResult.data.data || metadataResult.data);

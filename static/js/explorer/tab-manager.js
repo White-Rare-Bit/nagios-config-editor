@@ -239,17 +239,15 @@
 
         const tabsHtml = state.openTabs.map(tab => {
             const isActive = tab.key === state.activeTabKey;
-            const hasPendingEdit = state.pendingEdits.has(tab.key);
             const icon = Explorer.getObjectTypeIcon(tab.typeIcon);
             const escapedKey = Explorer.escapeHtml(tab.key);
             const escapedLabel = Explorer.escapeHtml(tab.label);
 
-            return `<div class="editor-tab${isActive ? ' active' : ''}${hasPendingEdit ? ' modified' : ''}"
+            return `<div class="editor-tab${isActive ? ' active' : ''}"
                          data-tab-key="${escapedKey}"
                          title="${escapedLabel}">
                 <span class="editor-tab-icon">${icon}</span>
                 <span class="editor-tab-label">${escapedLabel}</span>
-                ${hasPendingEdit ? '<span class="editor-tab-dot"></span>' : ''}
                 <button class="editor-tab-close" title="Close tab">&times;</button>
             </div>`;
         }).join('');

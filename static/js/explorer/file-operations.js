@@ -218,7 +218,7 @@
     function updateWorkspaceHeader() {
         const rootName = document.getElementById('workspaceRootName');
         const rootMeta = document.getElementById('workspaceRootMeta');
-        const configRootName = extractFileName(state.configPath);
+        const configRootName = state.configDisplayName || extractFileName(state.configPath);
         const totalObjects = state.allObjects.length;
 
         if (rootName) {rootName.textContent = configRootName;}
@@ -455,7 +455,7 @@
         // Build the tree HTML
         let html = '';
         const rootFolderNames = Object.keys(root.folders).sort();
-        const rootName = extractFileName(state.configPath);
+        const rootName = state.configDisplayName || extractFileName(state.configPath);
         const isRootExpanded = state.expandedFolders.has(state.configPath);
         const isRootSelected = state.selectedFolder === state.configPath;
         const hasRootChildren = rootFolderNames.length > 0 || root.files.length > 0;
@@ -546,8 +546,16 @@
 
         let html = '';
 
-        for (const obj of sortedObjects) {
+        // Drop zone before first object
+        html += buildDropZone(filePath, 0);
+
+        for (let i = 0; i < sortedObjects.length; i++) {
+            const obj = sortedObjects[i];
             html += buildExistingObjectRow(obj, gripIcon, filePath);
+
+            // Drop zone after each object (use line_number as position)
+            const dropPosition = obj.line_number + 1;
+            html += buildDropZone(filePath, dropPosition);
         }
 
         if (sortedObjects.length === 0) {
@@ -557,6 +565,85 @@
         }
 
         return html;
+    }
+
+    function buildDropZone(filePath, position) {
+        return `<div class="workspace-drop-zone" data-file="${Explorer.escapeHtml(filePath)}" data-position="${position}"
+                 ondragover="Explorer.handleObjectDragOver(event)"
+                 ondrop="Explorer.handleObjectDrop(event, '${Explorer.escapeJs(filePath)}', ${position})"
+                 ondragleave="Explorer.handleObjectDragLeave(event)"></div>`;
+    }
+
+    function handleObjectDragOver(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = 'move';
+        event.currentTarget.classList.add('drop-active');
+    }
+
+    function handleObjectDragLeave(event) {
+        event.currentTarget.classList.remove('drop-active');
+    }
+
+    /**
+     * Normalize drag data from either left-panel ('objects') or right-panel ('target-object-reorder')
+     * into a consistent array of {source_file, object_type, name, display_name, attributes}.
+     */
+    function parseDragObjects(dataStr) {
+        if (!dataStr) {return null;}
+        let data;
+        try { data = JSON.parse(dataStr); } catch (e) { return null; }
+
+        if (data.type === 'objects' && data.objects?.length) {
+            return data.objects;
+        }
+        if (data.type === 'target-object-reorder' && data.objectMeta) {
+            return [data.objectMeta];
+        }
+        return null;
+    }
+
+    async function handleObjectDrop(event, targetFile, position) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.currentTarget.classList.remove('drop-active');
+        Explorer.cleanupDragState();
+
+        const objects = parseDragObjects(event.dataTransfer.getData('text/plain'));
+        if (!objects) {return;}
+
+        let moved = 0;
+        for (const objData of objects) {
+            if (!objData?.source_file) {continue;}
+
+            const nameComponent = objData.name ?? objData.display_name ?? '';
+            const objKey = `${objData.source_file}|${objData.object_type}|${nameComponent}`;
+
+            // Delete original first (for both same-file reorder and cross-file move)
+            const deleteResult = await ApiClient.post('/api/objects/delete', {
+                stable_key: objKey
+            }, { silent: true });
+
+            if (!deleteResult.success) {continue;}
+
+            // Create at new position
+            const createResult = await ApiClient.post('/api/objects/create', {
+                target_file: targetFile,
+                object_type: objData.object_type,
+                attributes: objData.attributes,
+                after_line: position > 0 ? position : null
+            }, { silent: true });
+
+            if (createResult.success) {
+                moved++;
+            }
+        }
+
+        if (moved > 0) {
+            state.expandedFiles.add(targetFile);
+            await Explorer.afterFrontendMutation();
+            showToast(`Moved ${moved} object(s) to ${extractFileName(targetFile)}`, 'success');
+        }
     }
 
     function toggleFileExpand(filePath) {
@@ -606,13 +693,39 @@
         }
     }
 
-    function handleFileDrop(event, targetFile) {
+    async function handleFileDrop(event, targetFile) {
         event.preventDefault();
         event.currentTarget.classList.remove('drop-active');
         Explorer.cleanupDragState();
 
-        // File-on-file drops not supported in shadow copy mode
-        // File/folder moves use folder drop targets instead
+        const objects = parseDragObjects(event.dataTransfer.getData('text/plain'));
+        if (!objects) {return;}
+
+        let moved = 0;
+        for (const objData of objects) {
+            if (!objData?.source_file || objData.source_file === targetFile) {continue;}
+
+            const nameComponent = objData.name ?? objData.display_name ?? '';
+            const objKey = `${objData.source_file}|${objData.object_type}|${nameComponent}`;
+
+            const createResult = await ApiClient.post('/api/objects/create', {
+                target_file: targetFile,
+                object_type: objData.object_type,
+                attributes: objData.attributes
+            }, { silent: true });
+
+            if (createResult.success) {
+                const deleteResult = await ApiClient.post('/api/objects/delete', {
+                    stable_key: objKey
+                }, { silent: true });
+                if (deleteResult.success) {moved++;}
+            }
+        }
+
+        if (moved > 0) {
+            await Explorer.afterFrontendMutation();
+            showToast(`Moved ${moved} object(s) to ${extractFileName(targetFile)}`, 'success');
+        }
     }
 
     function handleTargetObjectDragStart(event, index, itemType, sourceFile) {
@@ -746,12 +859,29 @@
         moveFileImmediate(sourcePath, targetFolder);
     }
 
+    function resolveTargetFileInFolder(targetFolder) {
+        const filesInFolder = state.allFiles.filter(f => {
+            const dir = f.substring(0, f.lastIndexOf('/'));
+            return dir === targetFolder;
+        });
+        if (filesInFolder.length === 0) {
+            return targetFolder + '/objects.cfg';
+        }
+        if (filesInFolder.length === 1) {
+            return filesInFolder[0];
+        }
+        state.expandedFolders.add(targetFolder);
+        showToast('Multiple files in folder. Drop objects on a specific file.', 'info');
+        return null;
+    }
+
     function handleFolderDrop(event, targetFolder) {
         event.preventDefault();
         event.stopPropagation();
         event.currentTarget.classList.remove('drop-active');
         Explorer.cleanupDragState();
 
+        const objectData = event.dataTransfer.getData(DATA_TYPES.OBJECTS);
         const fileData = event.dataTransfer.getData(DATA_TYPES.FILE_MOVE);
         const folderData = event.dataTransfer.getData(DATA_TYPES.FOLDER_MOVE);
 
@@ -759,6 +889,44 @@
             handleFolderOnFolderDrop(folderData, targetFolder);
         } else if (fileData) {
             handleFileOnFolderDrop(fileData, targetFolder);
+        } else if (objectData) {
+            handleObjectsOnFolderDrop(objectData, targetFolder);
+        }
+    }
+
+    async function handleObjectsOnFolderDrop(data, targetFolder) {
+        const objects = parseDragObjects(data);
+        if (!objects) {return;}
+
+        const targetFile = resolveTargetFileInFolder(targetFolder);
+        if (!targetFile) {renderTargetPane(); return;}
+
+        let moved = 0;
+        for (const objData of objects) {
+            if (!objData?.source_file || objData.source_file === targetFile) {continue;}
+
+            const nameComponent = objData.name ?? objData.display_name ?? '';
+            const objKey = `${objData.source_file}|${objData.object_type}|${nameComponent}`;
+
+            const createResult = await ApiClient.post('/api/objects/create', {
+                target_file: targetFile,
+                object_type: objData.object_type,
+                attributes: objData.attributes
+            }, { silent: true });
+
+            if (createResult.success) {
+                const deleteResult = await ApiClient.post('/api/objects/delete', {
+                    stable_key: objKey
+                }, { silent: true });
+                if (deleteResult.success) {moved++;}
+            }
+        }
+
+        if (moved > 0) {
+            state.expandedFiles.add(targetFile);
+            state.expandedFolders.add(targetFolder);
+            await Explorer.afterFrontendMutation();
+            showToast(`Moved ${moved} object(s) to ${extractFileName(targetFile)}`, 'success');
         }
     }
 
@@ -1109,6 +1277,9 @@
     Explorer.handleTargetObjectDragStart = handleTargetObjectDragStart;
     Explorer.handleTargetObjectDragEnd = handleTargetObjectDragEnd;
     Explorer.handleFileDrop = handleFileDrop;
+    Explorer.handleObjectDragOver = handleObjectDragOver;
+    Explorer.handleObjectDragLeave = handleObjectDragLeave;
+    Explorer.handleObjectDrop = handleObjectDrop;
     Explorer.handleFolderDragOver = handleFolderDragOver;
     Explorer.handleFolderDragLeave = handleFolderDragLeave;
     Explorer.moveFileImmediate = moveFileImmediate;

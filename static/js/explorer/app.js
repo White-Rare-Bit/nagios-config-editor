@@ -26,7 +26,6 @@ function renderCenterAttributes() { Explorer.renderCenterAttributes(); }
 function getNewObjectNameField(objectType) { return Explorer.getNewObjectNameField(objectType); }
 function stageObjectDeletions() { Explorer.stageObjectDeletions(); }
 function stageNewObjectChanges() { Explorer.stageNewObjectChanges(); }
-function removeStagedCreation(idx) { Explorer.removeStagedCreation(idx); }
 
 // Delegates to functions in context-menu.js
 function hideContextMenu() { Explorer.hideContextMenu(); }
@@ -122,28 +121,17 @@ const mySessionId = getSessionId();
 // It already handles isEditingLocked = false
 
 // Update UI to show/hide editing lock state (banner is handled by base.html)
-function updateEditingLockedUI() {
-    if (state.isEditingLocked) {
-        document.body.classList.add('editing-locked');
-    } else {
-        document.body.classList.remove('editing-locked');
-    }
-}
-
-// Check if editing is allowed (not locked by another session)
-function canEdit() {
-    return !state.isEditingLocked;
-}
-
-// hasStagedChanges, startStagingPoll, stopStagingPoll now in modules
+// Lock check is now server-side (ensure_shadow_lock). These are kept for API compatibility.
+function updateEditingLockedUI() {}
+function canEdit() { return true; }
 
 // Load data
 document.addEventListener('DOMContentLoaded', async () => {
     // Load objects, files, and folders from backend
     await Explorer.loadObjects();
 
-    // Load any staged changes from server (shared across all users)
-    await Explorer.loadStagedChanges();
+    // Load changed files from shadow copy diff (for tree indicators)
+    await Explorer.loadChangedFiles();
 
     // Restore tabs from sessionStorage
     Explorer.restoreTabs();
@@ -183,8 +171,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         emptyState.style.display = 'flex';
     }
 
-    // Start polling for staging changes from other users
-    Explorer.startStagingPoll();
+    // Update badges (commit count, undo button)
+    Explorer.updateBadges();
     initTargetPane();
 
     // Restore suggestion section expanded/collapsed state
@@ -278,10 +266,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Clean URL
         window.history.replaceState({}, '', window.location.pathname);
         // Open commit dialog after a short delay to ensure everything is loaded
-        setTimeout(() => {
-            const totalChanges = state.pendingEdits.size + state.stagedMoves.size + state.stagedCreations.length +
-                state.stagedObjectDeletions.size + state.newFiles.size;
-            if (totalChanges > 0) {
+        setTimeout(async () => {
+            const count = await Explorer.getTotalStagedCount();
+            if (count > 0) {
                 showGlobalCommitDialog();
             }
         }, 300);
@@ -291,11 +278,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (urlParams.get('autoCommit') === '1') {
         // Clean URL
         window.history.replaceState({}, '', window.location.pathname);
-        // Open commit dialog after a short delay to ensure staging is loaded
-        setTimeout(() => {
-            const totalChanges = state.pendingEdits.size + state.stagedMoves.size + state.stagedCreations.length +
-                state.stagedObjectDeletions.size + state.newFiles.size;
-            if (totalChanges > 0) {
+        // Open commit dialog after a short delay to ensure data is loaded
+        setTimeout(async () => {
+            const count = await Explorer.getTotalStagedCount();
+            if (count > 0) {
                 showGlobalCommitDialog();
             }
         }, 300);
@@ -424,45 +410,16 @@ function buildFileTree(container, objects) {
         byFile[file].push(obj);
     });
 
-    // Group staged creations by file
-    const stagedByFile = {};
-    state.stagedCreations.forEach((creation, idx) => {
-        const file = creation.targetFile.split('/').pop();
-        if (!stagedByFile[file]) {stagedByFile[file] = [];}
-        stagedByFile[file].push({ creation, idx });
-    });
-
-    // Merge file lists (existing + staged)
-    const allFilesSet = new Set([...Object.keys(byFile), ...Object.keys(stagedByFile)]);
-
-    container.innerHTML = Array.from(allFilesSet)
-        .sort((a, b) => a.localeCompare(b))
-        .map(file => {
-            const objs = byFile[file] || [];
-            const staged = stagedByFile[file] || [];
-            const filePath = objs.length > 0 ? objs[0].source_file : staged[0].creation.targetFile;
-            const totalCount = objs.length + staged.length;
-
+    container.innerHTML = Object.entries(byFile)
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([file, objs]) => {
+            const filePath = objs[0].source_file;
             const isOpen = state.openTreeFolders.has(filePath);
 
-            // Combine existing objects and staged creations, sorted by position
-            const allItems = [
-                ...objs.map(o => ({ type: 'existing', obj: o, position: o.line_number })),
-                ...staged.map(s => ({
-                    type: 'staged',
-                    creation: s.creation,
-                    idx: s.idx,
-                    position: s.creation.insertPosition !== undefined ? s.creation.insertPosition + 0.5 : Infinity
-                }))
-            ].sort((a, b) => a.position - b.position);
-
-            const itemsHtml = allItems.map(item => {
-                if (item.type === 'existing') {
-                    return renderTreeItem(item.obj);
-                } 
-                    return renderStagedCreationTreeItem(item.creation, item.idx);
-                
-            }).join('');
+            const itemsHtml = objs
+                .sort((a, b) => a.line_number - b.line_number)
+                .map(obj => renderTreeItem(obj))
+                .join('');
 
             return `
             <div class="tree-folder${isOpen ? ' open' : ''}" data-file="${Explorer.escapeHtml(filePath)}">
@@ -472,170 +429,13 @@ function buildFileTree(container, objects) {
                     <span class="tree-folder-icon"><i class="fa-solid fa-chevron-right"></i></span>
                     <span class="tree-folder-name">${Explorer.escapeHtml(file)}</span>
                     <button class="tree-folder-add-btn" onclick="event.stopPropagation(); Explorer.createNewObject('${Explorer.escapeJs(filePath)}')" title="Add new object">+</button>
-                    <span class="tree-folder-count">${totalCount}${staged.length > 0 ? ` <span class="staged-count">(+${staged.length})</span>` : ''}</span>
+                    <span class="tree-folder-count">${objs.length}</span>
                 </div>
                 <div class="tree-folder-children">
                     ${itemsHtml}
                 </div>
             </div>
         `}).join('');
-}
-
-function renderStagedCreationTreeItem(creation, idx) {
-    const isSelected = state.selectedStagedIndices.has(idx);
-    const selected = isSelected ? 'selected' : '';
-    const displayName = creation.displayName || '(unnamed)';
-
-    return `
-        <div class="tree-item staged-creation ${selected}"
-             data-staged-index="${idx}"
-             draggable="true"
-             onclick="Explorer.handleStagedItemClick(event, ${idx})"
-             oncontextmenu="Explorer.handleStagedContextMenu(event, ${idx})"
-             ondragstart="Explorer.handleStagedDragStart(event, ${idx})"
-             ondragend="Explorer.handleDragEnd(event)">
-            <span class="tree-item-staged-badge" title="Pending - not yet committed">+</span>
-            <span class="tree-item-name">${Explorer.escapeHtml(displayName)}</span>
-            <span class="tree-item-type type-${creation.object_type}" title="${Explorer.escapeHtml(creation.object_type)}" data-badge-compact="${Explorer.getTypeBadgeTier(creation.object_type, false, 'compact')}" data-badge-medium="${Explorer.getTypeBadgeTier(creation.object_type, false, 'medium')}" data-badge-full="${Explorer.getTypeBadgeTier(creation.object_type, false, 'full')}">${Explorer.getTypeBadge(creation.object_type)}</span>
-        </div>
-    `;
-}
-
-function handleStagedItemClick(event, idx) {
-    event.stopPropagation();
-
-    // Clear regular object selection when clicking staged items
-    Explorer.clearSelection();
-    document.querySelectorAll('.tree-item:not(.staged-creation)').forEach(el => {
-        el.classList.remove('selected');
-    });
-
-    if (event.ctrlKey || event.metaKey) {
-        // Toggle selection
-        if (state.selectedStagedIndices.has(idx)) {
-            state.selectedStagedIndices.delete(idx);
-        } else {
-            state.selectedStagedIndices.add(idx);
-        }
-    } else if (event.shiftKey && state.selectedStagedIndices.size > 0) {
-        // Range select
-        const allStaged = Array.from(document.querySelectorAll('.tree-item.staged-creation')).map(el => parseInt(el.dataset.stagedIndex, 10));
-        const lastSelected = Array.from(state.selectedStagedIndices).pop();
-        const start = allStaged.indexOf(lastSelected);
-        const end = allStaged.indexOf(idx);
-        const range = allStaged.slice(Math.min(start, end), Math.max(start, end) + 1);
-        range.forEach(i => state.selectedStagedIndices.add(i));
-    } else {
-        // Single select
-        state.selectedStagedIndices.clear();
-        state.selectedStagedIndices.add(idx);
-    }
-
-    updateStagedSelection();
-}
-
-function updateStagedSelection() {
-    // Update visual selection for staged items
-    document.querySelectorAll('.tree-item.staged-creation').forEach(el => {
-        const idx = parseInt(el.dataset.stagedIndex, 10);
-        el.classList.toggle('selected', state.selectedStagedIndices.has(idx));
-    });
-
-    // Update center pane based on selection
-    if (state.selectedStagedIndices.size === 1) {
-        const idx = Array.from(state.selectedStagedIndices)[0];
-        selectStagedCreationForEdit(idx);
-    } else if (state.selectedStagedIndices.size === 0 && state.selectedKeys.size === 0) {
-        hideCenterPaneObject();
-    } else if (state.selectedStagedIndices.size > 1) {
-        showCenterPaneMultiple(state.selectedStagedIndices.size);
-    }
-}
-
-function selectStagedCreationForEdit(idx) {
-    // Get the staged creation
-    const creation = state.stagedCreations[idx];
-    if (!creation) {return;}
-
-    // Create an object representation for editing
-    const obj = {
-        object_type: creation.object_type,
-        attributes: {...creation.attributes},
-        source_file: creation.targetFile,
-        line_number: 999999,
-        display_name: creation.displayName || '(unnamed)',
-        global_index: -1
-    };
-
-    // Set editing state
-    state.editedObject = obj;
-    state.originalAttributes = {...creation.attributes};
-    state.isNewObject = true;
-    state.newObjectStagedIndex = idx;
-
-    // Show in center pane
-    showCenterPaneNewObject(obj, creation.targetFile);
-}
-
-function handleStagedContextMenu(event, idx) {
-    event.preventDefault();
-    event.stopPropagation();
-
-    // If not already selected, select just this one
-    if (!state.selectedStagedIndices.has(idx)) {
-        Explorer.clearSelection();
-        state.selectedStagedIndices.clear();
-        state.selectedStagedIndices.add(idx);
-        updateStagedSelection();
-    }
-
-    // Clear regular selection
-    Explorer.clearSelection();
-    document.querySelectorAll('.tree-item:not(.staged-creation)').forEach(el => {
-        el.classList.remove('selected');
-    });
-
-    state.contextTarget = idx;
-    const menu = document.getElementById('contextMenu');
-
-    // Set selection mode class - staged creations only support delete
-    menu.classList.remove('single-selection', 'multi-selection');
-    menu.classList.add(state.selectedStagedIndices.size > 1 ? 'multi-selection' : 'single-selection');
-    // Add class to indicate staged context
-    menu.classList.add('staged-context');
-
-    // Position menu
-    menu.style.left = event.pageX + 'px';
-    menu.style.top = event.pageY + 'px';
-    menu.classList.add('visible');
-}
-
-function handleStagedDragStart(event, idx) {
-    // If not selected, select only this item
-    if (!state.selectedStagedIndices.has(idx)) {
-        Explorer.clearSelection();
-        state.selectedStagedIndices.clear();
-        state.selectedStagedIndices.add(idx);
-        updateStagedSelection();
-    }
-
-    // Clear regular selection for staged drag
-    Explorer.clearSelection();
-    document.querySelectorAll('.tree-item:not(.staged-creation)').forEach(el => {
-        el.classList.remove('selected');
-    });
-
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', JSON.stringify({
-        type: 'staged-creations',
-        indices: Array.from(state.selectedStagedIndices)
-    }));
-
-    // Add dragging class to selected items
-    state.selectedStagedIndices.forEach(i => {
-        const el = document.querySelector(`[data-staged-index="${i}"]`);
-        if (el) {el.classList.add('dragging');}
-    });
 }
 
 function buildTypeTree(container, objects) {
@@ -670,36 +470,17 @@ function renderTreeItem(obj, showType = false) {
     const isOrphan = state.orphanIndices.has(Explorer.getObjectKey(obj));
     const hostListInfo = getHostListInfo(obj);
     const issue = getObjectIssue(obj);
-    const isDeleted = state.stagedObjectDeletions.has(Explorer.getObjectKey(obj));
-    const isStagedMove = state.stagedMoves.has(Explorer.getObjectKey(obj));
     const orphanClass = isOrphan ? 'is-orphan' : '';
     const longListClass = hostListInfo.shouldGroup ? 'has-long-list' : '';
-    const deletedClass = isDeleted ? 'staged-for-deletion' : '';
-    const stagedClass = isStagedMove ? 'staged' : '';
     const typeLabel = Explorer.getTypeBadge(obj.object_type, isTemplate);
     const badgeCompact = Explorer.getTypeBadgeTier(obj.object_type, isTemplate, 'compact');
     const badgeMedium = Explorer.getTypeBadgeTier(obj.object_type, isTemplate, 'medium');
     const badgeFull = Explorer.getTypeBadgeTier(obj.object_type, isTemplate, 'full');
     const matchField = getSearchMatchField(obj);
-
-    // Check if there's a staged edit with a new name
-    const displayName = getStagedDisplayName(obj);
-
-    // Don't allow interaction with deleted objects except to undo
-    if (isDeleted) {
-        return `
-        <div class="tree-item ${deletedClass}"
-             data-index="${obj.global_index}">
-            <span class="tree-item-delete-badge" title="Staged for deletion">−</span>
-            <span class="tree-item-name" title="${Explorer.escapeHtml(displayName)}">${Explorer.escapeHtml(displayName)}</span>
-            ${showType ? '' : `<span class="tree-item-type type-${obj.object_type}" title="${obj.object_type}" data-badge-compact="${badgeCompact}" data-badge-medium="${badgeMedium}" data-badge-full="${badgeFull}">${typeLabel}</span>`}
-            <button class="tree-item-undo-btn" onclick="event.stopPropagation(); Explorer.unstageObjectDeletion('${Explorer.escapeJs(Explorer.getObjectKey(obj))}')" title="Undo deletion">Undo</button>
-        </div>
-    `;
-    }
+    const displayName = obj.display_name || obj.name || '(unnamed)';
 
     return `
-        <div class="tree-item ${selected} ${orphanClass} ${longListClass} ${stagedClass}"
+        <div class="tree-item ${selected} ${orphanClass} ${longListClass}"
              data-index="${obj.global_index}"
              draggable="true"
              onclick="Explorer.handleItemClick(event, ${obj.global_index})"
@@ -707,7 +488,6 @@ function renderTreeItem(obj, showType = false) {
             <span class="tree-item-drag-handle" title="Drag to move to another file">${Explorer.getIcon('grip-vertical')}</span>
             ${issue ? `<span class="tree-item-issue-badge ${issue.severity}" title="${Explorer.escapeHtml(issue.message)}">${Explorer.getIssueIcon(issue)}</span>` : ''}
             ${hostListInfo.shouldGroup ? `<span class="tree-item-group-badge" title="Consider using a hostgroup (${hostListInfo.count} hosts)"><i class="fa-solid fa-list"></i></span>` : ''}
-            ${isStagedMove ? '<span class="tree-item-staged-badge" title="Pending move - not yet committed">→</span>' : ''}
             <span class="tree-item-name" title="${Explorer.escapeHtml(displayName)}">${Explorer.escapeHtml(displayName)}</span>
             ${matchField ? `<span class="tree-item-match-field" title="Matched in ${Explorer.escapeHtml(matchField)}">${Explorer.escapeHtml(matchField)}</span>` : ''}
             ${showType ? '' : `<span class="tree-item-type type-${obj.object_type}" title="${obj.object_type}" data-badge-compact="${badgeCompact}" data-badge-medium="${badgeMedium}" data-badge-full="${badgeFull}">${typeLabel}</span>`}
@@ -734,17 +514,9 @@ function getSearchMatchField(obj) {
     return null;
 }
 
-// Get display name for an object, checking staged edits first
+// Get display name for an object (shadow copy: attributes are always current)
 function getStagedDisplayName(obj) {
-    const edit = state.pendingEdits.get(Explorer.getObjectKey(obj));
-    if (edit) {
-        // Get the name field for this object type
-        const nameField = getNewObjectNameField(obj.object_type);
-        if (nameField && edit.edited[nameField] !== undefined) {
-            return edit.edited[nameField] || '(unnamed)';
-        }
-    }
-    return obj.display_name;
+    return obj.display_name || obj.name || '(unnamed)';
 }
 
 function getObjectIssue(obj) {
@@ -781,10 +553,9 @@ function isTreeItemTemplate(obj) {
     return Explorer.isObjectTemplate(obj);
 }
 
-// Helper to get effective attributes for an object (considering pending edits)
+// Helper to get effective attributes for an object (shadow copy: always current)
 function getEffectiveAttributes(obj) {
-    const pendingEdit = state.pendingEdits.get(Explorer.getObjectKey(obj));
-    return pendingEdit ? pendingEdit.edited : obj.attributes;
+    return obj.attributes;
 }
 
 // Helper to get the name field that should be used for an object
@@ -856,12 +627,6 @@ function filterTree() {
 function handleItemClick(event, index) {
     event.stopPropagation();
     hideContextMenu();
-
-    // Clear staged creation selection when clicking a regular item
-    state.selectedStagedIndices.clear();
-    document.querySelectorAll('.tree-item.staged-creation').forEach(el => {
-        el.classList.remove('selected');
-    });
 
     if (event.ctrlKey || event.metaKey) {
         if (Explorer.isSelectedByIndex(index)) {
@@ -936,11 +701,10 @@ function selectObjectByStableKey(stableKey) {
 // clearSelection, removeFromSelectionByIndex, isSelectedByIndex now in state-management.js
 
 function updateSelection() {
-    // Update tree items - highlight selected and show staged items differently
+    // Update tree items - highlight selected
     document.querySelectorAll('.tree-item').forEach(el => {
         const index = parseInt(el.dataset.index, 10);
         el.classList.toggle('selected', Explorer.isSelectedByIndex(index));
-        el.classList.toggle('staged', state.stagedMoves.has(Explorer.getObjectKeyByIndex(index)));
     });
 
     // Update selection count indicator
@@ -1389,12 +1153,6 @@ function restoreSuggestionSectionState() {
     Explorer.setView = setView;
     Explorer.buildTree = buildTree;
     Explorer.buildFileTree = buildFileTree;
-    Explorer.renderStagedCreationTreeItem = renderStagedCreationTreeItem;
-    Explorer.handleStagedItemClick = handleStagedItemClick;
-    Explorer.updateStagedSelection = updateStagedSelection;
-    Explorer.selectStagedCreationForEdit = selectStagedCreationForEdit;
-    Explorer.handleStagedContextMenu = handleStagedContextMenu;
-    Explorer.handleStagedDragStart = handleStagedDragStart;
     Explorer.buildTypeTree = buildTypeTree;
     Explorer.renderTreeItem = renderTreeItem;
     Explorer.getStagedDisplayName = getStagedDisplayName;

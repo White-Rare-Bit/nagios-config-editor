@@ -173,10 +173,6 @@
                 const inheritData = await Explorer.fetchInheritance(stableKey);
                 if (inheritData && inheritData.inherited) {
                     result.resolvedAttrs = inheritData.inherited;
-                    // Bug 019: Overlay staged template edits onto resolved attrs.
-                    // The API returns values based on disk state; if a template in
-                    // the chain has pending edits, those should be reflected here.
-                    overlayStagedTemplateEdits(result.resolvedAttrs, inheritData.chain, obj);
                 }
             } catch (error) {
                 console.error('Error loading resolved attributes:', error);
@@ -184,62 +180,6 @@
         }
 
         return result;
-    }
-
-    /**
-     * Bug 019: Overlay staged edits from templates onto resolved attributes.
-     * Walks the inheritance chain and applies any pending edits from template
-     * objects so that the resolved view reflects staged (not just disk) values.
-     */
-    function overlayStagedTemplateEdits(resolvedAttrs, chain, obj) {
-        if (!chain || chain.length === 0) {return;}
-
-        // Collect template names from the chain
-        const templateNames = [];
-        function collectNames(items) {
-            for (const item of items) {
-                if (item.name) {templateNames.push(item.name);}
-                if (item.parents) {collectNames(item.parents);}
-            }
-        }
-        collectNames(chain);
-
-        // Find template objects that have pending edits
-        for (const tmplName of templateNames) {
-            const tmplObj = state.allObjects.find(o =>
-                o.object_type === obj.object_type &&
-                (o.attributes.name === tmplName || o.display_name === tmplName)
-            );
-            if (!tmplObj) {continue;}
-
-            const pendingEdit = state.pendingEdits.get(Explorer.getObjectKey(tmplObj));
-            if (!pendingEdit) {continue;}
-
-            // Apply each changed attribute from the staged edit
-            const original = pendingEdit.original || {};
-            const edited = pendingEdit.edited || {};
-            for (const [attr, newValue] of Object.entries(edited)) {
-                if (['use', 'name', 'register'].includes(attr)) {continue;}
-                if (original[attr] !== newValue) {
-                    // Update or add the resolved attribute with staged value
-                    resolvedAttrs[attr] = { value: newValue, source: tmplName };
-                }
-            }
-
-            // Handle deleted attributes: if an attr was in original but not in edited
-            for (const attr of Object.keys(original)) {
-                if (['use', 'name', 'register'].includes(attr)) {continue;}
-                if (!(attr in edited)) {
-                    // Attribute was deleted from template — remove from resolved
-                    // only if it was sourced from this template
-                    const existing = resolvedAttrs[attr];
-                    const existingSource = (typeof existing === 'object' && existing !== null) ? existing.source : null;
-                    if (existingSource === tmplName) {
-                        delete resolvedAttrs[attr];
-                    }
-                }
-            }
-        }
     }
 
     // =============================================================================

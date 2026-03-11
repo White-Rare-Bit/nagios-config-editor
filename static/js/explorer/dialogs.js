@@ -270,7 +270,6 @@
         state.originalAttributes = null;
         state.isNewObject = false;
         state.newObjectStagedIndex = null;
-        Explorer.checkPendingExternalChanges();
 
         const content = document.getElementById('centerContent');
         const emptyState = document.getElementById('centerEmptyState');
@@ -707,8 +706,7 @@
                 state.newObjectStagedIndex = null;
                 state.isNewObject = false;
                 state.editedObject = null;
-                Explorer.checkPendingExternalChanges();
-            }
+                    }
             state.selectedStagedIndices.clear();
         }
 
@@ -1327,8 +1325,7 @@
             state.originalAttributes = null;
             state.isNewObject = false;
             state.newObjectStagedIndex = null;
-            Explorer.checkPendingExternalChanges();
-            const content = document.getElementById('centerContent');
+                const content = document.getElementById('centerContent');
             const emptyState = document.getElementById('centerEmptyState');
             content.classList.add('u-hidden');
             content.style.display = 'none';
