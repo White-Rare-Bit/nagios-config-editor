@@ -257,17 +257,9 @@
             return;
         }
 
-        // Check if there are still pending edits for this object
-        const pendingEdit = state.pendingEdits.get(objKey);
-        if (pendingEdit) {
-            // Still has pending edits - use them
-            state.editedObject.attributes = {...pendingEdit.edited};
-            state.originalAttributes = {...pendingEdit.original};
-        } else {
-            // No pending edits - use original attributes
-            state.editedObject.attributes = {...obj.attributes};
-            state.originalAttributes = {...obj.attributes};
-        }
+        // Shadow copy: attributes come directly from the parsed objects
+        state.editedObject.attributes = {...obj.attributes};
+        state.originalAttributes = {...obj.attributes};
 
         // Re-render the attributes display
         renderCenterAttributes();

@@ -83,6 +83,32 @@
             } else if (Explorer.state.selectedFolder?.startsWith(oldPath + '/')) {
                 Explorer.state.selectedFolder = newConfigPath + Explorer.state.selectedFolder.substring(oldPath.length);
             }
+
+            // Migrate stable keys (source_file|type|name) in selections and tabs.
+            // migrateSet works because source_file is the first component —
+            // startsWith(oldPath + '/') matches and the rest (|type|name) carries over.
+            Explorer.state.selectedKeys = migrateSet(Explorer.state.selectedKeys);
+
+            if (Explorer.state.activeTabKey) {
+                const migrated = migrateSet(new Set([Explorer.state.activeTabKey]));
+                Explorer.state.activeTabKey = migrated.values().next().value;
+            }
+            if (Explorer.state.openTabs) {
+                for (const tab of Explorer.state.openTabs) {
+                    const migrated = migrateSet(new Set([tab.key]));
+                    tab.key = migrated.values().next().value;
+                }
+            }
+
+            // Migrate editedObject.source_file so center pane key matches reloaded data
+            if (Explorer.state.editedObject) {
+                const sf = Explorer.state.editedObject.source_file;
+                if (sf === oldPath) {
+                    Explorer.state.editedObject.source_file = newConfigPath;
+                } else if (sf && sf.startsWith(oldPath + '/')) {
+                    Explorer.state.editedObject.source_file = newConfigPath + sf.substring(oldPath.length);
+                }
+            }
         }
 
         // Populate constants from backend metadata (once)

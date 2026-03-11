@@ -21,6 +21,31 @@
         FOLDER_MOVE: 'application/x-folder-move'
     };
 
+    /**
+     * After moving an object between files, update selectedKeys, tabs, and
+     * editedObject so they reference the new source_file.
+     */
+    function migrateKeysAfterMove(oldSourceFile, newSourceFile, objectType, nameComponent) {
+        const oldKey = `${oldSourceFile}|${objectType}|${nameComponent}`;
+        const newKey = `${newSourceFile}|${objectType}|${nameComponent}`;
+
+        if (state.selectedKeys.has(oldKey)) {
+            state.selectedKeys.delete(oldKey);
+            state.selectedKeys.add(newKey);
+        }
+        if (state.activeTabKey === oldKey) {
+            state.activeTabKey = newKey;
+        }
+        if (state.openTabs) {
+            for (const tab of state.openTabs) {
+                if (tab.key === oldKey) {tab.key = newKey;}
+            }
+        }
+        if (state.editedObject && Explorer.getObjectKey(state.editedObject) === oldKey) {
+            state.editedObject.source_file = newSourceFile;
+        }
+    }
+
     // ============================================================================
     // Navigation
     // ============================================================================
@@ -633,9 +658,9 @@
                 attributes: objData.attributes,
                 after_line: position > 0 ? position : null
             }, { silent: true });
-
             if (createResult.success) {
                 moved++;
+                migrateKeysAfterMove(objData.source_file, targetFile, objData.object_type, nameComponent);
             }
         }
 
@@ -718,7 +743,10 @@
                 const deleteResult = await ApiClient.post('/api/objects/delete', {
                     stable_key: objKey
                 }, { silent: true });
-                if (deleteResult.success) {moved++;}
+                if (deleteResult.success) {
+                    moved++;
+                    migrateKeysAfterMove(objData.source_file, targetFile, objData.object_type, nameComponent);
+                }
             }
         }
 
