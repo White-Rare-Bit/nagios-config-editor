@@ -185,6 +185,73 @@ def api_delete_object():
     return operation_response(result)
 
 
+@bp.route("/api/objects/move", methods=["POST"])
+def api_move_object():
+    """Move an object to a new position (create at target, delete original).
+
+    Atomic single-request alternative to separate create+delete calls.
+    Handles same-file reorder and cross-file moves.
+
+    Expects JSON:
+    - stable_key: Source object's stable key
+    - target_file: Destination file path
+    - after_line: (optional) Line number to insert after
+    """
+    data = request.get_json() or {}
+    stable_key = data.get("stable_key")
+    target_file = data.get("target_file")
+    after_line = data.get("after_line")
+
+    if not stable_key:
+        return jsonify({"error": "stable_key required"}), 400
+    if not target_file:
+        return jsonify({"error": "target_file required"}), 400
+
+    session_id = request.headers.get("X-Session-Id")
+    success, error = ensure_shadow_lock(session_id)
+    if not success:
+        return error
+
+    service = get_service()
+    sm = get_shadow_manager()
+
+    stable_key = _resolve_stable_key(stable_key)
+    target_file = _resolve_target_file(target_file)
+
+    found = service.find_object_by_stable_key(stable_key)
+    if not found:
+        return jsonify({"error": f"Object not found: {stable_key}"}), 404
+
+    _, obj = found
+
+    # Snapshot all affected files (source and target)
+    files_to_snapshot = set()
+    files_to_snapshot.add(os.path.relpath(obj.source_file, sm._config_dir))
+    files_to_snapshot.add(os.path.relpath(target_file, sm._config_dir))
+    sm.snapshot_files(list(files_to_snapshot), f"move {obj.object_type} {obj.get_display_name()}")
+
+    # Create at target position first (preserves line numbers)
+    create_result = service.create_object(
+        target_file, obj.object_type, dict(obj.attributes),
+        after_block_line=after_line,
+    )
+    if not create_result.success:
+        return operation_response(create_result)
+
+    # Reload so we can find the original by line number (may have shifted)
+    service.reload()
+
+    # Re-find the original object to get its updated line number
+    refound = service.find_object_by_stable_key(stable_key)
+    if refound:
+        _, orig_obj = refound
+        delete_result = service.delete_object(orig_obj.source_file, orig_obj.line_number)
+        if not delete_result.success:
+            return operation_response(delete_result)
+
+    return jsonify({"success": True})
+
+
 @bp.route("/api/objects/delete-multiple", methods=["POST"])
 def api_delete_multiple_objects():
     """Delete multiple objects from the shadow copy.

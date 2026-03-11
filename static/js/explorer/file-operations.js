@@ -644,21 +644,13 @@
             const nameComponent = objData.name ?? objData.display_name ?? '';
             const objKey = `${objData.source_file}|${objData.object_type}|${nameComponent}`;
 
-            // Delete original first (for both same-file reorder and cross-file move)
-            const deleteResult = await ApiClient.post('/api/objects/delete', {
-                stable_key: objKey
-            }, { silent: true });
-
-            if (!deleteResult.success) {continue;}
-
-            // Create at new position
-            const createResult = await ApiClient.post('/api/objects/create', {
+            // Single atomic move (create at target + delete original on server)
+            const result = await ApiClient.post('/api/objects/move', {
+                stable_key: objKey,
                 target_file: targetFile,
-                object_type: objData.object_type,
-                attributes: objData.attributes,
                 after_line: position > 0 ? position : null
             }, { silent: true });
-            if (createResult.success) {
+            if (result.success) {
                 moved++;
                 migrateKeysAfterMove(objData.source_file, targetFile, objData.object_type, nameComponent);
             }
