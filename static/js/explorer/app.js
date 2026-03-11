@@ -700,15 +700,19 @@ function selectObjectByStableKey(stableKey) {
 
 // clearSelection, removeFromSelectionByIndex, isSelectedByIndex now in state-management.js
 
-function updateSelection() {
+function updateSelection(options = {}) {
     // Update tree items - highlight selected
     document.querySelectorAll('.tree-item').forEach(el => {
         const index = parseInt(el.dataset.index, 10);
         el.classList.toggle('selected', Explorer.isSelectedByIndex(index));
     });
 
+    // When called from handleDragEnd, only update CSS — the drop handler
+    // will call afterFrontendMutation which rebuilds the center pane.
+    if (options.visualOnly) {return;}
+
     // Update selection count indicator
-    
+
     // Update center pane based on selection
     if (state.selectedKeys.size === 1) {
         const key = Array.from(state.selectedKeys)[0];

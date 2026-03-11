@@ -930,8 +930,10 @@
     function handleDragEnd(event) {
         Explorer.cleanupDragState();
         // Apply visual selection after drag completes (deferred from handleDragStart
-        // to avoid layout changes that cancel the drag operation)
-        Explorer.updateSelection();
+        // to avoid layout changes that cancel the drag operation).
+        // Use visualOnly to avoid loading impact data with stale source_file —
+        // the drop handler's afterFrontendMutation will rebuild the center pane.
+        Explorer.updateSelection({ visualOnly: true });
     }
 
     function handleDragOver(event) {
