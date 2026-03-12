@@ -51,6 +51,32 @@ class ShadowCopyManager:
         """Path to the snapshots directory."""
         return os.path.join(self.shadow_base_path, "snapshots")
 
+    @property
+    def _checksums_file(self) -> str:
+        """Path to the original-file checksums."""
+        return os.path.join(self.shadow_base_path, "checksums.json")
+
+    @staticmethod
+    def _hash_cfg_files(directory: str) -> dict[str, str]:
+        """Compute SHA-256 hashes of all .cfg files in directory.
+
+        Returns:
+            Dict mapping relative paths to hex digest strings
+        """
+        import hashlib
+        checksums = {}
+        for root, _dirs, files in os.walk(directory):
+            for fn in files:
+                if fn.endswith(".cfg"):
+                    full = os.path.join(root, fn)
+                    rel = os.path.relpath(full, directory)
+                    h = hashlib.sha256()
+                    with open(full, "rb") as f:
+                        for chunk in iter(lambda: f.read(8192), b""):
+                            h.update(chunk)
+                    checksums[rel] = h.hexdigest()
+        return checksums
+
     def has_shadow(self) -> bool:
         """Check if a shadow copy exists."""
         return os.path.isdir(self._config_dir)
@@ -81,6 +107,12 @@ class ShadowCopyManager:
                 # Copy entire config directory
                 shutil.copytree(self.config_path, self._config_dir)
 
+                # Hash original files for conflict detection at apply time
+                os.makedirs(self.shadow_base_path, exist_ok=True)
+                checksums = self._hash_cfg_files(self.config_path)
+                with open(self._checksums_file, "w", encoding="utf-8") as f:
+                    json.dump(checksums, f)
+
                 # Write lock file
                 lock_data = {
                     "session_id": session_id,
@@ -88,7 +120,6 @@ class ShadowCopyManager:
                     "user_email": user_email,
                     "created_at": time.time(),
                 }
-                os.makedirs(self.shadow_base_path, exist_ok=True)
                 with open(self._lock_file, "w", encoding="utf-8") as f:
                     json.dump(lock_data, f)
 
@@ -359,8 +390,45 @@ class ShadowCopyManager:
 
         return changes
 
+    @staticmethod
+    def _chunk_by_objects(lines: list[str]) -> list[str]:
+        """Group lines into object-level chunks for diffing.
+
+        Each 'define type { ... }' block becomes a single string (one "line"
+        for difflib). Lines between objects stay individual. This prevents
+        the diff algorithm from matching identical 'define type {' lines
+        across different objects.
+        """
+        chunks = []
+        current_block = []
+        in_block = False
+
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("define ") and stripped.endswith("{"):
+                in_block = True
+                current_block = [line]
+            elif in_block:
+                current_block.append(line)
+                if stripped == "}":
+                    chunks.append("".join(current_block))
+                    current_block = []
+                    in_block = False
+            else:
+                chunks.append(line)
+
+        # If file ended mid-block (malformed), flush remaining
+        if current_block:
+            chunks.extend(current_block)
+
+        return chunks
+
     def get_file_diff(self, relative_path: str, context_lines: int = 3) -> dict:
         """Compute unified diff for a single file.
+
+        Uses object-aware chunking so that each 'define type { ... }' block
+        is treated as an atomic unit, preventing the diff algorithm from
+        splitting object boundaries.
 
         Args:
             relative_path: Path relative to config root
@@ -383,14 +451,35 @@ class ShadowCopyManager:
             with open(shad, encoding="utf-8", errors="replace") as f:
                 shad_lines = f.readlines()
 
+        orig_chunks = self._chunk_by_objects(orig_lines)
+        shad_chunks = self._chunk_by_objects(shad_lines)
+
         diff = difflib.unified_diff(
-            orig_lines,
-            shad_lines,
+            orig_chunks,
+            shad_chunks,
             fromfile=f"a/{relative_path}",
             tofile=f"b/{relative_path}",
             n=context_lines,
         )
-        return {"diff_text": "".join(diff)}
+
+        # Expand multi-line chunks back to individual lines with correct prefixes
+        result_lines = []
+        for diff_line in diff:
+            if diff_line.startswith("---") or diff_line.startswith("+++") or diff_line.startswith("@@"):
+                result_lines.append(diff_line)
+            elif diff_line.startswith("+") or diff_line.startswith("-"):
+                prefix = diff_line[0]
+                content = diff_line[1:]
+                for sub_line in content.splitlines(True):
+                    result_lines.append(prefix + sub_line)
+            elif diff_line.startswith(" "):
+                content = diff_line[1:]
+                for sub_line in content.splitlines(True):
+                    result_lines.append(" " + sub_line)
+            else:
+                result_lines.append(diff_line)
+
+        return {"diff_text": "".join(result_lines)}
 
     def get_changed_object_count(self) -> int:
         """Count the number of changed Nagios objects between shadow and original.
@@ -402,14 +491,15 @@ class ShadowCopyManager:
 
         """
         from nagios_parser import NagiosConfigParser
-        from stable_keys import generate_stable_key_for_object
+        from stable_keys import generate_stable_key
 
         def _build_object_map(config_path: str) -> dict[str, dict]:
             parser = NagiosConfigParser(config_path)
             objects = parser.parse_all()
             obj_map = {}
             for obj in objects:
-                key = generate_stable_key_for_object(obj)
+                rel_path = os.path.relpath(obj.source_file, config_path)
+                key = generate_stable_key(rel_path, obj.object_type, obj.get_display_name())
                 obj_map[key] = dict(obj.attributes)
             return obj_map
 

@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import tempfile
@@ -59,6 +60,30 @@ class TestShadowLifecycle:
         scm = ShadowCopyManager(config_dir, shadow_base)
         result = scm.destroy_shadow()
         assert result.success
+
+    def test_create_shadow_stores_checksums(self, setup_dirs):
+        """create_shadow should hash all .cfg files and write checksums.json."""
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+
+        checksums_path = os.path.join(shadow_base, "checksums.json")
+        assert os.path.isfile(checksums_path), "checksums.json not created"
+
+        with open(checksums_path) as f:
+            checksums = json.load(f)
+
+        # Should have an entry for each .cfg file in config_dir
+        cfg_files = []
+        for root, _dirs, files in os.walk(config_dir):
+            for fn in files:
+                if fn.endswith(".cfg"):
+                    cfg_files.append(os.path.relpath(os.path.join(root, fn), config_dir))
+
+        assert set(checksums.keys()) == set(cfg_files)
+        # Each value should be a 64-char hex string (SHA-256)
+        for path, digest in checksums.items():
+            assert len(digest) == 64, f"Bad checksum for {path}: {digest}"
 
 
 class TestLockManagement:
@@ -236,6 +261,137 @@ class TestDiffComputation:
             f.write("define host {\n    host_name webserver1\n    alias Modified\n}\n")
         diff = scm.get_file_diff("hosts.cfg")
         assert "alias" in diff["diff_text"]
+
+    def test_object_aware_diff_keeps_blocks_atomic(self, setup_dirs):
+        """Removing middle object should not split surrounding objects' boundaries.
+
+        Real Nagios services share many identical lines (use, host_name, contacts).
+        Line-level diff cross-matches these shared lines across object boundaries,
+        making the Memory block appear partially removed. Object-aware chunking
+        treats each define block as an atom, preventing this.
+        """
+        config_dir, shadow_base = setup_dirs
+        original_content = (
+            "define service {\n"
+            "    use                    generic-service\n"
+            "    host_name              webserver1\n"
+            "    service_description    CPU Load\n"
+            "    check_command          check_nrpe!check_cpu\n"
+            "    contacts               admin\n"
+            "}\n"
+            "\n"
+            "define service {\n"
+            "    use                    generic-service\n"
+            "    host_name              webserver1\n"
+            "    service_description    Disk Usage\n"
+            "    check_command          check_nrpe!check_disk\n"
+            "    contacts               admin\n"
+            "}\n"
+            "\n"
+            "define service {\n"
+            "    use                    generic-service\n"
+            "    host_name              webserver1\n"
+            "    service_description    Memory\n"
+            "    check_command          check_nrpe!check_mem\n"
+            "    contacts               admin\n"
+            "}\n"
+        )
+        with open(os.path.join(config_dir, "services.cfg"), "w") as f:
+            f.write(original_content)
+
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+
+        # Shadow: middle object (Disk Usage) removed
+        shadow_content = (
+            "define service {\n"
+            "    use                    generic-service\n"
+            "    host_name              webserver1\n"
+            "    service_description    CPU Load\n"
+            "    check_command          check_nrpe!check_cpu\n"
+            "    contacts               admin\n"
+            "}\n"
+            "\n"
+            "define service {\n"
+            "    use                    generic-service\n"
+            "    host_name              webserver1\n"
+            "    service_description    Memory\n"
+            "    check_command          check_nrpe!check_mem\n"
+            "    contacts               admin\n"
+            "}\n"
+        )
+        with open(scm.shadow_path("services.cfg"), "w") as f:
+            f.write(shadow_content)
+
+        diff = scm.get_file_diff("services.cfg")
+        diff_text = diff["diff_text"]
+
+        # With object-aware diff, the entire Disk block is removed atomically:
+        # 'define service {' appears BEFORE 'Disk Usage' in removed lines.
+        # With line-level diff, 'define service {' is cross-matched as context
+        # and 'Disk Usage' appears BEFORE 'define service {' in removed lines
+        # (the 'define service {' that IS removed belongs to the Memory block).
+        removed = [l for l in diff_text.splitlines()
+                   if l.startswith("-") and not l.startswith("---")]
+        define_idx = next((i for i, l in enumerate(removed) if "define service" in l), None)
+        disk_idx = next((i for i, l in enumerate(removed) if "Disk Usage" in l), None)
+        assert define_idx is not None and disk_idx is not None, (
+            f"Expected both 'define service' and 'Disk Usage' in removed lines: {removed}"
+        )
+        assert define_idx < disk_idx, (
+            "Object-aware diff should remove the whole Disk block atomically "
+            "(define service { before Disk Usage), but got split boundaries"
+        )
+
+    def test_reorder_objects_shows_atomic_moves(self, setup_dirs):
+        """Reordering objects should show whole blocks as added/removed, not interleaved."""
+        config_dir, shadow_base = setup_dirs
+
+        original = (
+            "define host {\n"
+            "    host_name    alpha\n"
+            "    alias        Alpha Server\n"
+            "}\n"
+            "\n"
+            "define host {\n"
+            "    host_name    beta\n"
+            "    alias        Beta Server\n"
+            "}\n"
+        )
+        # Shadow: reversed order
+        shadow = (
+            "define host {\n"
+            "    host_name    beta\n"
+            "    alias        Beta Server\n"
+            "}\n"
+            "\n"
+            "define host {\n"
+            "    host_name    alpha\n"
+            "    alias        Alpha Server\n"
+            "}\n"
+        )
+
+        os.makedirs(config_dir, exist_ok=True)
+        with open(os.path.join(config_dir, "hosts.cfg"), "w") as f:
+            f.write(original)
+
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+
+        with open(scm.shadow_path("hosts.cfg"), "w") as f:
+            f.write(shadow)
+
+        diff = scm.get_file_diff("hosts.cfg")
+        diff_text = diff["diff_text"]
+
+        # Every line containing "alpha" should have the same prefix (all + or all -)
+        # i.e., the alpha block was not split
+        alpha_prefixes = set()
+        for line in diff_text.split("\n"):
+            if "alpha" in line.lower() and (line.startswith("+") or line.startswith("-")):
+                alpha_prefixes.add(line[0])
+        # If the block is atomic, all alpha lines have the same prefix
+        assert len(alpha_prefixes) <= 1, f"Alpha block was split across +/-: {alpha_prefixes}"
 
     def test_get_changed_object_count(self, setup_dirs):
         config_dir, shadow_base = setup_dirs
