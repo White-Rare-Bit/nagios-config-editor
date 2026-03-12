@@ -151,7 +151,7 @@ export async function updateBadges() {
     const infoResult = await ApiClient.get('/api/staging/info', { silent: true });
 
     if (infoResult.success) {
-        const info = infoResult.data;
+        const info = infoResult.data.data || infoResult.data;
         let count = info.totalCount || 0;
 
         updateUndoButton(info.undoCount || 0);
@@ -175,8 +175,9 @@ export async function updateBadges() {
 export async function loadChangedFiles() {
     const result = await ApiClient.get('/api/staging/diff', { silent: true });
     state.changedFilesMap.clear();
-    if (result.success && result.data?.files) {
-        for (const f of result.data.files) {
+    const diffData = result.data?.data || result.data;
+    if (result.success && diffData?.files) {
+        for (const f of diffData.files) {
             state.changedFilesMap.set(f.path, f.status);
         }
     }
@@ -230,8 +231,9 @@ export async function clearStagedChanges() {
  * Apply all staged changes to disk
  * @returns {Promise<{success: boolean, message?: string, results?: object}>}
  */
-export async function applyAllStaged() {
-    const result = await ApiClient.post('/api/staging/apply', {}, { silent: true });
+export async function applyAllStaged(force = false) {
+    const url = force ? '/api/staging/apply?force=true' : '/api/staging/apply';
+    const result = await ApiClient.post(url, {}, { silent: true });
 
     if (result.success && result.data?.success) {
         // Reload fresh data from disk
@@ -241,6 +243,19 @@ export async function applyAllStaged() {
         showToast('Changes applied successfully', 'success');
         return { success: true, results: result.data };
     }
+
+    // Check for conflict response (409)
+    if (result.data?.conflicts) {
+        const conflicts = result.data.conflicts;
+        const fileList = conflicts.map(f => `  \u2022 ${f}`).join('\n');
+        const msg = `${conflicts.length} file(s) were modified externally:\n\n${fileList}\n\nForce apply will overwrite. A backup is created first.`;
+        if (confirm(msg)) {
+            return applyAllStaged(true);
+        }
+        showToast('Apply cancelled due to conflicts', 'warning');
+        return { success: false, message: 'Conflicts detected' };
+    }
+
     const errorMsg = result.data?.error || result.error || 'Failed to apply changes';
     showToast(errorMsg, 'error');
     return { success: false, message: errorMsg };
@@ -285,7 +300,8 @@ export async function undoLastAction() {
 export async function getUndoCount() {
     const result = await ApiClient.get('/api/staging/info', { silent: true });
     if (result.success) {
-        return result.data.undoCount || 0;
+        const info = result.data.data || result.data;
+        return info.undoCount || 0;
     }
     return 0;
 }
@@ -297,7 +313,8 @@ export async function getUndoCount() {
 export async function getTotalStagedCount() {
     const result = await ApiClient.get('/api/staging/info', { silent: true });
     if (result.success) {
-        return result.data.totalCount || 0;
+        const info = result.data.data || result.data;
+        return info.totalCount || 0;
     }
     return 0;
 }

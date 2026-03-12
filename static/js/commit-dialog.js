@@ -30,7 +30,8 @@ export async function showGlobalCommitDialog() {
         return;
     }
 
-    const shadowFiles = (shadowResult.data && shadowResult.data.files) || [];
+    const shadowData = shadowResult.data?.data || shadowResult.data;
+    const shadowFiles = (shadowData && shadowData.files) || [];
     const gitFiles = (gitResult.success && gitResult.data && gitResult.data.files) || [];
     const hasShadowChanges = shadowFiles.length > 0;
     const hasGitChanges = gitFiles.length > 0;
@@ -154,10 +155,21 @@ function validateCommitInput() {
 /**
  * Apply shadow copy changes to original config. Returns apply result data on success.
  */
-async function applyShadowChanges() {
+async function applyShadowChanges(force = false) {
     showGitRunningPanel('Applying Changes', 'Applying shadow copy to original config...');
-    const applyResult = await ApiClient.post('/api/staging/apply', {}, { silent: true });
+    const url = force ? '/api/staging/apply?force=true' : '/api/staging/apply';
+    const applyResult = await ApiClient.post(url, {}, { silent: true });
     if (!applyResult.success) {
+        if (applyResult.data?.conflicts) {
+            const conflicts = applyResult.data.conflicts;
+            const fileList = conflicts.map(f => `  \u2022 ${f}`).join('\n');
+            const msg = `${conflicts.length} file(s) were modified externally since you started editing:\n\n${fileList}\n\nForce apply will overwrite these changes. A backup is created first.`;
+            if (confirm(msg)) {
+                return applyShadowChanges(true);
+            }
+            showStagingResultPanel(false, 'Apply cancelled due to conflicts');
+            return null;
+        }
         showStagingResultPanel(false, applyResult.error || 'Failed to apply staged changes');
         return null;
     }
@@ -630,7 +642,8 @@ export async function updateGlobalContextLines(value) {
     const shadowResult = await ApiClient.get(`/api/staging/diff?context_lines=${contextParam}`, { silent: true });
     if (!shadowResult.success) {return;}
 
-    const shadowFiles = (shadowResult.data && shadowResult.data.files) || [];
+    const shadowData2 = shadowResult.data?.data || shadowResult.data;
+    const shadowFiles = (shadowData2 && shadowData2.files) || [];
     baseState.diffData.shadowFiles = shadowFiles;
 
     const changesList = document.getElementById('globalCommitChangesList');
