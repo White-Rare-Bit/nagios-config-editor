@@ -1,14 +1,16 @@
 # Explorer Modules
 
-All modules attach to `window.Explorer` namespace. State in `Explorer.state`.
+All modules use ES module `import`/`export` syntax. Shared state in `state.js`.
 
 ## Module Index
 
 | File | What |
 |------|------|
-| `main.js` | Namespace, state structure (allObjects, selections, staging maps, undo stack) |
+| `main.js` | Entry point: imports, initializes event delegation, registers callbacks |
+| `state.js` | Shared state object (allObjects, selections, filters, etc.) |
 | `constants.js` | Domain metadata from `/api/metadata`, UI-only constants, shared helpers |
 | `state-management.js` | Stable key helpers, pending edit get/set, `rebuildUI()` |
+| `action-registry.js` | Maps `data-action` names to handler functions for event delegation |
 | `app.js` | Left pane: tree rendering, filtering, selection, autocomplete |
 | `object-editor.js` | Center pane: attribute editor, validation, create/delete workflows |
 | `file-operations.js` | Right pane: file tree, navigation, folder ops. Helper: `afterStagingChange()` |
@@ -22,6 +24,8 @@ All modules attach to `window.Explorer` namespace. State in `Explorer.state`.
 | `badge-issues.js` | Issue badge rendering and counts for tree nodes |
 | `relations-loader.js` | Reference and inheritance loading for center pane |
 | `impact-section.js` | Impact analysis and resolved attributes in center pane |
+| `panel-resizer.js` | Resizable panel dividers |
+| `tab-manager.js` | Tab switching for center/right panes |
 | `ui-utils.js` | Icons, `formatObjectName()`, `buildBreadcrumb()`, tab switching |
 
 ## Constants: Metadata vs Hardcoded
@@ -38,9 +42,9 @@ Two orchestrators in `data-loading.js` handle all post-mutation work:
 
 | Function | When to use | What it does |
 |----------|-------------|--------------|
-| `Explorer.afterFrontendMutation(opts)` | User edited/created/deleted/moved something | saveStaging -> rebuildUI -> updateBadges -> debouncedAnalysis |
-| `Explorer.afterServerSync(opts)` | Undo, apply, polling detected change | rebuildUI -> updateBadges -> debouncedAnalysis |
+| `afterFrontendMutation(opts)` | User edited/created/deleted/moved something | rebuildUI -> updateBadges -> debouncedAnalysis |
+| `afterServerSync(opts)` | Undo, apply, polling detected change | rebuildUI -> updateBadges -> debouncedAnalysis |
 
 Both accept `options`: `{ skipTree, skipTarget, skipCenter, skipTabs }`.
 
-**Rule:** After mutating staging state locally, call `afterFrontendMutation()`. After loading state from server, call `afterServerSync()`. Never manually compose `saveStagedChanges` + `buildTree` + `updateCommitUI`.
+**Rule:** After mutating state, call `afterFrontendMutation()`. After loading state from server, call `afterServerSync()`. Never manually compose build steps.

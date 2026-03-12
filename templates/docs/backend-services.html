@@ -6,7 +6,7 @@
         <ul>
             <li>Service architecture and overview table</li>
             <li>NagiosService: query, mutation, and apply methods</li>
-            <li>StagingManager: state, locks, undo, and conflict detection</li>
+            <li>ShadowCopyManager: lifecycle, locks, undo, and conflict detection</li>
             <li>GitService, BackupManager, NagiosWriter, and path safety</li>
         </ul>
     </div>
@@ -15,7 +15,7 @@
         The backend is organized into service classes, each responsible for a single domain.
         All services are instantiated during app creation and stored in <code>app.extensions</code>.
         Route handlers access them via helper functions like <code>get_service()</code> and
-        <code>get_staging_manager()</code>.
+        <code>get_shadow_manager()</code>.
     </p>
 
     <div class="docs-diagram">
@@ -41,38 +41,37 @@
 
             <line x1="48" y1="194" x2="312" y2="194" stroke="#404040"/>
 
-            <text x="48" y="212" fill="#888" font-family="Inter, sans-serif" font-size="10" font-weight="600">APPLY PHASES</text>
-            <text x="48" y="228" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">apply_edits() · apply_moves()</text>
-            <text x="48" y="242" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">apply_creations() · apply_deletions()</text>
-            <text x="48" y="256" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">apply_file_*() · apply_folder_*()</text>
+            <text x="48" y="212" fill="#888" font-family="Inter, sans-serif" font-size="10" font-weight="600">OTHER</text>
+            <text x="48" y="228" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">reload() · get_name_field()</text>
+            <text x="48" y="242" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">get_object_stats()</text>
 
             <rect x="38" y="270" width="64" height="14" rx="3" fill="rgba(255, 193, 7, 0.15)" stroke="rgba(255, 193, 7, 0.3)"/>
             <text x="70" y="280" text-anchor="middle" fill="#ffb74d" font-family="Inter, sans-serif" font-size="9">mp.Lock</text>
 
-            <!-- StagingManager -->
+            <!-- ShadowCopyManager -->
             <rect x="348" y="44" width="310" height="248" rx="5" fill="#2d2d2d" stroke="#404040"/>
             <rect x="348" y="44" width="310" height="30" rx="5" fill="#333" stroke="#404040"/>
-            <text x="503" y="64" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="13" font-weight="600">StagingManager</text>
+            <text x="503" y="64" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="13" font-weight="600">ShadowCopyManager</text>
 
-            <text x="366" y="96" fill="#888" font-family="Inter, sans-serif" font-size="10" font-weight="600">STATE</text>
-            <text x="366" y="112" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">get_staging() · save_staging()</text>
-            <text x="366" y="126" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">clear() · get_counts()</text>
+            <text x="366" y="96" fill="#888" font-family="Inter, sans-serif" font-size="10" font-weight="600">LIFECYCLE</text>
+            <text x="366" y="112" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">create_shadow() · destroy_shadow()</text>
+            <text x="366" y="126" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">has_shadow() · apply()</text>
 
             <line x1="366" y1="136" x2="640" y2="136" stroke="#404040"/>
 
             <text x="366" y="154" fill="#888" font-family="Inter, sans-serif" font-size="10" font-weight="600">LOCK</text>
-            <text x="366" y="170" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">can_modify() · acquire_lock()</text>
-            <text x="366" y="184" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">release_lock() · break_lock()</text>
+            <text x="366" y="170" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">can_modify() · get_lock_status()</text>
+            <text x="366" y="184" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">break_lock()</text>
 
             <line x1="366" y1="194" x2="640" y2="194" stroke="#404040"/>
 
-            <text x="366" y="212" fill="#888" font-family="Inter, sans-serif" font-size="10" font-weight="600">UNDO + CONFLICT</text>
-            <text x="366" y="228" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">push_undo() · pop_undo()</text>
-            <text x="366" y="242" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">update_checksums()</text>
-            <text x="366" y="256" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">detect_conflicts()</text>
+            <text x="366" y="212" fill="#888" font-family="Inter, sans-serif" font-size="10" font-weight="600">UNDO + DIFF</text>
+            <text x="366" y="228" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">snapshot_files() · undo()</text>
+            <text x="366" y="242" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">get_changed_files() · get_file_diff()</text>
+            <text x="366" y="256" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">get_changed_object_count()</text>
 
-            <rect x="356" y="270" width="80" height="14" rx="3" fill="rgba(56, 139, 253, 0.15)" stroke="rgba(56, 139, 253, 0.3)"/>
-            <text x="396" y="280" text-anchor="middle" fill="#64b5f6" font-family="Inter, sans-serif" font-size="9">Atomic write</text>
+            <rect x="356" y="270" width="80" height="14" rx="3" fill="rgba(255, 193, 7, 0.15)" stroke="rgba(255, 193, 7, 0.3)"/>
+            <text x="396" y="280" text-anchor="middle" fill="#ffb74d" font-family="Inter, sans-serif" font-size="9">mp.Lock</text>
 
             <!-- GitService + BackupManager -->
             <rect x="676" y="44" width="160" height="120" rx="5" fill="#2d2d2d" stroke="#404040"/>
@@ -120,12 +119,12 @@
             <tr>
                 <td><strong>NagiosService</strong></td>
                 <td><code>nagios_service.py</code></td>
-                <td>CRUD operations on Nagios objects, apply phases for staging</td>
+                <td>CRUD operations on Nagios objects, parser access</td>
             </tr>
             <tr>
-                <td><strong>StagingManager</strong></td>
-                <td><code>staging_manager.py</code></td>
-                <td>Staging state, session locks, undo stack, conflict detection</td>
+                <td><strong>ShadowCopyManager</strong></td>
+                <td><code>shadow_copy_manager.py</code></td>
+                <td>Shadow copy lifecycle, session locks, file-level undo, apply/destroy</td>
             </tr>
             <tr>
                 <td><strong>GitService</strong></td>
@@ -154,8 +153,8 @@
 
     <p>
         The primary service for interacting with Nagios configuration objects. Handles all
-        CRUD operations and the multi-phase apply process for staging. All mutation methods
-        acquire a <code>multiprocessing.Lock</code> to ensure thread safety.
+        CRUD operations. All mutation methods acquire a <code>multiprocessing.Lock</code>
+        to ensure thread safety. Writes go to the shadow copy when active.
     </p>
 
     <details class="docs-details">
@@ -251,55 +250,7 @@
     </details>
 
     <details class="docs-details">
-        <summary>Apply Phase Methods (10 methods)</summary>
-
-    <p>
-        These methods execute the staged changes during the apply process. They are called
-        in a specific order (see <a href="#app/data-flow-staging">Data Flow &amp; Staging</a>):
-    </p>
-
-    <table>
-        <thead>
-            <tr>
-                <th>Method</th>
-                <th>Phase</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td><code>apply_folder_creations(staging_data, is_safe)</code></td>
-                <td>1. Create folders (parent-first)</td>
-            </tr>
-            <tr>
-                <td><code>apply_file_creations(staging_data, is_safe)</code></td>
-                <td>2. Create files</td>
-            </tr>
-            <tr>
-                <td><code>apply_object_composite(staging_data)</code></td>
-                <td>3. Object composite (deletes, moves/edits/move_edits, creates)</td>
-            </tr>
-            <tr>
-                <td><code>apply_file_moves(staging_data, is_safe)</code></td>
-                <td>4. Move/rename files</td>
-            </tr>
-            <tr>
-                <td><code>apply_folder_moves(staging_data, is_safe)</code></td>
-                <td>5. Move/rename folders</td>
-            </tr>
-            <tr>
-                <td><code>apply_file_deletions(staging_data, is_safe)</code></td>
-                <td>6. Delete files</td>
-            </tr>
-            <tr>
-                <td><code>apply_folder_deletions(staging_data, is_safe)</code></td>
-                <td>7. Delete folders (child-first)</td>
-            </tr>
-        </tbody>
-    </table>
-    </details>
-
-    <details class="docs-details">
-        <summary>Other Methods (2 methods)</summary>
+        <summary>Other Methods (1 method)</summary>
 
     <table>
         <thead>
@@ -310,11 +261,6 @@
             </tr>
         </thead>
         <tbody>
-            <tr>
-                <td><code>get_typed_staging()</code></td>
-                <td><code>Optional[StagingState]</code></td>
-                <td>Get a typed StagingState instance from current staging data</td>
-            </tr>
             <tr>
                 <td><code>reload()</code></td>
                 <td><code>NagiosConfigParser</code></td>
@@ -324,21 +270,16 @@
     </table>
     </details>
 
-    <h3>StagingManager</h3>
+    <h3>ShadowCopyManager</h3>
 
     <p>
-        Manages the staging lifecycle: lock acquisition, staged operation storage, undo stack,
-        and conflict detection. Internally delegates to composed managers:
+        Manages the shadow copy lifecycle: creating the directory copy on first edit,
+        session-based locking, file-level undo snapshots, diff computation, conflict
+        detection, and applying changes back to the original config.
     </p>
 
-    <ul>
-        <li><code>sm.checksums</code> (ChecksumManager) — file checksums and conflict detection</li>
-        <li><code>sm.undo</code> (UndoStackManager) — undo stack operations</li>
-        <li><code>sm.file_ops</code> (FileOperationsStager) — file/folder staging operations</li>
-    </ul>
-
     <details class="docs-details">
-        <summary>Staging State (8 methods)</summary>
+        <summary>Lifecycle (4 methods)</summary>
 
     <table>
         <thead>
@@ -350,51 +291,31 @@
         </thead>
         <tbody>
             <tr>
-                <td><code>get_staging()</code></td>
-                <td><code>Optional[Dict]</code></td>
-                <td>Get current staging data (all operations)</td>
-            </tr>
-            <tr>
-                <td><code>save_staging(data)</code></td>
-                <td><code>OperationResult</code></td>
-                <td>Save staging data atomically to disk</td>
-            </tr>
-            <tr>
-                <td><code>save_staging_atomic(data, session_id, lock)</code></td>
-                <td><code>OperationResult</code></td>
-                <td>Save with atomic lock validation</td>
-            </tr>
-            <tr>
-                <td><code>clear_staging()</code></td>
-                <td><code>OperationResult</code></td>
-                <td>Clear all staging data and release lock</td>
-            </tr>
-            <tr>
-                <td><code>has_staging()</code></td>
+                <td><code>has_shadow()</code></td>
                 <td><code>bool</code></td>
-                <td>Check if any session holds the staging lock</td>
+                <td>Check if a shadow copy currently exists</td>
             </tr>
             <tr>
-                <td><code>get_staging_info()</code></td>
-                <td><code>Dict</code></td>
-                <td>Summary with counts for each operation type</td>
+                <td><code>create_shadow(session_id, user_name, user_email)</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Copy original config to shadow directory, acquire session lock, store checksums</td>
             </tr>
             <tr>
-                <td><code>get_total_staged_count()</code></td>
-                <td><code>int</code></td>
-                <td>Total count of all staged operations</td>
+                <td><code>destroy_shadow()</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Delete shadow copy, release lock, discard all changes</td>
             </tr>
             <tr>
-                <td><code>get_empty_staging_structure()</code></td>
-                <td><code>Dict</code></td>
-                <td>Get empty staging with all required fields initialized</td>
+                <td><code>apply(backup_manager, force)</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Replace original config with shadow, create backup first. Detects conflicts unless force=True</td>
             </tr>
         </tbody>
     </table>
     </details>
 
     <details class="docs-details">
-        <summary>Lock Management (4 methods)</summary>
+        <summary>Lock Management (3 methods)</summary>
 
     <table>
         <thead>
@@ -408,29 +329,24 @@
             <tr>
                 <td><code>can_modify(session_id)</code></td>
                 <td><code>bool</code></td>
-                <td>Check if the given session holds the staging lock</td>
+                <td>Check if the given session owns the lock</td>
             </tr>
             <tr>
-                <td><code>validate_or_acquire_lock(session_id)</code></td>
-                <td><code>bool</code></td>
-                <td>Acquire lock if available, or validate existing ownership</td>
-            </tr>
-            <tr>
-                <td><code>get_lock_owner()</code></td>
-                <td><code>Optional[str]</code></td>
-                <td>Get the session ID that currently holds the lock</td>
-            </tr>
-            <tr>
-                <td><code>get_lock_status(session_id)</code></td>
+                <td><code>get_lock_status()</code></td>
                 <td><code>Dict</code></td>
-                <td>Detailed lock info (owner, is_owner, locked state)</td>
+                <td>Detailed lock info (locked, session_id, user_name, user_email)</td>
+            </tr>
+            <tr>
+                <td><code>break_lock()</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Force-break a stale lock, destroying the shadow copy</td>
             </tr>
         </tbody>
     </table>
     </details>
 
     <details class="docs-details">
-        <summary>Undo Stack (5 methods)</summary>
+        <summary>Undo Snapshots (3 methods)</summary>
 
     <table>
         <thead>
@@ -442,36 +358,26 @@
         </thead>
         <tbody>
             <tr>
-                <td><code>add_to_undo_stack(type, data, desc, staging)</code></td>
-                <td><code>Optional[str]</code></td>
-                <td>Push an undo entry; returns entry ID</td>
+                <td><code>snapshot_files(file_paths, description)</code></td>
+                <td><code>str</code></td>
+                <td>Capture file contents before a mutation for undo; returns snapshot ID</td>
             </tr>
             <tr>
-                <td><code>peek_undo_stack()</code></td>
-                <td><code>Optional[Dict]</code></td>
-                <td>View top entry without removing it</td>
+                <td><code>undo()</code></td>
+                <td><code>OperationResult</code></td>
+                <td>Restore files from the most recent snapshot</td>
             </tr>
             <tr>
-                <td><code>pop_undo_stack()</code></td>
-                <td><code>Optional[Dict]</code></td>
-                <td>Pop and return the top undo entry</td>
-            </tr>
-            <tr>
-                <td><code>get_undo_stack_count()</code></td>
+                <td><code>get_undo_count()</code></td>
                 <td><code>int</code></td>
-                <td>Number of entries in the undo stack</td>
-            </tr>
-            <tr>
-                <td><code>clear_undo_stack()</code></td>
-                <td><code>OperationResult</code></td>
-                <td>Clear all undo entries</td>
+                <td>Number of undo snapshots available</td>
             </tr>
         </tbody>
     </table>
     </details>
 
     <details class="docs-details">
-        <summary>Conflict Detection (4 methods)</summary>
+        <summary>Diff and Change Detection (4 methods)</summary>
 
     <table>
         <thead>
@@ -483,75 +389,24 @@
         </thead>
         <tbody>
             <tr>
-                <td><code>compute_file_checksum(path)</code></td>
-                <td><code>Optional[str]</code></td>
-                <td>SHA256 checksum of a single file</td>
-            </tr>
-            <tr>
-                <td><code>compute_base_checksums(paths)</code></td>
-                <td><code>Dict[str, str]</code></td>
-                <td>Compute checksums for multiple files</td>
-            </tr>
-            <tr>
-                <td><code>update_base_checksums(paths)</code></td>
-                <td><code>OperationResult</code></td>
-                <td>Store base checksums for later conflict detection</td>
-            </tr>
-            <tr>
-                <td><code>detect_conflicts()</code></td>
+                <td><code>get_changed_files()</code></td>
                 <td><code>List[Dict]</code></td>
-                <td>Find files modified outside the app since staging began</td>
-            </tr>
-        </tbody>
-    </table>
-    </details>
-
-    <details class="docs-details">
-        <summary>File/Folder Staging (7 methods)</summary>
-
-    <table>
-        <thead>
-            <tr>
-                <th>Method</th>
-                <th>Returns</th>
-                <th>Description</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td><code>stage_file_creation(path)</code></td>
-                <td><code>OperationResult</code></td>
-                <td>Stage a new file to be created</td>
+                <td>List files that differ between shadow and original (with status: modified/added/deleted)</td>
             </tr>
             <tr>
-                <td><code>stage_file_deletion(path)</code></td>
-                <td><code>OperationResult</code></td>
-                <td>Stage a file for deletion</td>
+                <td><code>get_file_diff(relative_path, context_lines)</code></td>
+                <td><code>Dict</code></td>
+                <td>Unified diff for a single file (shadow vs original)</td>
             </tr>
             <tr>
-                <td><code>stage_file_move(src, tgt)</code></td>
-                <td><code>OperationResult</code></td>
-                <td>Stage a file move/rename</td>
+                <td><code>get_changed_object_count()</code></td>
+                <td><code>int</code></td>
+                <td>Count of Nagios objects that differ between shadow and original</td>
             </tr>
             <tr>
-                <td><code>stage_folder_creation(path)</code></td>
-                <td><code>OperationResult</code></td>
-                <td>Stage a new folder to be created</td>
-            </tr>
-            <tr>
-                <td><code>stage_folder_deletion(path)</code></td>
-                <td><code>OperationResult</code></td>
-                <td>Stage a folder for deletion</td>
-            </tr>
-            <tr>
-                <td><code>stage_folder_move(src, tgt)</code></td>
-                <td><code>OperationResult</code></td>
-                <td>Stage a folder move/rename</td>
-            </tr>
-            <tr>
-                <td><code>unstage_operation(op_id, op_type)</code></td>
-                <td><code>OperationResult</code></td>
-                <td>Remove a staged operation by its ID and type</td>
+                <td><code>shadow_path(relative_path)</code></td>
+                <td><code>str</code></td>
+                <td>Resolve a relative path within the shadow copy directory</td>
             </tr>
         </tbody>
     </table>

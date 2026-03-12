@@ -3,7 +3,7 @@
 
     <p>
         All API endpoints return JSON. Mutation endpoints require a session ID sent via the
-        <code>X-Session-Id</code> header for staging lock validation. Field names in both
+        <code>X-Session-Id</code> header for shadow copy lock validation. Field names in both
         requests and responses use <code>snake_case</code>.
     </p>
 
@@ -45,7 +45,7 @@
             <tr>
                 <td><code>/dependencies</code></td>
                 <td>GET</td>
-                <td>D3/Cytoscape dependency graph</td>
+                <td>Cytoscape dependency graph</td>
             </tr>
             <tr>
                 <td><code>/logs</code></td>
@@ -56,6 +56,11 @@
                 <td><code>/settings</code></td>
                 <td>GET</td>
                 <td>Settings and configuration</td>
+            </tr>
+            <tr>
+                <td><code>/docs</code></td>
+                <td>GET</td>
+                <td>In-app documentation</td>
             </tr>
         </tbody>
     </table>
@@ -101,19 +106,34 @@
                 <td>List objects with optional <code>type</code> and <code>search</code> query filters</td>
             </tr>
             <tr>
-                <td><code>/api/delete-objects</code></td>
+                <td><code>/api/objects/update</code></td>
                 <td>POST</td>
-                <td>Delete multiple objects, with optional reference cleanup</td>
+                <td>Update attributes of an existing object (by stable key)</td>
             </tr>
             <tr>
-                <td><code>/api/clone-objects</code></td>
+                <td><code>/api/objects/create</code></td>
                 <td>POST</td>
-                <td>Clone objects with name transformation</td>
+                <td>Create a new object in the specified file</td>
+            </tr>
+            <tr>
+                <td><code>/api/objects/delete</code></td>
+                <td>POST</td>
+                <td>Delete a single object (by stable key)</td>
+            </tr>
+            <tr>
+                <td><code>/api/objects/move</code></td>
+                <td>POST</td>
+                <td>Move an object to a different file</td>
+            </tr>
+            <tr>
+                <td><code>/api/objects/delete-multiple</code></td>
+                <td>POST</td>
+                <td>Delete multiple objects, with optional reference cleanup</td>
             </tr>
         </tbody>
     </table>
 
-    <h3>Staging</h3>
+    <h3>Shadow Copy &amp; Staging</h3>
 
     <table>
         <thead>
@@ -127,67 +147,42 @@
             <tr>
                 <td><code>/api/staging</code></td>
                 <td>GET</td>
-                <td>Get full staging data (all operations)</td>
-            </tr>
-            <tr>
-                <td><code>/api/staging</code></td>
-                <td>POST</td>
-                <td>Save staged changes to <code>staging.json</code> (no disk writes)</td>
+                <td>Get shadow copy status and change summary</td>
             </tr>
             <tr>
                 <td><code>/api/staging</code></td>
                 <td>DELETE</td>
-                <td>Clear all staging data and release lock</td>
+                <td>Destroy shadow copy and release lock (discard all changes)</td>
             </tr>
             <tr>
                 <td><code>/api/staging/info</code></td>
                 <td>GET</td>
-                <td>Staging summary with counts, undo count (used for polling)</td>
+                <td>Shadow copy summary with change counts, undo count (used for polling)</td>
             </tr>
             <tr>
                 <td><code>/api/staging/lock</code></td>
                 <td>GET</td>
-                <td>Get staging lock status</td>
+                <td>Get lock status (locked, session_id, user_name, user_email)</td>
             </tr>
             <tr>
                 <td><code>/api/staging/lock/break</code></td>
                 <td>POST</td>
-                <td>Force break the staging lock (admin action)</td>
+                <td>Force break the lock and destroy shadow copy (admin action)</td>
             </tr>
             <tr>
                 <td><code>/api/staging/apply</code></td>
                 <td>POST</td>
-                <td>Apply all staged changes to disk (10-phase process)</td>
+                <td>Replace original config with shadow copy. Detects conflicts; accepts <code>force</code> param to override. Returns 409 on conflict.</td>
             </tr>
             <tr>
                 <td><code>/api/staging/undo</code></td>
                 <td>POST</td>
-                <td>Pop and reverse the last staged operation</td>
-            </tr>
-            <tr>
-                <td><code>/api/staging/conflicts</code></td>
-                <td>GET</td>
-                <td>Detect external file modifications via checksums</td>
+                <td>Restore files from the most recent undo snapshot</td>
             </tr>
             <tr>
                 <td><code>/api/staging/diff</code></td>
                 <td>GET</td>
-                <td>Git diff + staging metadata for commit dialog</td>
-            </tr>
-            <tr>
-                <td><code>/api/staging/analyze-references</code></td>
-                <td>GET</td>
-                <td>Count references affected by pending name changes</td>
-            </tr>
-            <tr>
-                <td><code>/api/staging/virtual-tree</code></td>
-                <td>GET</td>
-                <td>Merged view of objects with staged changes applied</td>
-            </tr>
-            <tr>
-                <td><code>/api/staging/commit</code></td>
-                <td>POST</td>
-                <td>Apply staged changes + clear staging lock</td>
+                <td>Per-file unified diffs (shadow vs original) for the commit dialog</td>
             </tr>
         </tbody>
     </table>
@@ -216,47 +211,32 @@
             <tr>
                 <td><code>/api/files/create</code></td>
                 <td>POST</td>
-                <td>Stage a file creation</td>
+                <td>Create a new <code>.cfg</code> file in the shadow copy</td>
             </tr>
             <tr>
                 <td><code>/api/folders</code></td>
                 <td>POST</td>
-                <td>Stage a folder creation</td>
+                <td>Create a new folder in the shadow copy</td>
             </tr>
             <tr>
                 <td><code>/api/files/move</code></td>
                 <td>POST</td>
-                <td>Stage a file move/rename</td>
+                <td>Move/rename a file in the shadow copy</td>
             </tr>
             <tr>
                 <td><code>/api/folders/move</code></td>
                 <td>POST</td>
-                <td>Stage a folder move/rename</td>
-            </tr>
-            <tr>
-                <td><code>/api/files/relocate</code></td>
-                <td>POST</td>
-                <td>Move file and update object <code>source_file</code> references</td>
-            </tr>
-            <tr>
-                <td><code>/api/folders/relocate</code></td>
-                <td>POST</td>
-                <td>Move folder and update contained object references</td>
+                <td>Move/rename a folder in the shadow copy</td>
             </tr>
             <tr>
                 <td><code>/api/files/&lt;path&gt;</code></td>
                 <td>DELETE</td>
-                <td>Stage a file for deletion</td>
+                <td>Delete a file in the shadow copy</td>
             </tr>
             <tr>
                 <td><code>/api/folders/&lt;path&gt;</code></td>
                 <td>DELETE</td>
-                <td>Stage a folder for deletion</td>
-            </tr>
-            <tr>
-                <td><code>/api/delete</code></td>
-                <td>POST</td>
-                <td>Batch delete files/folders</td>
+                <td>Delete a folder in the shadow copy</td>
             </tr>
         </tbody>
     </table>
@@ -273,14 +253,14 @@
         </thead>
         <tbody>
             <tr>
-                <td><code>/api/search</code></td>
-                <td>POST</td>
-                <td>Search objects by query, type, field, regex</td>
-            </tr>
-            <tr>
                 <td><code>/api/preview-rename</code></td>
                 <td>POST</td>
                 <td>Preview bulk rename with pattern/prefix/suffix</td>
+            </tr>
+            <tr>
+                <td><code>/api/diff/rename</code></td>
+                <td>POST</td>
+                <td>Generate diff preview for bulk rename</td>
             </tr>
             <tr>
                 <td><code>/api/apply-rename</code></td>
@@ -291,11 +271,6 @@
                 <td><code>/api/move-objects</code></td>
                 <td>POST</td>
                 <td>Bulk move objects to a target file</td>
-            </tr>
-            <tr>
-                <td><code>/api/diff/rename</code></td>
-                <td>POST</td>
-                <td>Generate diff preview for bulk rename</td>
             </tr>
         </tbody>
     </table>
@@ -435,24 +410,24 @@
                 <td>Suggest groupings based on naming patterns</td>
             </tr>
             <tr>
-                <td><code>/api/smart-grouping/create</code></td>
-                <td>POST</td>
-                <td>Create folder and reorganize objects by pattern</td>
-            </tr>
-            <tr>
-                <td><code>/api/smart-grouping/add-to-group</code></td>
-                <td>POST</td>
-                <td>Add objects to an existing folder/group</td>
-            </tr>
-            <tr>
-                <td><code>/api/object-references/&lt;index&gt;</code></td>
+                <td><code>/api/templates/issues</code></td>
                 <td>GET</td>
-                <td>Return all relationships for an object</td>
+                <td>Get template-specific validation issues</td>
+            </tr>
+            <tr>
+                <td><code>/api/object-references</code></td>
+                <td>GET</td>
+                <td>Return all relationships for an object (query param: <code>key</code>)</td>
             </tr>
             <tr>
                 <td><code>/api/escalation-path/&lt;type&gt;/&lt;name&gt;</code></td>
                 <td>GET</td>
                 <td>Get escalation path for host or service</td>
+            </tr>
+            <tr>
+                <td><code>/api/escalation-path/&lt;type&gt;/&lt;name&gt;/&lt;service_desc&gt;</code></td>
+                <td>GET</td>
+                <td>Get escalation path for a specific service on a host</td>
             </tr>
         </tbody>
     </table>
@@ -477,16 +452,6 @@
                 <td><code>/api/templates/inheritance/&lt;stable_key&gt;</code></td>
                 <td>GET</td>
                 <td>Get inheritance chain for an object by stable key</td>
-            </tr>
-            <tr>
-                <td><code>/api/templates/validate-use</code></td>
-                <td>GET</td>
-                <td>Check if <code>use</code> references exist for a given object type</td>
-            </tr>
-            <tr>
-                <td><code>/api/templates/issues</code></td>
-                <td>GET</td>
-                <td>Get template-specific validation issues</td>
             </tr>
         </tbody>
     </table>
@@ -518,29 +483,9 @@
                 <td>Run <code>nagios -v</code>, return errors and warnings</td>
             </tr>
             <tr>
-                <td><code>/api/validate/check</code></td>
-                <td>GET</td>
-                <td>Check if the Nagios binary exists at the configured path</td>
-            </tr>
-            <tr>
-                <td><code>/api/constants</code></td>
-                <td>GET</td>
-                <td>Return domain metadata constants</td>
-            </tr>
-            <tr>
                 <td><code>/api/health-check</code></td>
                 <td>GET</td>
                 <td>Run sanity checks (orphans, circular deps, templates)</td>
-            </tr>
-            <tr>
-                <td><code>/api/analysis/orphans</code></td>
-                <td>GET</td>
-                <td>Detect orphan objects</td>
-            </tr>
-            <tr>
-                <td><code>/api/analysis/template-suggestions</code></td>
-                <td>GET</td>
-                <td>Suggest template consolidation opportunities</td>
             </tr>
         </tbody>
     </table>
@@ -626,20 +571,15 @@
                 <td>POST</td>
                 <td>Truncate application log</td>
             </tr>
-            <tr>
-                <td><code>/api/logs/archives</code></td>
-                <td>GET</td>
-                <td>List rotated log archives</td>
-            </tr>
         </tbody>
     </table>
 
     <h3>Request Format</h3>
 
     <p>
-        All POST endpoints accept JSON request bodies. Mutation endpoints that modify staging
-        must include the <code>X-Session-Id</code> header. The frontend's <code>ApiClient</code>
-        adds this header automatically.
+        All POST endpoints accept JSON request bodies. Mutation endpoints that modify the
+        shadow copy must include the <code>X-Session-Id</code> header. The frontend's
+        <code>ApiClient</code> adds this header automatically.
     </p>
 
     <h3>Response Format</h3>

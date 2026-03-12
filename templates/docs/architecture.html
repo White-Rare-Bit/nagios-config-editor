@@ -14,8 +14,7 @@
     <p>
         Nagios Bulk Editor is a Flask application with a vanilla JavaScript frontend. The backend
         is organized around an app factory pattern with dedicated service classes for each domain
-        responsibility. There is no database — all state comes from the filesystem and in-memory
-        staging.
+        responsibility. There is no database — all state comes from the filesystem and the shadow copy.
     </p>
 
     <h3>App Factory</h3>
@@ -27,7 +26,7 @@
         helper functions rather than importing service instances directly:
     </p>
 
-    <pre><code>from .helpers import get_service, get_staging_manager, get_backup_manager, get_server_config</code></pre>
+    <pre><code>from .helpers import get_service, get_shadow_manager, get_backup_manager, get_server_config</code></pre>
 
     <p>
         This pattern keeps service creation centralized and makes testing easier — you can
@@ -77,15 +76,15 @@
             <rect x="58" y="267" width="64" height="14" rx="3" fill="rgba(255, 193, 7, 0.15)" stroke="rgba(255, 193, 7, 0.3)"/>
             <text x="90" y="277" text-anchor="middle" fill="#ffb74d" font-family="Inter, sans-serif" font-size="9">mp.Lock</text>
 
-            <!-- StagingManager -->
+            <!-- ShadowCopyManager -->
             <rect x="238" y="182" width="170" height="100" rx="5" fill="#2d2d2d" stroke="#404040"/>
             <rect x="238" y="182" width="170" height="28" rx="5" fill="#333" stroke="#404040"/>
-            <text x="323" y="201" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="12" font-weight="600">StagingManager</text>
-            <text x="323" y="224" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">Staging state</text>
+            <text x="323" y="201" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="12" font-weight="600">ShadowCopyManager</text>
+            <text x="323" y="224" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">Shadow copy lifecycle</text>
             <text x="323" y="241" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">Session locks</text>
-            <text x="323" y="258" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">Undo stack</text>
+            <text x="323" y="258" text-anchor="middle" fill="#888" font-family="Inter, sans-serif" font-size="11">File-level undo</text>
             <rect x="246" y="267" width="80" height="14" rx="3" fill="rgba(56, 139, 253, 0.15)" stroke="rgba(56, 139, 253, 0.3)"/>
-            <text x="286" y="277" text-anchor="middle" fill="#64b5f6" font-family="Inter, sans-serif" font-size="9">Atomic write</text>
+            <text x="286" y="277" text-anchor="middle" fill="#64b5f6" font-family="Inter, sans-serif" font-size="9">mp.Lock</text>
 
             <!-- GitService -->
             <rect x="426" y="182" width="170" height="100" rx="5" fill="#2d2d2d" stroke="#404040"/>
@@ -119,7 +118,7 @@
 
             <!-- Filesystem layer -->
             <rect x="60" y="312" width="900" height="46" rx="5" fill="#252525" stroke="#333"/>
-            <text x="200" y="340" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="12">staging.json</text>
+            <text x="200" y="340" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="12">shadow copy/</text>
             <text x="400" y="340" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="12">*.cfg files</text>
             <text x="600" y="340" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="12">.git/</text>
             <text x="800" y="340" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="12">backups/*.zip</text>
@@ -135,8 +134,8 @@
     </p>
 
     <ul>
-        <li><strong>NagiosService</strong> — CRUD operations on Nagios objects, apply phases, parser access</li>
-        <li><strong>StagingManager</strong> — Staging state, session locks, undo stack, conflict detection</li>
+        <li><strong>NagiosService</strong> — CRUD operations on Nagios objects, parser access</li>
+        <li><strong>ShadowCopyManager</strong> — Shadow copy lifecycle, session locks, file-level undo, apply/destroy</li>
         <li><strong>GitService</strong> — Git subprocess wrapper with retry logic and identity injection</li>
         <li><strong>BackupManager</strong> — Zip backup creation, restore, cleanup</li>
         <li><strong>ServerConfig</strong> — Configuration loading, saving, and environment overrides</li>
@@ -187,7 +186,7 @@ return jsonify({'success': True, 'data': result.data})</code></pre>
     <ul>
         <li><strong>NagiosService</strong> — Lock held for all mutation operations (create, update, delete, move)</li>
         <li><strong>GitService</strong> — Lock held for multi-step mutations (add + commit must be atomic)</li>
-        <li><strong>StagingManager</strong> — Uses atomic file writes (temp file + <code>os.replace()</code>) instead of locks</li>
+        <li><strong>ShadowCopyManager</strong> — Lock held for shadow lifecycle operations (create, apply, destroy)</li>
     </ul>
 
     <div class="docs-note">
@@ -278,11 +277,11 @@ return jsonify({'success': True, 'data': result.data})</code></pre>
             </tr>
             <tr>
                 <td><code>nagios_service.py</code></td>
-                <td>CRUD operations on objects, apply phases for staging</td>
+                <td>CRUD operations on objects, parser access</td>
             </tr>
             <tr>
-                <td><code>staging_manager.py</code></td>
-                <td>Staging state management, session locks, undo stack</td>
+                <td><code>shadow_copy_manager.py</code></td>
+                <td>Shadow copy lifecycle, session locks, file-level undo, apply/destroy</td>
             </tr>
             <tr>
                 <td><code>backup_manager.py</code></td>
