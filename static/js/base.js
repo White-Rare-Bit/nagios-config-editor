@@ -10,6 +10,7 @@ import { showToast, showConfirmDialog } from './ui-notifications.js';
 import { ApiClient } from './api-client.js';
 import { closeGitResultPanel } from './git-ui.js';
 import { handleCommitClick, closeGlobalCommitDialog } from './commit-dialog.js';
+import { checkLockStatus, breakLock } from './lock-manager.js';
 
 let explorerCallbacks = null;
 
@@ -262,6 +263,18 @@ export function checkIdentityRequired() {
 }
 
 // =============================================================================
+// Polling
+// =============================================================================
+
+function startLockPoll() {
+    if (baseState.lockPollInterval) { return; }
+    baseState.lockPollInterval = setInterval(async () => {
+        await checkLockStatus();
+        await checkPendingChanges();
+    }, 5000);
+}
+
+// =============================================================================
 // Initialization
 // =============================================================================
 
@@ -275,6 +288,7 @@ export const actionHandlers = {
     'show-shortcuts': showKeyboardShortcuts,
     'close-shortcuts': closeKeyboardShortcuts,
     'reload-config': reloadConfig,
+    'break-lock': breakLock,
     'close-git-result': closeGitResultPanel,
     'close-toast': (e) => e.target.closest('.toast')?.remove()
 };
@@ -282,6 +296,8 @@ export const actionHandlers = {
 document.addEventListener('DOMContentLoaded', () => {
     // Always check for pending changes and update commit button
     checkPendingChanges();
+    checkLockStatus();
+    startLockPoll();
 
     // Check identity - if not set, show popup (but don't block the above checks)
     checkIdentityRequired();

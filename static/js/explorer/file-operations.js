@@ -10,7 +10,8 @@ import { constants, isObjectTemplate, getTypeBadge, getTypeBadgeTier } from './c
 import { getObjectKey, findObjectByKey, getSelectedIndices, groupByType, getConfigRootName } from './main.js';
 import { isSelectedByIndex, clearSelection, addToSelectionByIndex, removeFromSelectionByIndex } from './state-management.js';
 import { afterFrontendMutation, loadObjects, getStagingHeaders } from './data-loading.js'; // circular — safe (function-level)
-import { showCenterPaneObject, hideCenterPaneObject, checkForChanges, getEffectiveAttributes, getEffectiveName } from './object-editor.js'; // circular — safe (function-level)
+import { showCenterPaneObject, hideCenterPaneObject, checkForChanges } from './object-editor.js'; // circular — safe (function-level)
+import { getEffectiveAttributes, getEffectiveName } from './app.js'; // circular — safe (function-level)
 import { openTab } from './tab-manager.js'; // circular — safe (function-level)
 import { getIcon, handleApiError, toRelativePath, toDisplayPath, extractFileName, updateBadge } from './ui-utils.js';
 import { refreshPanelTiers } from './panel-resizer.js';
@@ -112,11 +113,6 @@ export function selectObjectByName(name) {
     if (obj) {
         navigateToObjectByIndex(obj.global_index);
     }
-}
-
-function selectObjectByIndex(index) {
-    clearSelection();
-    addToSelectionByIndex(index);
 }
 
 // ============================================================================

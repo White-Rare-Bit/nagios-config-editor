@@ -11,7 +11,8 @@ import { isSelectedByIndex, clearSelection } from './state-management.js';
 import { selectObjectByIndex, updateSelection, switchRightTab, getNameFieldForObject } from './app.js'; // circular — safe (function-level)
 import { findDependencies, stageObjectDeletions } from './dialogs.js'; // circular — safe (function-level)
 import { afterFrontendMutation } from './data-loading.js'; // circular — safe (function-level)
-import { showCenterPaneObject, loadImpactAndRelationships } from './object-editor.js'; // circular — safe (function-level)
+import { showCenterPaneObject } from './object-editor.js'; // circular — safe (function-level)
+import { loadImpactAndRelationships } from './impact-section.js'; // circular — safe (function-level)
 import { cleanupDragState } from './drag-drop.js';
 import { ApiClient } from '../api-client.js';
 import { showToast } from '../ui-notifications.js';

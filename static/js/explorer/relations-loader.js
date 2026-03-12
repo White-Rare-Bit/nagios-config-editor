@@ -7,7 +7,7 @@
  */
 
 import { state } from './state.js';
-import { getEffectiveAttributes, getEffectiveName } from './object-editor.js'; // circular — safe (function-level)
+import { getEffectiveAttributes, getEffectiveName } from './app.js'; // circular — safe (function-level)
 import { isObjectTemplate } from './constants.js';
 import { parseCommaValues } from './main.js';
 

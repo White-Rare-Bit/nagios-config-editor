@@ -13,6 +13,13 @@
 // =============================================================================
 
 export const baseState = {
+    // Lock status
+    isEditingLocked: false,
+    lockOwner: null,
+    lockUserName: null,
+    lockUserEmail: null,
+    lockPollInterval: null,
+
     // Commit dialog
     commitContextLines: 3,
     diffData: null,

@@ -11,11 +11,13 @@ import { getIcon, handleApiError, toRelativePath, toDisplayPath, extractFileName
 import { loadImpactAndRelationships } from './impact-section.js'; // circular — safe (function-level)
 import { computeStagedIssues, refreshCenterPaneIssueBadge } from './badge-issues.js'; // circular — safe (function-level)
 import { showDialog, closeDialog } from './context-menu.js'; // circular — safe (function-level)
-import { getObjectIssue, getHostListInfo, getIssueShortLabel, getIssueIcon, getObjectTypeIcon } from './app.js'; // circular — safe (function-level)
+import { getNewObjectNameField, stageNewObjectChanges } from './dialogs.js'; // circular — safe (function-level)
+import { getObjectIssue, getHostListInfo, getIssueShortLabel, getIssueIcon, getObjectTypeIcon, getNameFieldForObject, hideAutocompleteDropdown, handleAutocompleteKeyNav, refreshRelatedSections, getEffectiveName } from './app.js'; // circular — safe (function-level)
 import { ApiClient } from '../api-client.js';
 import { showToast, showConfirmDialog } from '../ui-notifications.js';
-import { escapeHtml } from '../app.js';
+import { escapeHtml, copyToClipboard } from '../app.js';
 import { DebugLogger, escapeJs } from '../base.js';
+import { baseState } from '../base-state.js';
 import { StableKey } from '../stable-key.js';
 
 const identityFields = constants.identityFields;

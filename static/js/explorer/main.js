@@ -7,12 +7,15 @@
 
 import { state } from './state.js';
 import { StableKey } from '../stable-key.js';
-import { escapeHtml, escapeJs } from '../app.js';
+import { escapeHtml } from '../app.js';
+import { escapeJs } from '../base.js';
 import { DebugLogger, registerExplorerCallbacks } from '../base.js';
+import { registerLockChangeCallback } from '../lock-manager.js';
 import { getSessionId } from '../session-manager.js';
 import { actionHandlers } from './action-registry.js';
 import { undoLastAction, getTotalStagedCount, getUndoCount, loadObjects } from './data-loading.js';
 import { buildTree } from './app.js'; // circular — safe (function-level)
+import { renderCenterAttributes } from './object-editor.js'; // circular — safe (function-level)
 import { initPanelResizer } from './panel-resizer.js';
 
 // Re-export escapeHtml/escapeJs for explorer modules that import them from main.js
@@ -149,6 +152,7 @@ function initEventDelegation() {
 
 // Register callbacks for base.js (undo/commit button updates)
 registerExplorerCallbacks({ undoLastAction, getTotalStagedCount, getUndoCount, buildTree });
+registerLockChangeCallback(renderCenterAttributes);
 
 /**
  * Initialize the explorer with config path.

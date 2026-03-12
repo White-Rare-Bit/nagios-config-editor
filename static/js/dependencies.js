@@ -5,6 +5,9 @@
  */
 
 import { DepsConfig } from './dependencies-config.js';
+import { ApiClient } from './api-client.js';
+import { escapeHtml } from './app.js';
+import { showToast } from './ui-notifications.js';
 
 // Import configuration from dependencies-config.js
 const {
