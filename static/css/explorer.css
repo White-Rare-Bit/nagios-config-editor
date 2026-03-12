@@ -890,13 +890,14 @@
     border-left: 3px solid var(--nbe-dark-accent-primary);
 }
 
-.tree-item.staged {
-    opacity: 0.8;
+.tree-item.staged,
+.tree-item.is-changed {
     background: var(--nbe-dark-warning-bg);
     border-left: 3px solid var(--nbe-dark-accent-warning);
 }
 
-.tree-item.staged.selected {
+.tree-item.staged.selected,
+.tree-item.is-changed.selected {
     background: var(--nbe-dark-validation-warning-border);
 }
 
@@ -1924,6 +1925,11 @@
 .workspace-object-row.staged-creation {
     background: var(--nbe-dark-validation-warning-bg);
     border-left-color: var(--nbe-warning);
+}
+
+.workspace-object-row.is-changed {
+    background: var(--nbe-dark-validation-warning-bg);
+    border-left: 3px solid var(--nbe-dark-accent-warning);
 }
 
 .workspace-object-row.dragging {

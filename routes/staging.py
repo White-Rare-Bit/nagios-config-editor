@@ -144,10 +144,12 @@ def api_get_staging_info():
             "success": True,
             "data": {"totalCount": 0, "undoCount": 0, "changedFiles": 0},
         })
+    changed_keys = sm.get_changed_object_keys()
     return jsonify({
         "success": True,
         "data": {
-            "totalCount": sm.get_changed_object_count(),
+            "totalCount": len(changed_keys),
+            "changedObjectKeys": changed_keys,
             "undoCount": sm.get_undo_count(),
             "changedFiles": len(sm.get_changed_files()),
         },

@@ -55,6 +55,9 @@ export const state = {
     // Map of relative path -> status ('added'|'modified'|'deleted')
     changedFilesMap: new Map(),
 
+    // Changed object stable keys (from /api/staging/info)
+    changedObjectKeys: new Set(),
+
     // Config
     configPath: '',
 

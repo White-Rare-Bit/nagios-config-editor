@@ -481,17 +481,20 @@ class ShadowCopyManager:
 
         return {"diff_text": "".join(result_lines)}
 
-    def get_changed_object_count(self) -> int:
-        """Count the number of changed Nagios objects between shadow and original.
+    def get_changed_object_keys(self) -> list[str]:
+        """Return stable keys of all changed Nagios objects between shadow and original.
 
         Parses both directories and compares objects by stable key.
 
         Returns:
-            Number of added, modified, or deleted objects
+            List of stable keys for added, modified, or deleted objects
 
         """
         from nagios_parser import NagiosConfigParser
         from stable_keys import generate_stable_key
+
+        if not self.has_shadow():
+            return []
 
         def _build_object_map(config_path: str) -> dict[str, dict]:
             parser = NagiosConfigParser(config_path)
@@ -506,17 +509,18 @@ class ShadowCopyManager:
         orig_map = _build_object_map(self.config_path)
         shadow_map = _build_object_map(self._config_dir)
 
-        count = 0
-        # Added objects
-        count += len(shadow_map.keys() - orig_map.keys())
-        # Deleted objects
-        count += len(orig_map.keys() - shadow_map.keys())
-        # Modified objects
-        for key in orig_map.keys() & shadow_map.keys():
+        changed = []
+        changed.extend(sorted(shadow_map.keys() - orig_map.keys()))
+        changed.extend(sorted(orig_map.keys() - shadow_map.keys()))
+        for key in sorted(orig_map.keys() & shadow_map.keys()):
             if orig_map[key] != shadow_map[key]:
-                count += 1
+                changed.append(key)
 
-        return count
+        return changed
+
+    def get_changed_object_count(self) -> int:
+        """Count the number of changed Nagios objects between shadow and original."""
+        return len(self.get_changed_object_keys())
 
     # =========================================================================
     # Conflict Detection

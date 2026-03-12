@@ -154,6 +154,9 @@ export async function updateBadges() {
         const info = infoResult.data.data || infoResult.data;
         let count = info.totalCount || 0;
 
+        // Update object-level change tracking
+        state.changedObjectKeys = new Set(info.changedObjectKeys || []);
+
         updateUndoButton(info.undoCount || 0);
 
         // If no shadow changes, check git for external changes
@@ -190,9 +193,8 @@ export async function loadChangedFiles() {
  * @param {Object} options - Passed through to rebuildUI
  */
 export async function afterFrontendMutation(options = {}) {
-    await Promise.all([loadObjects(), loadChangedFiles()]);
+    await Promise.all([loadObjects(), loadChangedFiles(), updateBadges()]);
     rebuildUI(options);
-    updateBadges();
     triggerAnalysisUpdate();
 }
 
@@ -203,9 +205,8 @@ export async function afterFrontendMutation(options = {}) {
  * @param {Object} options - Passed through to rebuildUI
  */
 export async function afterServerSync(options = {}) {
-    await loadChangedFiles();
+    await Promise.all([loadChangedFiles(), updateBadges()]);
     rebuildUI(options);
-    updateBadges();
     triggerAnalysisUpdate();
 }
 

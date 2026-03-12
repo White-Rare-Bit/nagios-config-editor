@@ -20,7 +20,7 @@ import { initTargetPane, renderTargetPane, navigateToObjectByIndex } from './fil
 import { loadImpactAndRelationships } from './impact-section.js'; // circular — safe (function-level)
 import { cleanupDragState } from './drag-drop.js';
 import { refreshPanelTiers } from './panel-resizer.js';
-import { switchTabs, getIcon } from './ui-utils.js';
+import { switchTabs, getIcon, toRelativePath } from './ui-utils.js';
 import { escapeHtml } from '../app.js';
 import { escapeJs } from '../base.js';
 import { showToast } from '../ui-notifications.js';
@@ -442,6 +442,17 @@ export function buildTypeTree(container, objects) {
         `}).join('');
 }
 
+/**
+ * Check if an object has changed vs the original config (using relative-path stable keys).
+ */
+function isObjectChanged(obj) {
+    if (state.changedObjectKeys.size === 0) { return false; }
+    const relPath = toRelativePath(obj.source_file);
+    const name = obj.display_name ?? obj.name ?? ('idx:' + obj.global_index);
+    const relKey = relPath + '|' + obj.object_type + '|' + name;
+    return state.changedObjectKeys.has(relKey);
+}
+
 export function renderTreeItem(obj, showType = false) {
     const selected = isSelectedByIndex(obj.global_index) ? 'selected' : '';
     const isTemplate = isTreeItemTemplate(obj);
@@ -449,6 +460,7 @@ export function renderTreeItem(obj, showType = false) {
     const hostListInfo = getHostListInfo(obj);
     const issue = getObjectIssue(obj);
     const orphanClass = isOrphan ? 'is-orphan' : '';
+    const changedClass = isObjectChanged(obj) ? 'is-changed' : '';
     const longListClass = hostListInfo.shouldGroup ? 'has-long-list' : '';
     const typeLabel = getTypeBadge(obj.object_type, isTemplate);
     const badgeCompact = getTypeBadgeTier(obj.object_type, isTemplate, 'compact');
@@ -458,7 +470,7 @@ export function renderTreeItem(obj, showType = false) {
     const displayName = obj.display_name || obj.name || '(unnamed)';
 
     return `
-        <div class="tree-item ${selected} ${orphanClass} ${longListClass}"
+        <div class="tree-item ${selected} ${orphanClass} ${changedClass} ${longListClass}"
              data-index="${obj.global_index}"
              draggable="true"
              onclick="Explorer.handleItemClick(event, ${obj.global_index})"
