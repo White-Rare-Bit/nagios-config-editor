@@ -1,7 +1,7 @@
 /**
  * Stable key format: "source_file|object_type|name"
  *
- * This format is shared with the backend (staging_manager.py).
+ * This format is shared with the backend (stable_keys.py).
  * Any change here MUST be coordinated with the backend.
  */
 
