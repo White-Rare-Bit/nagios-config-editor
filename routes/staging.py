@@ -159,41 +159,49 @@ def api_apply_staging():
     """Apply all staged changes to disk."""
     sm = get_shadow_manager()
     bm = get_backup_manager()
+    force = request.args.get("force", "").lower() == "true"
 
     # Get lock info for audit before apply destroys it
     lock_status = sm.get_lock_status() if sm.has_shadow() else {}
     user_name = lock_status.get("user_name", "")
     user_email = lock_status.get("user_email", "")
 
-    result = sm.apply(backup_manager=bm)
-    if result.success:
-        # Reload service to pick up applied changes (now on original config)
-        service = get_service()
-        service.config_path = sm.config_path
-        service.reload()
+    result = sm.apply(backup_manager=bm, force=force)
 
-        # Audit log
-        changed = result.data.get("changed_files", []) if result.data else []
-        if changed:
-            txn = uuid.uuid4().hex[:8]
-            user = format_audit_user(name=user_name, email=user_email)
-            log_audit(
-                action="apply",
-                user=user,
-                txn=txn,
-                files_changed=len(changed),
-            )
+    if not result.success:
+        if result.error == "conflicts":
+            return jsonify({
+                "success": False,
+                "error": "conflicts",
+                "conflicts": result.data["conflicts"],
+            }), 409
+        return jsonify({"success": False, "error": result.error}), 500
 
-        # Post-apply validation
-        validation = _run_post_apply_validation()
+    # Reload service to pick up applied changes (now on original config)
+    service = get_service()
+    service.config_path = sm.config_path
+    service.reload()
 
-        return jsonify({
-            "success": True,
-            "data": result.data,
-            "validation": validation,
-        })
+    # Audit log
+    changed = result.data.get("changed_files", []) if result.data else []
+    if changed:
+        txn = uuid.uuid4().hex[:8]
+        user = format_audit_user(name=user_name, email=user_email)
+        log_audit(
+            action="apply",
+            user=user,
+            txn=txn,
+            files_changed=len(changed),
+        )
 
-    return jsonify({"success": False, "error": result.error}), 500
+    # Post-apply validation
+    validation = _run_post_apply_validation()
+
+    return jsonify({
+        "success": True,
+        "data": result.data,
+        "validation": validation,
+    })
 
 
 @bp.route("/api/staging/undo", methods=["POST"])
