@@ -12,12 +12,20 @@ import { showToast, showConfirmDialog } from './ui-notifications.js';
 import { getSessionId } from './session-manager.js';
 
 let explorerRenderCallback = null;
+let explorerReloadCallback = null;
 
 /**
  * Register a callback for re-rendering the center pane when lock state changes.
  */
 export function registerLockChangeCallback(callback) {
     explorerRenderCallback = callback;
+}
+
+/**
+ * Register a callback for fully reloading explorer data (after lock break).
+ */
+export function registerLockBreakCallback(callback) {
+    explorerReloadCallback = callback;
 }
 
 /**
@@ -99,6 +107,7 @@ export async function breakLock() {
         baseState.lockUserName = null;
         baseState.lockUserEmail = null;
         updateLockBannerUI();
+        if (explorerReloadCallback) { explorerReloadCallback(); }
         showToast('Lock broken - staging cleared', 'success');
     } else {
         showToast(result.data?.error || result.error || 'Failed to break lock', 'error');

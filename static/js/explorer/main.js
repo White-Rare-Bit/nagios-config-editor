@@ -10,10 +10,10 @@ import { StableKey } from '../stable-key.js';
 import { escapeHtml } from '../app.js';
 import { escapeJs } from '../base.js';
 import { DebugLogger, registerExplorerCallbacks } from '../base.js';
-import { registerLockChangeCallback } from '../lock-manager.js';
+import { registerLockChangeCallback, registerLockBreakCallback } from '../lock-manager.js';
 import { getSessionId } from '../session-manager.js';
 import { actionHandlers } from './action-registry.js';
-import { undoLastAction, getTotalStagedCount, getUndoCount, loadObjects } from './data-loading.js';
+import { undoLastAction, getTotalStagedCount, getUndoCount, loadObjects, afterServerSync } from './data-loading.js';
 import { buildTree } from './app.js'; // circular — safe (function-level)
 import { renderCenterAttributes } from './object-editor.js'; // circular — safe (function-level)
 import { initPanelResizer } from './panel-resizer.js';
@@ -153,6 +153,7 @@ function initEventDelegation() {
 // Register callbacks for base.js (undo/commit button updates)
 registerExplorerCallbacks({ undoLastAction, getTotalStagedCount, getUndoCount, buildTree });
 registerLockChangeCallback(renderCenterAttributes);
+registerLockBreakCallback(() => afterServerSync());
 
 /**
  * Initialize the explorer with config path.

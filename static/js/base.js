@@ -219,7 +219,7 @@ export async function checkPendingChanges() {
     const infoResult = await ApiClient.get('/api/staging/info', { silent: true });
 
     if (infoResult.success) {
-        const info = infoResult.data;
+        const info = infoResult.data.data || infoResult.data;
         let count = info.totalCount || 0;
         updateUndoButton(info.undoCount || 0);
 
