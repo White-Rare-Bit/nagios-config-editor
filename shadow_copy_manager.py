@@ -519,17 +519,47 @@ class ShadowCopyManager:
         return count
 
     # =========================================================================
+    # Conflict Detection
+    # =========================================================================
+
+    def _detect_conflicts(self) -> list[str]:
+        """Compare current originals against stored checksums.
+
+        Returns:
+            List of relative paths that have changed externally.
+            Empty list if checksums.json doesn't exist (backward compat).
+        """
+        if not os.path.isfile(self._checksums_file):
+            return []
+
+        with open(self._checksums_file, encoding="utf-8") as f:
+            stored = json.load(f)
+
+        current = self._hash_cfg_files(self.config_path)
+        conflicts = []
+        for rel_path, original_hash in stored.items():
+            current_hash = current.get(rel_path)
+            if current_hash is None:
+                # File was deleted externally
+                conflicts.append(rel_path)
+            elif current_hash != original_hash:
+                conflicts.append(rel_path)
+        return conflicts
+
+    # =========================================================================
     # Apply
     # =========================================================================
 
-    def apply(self, backup_manager=None) -> OperationResult:
+    def apply(self, backup_manager=None, force: bool = False) -> OperationResult:
         """Apply shadow changes back to the original config directory.
 
+        Checks for external modifications first (unless force=True).
         Copies changed files from shadow to original, removes deleted files,
         then destroys the shadow copy.
 
         Args:
             backup_manager: Optional BackupManager to create pre-apply backup
+            force: If True, skip conflict detection and overwrite
 
         Returns:
             OperationResult with data={'changed_files': [...]} on success
@@ -541,6 +571,16 @@ class ShadowCopyManager:
                 return OperationResult(success=True, data={"changed_files": []})
 
             try:
+                # Check for external modifications unless force-applying
+                if not force:
+                    conflicts = self._detect_conflicts()
+                    if conflicts:
+                        return OperationResult(
+                            success=False,
+                            error="conflicts",
+                            data={"conflicts": conflicts},
+                        )
+
                 changed = self.get_changed_files()
 
                 # Create backup before applying if manager provided and there are changes

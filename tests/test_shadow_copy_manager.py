@@ -405,6 +405,92 @@ class TestDiffComputation:
         assert count >= 1
 
 
+class TestConflictDetection:
+    def test_apply_detects_external_modification(self, setup_dirs):
+        """apply() should fail when original files changed since shadow creation."""
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+
+        # User's edit in shadow
+        with open(scm.shadow_path("hosts.cfg"), "w") as f:
+            f.write("define host {\n    host_name edited\n}\n")
+
+        # External modification to original
+        with open(os.path.join(config_dir, "hosts.cfg"), "w") as f:
+            f.write("define host {\n    host_name external-change\n}\n")
+
+        result = scm.apply()
+        assert not result.success
+        assert result.error == "conflicts"
+        assert "hosts.cfg" in result.data["conflicts"]
+
+    def test_apply_succeeds_when_no_conflicts(self, setup_dirs):
+        """apply() should succeed when originals are unchanged."""
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+
+        with open(scm.shadow_path("hosts.cfg"), "w") as f:
+            f.write("define host {\n    host_name edited\n}\n")
+
+        result = scm.apply()
+        assert result.success
+
+    def test_apply_force_overrides_conflicts(self, setup_dirs):
+        """apply(force=True) should overwrite despite conflicts."""
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+
+        with open(scm.shadow_path("hosts.cfg"), "w") as f:
+            f.write("define host {\n    host_name edited\n}\n")
+
+        # External modification
+        with open(os.path.join(config_dir, "hosts.cfg"), "w") as f:
+            f.write("define host {\n    host_name external\n}\n")
+
+        result = scm.apply(force=True)
+        assert result.success
+        with open(os.path.join(config_dir, "hosts.cfg")) as f:
+            assert "edited" in f.read()
+
+    def test_apply_detects_externally_deleted_file(self, setup_dirs):
+        """apply() should detect when an original file was deleted externally."""
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+
+        # External deletion
+        os.remove(os.path.join(config_dir, "hosts.cfg"))
+
+        result = scm.apply()
+        assert not result.success
+        assert result.error == "conflicts"
+        assert "hosts.cfg" in result.data["conflicts"]
+
+    def test_apply_skips_check_when_no_checksums_file(self, setup_dirs):
+        """apply() should succeed without checksums.json (backward compat)."""
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+
+        # Remove checksums.json to simulate old shadow
+        checksums_path = os.path.join(shadow_base, "checksums.json")
+        if os.path.exists(checksums_path):
+            os.remove(checksums_path)
+
+        with open(scm.shadow_path("hosts.cfg"), "w") as f:
+            f.write("modified\n")
+
+        # Externally modify original — should NOT be detected
+        with open(os.path.join(config_dir, "hosts.cfg"), "w") as f:
+            f.write("external\n")
+
+        result = scm.apply()
+        assert result.success
+
+
 class TestApply:
     def test_apply_copies_modified_files(self, setup_dirs):
         config_dir, shadow_base = setup_dirs
