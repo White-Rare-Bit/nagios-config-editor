@@ -1,7 +1,7 @@
 /** Explorer Context Menu Module - Context menus, bulk actions, preview, drag-drop from tree
  *
  * Shadow copy architecture: all mutations go directly to the server via API calls.
- * No local pendingEdits/stagedMoves/stagedCreations — the shadow copy IS the edited state.
+ * All mutations go to the server via API. The shadow copy IS the edited state.
  */
 
 import { state } from './state.js';

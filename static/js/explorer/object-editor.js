@@ -262,7 +262,7 @@ export function syncCenterPaneAfterUndo() {
         return;
     }
 
-    // For existing objects, sync attributes with current pendingEdits state
+    // For existing objects, sync attributes with current server state
     const objKey = getObjectKey(state.editedObject);
     if (!objKey) {return;}
 
