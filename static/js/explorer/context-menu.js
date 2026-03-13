@@ -467,30 +467,30 @@ export async function applyMove() {
         }
     }
 
-    let moved = 0;
+    const stableKeys = [];
     for (const idx of getSelectedIndices()) {
         const obj = state.allObjects.find(o => o.global_index === idx);
         if (!obj || obj.source_file === targetFile) {continue;}
-
-        const result = await ApiClient.post('/api/objects/move', {
-            stable_key: getObjectKey(obj),
-            target_file: targetFile
-        }, { silent: true });
-
-        if (result.success) {
-            moved++;
-        } else {
-            showToast(result.error || `Failed to move ${obj.display_name || obj.name}`, 'error');
-        }
+        stableKeys.push(getObjectKey(obj));
     }
+
+    if (stableKeys.length === 0) {
+        showToast('No objects to move', 'info');
+        return;
+    }
+
+    const result = await ApiClient.post('/api/move-objects', {
+        stable_keys: stableKeys,
+        target_file: targetFile
+    }, { silent: true });
 
     await afterFrontendMutation();
     closeDialog();
 
-    if (moved > 0) {
-        showToast(`Moved ${moved} object(s) to ${targetFile.split('/').pop()}`, 'success');
+    if (result.success && result.data?.moved > 0) {
+        showToast(`Moved ${result.data.moved} object(s) to ${targetFile.split('/').pop()}`, 'success');
     } else {
-        showToast('No objects moved', 'info');
+        showToast(result.error || result.data?.error || 'No objects moved', result.success ? 'info' : 'error');
     }
 }
 
