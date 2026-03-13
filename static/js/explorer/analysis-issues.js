@@ -359,39 +359,33 @@ export function createAllMissing(groupType) {
 export async function executeBatchCreate(groups, targetFile) {
     closeDialog();
 
-    let created = 0;
-    let failed = 0;
-
-    for (const group of groups) {
+    const operations = groups.map(group => {
         const issue = group.firstIssue;
         const isTemplate = issue.type === 'missing_template';
         const objectType = isTemplate ? issue.object_type : group.objectType;
-
-        const attributes = buildDefaultAttributes(objectType, group.missingName, isTemplate);
-
-        const result = await ApiClient.post('/api/objects/create', {
-            source_file: targetFile,
+        return {
+            action: 'create',
+            target_file: targetFile,
             object_type: objectType,
-            attributes: attributes
-        }, { silent: true });
+            attributes: buildDefaultAttributes(objectType, group.missingName, isTemplate)
+        };
+    });
 
-        if (result.success) {
-            created++;
-        } else {
-            failed++;
-            console.error('Failed to create:', group.missingName, result.error);
-        }
-    }
+    const result = await ApiClient.post('/api/batch-mutations', {
+        description: `create ${operations.length} missing objects`,
+        operations
+    }, { silent: true });
 
-    // Refresh UI
     state.healthCheckData = null;
     await afterFrontendMutation();
     loadIssues();
 
-    if (failed === 0) {
-        showToast(`Created ${created} new object${created !== 1 ? 's' : ''}`, 'success');
+    const completed = result.data?.completed || 0;
+    const errors = result.data?.errors || [];
+    if (errors.length === 0) {
+        showToast(`Created ${completed} new object${completed !== 1 ? 's' : ''}`, 'success');
     } else {
-        showToast(`Created ${created} objects, ${failed} failed`, 'warning');
+        showToast(`Created ${completed} objects, ${errors.length} failed`, 'warning');
     }
 }
 
