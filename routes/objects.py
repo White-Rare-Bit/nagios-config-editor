@@ -224,8 +224,14 @@ def api_move_object():
     # Snapshot all affected files (source and target)
     files_to_snapshot = set()
     files_to_snapshot.add(os.path.relpath(obj.source_file, sm._config_dir))
-    files_to_snapshot.add(os.path.relpath(target_file, sm._config_dir))
-    sm.snapshot_files(list(files_to_snapshot), f"move {obj.object_type} {obj.get_display_name()}")
+    rel_target = os.path.relpath(target_file, sm._config_dir)
+    files_to_snapshot.add(rel_target)
+    moved_key = f"{rel_target}|{obj.object_type}|{obj.get_display_name()}"
+    sm.snapshot_files(
+        list(files_to_snapshot),
+        f"move {obj.object_type} {obj.get_display_name()}",
+        moved_keys=[moved_key],
+    )
 
     result = service.move_object(
         obj.source_file, obj.line_number, target_file,

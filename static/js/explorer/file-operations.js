@@ -646,23 +646,24 @@ export async function handleObjectDrop(event, targetFile, position) {
 
     const objects = parseDragObjects(event.dataTransfer.getData('text/plain'));
     if (!objects) {return;}
+    const valid = objects.filter(o => o?.source_file);
+    if (valid.length === 0) {return;}
+
+    const stableKeys = valid
+        .map(o => `${o.source_file}|${o.object_type}|${o.name ?? o.display_name ?? ''}`);
+
+    const payload = { stable_keys: stableKeys, target_file: targetFile };
+    if (position > 0) {payload.after_line = position;}
+
+    const result = await ApiClient.post('/api/move-objects', payload, { silent: true });
 
     let moved = 0;
-    for (const objData of objects) {
-        if (!objData?.source_file) {continue;}
-
-        const nameComponent = objData.name ?? objData.display_name ?? '';
-        const objKey = `${objData.source_file}|${objData.object_type}|${nameComponent}`;
-
-        // Single atomic move (create at target + delete original on server)
-        const result = await ApiClient.post('/api/objects/move', {
-            stable_key: objKey,
-            target_file: targetFile,
-            after_line: position > 0 ? position : null
-        }, { silent: true });
-        if (result.success) {
-            moved++;
-            migrateKeysAfterMove(objData.source_file, targetFile, objData.object_type, nameComponent);
+    if (result.success && result.data?.moved > 0) {
+        moved = result.data.moved;
+        for (const o of valid) {
+            if (o.source_file !== targetFile) {
+                migrateKeysAfterMove(o.source_file, targetFile, o.object_type, o.name ?? o.display_name ?? '');
+            }
         }
     }
 
@@ -728,33 +729,24 @@ export async function handleFileDrop(event, targetFile) {
     const objects = parseDragObjects(event.dataTransfer.getData('text/plain'));
     if (!objects) {return;}
 
-    let moved = 0;
-    for (const objData of objects) {
-        if (!objData?.source_file || objData.source_file === targetFile) {continue;}
+    const stableKeys = objects
+        .filter(o => o?.source_file && o.source_file !== targetFile)
+        .map(o => `${o.source_file}|${o.object_type}|${o.name ?? o.display_name ?? ''}`);
+    if (stableKeys.length === 0) {return;}
 
-        const nameComponent = objData.name ?? objData.display_name ?? '';
-        const objKey = `${objData.source_file}|${objData.object_type}|${nameComponent}`;
+    const result = await ApiClient.post('/api/move-objects', {
+        stable_keys: stableKeys,
+        target_file: targetFile
+    }, { silent: true });
 
-        const createResult = await ApiClient.post('/api/objects/create', {
-            target_file: targetFile,
-            object_type: objData.object_type,
-            attributes: objData.attributes
-        }, { silent: true });
-
-        if (createResult.success) {
-            const deleteResult = await ApiClient.post('/api/objects/delete', {
-                stable_key: objKey
-            }, { silent: true });
-            if (deleteResult.success) {
-                moved++;
-                migrateKeysAfterMove(objData.source_file, targetFile, objData.object_type, nameComponent);
+    if (result.success && result.data?.moved > 0) {
+        for (const o of objects) {
+            if (o?.source_file && o.source_file !== targetFile) {
+                migrateKeysAfterMove(o.source_file, targetFile, o.object_type, o.name ?? o.display_name ?? '');
             }
         }
-    }
-
-    if (moved > 0) {
         await afterFrontendMutation();
-        showToast(`Moved ${moved} object(s) to ${extractFileName(targetFile)}`, 'success');
+        showToast(`Moved ${result.data.moved} object(s) to ${extractFileName(targetFile)}`, 'success');
     }
 }
 
@@ -931,32 +923,26 @@ async function handleObjectsOnFolderDrop(data, targetFolder) {
     const targetFile = resolveTargetFileInFolder(targetFolder);
     if (!targetFile) {renderTargetPane(); return;}
 
-    let moved = 0;
-    for (const objData of objects) {
-        if (!objData?.source_file || objData.source_file === targetFile) {continue;}
+    const stableKeys = objects
+        .filter(o => o?.source_file && o.source_file !== targetFile)
+        .map(o => `${o.source_file}|${o.object_type}|${o.name ?? o.display_name ?? ''}`);
+    if (stableKeys.length === 0) {return;}
 
-        const nameComponent = objData.name ?? objData.display_name ?? '';
-        const objKey = `${objData.source_file}|${objData.object_type}|${nameComponent}`;
+    const result = await ApiClient.post('/api/move-objects', {
+        stable_keys: stableKeys,
+        target_file: targetFile
+    }, { silent: true });
 
-        const createResult = await ApiClient.post('/api/objects/create', {
-            target_file: targetFile,
-            object_type: objData.object_type,
-            attributes: objData.attributes
-        }, { silent: true });
-
-        if (createResult.success) {
-            const deleteResult = await ApiClient.post('/api/objects/delete', {
-                stable_key: objKey
-            }, { silent: true });
-            if (deleteResult.success) {moved++;}
+    if (result.success && result.data?.moved > 0) {
+        for (const o of objects) {
+            if (o?.source_file && o.source_file !== targetFile) {
+                migrateKeysAfterMove(o.source_file, targetFile, o.object_type, o.name ?? o.display_name ?? '');
+            }
         }
-    }
-
-    if (moved > 0) {
         state.expandedFiles.add(targetFile);
         state.expandedFolders.add(targetFolder);
         await afterFrontendMutation();
-        showToast(`Moved ${moved} object(s) to ${extractFileName(targetFile)}`, 'success');
+        showToast(`Moved ${result.data.moved} object(s) to ${extractFileName(targetFile)}`, 'success');
     }
 }
 

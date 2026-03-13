@@ -243,7 +243,12 @@ class ShadowCopyManager:
     # Undo snapshots
     # =========================================================================
 
-    def snapshot_files(self, file_paths: list[str], description: str) -> str:
+    def snapshot_files(
+        self,
+        file_paths: list[str],
+        description: str,
+        moved_keys: list[str] | None = None,
+    ) -> str:
         """Take a snapshot of files before mutation for undo support.
 
         For each relative path, copies the file from shadow config to a
@@ -253,6 +258,8 @@ class ShadowCopyManager:
         Args:
             file_paths: List of relative paths to snapshot
             description: Human-readable description of the operation
+            moved_keys: Optional stable keys of objects being moved (for
+                reorder highlighting). Uses relative paths.
 
         Returns:
             Snapshot UUID
@@ -277,11 +284,13 @@ class ShadowCopyManager:
                 file_records.append({"path": rel_path, "status": "absent"})
 
         # Write metadata
-        meta = {
+        meta: dict = {
             "description": description,
             "timestamp": time.time(),
             "files": file_records,
         }
+        if moved_keys:
+            meta["moved_keys"] = moved_keys
         with open(os.path.join(snapshot_dir, "meta.json"), "w", encoding="utf-8") as f:
             json.dump(meta, f)
 
@@ -485,9 +494,10 @@ class ShadowCopyManager:
         """Return stable keys of all changed Nagios objects between shadow and original.
 
         Parses both directories and compares objects by stable key.
+        Also includes moved keys recorded in snapshot metadata.
 
         Returns:
-            List of stable keys for added, modified, or deleted objects
+            List of stable keys for added, modified, deleted, or moved objects
 
         """
         from nagios_parser import NagiosConfigParser
@@ -515,6 +525,23 @@ class ShadowCopyManager:
         for key in sorted(orig_map.keys() & shadow_map.keys()):
             if orig_map[key] != shadow_map[key]:
                 changed.append(key)
+
+        # Include moved keys from snapshot metadata (tracks reorders)
+        changed_set = set(changed)
+        if os.path.isdir(self._snapshots_dir):
+            for snap_name in os.listdir(self._snapshots_dir):
+                meta_path = os.path.join(self._snapshots_dir, snap_name, "meta.json")
+                if not os.path.isfile(meta_path):
+                    continue
+                try:
+                    with open(meta_path, encoding="utf-8") as f:
+                        meta = json.load(f)
+                    for key in meta.get("moved_keys", []):
+                        if key not in changed_set:
+                            changed.append(key)
+                            changed_set.add(key)
+                except (OSError, json.JSONDecodeError):
+                    continue
 
         return changed
 

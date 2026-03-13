@@ -283,10 +283,12 @@ def api_move_objects():
     Expects JSON:
     - stable_keys: Array of stable keys to move
     - target_file: Destination file path
+    - after_line: (optional) Line number to insert after in target file
     """
     data = request.get_json() or {}
     stable_keys = data.get("stable_keys", [])
     target_file = data.get("target_file", "")
+    after_line = data.get("after_line")
 
     if not stable_keys:
         return jsonify({"error": "stable_keys required"}), 400
@@ -316,7 +318,8 @@ def api_move_objects():
             not_found.append(key)
             continue
         _, obj = found
-        if os.path.realpath(obj.source_file) == os.path.realpath(target_file):
+        # Skip same-file objects only when no position specified (no reorder)
+        if not after_line and os.path.realpath(obj.source_file) == os.path.realpath(target_file):
             skipped += 1
             continue
         to_move.append(obj)
@@ -331,14 +334,24 @@ def api_move_objects():
 
     # Snapshot all affected files
     affected_files = set()
-    affected_files.add(os.path.relpath(target_file, sm._config_dir))
+    rel_target = os.path.relpath(target_file, sm._config_dir)
+    affected_files.add(rel_target)
     for obj in to_move:
         affected_files.add(os.path.relpath(obj.source_file, sm._config_dir))
-    sm.snapshot_files(list(affected_files), f"bulk move {len(to_move)} objects")
+    moved_keys = [
+        f"{rel_target}|{obj.object_type}|{obj.get_display_name()}"
+        for obj in to_move
+    ]
+    sm.snapshot_files(
+        list(affected_files),
+        f"bulk move {len(to_move)} objects",
+        moved_keys=moved_keys,
+    )
 
     # Move each object using service.move_object (reloads after each)
     moved = 0
     errors = []
+    insert_pos = after_line
     for obj in to_move:
         # Re-find by stable key since reloads may shift state
         from stable_keys import generate_stable_key_for_object
@@ -352,9 +365,15 @@ def api_move_objects():
             current_obj.source_file, current_obj.line_number,
             target_file, current_obj.object_type,
             dict(current_obj.attributes),
+            insert_line=insert_pos,
         )
         if result.success:
             moved += 1
+            # Find the just-moved object so the next insert goes after it
+            if insert_pos is not None:
+                new_key = f"{target_file}|{current_obj.object_type}|{current_obj.get_display_name()}"
+                placed = service.find_object_by_stable_key(new_key)
+                insert_pos = placed[1].line_number if placed else None
         else:
             errors.append(result.error)
 

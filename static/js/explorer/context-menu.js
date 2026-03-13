@@ -964,32 +964,19 @@ export async function handleDrop(event, targetFile) {
 
     if (data.type !== 'objects' || !data.objects?.length) {return;}
 
-    let moved = 0;
-    for (const objData of data.objects) {
-        if (!objData?.source_file || objData.source_file === targetFile) {continue;}
+    const stableKeys = data.objects
+        .filter(o => o?.source_file && o.source_file !== targetFile)
+        .map(o => `${o.source_file}|${o.object_type}|${o.name ?? o.display_name ?? ''}`);
+    if (stableKeys.length === 0) {return;}
 
-        // Find the live object for its stable key
-        const nameComponent = objData.name ?? objData.display_name ?? '';
-        const objKey = `${objData.source_file}|${objData.object_type}|${nameComponent}`;
+    const result = await ApiClient.post('/api/move-objects', {
+        stable_keys: stableKeys,
+        target_file: targetFile
+    }, { silent: true });
 
-        // Move = create in target + delete from source
-        const createResult = await ApiClient.post('/api/objects/create', {
-            target_file: targetFile,
-            object_type: objData.object_type,
-            attributes: objData.attributes
-        }, { silent: true });
-
-        if (createResult.success) {
-            const deleteResult = await ApiClient.post('/api/objects/delete', {
-                stable_key: objKey
-            }, { silent: true });
-            if (deleteResult.success) {moved++;}
-        }
-    }
-
-    if (moved > 0) {
+    if (result.success && result.data?.moved > 0) {
         await afterFrontendMutation();
-        showToast(`Moved ${moved} object(s) to ${targetFile.split('/').pop()}`, 'success');
+        showToast(`Moved ${result.data.moved} object(s) to ${targetFile.split('/').pop()}`, 'success');
     }
 }
 
