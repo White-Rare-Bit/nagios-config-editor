@@ -1292,7 +1292,7 @@ export function openNewObjectInEditor(newObj, targetFile) {
     }
 }
 
-export function handleHostgroupServiceLink() {
+export async function handleHostgroupServiceLink() {
     // Called when a new hostgroup is saved that has a pending service link
     if (!state.pendingHostgroupServiceLink || !state.isNewObject || state.editedObject?.object_type !== 'hostgroup') {
         return;
@@ -1304,25 +1304,22 @@ export function handleHostgroupServiceLink() {
     const serviceKey = state.pendingHostgroupServiceLink.serviceKey;
     const suggestionIdx = state.pendingHostgroupServiceLink.suggestionIdx;
 
-    // Stage edit to update the service - remove host_name, add hostgroup_name
+    // Update the service via API — remove host_name, add hostgroup_name
     const serviceObj = state.allObjects.find(o => getObjectKey(o) === serviceKey);
     if (serviceObj) {
-        const existingEdit = state.pendingEdits.get(serviceKey);
-        const edit = existingEdit || {
-            original: { ...serviceObj.attributes },
-            edited: { ...serviceObj.attributes },
-            object: {
-                source_file: serviceObj.source_file,
-                line_number: serviceObj.line_number,
-                object_type: serviceObj.object_type,
-                display_name: serviceObj.display_name
-            }
-        };
-        delete edit.edited.host_name;
-        edit.edited.hostgroup_name = hostgroupName;
-        state.pendingEdits.set(serviceKey, edit);
+        const newAttrs = { ...serviceObj.attributes };
+        delete newAttrs.host_name;
+        newAttrs.hostgroup_name = hostgroupName;
 
-        showToast(`Service "${serviceObj.display_name}" will now use hostgroup "${hostgroupName}"`, 'success');
+        const result = await ApiClient.post('/api/objects/update', {
+            stable_key: serviceKey,
+            attributes: newAttrs
+        }, { silent: true });
+
+        if (result.success) {
+            showToast(`Service "${serviceObj.display_name}" will now use hostgroup "${hostgroupName}"`, 'success');
+            await afterFrontendMutation();
+        }
     }
 
     // Remove from cleanup suggestions
