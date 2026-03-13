@@ -559,7 +559,6 @@ export async function applyRename() {
 }
 
 export async function applyClone() {
-    // Check if this is a single clone (cloneNewName) or bulk clone (cloneSuffix)
     const newNameInput = document.getElementById('cloneNewName');
     const suffixInput = document.getElementById('cloneSuffix');
     const targetFileSelect = document.getElementById('cloneTargetFile');
@@ -571,7 +570,7 @@ export async function applyClone() {
         return;
     }
 
-    let clonedCount = 0;
+    const operations = [];
     for (const idx of getSelectedIndices()) {
         const obj = state.allObjects.find(o => o.global_index === idx);
         if (!obj) {continue;}
@@ -581,27 +580,29 @@ export async function applyClone() {
         const newName = isSingleClone ? newNameInput.value.trim() : currentName + suffix;
 
         const cloneTargetFile = (targetFileSelect && targetFileSelect.value) || obj.source_file;
-        const newAttrs = {...obj.attributes, [nameField]: newName};
-
-        const result = await ApiClient.post('/api/objects/create', {
+        operations.push({
+            action: 'create',
             target_file: cloneTargetFile,
             object_type: obj.object_type,
-            attributes: newAttrs
-        }, { silent: true });
-
-        if (result.success) {
-            clonedCount++;
-        } else {
-            showToast(result.error || `Failed to clone ${currentName}`, 'error');
-            if (isSingleClone) {return;} // Don't close dialog for single clone error
-        }
+            attributes: {...obj.attributes, [nameField]: newName}
+        });
     }
 
-    if (clonedCount === 0) {return;}
+    if (operations.length === 0) {return;}
+
+    const result = await ApiClient.post('/api/batch-mutations', {
+        description: `clone ${operations.length} objects`,
+        operations
+    }, { silent: true });
+
+    if (!result.success) {
+        showToast(result.error || 'Clone failed', 'error');
+        if (isSingleClone) {return;}
+    }
 
     await afterFrontendMutation();
     closeDialog();
-    showToast(`Cloned ${clonedCount} object(s)`, 'success');
+    showToast(`Cloned ${result.data?.completed || operations.length} object(s)`, 'success');
 }
 
 export function toggleNewFileInput() {
