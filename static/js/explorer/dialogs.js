@@ -780,15 +780,14 @@ export async function executeObjectDeletions(stagedCreationDeletedCount = 0) {
 // ============================================================================
 
 /**
- * Stage reference updates for a batch of renames, excluding renamed objects from
- * each other's reference scans. Uses Explorer.stageReferenceUpdates for individual
- * renames, but filters out co-renamed objects to avoid circular updates.
+ * Compute reference update operations for a batch of renames, excluding
+ * renamed objects from each other's reference scans.
  * @param {Array<{oldName: string, newName: string, key: string}>} renames
- * @returns {number} total reference objects updated
+ * @returns {Array} batch mutation operations
  */
-function stageBulkReferenceUpdates(renames) {
+function computeBulkReferenceUpdates(renames) {
     const allRenamedKeys = new Set(renames.map(r => r.key));
-    let totalRefUpdates = 0;
+    const refUpdates = new Map();
 
     for (const { oldName, newName } of renames) {
         const deps = findDependencies(oldName)
@@ -796,9 +795,8 @@ function stageBulkReferenceUpdates(renames) {
 
         for (const dep of deps) {
             const depKey = getObjectKey(dep.object);
-            const existingEdit = state.pendingEdits.get(depKey);
-            const originalAttrs = existingEdit ? existingEdit.original : {...dep.object.attributes};
-            const editedAttrs = existingEdit ? {...existingEdit.edited} : {...dep.object.attributes};
+            const existing = refUpdates.get(depKey);
+            const editedAttrs = existing ? {...existing.attributes} : {...dep.object.attributes};
             let changed = false;
 
             for (const fieldName of dep.fields) {
@@ -811,31 +809,21 @@ function stageBulkReferenceUpdates(renames) {
             }
 
             if (changed) {
-                state.pendingEdits.set(depKey, {
-                    original: originalAttrs,
-                    edited: editedAttrs,
-                    object: {
-                        source_file: dep.object.source_file,
-                        line_number: dep.object.line_number,
-                        object_type: dep.object.object_type,
-                        name: dep.object.name,
-                        display_name: dep.object.display_name
-                    }
+                refUpdates.set(depKey, {
+                    action: 'update',
+                    stable_key: depKey,
+                    attributes: editedAttrs
                 });
-                totalRefUpdates++;
             }
         }
     }
 
-    return totalRefUpdates;
+    return Array.from(refUpdates.values());
 }
 
-/**
- * Apply find/replace to each selected object's name field and stage the edits.
- * @returns {{renames: Array, centerPaneNeedsRefresh: boolean}}
- */
-function applyBulkRenameEdits(find, replace) {
+async function executeBulkRename(find, replace, shouldUpdateRefs) {
     const renames = [];
+    const operations = [];
     let centerPaneNeedsRefresh = false;
 
     for (const key of state.selectedKeys) {
@@ -844,25 +832,16 @@ function applyBulkRenameEdits(find, replace) {
 
         const objKey = getObjectKey(obj);
         const nameField = getNameFieldForObject(obj);
-        const existingEdit = state.pendingEdits.get(objKey);
-        const currentName = existingEdit ? (existingEdit.edited[nameField] || '') : (obj.attributes[nameField] || '');
+        const currentName = obj.attributes[nameField] || '';
         const newName = currentName.split(find).join(replace);
 
         if (newName !== currentName) {
-            const originalAttrs = existingEdit ? existingEdit.original : {...obj.attributes};
-            const editedAttrs = existingEdit ? {...existingEdit.edited} : {...obj.attributes};
+            const editedAttrs = {...obj.attributes};
             editedAttrs[nameField] = newName;
-
-            state.pendingEdits.set(objKey, {
-                original: originalAttrs,
-                edited: editedAttrs,
-                object: {
-                    source_file: obj.source_file,
-                    line_number: obj.line_number,
-                    object_type: obj.object_type,
-                    name: obj.name,
-                    display_name: obj.display_name
-                }
+            operations.push({
+                action: 'update',
+                stable_key: objKey,
+                attributes: editedAttrs
             });
             renames.push({ oldName: currentName, newName, key: objKey });
 
@@ -872,20 +851,34 @@ function applyBulkRenameEdits(find, replace) {
         }
     }
 
-    return { renames, centerPaneNeedsRefresh };
-}
-
-function executeBulkRename(find, replace, shouldUpdateRefs) {
-    const { renames, centerPaneNeedsRefresh } = applyBulkRenameEdits(find, replace);
-
     let totalRefUpdates = 0;
     if (shouldUpdateRefs && renames.length > 0) {
-        totalRefUpdates = stageBulkReferenceUpdates(renames);
+        const refOps = computeBulkReferenceUpdates(renames);
+        totalRefUpdates = refOps.length;
+        operations.push(...refOps);
+    }
+
+    if (operations.length === 0) {
+        closeDialog();
+        showToast('No matches found', 'warning');
+        return;
+    }
+
+    const result = await ApiClient.post('/api/batch-mutations', {
+        description: `bulk rename ${renames.length} objects`,
+        operations
+    });
+
+    closeDialog();
+
+    if (!result.success) {
+        showToast(result.error || 'Failed to apply renames', 'error');
+        afterFrontendMutation();
+        return;
     }
 
     state.healthCheckData = null;
     afterFrontendMutation();
-    closeDialog();
 
     if (centerPaneNeedsRefresh && state.editedObject) {
         const editedKey = getObjectKey(state.editedObject);
@@ -895,12 +888,8 @@ function executeBulkRename(find, replace, shouldUpdateRefs) {
         loadImpactAndRelationships(state.editedObject);
     }
 
-    if (renames.length > 0) {
-        const refMsg = totalRefUpdates > 0 ? ` Updated ${totalRefUpdates} reference${totalRefUpdates !== 1 ? 's' : ''}.` : '';
-        showToast(`Staged ${renames.length} rename(s).${refMsg} Commit to apply.`, 'info');
-    } else {
-        showToast('No matches found', 'warning');
-    }
+    const refMsg = totalRefUpdates > 0 ? ` Updated ${totalRefUpdates} reference${totalRefUpdates !== 1 ? 's' : ''}.` : '';
+    showToast(`Renamed ${renames.length} object(s).${refMsg}`, 'success');
 }
 
 export function showBulkRenameDialog() {
