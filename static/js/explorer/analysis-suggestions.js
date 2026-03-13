@@ -349,20 +349,15 @@ export function showCreateTemplateDialog(idx) {
             return;
         }
 
-        // Create template via API
+        // Build batch: create template + update objects
         const templateAttrs = { ...suggestion.attributes, name: name, register: '0' };
-        const createResult = await ApiClient.post('/api/objects/create', {
-            source_file: targetFile,
+        const operations = [{
+            action: 'create',
+            target_file: targetFile,
             object_type: suggestion.type,
             attributes: templateAttrs
-        }, { silent: true });
+        }];
 
-        if (!createResult.success) {
-            showToast(`Failed to create template: ${createResult.error}`, 'error');
-            return;
-        }
-
-        // If updating objects, edit each to add 'use' and remove common attrs
         if (updateObjects) {
             for (const obj of suggestion.objects) {
                 const newAttrs = { ...obj.attributes };
@@ -370,12 +365,22 @@ export function showCreateTemplateDialog(idx) {
                 for (const key of Object.keys(suggestion.attributes)) {
                     delete newAttrs[key];
                 }
-
-                await ApiClient.post('/api/objects/update', {
+                operations.push({
+                    action: 'update',
                     stable_key: getObjectKey(obj),
                     attributes: newAttrs
-                }, { silent: true });
+                });
             }
+        }
+
+        const result = await ApiClient.post('/api/batch-mutations', {
+            description: `consolidate template ${name}`,
+            operations
+        }, { silent: true });
+
+        if (!result.success) {
+            showToast(`Failed: ${result.error}`, 'error');
+            return;
         }
 
         closeDialog();
