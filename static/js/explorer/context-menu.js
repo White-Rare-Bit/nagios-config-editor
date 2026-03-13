@@ -244,7 +244,7 @@ export function contextAction(action) {
             <input type="text" id="cloneNewName" value="${escapeHtml(currentName + '-copy')}">
             <label>Target file</label>
             <select id="cloneTargetFile">${fileOptions}</select>
-        `, applyClone);
+        `, () => applyClone('single'));
     } else if (action === 'delete') {
         showBulkAction('delete');
     }
@@ -495,7 +495,7 @@ export async function applyMove() {
 }
 
 export function applyBulkClone() {
-    applyClone();
+    applyClone('bulk');
 }
 
 export async function applyRename() {
@@ -558,11 +558,11 @@ export async function applyRename() {
     showToast(`Renamed successfully.${refMsg}`, 'success');
 }
 
-export async function applyClone() {
-    const newNameInput = document.getElementById('cloneNewName');
-    const suffixInput = document.getElementById('cloneSuffix');
+export async function applyClone(mode) {
+    const isSingleClone = mode === 'single';
+    const newNameInput = isSingleClone ? document.getElementById('cloneNewName') : null;
+    const suffixInput = !isSingleClone ? document.getElementById('cloneSuffix') : null;
     const targetFileSelect = document.getElementById('cloneTargetFile');
-    const isSingleClone = newNameInput !== null;
     const suffix = suffixInput ? (suffixInput.value || '-copy') : '-copy';
 
     if (isSingleClone && !newNameInput.value.trim()) {

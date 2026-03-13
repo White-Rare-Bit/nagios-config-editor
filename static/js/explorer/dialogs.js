@@ -250,7 +250,7 @@ export function showCenterPaneNewObject(obj, targetFile) {
     loadImpactAndRelationships(state.editedObject);
 
     // Ensure impact section stays collapsed for new objects
-    setTimeout(() => {
+    requestAnimationFrame(() => {
         const titleEl = document.querySelector('#impactSection .section-title');
         const contentEl = document.getElementById('impactContent');
         if (titleEl) {titleEl.classList.add('collapsed');}
@@ -258,7 +258,7 @@ export function showCenterPaneNewObject(obj, targetFile) {
             contentEl.classList.add('collapsed');
             contentEl.style.display = 'none';
         }
-    }, 0);
+    });
 
     // Show close button for new objects
     document.getElementById('centerCloseBtn').style.display = 'flex';
@@ -1107,7 +1107,7 @@ export function showEditAttributesDialog() {
     });
 
     // Setup after dialog shown
-    setTimeout(() => {
+    requestAnimationFrame(() => {
         const actionSelect = document.getElementById('editAttrAction');
         const findSection = document.getElementById('editAttrFindSection');
         const valueSection = document.getElementById('editAttrValueSection');
@@ -1217,10 +1217,10 @@ export function selectByType() {
     });
 
     // Select first item by default
-    setTimeout(() => {
+    requestAnimationFrame(() => {
         const firstItem = document.querySelector('.dialog-type-item');
         if (firstItem) {firstItem.classList.add('selected');}
-    }, 0);
+    });
 }
 
 export function selectDialogType(el) {
