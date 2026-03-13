@@ -57,15 +57,15 @@ export function updateReferenceValue(value, oldName, newName) {
 }
 
 /**
- * Update references for all objects that reference the old name via API calls.
+ * Build update operations for all objects that reference the old name.
  * @param {string} oldName - The old name being replaced
  * @param {string} newName - The new name to replace with
  * @param {number} excludeIndex - global_index of the renamed object (to exclude)
- * @returns {Promise<number>} count of objects updated
+ * @returns {Array} array of batch mutation operations
  */
-export async function updateReferencesViaApi(oldName, newName, excludeIndex) {
+function buildReferenceUpdateOps(oldName, newName, excludeIndex) {
     const deps = findDependencies(oldName);
-    let updatedCount = 0;
+    const operations = [];
 
     for (const dep of deps) {
         const obj = dep.object;
@@ -84,15 +84,15 @@ export async function updateReferencesViaApi(oldName, newName, excludeIndex) {
         }
 
         if (changed) {
-            const result = await ApiClient.post('/api/objects/update', {
+            operations.push({
+                action: 'update',
                 stable_key: getObjectKey(obj),
                 attributes: editedAttrs
-            }, { silent: true });
-            if (result.success) {updatedCount++;}
+            });
         }
     }
 
-    return updatedCount;
+    return operations;
 }
 
 // Context Menu
@@ -520,11 +520,22 @@ export async function applyRename() {
         return;
     }
 
-    // Update the object's name via API
-    const newAttrs = {...obj.attributes, [nameField]: newName};
-    const result = await ApiClient.post('/api/objects/update', {
+    // Build all operations: rename + reference updates
+    const operations = [{
+        action: 'update',
         stable_key: getObjectKey(obj),
-        attributes: newAttrs
+        attributes: {...obj.attributes, [nameField]: newName}
+    }];
+
+    const updateRefsCheckbox = document.getElementById('renameUpdateRefs');
+    const shouldUpdateRefs = updateRefsCheckbox ? updateRefsCheckbox.checked : false;
+    if (shouldUpdateRefs) {
+        operations.push(...buildReferenceUpdateOps(currentName, newName, state.contextTarget));
+    }
+
+    const result = await ApiClient.post('/api/batch-mutations', {
+        description: `rename ${obj.object_type} ${currentName} to ${newName}`,
+        operations
     });
 
     if (!result.success) {
@@ -532,26 +543,18 @@ export async function applyRename() {
         return;
     }
 
-    // Update references if checkbox is checked
-    const updateRefsCheckbox = document.getElementById('renameUpdateRefs');
-    const shouldUpdateRefs = updateRefsCheckbox ? updateRefsCheckbox.checked : false;
-    let refUpdates = 0;
-    if (shouldUpdateRefs) {
-        refUpdates = await updateReferencesViaApi(currentName, newName, state.contextTarget);
-    }
-
     state.healthCheckData = null;
     await afterFrontendMutation();
     closeDialog();
 
-    // Refresh center pane if this object is currently displayed
     if (state.editedObject && state.editedObject.global_index === state.contextTarget) {
         showCenterPaneObject(obj);
     } else if (state.editedObject) {
         loadImpactAndRelationships(state.editedObject);
     }
 
-    const refMsg = refUpdates > 0 ? ` Updated ${refUpdates} reference${refUpdates !== 1 ? 's' : ''}.` : '';
+    const refCount = operations.length - 1;
+    const refMsg = refCount > 0 ? ` Updated ${refCount} reference${refCount !== 1 ? 's' : ''}.` : '';
     showToast(`Renamed successfully.${refMsg}`, 'success');
 }
 
