@@ -964,7 +964,7 @@ export async function handleDrop(event, targetFile) {
 
     const stableKeys = data.objects
         .filter(o => o?.source_file && o.source_file !== targetFile)
-        .map(o => `${o.source_file}|${o.object_type}|${o.name ?? o.display_name ?? ''}`);
+        .map(o => `${o.source_file}|${o.object_type}|${o.display_name ?? o.name ?? ''}`);
     if (stableKeys.length === 0) {return;}
 
     const result = await ApiClient.post('/api/move-objects', {

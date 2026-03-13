@@ -650,7 +650,7 @@ export async function handleObjectDrop(event, targetFile, position) {
     if (valid.length === 0) {return;}
 
     const stableKeys = valid
-        .map(o => `${o.source_file}|${o.object_type}|${o.name ?? o.display_name ?? ''}`);
+        .map(o => `${o.source_file}|${o.object_type}|${o.display_name ?? o.name ?? ''}`);
 
     const payload = { stable_keys: stableKeys, target_file: targetFile };
     if (position > 0) {payload.after_line = position;}
@@ -662,7 +662,7 @@ export async function handleObjectDrop(event, targetFile, position) {
         moved = result.data.moved;
         for (const o of valid) {
             if (o.source_file !== targetFile) {
-                migrateKeysAfterMove(o.source_file, targetFile, o.object_type, o.name ?? o.display_name ?? '');
+                migrateKeysAfterMove(o.source_file, targetFile, o.object_type, o.display_name ?? o.name ?? '');
             }
         }
     }
@@ -731,7 +731,7 @@ export async function handleFileDrop(event, targetFile) {
 
     const stableKeys = objects
         .filter(o => o?.source_file && o.source_file !== targetFile)
-        .map(o => `${o.source_file}|${o.object_type}|${o.name ?? o.display_name ?? ''}`);
+        .map(o => `${o.source_file}|${o.object_type}|${o.display_name ?? o.name ?? ''}`);
     if (stableKeys.length === 0) {return;}
 
     const result = await ApiClient.post('/api/move-objects', {
@@ -742,7 +742,7 @@ export async function handleFileDrop(event, targetFile) {
     if (result.success && result.data?.moved > 0) {
         for (const o of objects) {
             if (o?.source_file && o.source_file !== targetFile) {
-                migrateKeysAfterMove(o.source_file, targetFile, o.object_type, o.name ?? o.display_name ?? '');
+                migrateKeysAfterMove(o.source_file, targetFile, o.object_type, o.display_name ?? o.name ?? '');
             }
         }
         await afterFrontendMutation();
@@ -925,7 +925,7 @@ async function handleObjectsOnFolderDrop(data, targetFolder) {
 
     const stableKeys = objects
         .filter(o => o?.source_file && o.source_file !== targetFile)
-        .map(o => `${o.source_file}|${o.object_type}|${o.name ?? o.display_name ?? ''}`);
+        .map(o => `${o.source_file}|${o.object_type}|${o.display_name ?? o.name ?? ''}`);
     if (stableKeys.length === 0) {return;}
 
     const result = await ApiClient.post('/api/move-objects', {
@@ -936,7 +936,7 @@ async function handleObjectsOnFolderDrop(data, targetFolder) {
     if (result.success && result.data?.moved > 0) {
         for (const o of objects) {
             if (o?.source_file && o.source_file !== targetFile) {
-                migrateKeysAfterMove(o.source_file, targetFile, o.object_type, o.name ?? o.display_name ?? '');
+                migrateKeysAfterMove(o.source_file, targetFile, o.object_type, o.display_name ?? o.name ?? '');
             }
         }
         state.expandedFiles.add(targetFile);
