@@ -773,11 +773,7 @@ export async function executeObjectDeletions(stagedCreationDeletedCount = 0) {
     }
 }
 
-export function unstageObjectDeletion(key) {
-    state.stagedObjectDeletions.delete(key);
-    // Centralized refresh ensures all UI components stay in sync
-    afterFrontendMutation();
-}
+
 
 // ============================================================================
 // Bulk Operations Dialogs

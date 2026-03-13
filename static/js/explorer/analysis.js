@@ -18,10 +18,7 @@ import { filterIssues, navigateToIssue, resolveGroupedError, getIssueResolveInfo
 // Severity order for consistent sorting across suggestion types
 const SEVERITY_ORDER = { error: 0, warning: 1, info: 2 };
 
-// A-02: Filter out suggestions for objects marked for deletion (used 11+ times)
-function filterActiveSuggestions(suggestions) {
-    return suggestions.filter(s => s.object && !state.stagedObjectDeletions.has(getObjectKey(s.object)));
-}
+
 
 export async function analyzeAll() {
     try {
