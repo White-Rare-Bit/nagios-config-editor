@@ -53,8 +53,7 @@ const projectGlobals = {
   showGlobalCommitDialog: "readonly",
   showResultPanel: "readonly",
   toggleReferencePreview: "readonly",
-  updateGitOnlyContextLines: "readonly",
-  updateGlobalContextLines: "readonly",
+  updateContextLines: "readonly",
 
   // lock-manager.js
   breakLock: "readonly",

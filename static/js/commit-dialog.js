@@ -46,12 +46,7 @@ export async function showGlobalCommitDialog() {
     // Store for context line updates
     baseState.diffData = { shadowFiles, gitFiles };
 
-    if (!hasShadowChanges && hasGitChanges) {
-        // Git-only changes (files modified outside the editor)
-        content.innerHTML = await buildGitOnlyCommitDialogHtml(gitFiles, isGitConfigured);
-    } else {
-        content.innerHTML = await buildGlobalCommitDialogHtml(shadowFiles, gitFiles, isGitConfigured);
-    }
+    content.innerHTML = await buildCommitDialogHtml({ shadowFiles, gitFiles, isGitConfigured });
 
     document.querySelectorAll('#globalCommitContent .commit-item-header').forEach(header => {
         header.addEventListener('click', () => {
@@ -63,7 +58,7 @@ export async function showGlobalCommitDialog() {
 /**
  * Build commit footer HTML with git identity and action buttons.
  */
-function buildCommitFooterHtml(isGitConfigured) {
+function buildCommitFooterHtml(isGitConfigured, discardFn, applyFn) {
     let identityHtml;
     if (isGitConfigured) {
         identityHtml = `<textarea id="globalGitCommitMessage" class="commit-message-textarea" placeholder="Enter commit message..."></textarea>`;
@@ -81,9 +76,9 @@ function buildCommitFooterHtml(isGitConfigured) {
         <div class="commit-footer">
             <div class="commit-footer-left">${identityHtml}</div>
             <div class="commit-footer-right">
-                <button class="nbe-btn nbe-btn--dark nbe-btn--danger" onclick="discardGlobalChanges()">Discard All</button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--danger" onclick="${discardFn}()">Discard All</button>
                 <button class="nbe-btn nbe-btn--dark" onclick="closeGlobalCommitDialog()">Cancel</button>
-                <button class="nbe-btn nbe-btn--dark nbe-btn--tonal" id="globalApplyBtn" onclick="applyGlobalCommit()" ${isGitConfigured ? '' : 'disabled'}>Apply Changes</button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--tonal" id="globalApplyBtn" onclick="${applyFn}()" ${isGitConfigured ? '' : 'disabled'}>Apply Changes</button>
             </div>
         </div>`;
 }
@@ -94,7 +89,7 @@ function buildCommitFooterHtml(isGitConfigured) {
 function buildSummaryStatsHtml(files) {
     let addedCount = 0, deletedCount = 0, modifiedCount = 0;
     for (const f of files) {
-        if (f.status === 'added') {addedCount++;}
+        if (f.status === 'added' || f.status === 'untracked') {addedCount++;}
         else if (f.status === 'deleted') {deletedCount++;}
         else if (f.status === 'modified') {modifiedCount++;}
     }
@@ -219,37 +214,53 @@ function buildContextControlHtml(contextLines, inputHandler, valueId) {
 }
 
 /**
- * Build the global commit dialog HTML with shadow diff data.
- * Renders file-level diffs from the shadow copy system.
+ * Build the commit dialog HTML for both shadow and git-only modes.
+ * Shadow mode: renders shadow file diffs + optional external git changes.
+ * Git-only mode: renders git file diffs directly.
  */
-async function buildGlobalCommitDialogHtml(shadowFiles, gitFiles, isGitConfigured) {
-    // Build shadow changes section
-    const shadowFilesHtml = buildShadowFilesHtml(shadowFiles);
+async function buildCommitDialogHtml({ shadowFiles = [], gitFiles = [], isGitConfigured }) {
+    const hasShadow = shadowFiles.length > 0;
 
-    // Filter external git changes to exclude files already in shadow diff
-    const shadowPaths = new Set(shadowFiles.map(f => f.path));
-    const externalOnlyChanges = gitFiles.filter(gc => !shadowPaths.has(gc.path));
-    const hasExternalChanges = externalOnlyChanges.length > 0;
-    const externalChangesHtml = hasExternalChanges
-        ? await buildExternalChangesHtml(externalOnlyChanges, baseState.commitContextLines)
-        : '';
+    // Build file sections based on mode
+    let filesHtml, externalHtml = '', displayFiles;
+    if (hasShadow) {
+        filesHtml = buildShadowFilesHtml(shadowFiles);
+        displayFiles = shadowFiles;
+        const shadowPaths = new Set(shadowFiles.map(f => f.path));
+        const externalOnly = gitFiles.filter(gc => !shadowPaths.has(gc.path));
+        if (externalOnly.length > 0) {
+            externalHtml = await buildExternalChangesHtml(externalOnly, baseState.commitContextLines);
+        }
+    } else {
+        filesHtml = await buildChangesFilesHtml(gitFiles, baseState.commitContextLines, { expandedByDefault: true });
+        displayFiles = gitFiles;
+    }
+
+    // External count for stats badge (shadow mode only)
+    const externalCount = hasShadow
+        ? gitFiles.filter(gc => !new Set(shadowFiles.map(f => f.path)).has(gc.path)).length
+        : 0;
+
+    // Footer buttons differ by mode
+    const discardFn = hasShadow ? 'discardGlobalChanges' : 'discardGitChanges';
+    const applyFn = hasShadow ? 'applyGlobalCommit' : 'applyGitCommit';
 
     return `
         <div class="commit-header">
             <div class="commit-summary">
-                ${buildSummaryStatsHtml(shadowFiles)}
-                ${hasExternalChanges ? `<div class="commit-stat external"><span class="commit-stat-count">${externalOnlyChanges.length}</span> external</div>` : ''}
+                ${buildSummaryStatsHtml(displayFiles)}
+                ${externalCount > 0 ? `<div class="commit-stat external"><span class="commit-stat-count">${externalCount}</span> external</div>` : ''}
             </div>
-            ${buildContextControlHtml(baseState.commitContextLines, 'updateGlobalContextLines', 'globalContextLinesValue')}
+            ${buildContextControlHtml(baseState.commitContextLines, 'updateContextLines', 'contextLinesValue')}
         </div>
         <div class="commit-changes-list" id="globalCommitChangesList">
             <div class="commit-section">
-                <div class="commit-section-title">File Changes <span class="badge">${shadowFiles.length} file${shadowFiles.length !== 1 ? 's' : ''}</span></div>
-                ${shadowFilesHtml}
+                <div class="commit-section-title">File Changes <span class="badge">${displayFiles.length} file${displayFiles.length !== 1 ? 's' : ''}</span></div>
+                ${filesHtml}
             </div>
-            ${externalChangesHtml}
+            ${externalHtml}
         </div>
-        ${buildCommitFooterHtml(isGitConfigured)}`;
+        ${buildCommitFooterHtml(isGitConfigured, discardFn, applyFn)}`;
 }
 
 /**
@@ -313,62 +324,6 @@ function renderDiffText(diffText) {
         }
         return `<div class="diff-line ${lineClass}">${escapeHtml(line)}</div>`;
     }).join('');
-}
-
-async function buildGitOnlyCommitDialogHtml(gitChanges, isGitConfigured) {
-    baseState.gitOnlyChanges = gitChanges;
-
-    const filesHtml = await buildChangesFilesHtml(gitChanges, baseState.gitOnlyContextLines, { expandedByDefault: true });
-
-    // Count by status
-    let modifiedCount = 0, addedCount = 0, deletedCount = 0;
-    for (const change of gitChanges) {
-        if (change.status === 'modified') {modifiedCount++;}
-        else if (change.status === 'added' || change.status === 'untracked') {addedCount++;}
-        else if (change.status === 'deleted') {deletedCount++;}
-    }
-
-    return `
-        <div class="commit-header">
-            <div class="commit-summary">
-                ${gitChanges.length > 0 ? `<div class="commit-stat edits"><span class="commit-stat-count">${gitChanges.length}</span> file${gitChanges.length !== 1 ? 's' : ''} changed</div>` : ''}
-                ${addedCount > 0 ? `<div class="commit-stat creates"><span class="commit-stat-count">+${addedCount}</span> new</div>` : ''}
-                ${deletedCount > 0 ? `<div class="commit-stat deletes"><span class="commit-stat-count">${deletedCount}</span> deleted</div>` : ''}
-                ${modifiedCount > 0 ? `<div class="commit-stat edits"><span class="commit-stat-count">~${modifiedCount}</span> modified</div>` : ''}
-            </div>
-            <div class="commit-context-control" title="Number of surrounding lines to show in diffs (drag to adjust)">
-                <label>Context:</label>
-                <input type="range" min="1" max="10" value="${baseState.gitOnlyContextLines > 9 ? 10 : baseState.gitOnlyContextLines}" oninput="updateGitOnlyContextLines(this.value)">
-                <span id="gitOnlyContextLinesValue" class="context-value">${baseState.gitOnlyContextLines > 9 ? 'All' : baseState.gitOnlyContextLines}</span>
-            </div>
-        </div>
-        <div class="commit-changes-list" id="globalCommitChangesList">
-            <div class="commit-section">
-                <div class="commit-section-title">File Changes <span class="badge">${gitChanges.length} file${gitChanges.length !== 1 ? 's' : ''}</span></div>
-                ${filesHtml}
-            </div>
-        </div>
-        <div class="commit-footer">
-            <div class="commit-footer-left">
-                ${isGitConfigured ? `
-                <textarea id="globalGitCommitMessage" class="commit-message-textarea" placeholder="Enter commit message..."></textarea>
-                ` : `
-                <div class="git-config-warning">
-                    <span class="git-config-warning-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
-                    <div>
-                        <strong>Git identity not configured</strong><br>
-                        <span class="git-config-warning-text">Configure your name and email in <a href="/settings">Settings</a> to enable commits.</span>
-                    </div>
-                </div>
-                `}
-            </div>
-            <div class="commit-footer-right">
-                <button class="nbe-btn nbe-btn--dark nbe-btn--danger" onclick="discardGitChanges()">Discard All</button>
-                <button class="nbe-btn nbe-btn--dark" onclick="closeGlobalCommitDialog()">Cancel</button>
-                <button class="nbe-btn nbe-btn--dark nbe-btn--tonal" id="globalApplyBtn" onclick="applyGitCommit()" ${isGitConfigured ? '' : 'disabled'}>Apply Changes</button>
-            </div>
-        </div>
-    `;
 }
 
 /**
@@ -445,29 +400,59 @@ async function buildChangesFilesHtml(gitChanges, contextLines, options = {}) {
     return filesHtml;
 }
 
-export async function updateGitOnlyContextLines(value) {
+/**
+ * Unified context line updater for both shadow and git-only modes.
+ */
+export async function updateContextLines(value) {
     const intValue = parseInt(value, 10);
-    baseState.gitOnlyContextLines = intValue === 10 ? 9999 : intValue;
-    document.getElementById('gitOnlyContextLinesValue').textContent = intValue === 10 ? 'All' : value;
+    baseState.commitContextLines = intValue === 10 ? 9999 : intValue;
+    document.getElementById('contextLinesValue').textContent = intValue === 10 ? 'All' : value;
 
-    if (!baseState.gitOnlyChanges) {return;}
+    if (!baseState.diffData) {return;}
 
+    const expandedPaths = saveCommitItemExpansionState();
     const changesList = document.getElementById('globalCommitChangesList');
     if (!changesList) {return;}
 
-    const filesHtml = await buildChangesFilesHtml(baseState.gitOnlyChanges, baseState.gitOnlyContextLines, { expandedByDefault: true });
-    changesList.innerHTML = `
-        <div class="commit-section">
-            <div class="commit-section-title">File Changes <span class="badge">${pluralize(baseState.gitOnlyChanges.length, 'file')}</span></div>
-            ${filesHtml}
-        </div>
-    `;
+    const hasShadow = baseState.diffData.shadowFiles?.length > 0;
 
-    changesList.querySelectorAll('.commit-item-header').forEach(header => {
-        header.addEventListener('click', () => {
-            header.closest('.commit-item').classList.toggle('expanded');
-        });
-    });
+    if (hasShadow) {
+        // Re-fetch shadow diff with new context lines
+        const contextParam = intValue === 10 ? 9999 : intValue;
+        const shadowResult = await ApiClient.get(`/api/staging/diff?context_lines=${contextParam}`, { silent: true });
+        if (!shadowResult.success) {return;}
+
+        const shadowData = shadowResult.data?.data || shadowResult.data;
+        const shadowFiles = (shadowData && shadowData.files) || [];
+        baseState.diffData.shadowFiles = shadowFiles;
+
+        const shadowFilesHtml = buildShadowFilesHtml(shadowFiles);
+        const gitFiles = baseState.diffData.gitFiles || [];
+        const shadowPaths = new Set(shadowFiles.map(f => f.path));
+        const externalOnly = gitFiles.filter(gc => !shadowPaths.has(gc.path));
+        const externalHtml = externalOnly.length > 0
+            ? await buildExternalChangesHtml(externalOnly, baseState.commitContextLines)
+            : '';
+
+        changesList.innerHTML = `
+            <div class="commit-section">
+                <div class="commit-section-title">File Changes <span class="badge">${shadowFiles.length} file${shadowFiles.length !== 1 ? 's' : ''}</span></div>
+                ${shadowFilesHtml}
+            </div>
+            ${externalHtml}
+        `;
+    } else {
+        const gitChanges = baseState.diffData.gitFiles || [];
+        const filesHtml = await buildChangesFilesHtml(gitChanges, baseState.commitContextLines, { expandedByDefault: true });
+        changesList.innerHTML = `
+            <div class="commit-section">
+                <div class="commit-section-title">File Changes <span class="badge">${pluralize(gitChanges.length, 'file')}</span></div>
+                ${filesHtml}
+            </div>
+        `;
+    }
+
+    restoreCommitItemExpansionState(expandedPaths);
 }
 
 export async function discardGitChanges() {
@@ -628,53 +613,6 @@ export async function applyGitCommit() {
         updateNavCommitButton(0);
     }
     showGitResultPanel(message, result.success && result.data?.success, result.data || { error: result.error });
-}
-
-/**
- * Re-fetch shadow diff with updated context lines and re-render the changes list.
- */
-export async function updateGlobalContextLines(value) {
-    const intValue = parseInt(value, 10);
-    baseState.commitContextLines = intValue === 10 ? 9999 : intValue;
-    document.getElementById('globalContextLinesValue').textContent = intValue === 10 ? 'All' : value;
-
-    if (!baseState.diffData || !baseState.diffData.shadowFiles) {return;}
-
-    const expandedIndices = saveCommitItemExpansionState();
-
-    // Re-fetch shadow diff with new context lines
-    const contextParam = intValue === 10 ? 9999 : intValue;
-    const shadowResult = await ApiClient.get(`/api/staging/diff?context_lines=${contextParam}`, { silent: true });
-    if (!shadowResult.success) {return;}
-
-    const shadowData2 = shadowResult.data?.data || shadowResult.data;
-    const shadowFiles = (shadowData2 && shadowData2.files) || [];
-    baseState.diffData.shadowFiles = shadowFiles;
-
-    const changesList = document.getElementById('globalCommitChangesList');
-    if (!changesList) {return;}
-
-    // Rebuild shadow files section
-    const shadowFilesHtml = buildShadowFilesHtml(shadowFiles);
-
-    // Rebuild external changes if present
-    const gitFiles = baseState.diffData.gitFiles || [];
-    const shadowPaths = new Set(shadowFiles.map(f => f.path));
-    const externalOnlyChanges = gitFiles.filter(gc => !shadowPaths.has(gc.path));
-    const hasExternalChanges = externalOnlyChanges.length > 0;
-    const externalChangesHtml = hasExternalChanges
-        ? await buildExternalChangesHtml(externalOnlyChanges, baseState.commitContextLines)
-        : '';
-
-    changesList.innerHTML = `
-        <div class="commit-section">
-            <div class="commit-section-title">File Changes <span class="badge">${shadowFiles.length} file${shadowFiles.length !== 1 ? 's' : ''}</span></div>
-            ${shadowFilesHtml}
-        </div>
-        ${externalChangesHtml}
-    `;
-
-    restoreCommitItemExpansionState(expandedIndices);
 }
 
 export function closeGlobalCommitDialog() {
@@ -869,8 +807,7 @@ export function showGitResultPanel(message, success, result, showRetryOption = f
 window.discardGlobalChanges = discardGlobalChanges;
 window.closeGlobalCommitDialog = closeGlobalCommitDialog;
 window.applyGlobalCommit = applyGlobalCommit;
-window.updateGlobalContextLines = updateGlobalContextLines;
-window.updateGitOnlyContextLines = updateGitOnlyContextLines;
+window.updateContextLines = updateContextLines;
 window.discardGitChanges = discardGitChanges;
 window.applyGitCommit = applyGitCommit;
 window.retryGitCommit = retryGitCommit;

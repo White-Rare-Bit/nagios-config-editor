@@ -26,10 +26,6 @@ export const baseState = {
     referenceData: null,
     gitResultNeedsReload: false,
 
-    // Git-only commit
-    gitOnlyChanges: null,
-    gitOnlyContextLines: 3,
-
     // Reference analysis
     currentRefData: null,
 
