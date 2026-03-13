@@ -993,8 +993,7 @@ function showBulkEditResultToast(action, updatedCount, unchangedCount, skippedIn
         let msg = `${ACTION_LABELS[action] || action} ${updatedCount} object(s).`;
         if (unchangedCount > 0) {msg += ` ${unchangedCount} already had the requested value.`;}
         if (skippedIncompatible > 0) {msg += ` ${skippedIncompatible} skipped (incompatible type).`;}
-        msg += ' Commit to apply.';
-        showToast(msg, 'info');
+        showToast(msg, 'success');
     } else {
         let msg = 'No changes made';
         if (skippedIncompatible > 0) {
@@ -1006,7 +1005,7 @@ function showBulkEditResultToast(action, updatedCount, unchangedCount, skippedIn
     }
 }
 
-function executeBulkEditAction(scope, sortedFields) {
+async function executeBulkEditAction(scope, sortedFields) {
     const action = document.getElementById('editAttrAction').value;
     const field = document.getElementById('editAttrField').value.trim();
     const findText = document.getElementById('editAttrFind').value;
@@ -1016,32 +1015,37 @@ function executeBulkEditAction(scope, sortedFields) {
 
     const { filteredScope, skippedIncompatible } = filterScopeByAttribute(scope, field, action);
 
-    let updatedCount = 0;
+    const operations = [];
     let unchangedCount = 0;
     for (const key of filteredScope) {
         const obj = findObjectByKey(key);
         if (!obj) {continue;}
 
         const objKey = getObjectKey(obj);
-        const existingEdit = state.pendingEdits.get(objKey);
-        const originalAttrs = existingEdit ? existingEdit.original : {...obj.attributes};
-        const editedAttrs = existingEdit ? {...existingEdit.edited} : {...obj.attributes};
+        const editedAttrs = {...obj.attributes};
 
         if (applyBulkAction(action, field, findText, valueText, editedAttrs)) {
-            state.pendingEdits.set(objKey, {
-                original: originalAttrs,
-                edited: editedAttrs,
-                object: {
-                    source_file: obj.source_file,
-                    line_number: obj.line_number,
-                    object_type: obj.object_type,
-                    name: obj.name,
-                    display_name: obj.display_name
-                }
+            operations.push({
+                action: 'update',
+                stable_key: objKey,
+                attributes: editedAttrs
             });
-            updatedCount++;
         } else {
             unchangedCount++;
+        }
+    }
+
+    if (operations.length > 0) {
+        const ACTION_DESCS = { findreplace: 'find/replace', set: 'set attribute', remove: 'remove attribute' };
+        const result = await ApiClient.post('/api/batch-mutations', {
+            description: `bulk ${ACTION_DESCS[action] || action} on ${operations.length} objects`,
+            operations
+        });
+        if (!result.success) {
+            showToast(result.error || 'Failed to apply edits', 'error');
+            closeDialog();
+            afterFrontendMutation();
+            return;
         }
     }
 
@@ -1057,7 +1061,7 @@ function executeBulkEditAction(scope, sortedFields) {
         }
     }
 
-    showBulkEditResultToast(action, updatedCount, unchangedCount, skippedIncompatible);
+    showBulkEditResultToast(action, operations.length, unchangedCount, skippedIncompatible);
 }
 
 export function showEditAttributesDialog() {
@@ -1073,8 +1077,7 @@ export function showEditAttributesDialog() {
         const obj = findObjectByKey(key);
         if (!obj) {continue;}
         const objKey = getObjectKey(obj);
-        const pendingEdit = state.pendingEdits.get(objKey);
-        const attrs = pendingEdit ? pendingEdit.edited : obj.attributes;
+        const attrs = obj.attributes;
         Object.keys(attrs).forEach(k => availableFields.add(k));
     }
     const sortedFields = [...availableFields].sort();
