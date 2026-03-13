@@ -503,64 +503,7 @@ class TestMoveObject:
 
 
 class TestBulkOperations:
-    """Test bulk rename and move endpoints."""
-
-    def test_apply_rename_renames_objects(self, client, shadow_app):
-        """POST /api/apply-rename renames matching objects and updates references."""
-        resp = client.post("/api/apply-rename", json={
-            "type": "host",
-            "find": "test-host",
-            "replace": "prod-host",
-        }, headers={"X-Session-Id": "session-bulk"})
-        assert resp.status_code == 200
-        data = resp.json
-        assert data["success"] is True
-        assert data["renamed"] == 2
-
-        # Verify both hosts were renamed
-        resp = client.get("/api/objects?type=host")
-        host_names = [h["attributes"]["host_name"] for h in resp.json]
-        assert "prod-host-1" in host_names
-        assert "prod-host-2" in host_names
-        assert "test-host-1" not in host_names
-
-    def test_apply_rename_updates_references(self, client, shadow_app):
-        """Renaming a host updates service host_name references."""
-        resp = client.post("/api/apply-rename", json={
-            "type": "host",
-            "find": "test-host-1",
-            "replace": "renamed-host",
-            "updateReferences": True,
-        }, headers={"X-Session-Id": "session-bulk-ref"})
-        assert resp.status_code == 200
-        data = resp.json
-        assert data["renamed"] >= 1
-        assert data["references_updated"] >= 1
-
-        # Verify the service now references renamed-host
-        resp = client.get("/api/objects?type=service")
-        for svc in resp.json:
-            if svc["attributes"].get("service_description") == "HTTP":
-                assert "renamed-host" in svc["attributes"].get("host_name", "")
-                break
-
-    def test_apply_rename_no_matches(self, client, shadow_app):
-        """No matches returns success with zero counts."""
-        resp = client.post("/api/apply-rename", json={
-            "type": "host",
-            "find": "nonexistent-pattern",
-            "replace": "whatever",
-        }, headers={"X-Session-Id": "session-bulk-none"})
-        assert resp.status_code == 200
-        assert resp.json["renamed"] == 0
-
-    def test_apply_rename_requires_type(self, client):
-        """Missing type returns 400."""
-        resp = client.post("/api/apply-rename", json={
-            "find": "test",
-            "replace": "prod",
-        }, headers={"X-Session-Id": "session-bulk-err"})
-        assert resp.status_code == 400
+    """Test bulk move endpoint."""
 
     def test_move_objects_to_new_file(self, client, shadow_app):
         """POST /api/move-objects moves objects to target file."""

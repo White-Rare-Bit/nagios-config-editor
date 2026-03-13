@@ -10,7 +10,7 @@ Flask blueprints registered in `__init__.py`. Service access via `helpers.py`.
 | `objects.py` | GET /api/objects, POST /api/objects/update, /create, /delete, /move, /delete-multiple |
 | `staging.py` | GET /api/staging, /info, /lock, /diff, POST /api/staging/apply, /undo, /lock/break, DELETE /api/staging |
 | `files.py` | GET /api/files, /folders, POST /api/files/create, /move, /folders, /folders/move, DELETE /api/files/<path>, /folders/<path> |
-| `bulk_ops.py` | POST /api/preview-rename, /api/diff/rename, /api/apply-rename, /api/move-objects |
+| `bulk_ops.py` | POST /api/move-objects, /api/batch-mutations |
 | `git.py` | GET /api/git/status, /identity, /log, POST /api/git/commit, /diff, /discard, /discard-all, /clear-history, /restore |
 | `backups.py` | GET/POST /api/backups, POST /api/backups/<name>/restore, DELETE /api/backups/<name>, /all |
 | `analysis.py` | GET /api/dependencies, /inheritance/list/<type>, /inheritance/<type>/<name>, /smart-grouping/suggest, /templates/issues, /escalation-path/<type>/<name>, /object-references |
