@@ -613,52 +613,43 @@ export function toggleNewFileInput() {
 }
 
 export async function applyBulkAttribute() {
-    const name = document.getElementById('bulkAttrName').value.trim();
-    const value = document.getElementById('bulkAttrValue').value;
-    const action = document.getElementById('bulkAttrAction').value;
+    const name = document.getElementById('attrName').value.trim();
+    const value = document.getElementById('attrValue').value;
 
     if (!name) {
         showToast('Please enter an attribute name', 'warning');
         return;
     }
 
-    let updatedCount = 0;
-
+    const operations = [];
     for (const idx of getSelectedIndices()) {
         const obj = state.allObjects.find(o => o.global_index === idx);
         if (!obj) {continue;}
 
-        const newAttrs = {...obj.attributes};
-        let madeChange = false;
-
-        if (action === 'remove') {
-            if (name in newAttrs) {
-                delete newAttrs[name];
-                madeChange = true;
-            }
-        } else if (newAttrs[name] !== value) {
-            newAttrs[name] = value;
-            madeChange = true;
-        }
-
-        if (madeChange) {
-            const result = await ApiClient.post('/api/objects/update', {
+        if (obj.attributes[name] !== value) {
+            operations.push({
+                action: 'update',
                 stable_key: getObjectKey(obj),
-                attributes: newAttrs
-            }, { silent: true });
-            if (result.success) {updatedCount++;}
+                attributes: {...obj.attributes, [name]: value}
+            });
         }
     }
+
+    if (operations.length === 0) {
+        await afterFrontendMutation();
+        closeDialog();
+        showToast('No changes made', 'info');
+        return;
+    }
+
+    await ApiClient.post('/api/batch-mutations', {
+        description: `bulk set ${name} on ${operations.length} objects`,
+        operations
+    }, { silent: true });
 
     await afterFrontendMutation();
     closeDialog();
-
-    if (updatedCount > 0) {
-        const actionText = action === 'remove' ? 'removed from' : 'set on';
-        showToast(`Attribute ${actionText} ${updatedCount} object(s)`, 'success');
-    } else {
-        showToast('No changes made', 'info');
-    }
+    showToast(`Attribute set on ${operations.length} object(s)`, 'success');
 }
 
 export function applyAddToGroup() {
