@@ -16,8 +16,6 @@ import { analyzeAll, filterSuggestions } from './analysis.js';
 import { closePreview, closeDialog, contextAction, showBulkAction,
          showAddToGroupDialog, viewInGraph } from './context-menu.js';
 import { filterTemplateSuggestions, filterGroupingSuggestions } from './analysis-suggestions.js';
-import { undoLastAction } from './data-loading.js';
-
 // Map data-action attribute values to handler functions
 export const actionHandlers = {
     // View and navigation
@@ -69,7 +67,4 @@ export const actionHandlers = {
 
     // Unified suggestions list actions
     filterSuggestions: (el, e) => filterSuggestions(e),
-
-    // Undo action
-    undo: () => undoLastAction(),
 };
