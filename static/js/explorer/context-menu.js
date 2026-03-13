@@ -811,35 +811,38 @@ export async function addToGroup(groupName) {
         return;
     }
 
-    let updatedCount = 0;
+    const operations = [];
     for (const obj of eligibleObjects) {
         const groupAttr = getGroupAttrMap()[obj.object_type];
         const currentGroups = (obj.attributes[groupAttr] || '').split(',').map(g => g.trim()).filter(g => g);
 
         if (!currentGroups.includes(groupName)) {
             currentGroups.push(groupName);
-            const newAttrs = {...obj.attributes, [groupAttr]: currentGroups.join(',')};
-
-            const result = await ApiClient.post('/api/objects/update', {
+            operations.push({
+                action: 'update',
                 stable_key: getObjectKey(obj),
-                attributes: newAttrs
-            }, { silent: true });
-            if (result.success) {updatedCount++;}
+                attributes: {...obj.attributes, [groupAttr]: currentGroups.join(',')}
+            });
         }
     }
 
+    if (operations.length === 0) {
+        showToast(`Selected objects already belong to "${groupName}"`, 'info');
+        return;
+    }
+
+    await ApiClient.post('/api/batch-mutations', {
+        description: `add group ${groupName} to ${operations.length} objects`,
+        operations
+    }, { silent: true });
+
     await afterFrontendMutation();
 
-    // Refresh center pane if the displayed object was updated
     if (state.editedObject) {
         showCenterPaneObject(state.editedObject);
     }
 
-    if (updatedCount > 0) {
-        showToast(`Added "${groupName}" to ${updatedCount} object(s)`, 'success');
-    } else {
-        showToast(`Selected objects already belong to "${groupName}"`, 'info');
-    }
+    showToast(`Added "${groupName}" to ${operations.length} object(s)`, 'success');
 }
 
 // Drag and Drop
