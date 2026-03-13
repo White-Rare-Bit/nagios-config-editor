@@ -405,16 +405,15 @@ def api_git_discard_all():
                 "commands": result.data.get("commands", []) if result.data else [],
             }), 400
 
-        # Reload config to reflect changes
-        get_service().reload()
-
-        # Destroy shadow if present
+        # Destroy shadow first (so reload reads original config, not shadow)
         sm = get_shadow_manager()
         if sm.has_shadow():
             sm.destroy_shadow()
-            service = get_service()
-            service.config_path = sm.config_path
-            service.reload()
+
+        # Reload config to reflect discarded changes
+        service = get_service()
+        service.config_path = sm.config_path
+        service.reload()
 
         # Write audit log entry for discard
         identity = get_audit_user_identity()
