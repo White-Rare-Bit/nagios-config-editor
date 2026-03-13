@@ -83,6 +83,7 @@ export async function loadObjects() {
         };
         state.expandedFolders = migrateSet(state.expandedFolders);
         state.expandedFiles = migrateSet(state.expandedFiles);
+        state.openTreeFolders = migrateSet(state.openTreeFolders);
         if (state.selectedFolder === oldPath) {
             state.selectedFolder = newConfigPath;
         } else if (state.selectedFolder?.startsWith(oldPath + '/')) {

@@ -108,6 +108,18 @@ export function navigateToObjectByIndex(index) {
     }, 50);
 }
 
+/**
+ * Scroll a file row into view in the right pane after a rebuild.
+ * Used after drag-drop moves to keep the drop target visible.
+ */
+function scrollTargetFileIntoView(filePath) {
+    const container = document.getElementById('targetPaneContent');
+    if (!container) {return;}
+    const row = Array.from(container.querySelectorAll('.workspace-tree-row[data-file]'))
+        .find(el => el.dataset.file === filePath);
+    if (row) {row.scrollIntoView({ block: 'nearest' });}
+}
+
 export function selectObjectByName(name) {
     const obj = state.allObjects.find(o => o.name === name || o.display_name === name);
     if (obj) {
@@ -746,6 +758,7 @@ export async function handleFileDrop(event, targetFile) {
             }
         }
         await afterFrontendMutation();
+        scrollTargetFileIntoView(targetFile);
         showToast(`Moved ${result.data.moved} object(s) to ${extractFileName(targetFile)}`, 'success');
     }
 }
@@ -942,6 +955,7 @@ async function handleObjectsOnFolderDrop(data, targetFolder) {
         state.expandedFiles.add(targetFile);
         state.expandedFolders.add(targetFolder);
         await afterFrontendMutation();
+        scrollTargetFileIntoView(targetFile);
         showToast(`Moved ${result.data.moved} object(s) to ${extractFileName(targetFile)}`, 'success');
     }
 }
