@@ -586,9 +586,9 @@ export async function checkDependenciesAndDelete(stagedCreationDeletedCount = 0)
             const key = Array.from(state.selectedKeys)[0];
             const obj = findObjectByKey(key);
             const name = obj ? (obj.display_name || obj.name || 'unnamed') : 'this object';
-            message = `Are you sure you want to stage "${name}" for deletion?`;
+            message = `Are you sure you want to delete "${name}"?`;
         } else {
-            message = `Are you sure you want to stage ${selectedCount} objects for deletion?`;
+            message = `Are you sure you want to delete ${selectedCount} objects?`;
         }
 
         const confirmed = await showConfirmDialog({
@@ -731,22 +731,13 @@ export function stageObjectDeletions() {
     }
 }
 
-export function executeObjectDeletions(stagedCreationDeletedCount = 0) {
-    let deletedCount = 0;
-
-    // Stage regular objects for deletion
+export async function executeObjectDeletions(stagedCreationDeletedCount = 0) {
+    // Collect stable keys for deletion via API
+    const stableKeys = [];
     for (const key of state.selectedKeys) {
         const obj = findObjectByKey(key);
         if (!obj) {continue;}
-        const objKey = getObjectKey(obj);
-        if (!state.stagedObjectDeletions.has(objKey)) {
-            state.stagedObjectDeletions.add(objKey);
-            // Remove any pending edits for this object since it's being deleted
-            state.pendingEdits.delete(objKey);
-            // Remove any staged moves for this object
-            state.stagedMoves.delete(objKey);
-            deletedCount++;
-        }
+        stableKeys.push(getObjectKey(obj));
     }
 
     // Close tabs for deleted objects
@@ -757,15 +748,28 @@ export function executeObjectDeletions(stagedCreationDeletedCount = 0) {
     // Clear selection
     clearSelection();
 
-    // Centralized refresh ensures all UI components (tree, target, suggestions, commit) stay in sync
-    afterFrontendMutation();
+    if (stableKeys.length > 0) {
+        const result = await ApiClient.post('/api/objects/delete-multiple', {
+            stable_keys: stableKeys,
+        });
 
-    // Show appropriate message
-    const totalDeleted = deletedCount + stagedCreationDeletedCount;
-    if (stagedCreationDeletedCount > 0 && deletedCount > 0) {
-        showToast(`Staged ${deletedCount} object(s) for deletion, removed ${stagedCreationDeletedCount} staged creation(s)`, 'success');
-    } else if (deletedCount > 0) {
-        showToast(`Staged ${deletedCount} object(s) for deletion`, 'success');
+        if (!result.success) {
+            showToast(result.data?.error || result.error || 'Failed to delete objects', 'error');
+            afterFrontendMutation();
+            return;
+        }
+
+        const deletedCount = result.data?.deleted || 0;
+        afterFrontendMutation();
+
+        if (stagedCreationDeletedCount > 0 && deletedCount > 0) {
+            showToast(`Deleted ${deletedCount} object(s), removed ${stagedCreationDeletedCount} staged creation(s)`, 'success');
+        } else if (deletedCount > 0) {
+            showToast(`Deleted ${deletedCount} object(s)`, 'success');
+        }
+    } else if (stagedCreationDeletedCount > 0) {
+        afterFrontendMutation();
+        showToast(`Removed ${stagedCreationDeletedCount} staged creation(s)`, 'success');
     }
 }
 
