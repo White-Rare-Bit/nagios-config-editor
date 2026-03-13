@@ -509,7 +509,7 @@ export function showResultPanel({ command, success, title, outputHtml, needsRelo
                     <i class="fa-solid fa-redo"></i> Retry Commit
                 </button>
                 <button class="nbe-btn nbe-btn--dark" onclick="discardStagingAfterFailedCommit()">
-                    Discard Staging
+                    Revert Changes
                 </button>
             </div>
         `;
@@ -521,7 +521,7 @@ export function showResultPanel({ command, success, title, outputHtml, needsRelo
 
 /**
  * Retry git commit after a failed attempt.
- * Staging was preserved after apply, so we can retry the commit.
+ * Changes are on disk (shadow destroyed after apply), just need git commit.
  */
 export async function retryGitCommit() {
     const message = baseState.pendingCommitMessage;
@@ -537,22 +537,27 @@ export async function retryGitCommit() {
 }
 
 /**
- * Discard staging after a failed commit.
- * User chose not to retry, so clear the preserved staging.
+ * Revert changes after a failed commit.
+ * After apply, shadow is destroyed — files are on disk. Revert via git.
  */
 export async function discardStagingAfterFailedCommit() {
     const confirmed = await showConfirmDialog({
-        title: 'Discard Staging?',
-        message: 'Your changes have been written to disk but not committed to git. Discarding staging will clear the staging state. The files on disk will remain changed.',
-        confirmText: 'Discard Staging',
+        title: 'Revert Changes?',
+        message: 'Your changes have been written to disk but not committed to git. This will revert all files to their last committed state via git.',
+        confirmText: 'Revert Changes',
         type: 'warning'
     });
 
     if (confirmed) {
         await ApiClient.del('/api/staging', { silent: true });
+        const revertResult = await ApiClient.post('/api/git/discard-all');
         baseState.pendingCommitMessage = null;
         closeGitResultOverlay();
-        showToast('Staging cleared', 'info');
+        if (!revertResult.success) {
+            showToast('Warning: could not revert files via git', 'warning');
+        } else {
+            showToast('Changes reverted', 'info');
+        }
     }
 }
 
@@ -674,6 +679,7 @@ export async function updateGlobalContextLines(value) {
 
 export function closeGlobalCommitDialog() {
     document.getElementById('globalCommitOverlay').classList.remove('visible');
+    baseState.pendingCommitMessage = null;
 }
 
 export async function discardGlobalChanges() {
@@ -833,7 +839,7 @@ export function showGitResultPanel(message, success, result, showRetryOption = f
 
         if (showRetryOption) {
             outputHtml += '\n\n<span class="info-text">Changes have been applied to disk but not committed to git.</span>';
-            outputHtml += '\n<span class="info-text">Staging preserved - you can retry the commit.</span>';
+            outputHtml += '\n<span class="info-text">You can retry the commit or revert changes via git.</span>';
             baseState.pendingCommitMessage = message;
         }
     }
