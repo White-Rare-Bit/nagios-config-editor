@@ -382,9 +382,9 @@ export function renderTargetPane() {
         let html = `
         <div class="${rowClasses}" data-depth="${depth}" data-folder="${escapeHtml(folder.path)}"
              onclick="Explorer.selectFolder('${escapeJs(folder.path)}')"
-             ondragover="Explorer.handleFolderDragOver(event, '${escapeJs(folder.path)}')"
+             ondragover="Explorer.handleDragExpandOver(event, '${escapeJs(folder.path)}')"
              ondrop="Explorer.handleFolderDrop(event, '${escapeJs(folder.path)}')"
-             ondragleave="Explorer.handleFolderDragLeave(event)"
+             ondragleave="Explorer.handleDragExpandLeave(event)"
              draggable="${canDrag ? 'true' : 'false'}"
              ondragstart="Explorer.handleFolderDragStart(event, '${escapeJs(folder.path)}')">
             <button class="tree-expand-btn${isExpanded ? ' expanded' : ''}" onclick="event.stopPropagation(); Explorer.toggleFolderExpand('${escapeJs(folder.path)}')">${expandIcon}</button>
@@ -432,9 +432,9 @@ export function renderTargetPane() {
         let html = `
         <div class="${rowClasses}" data-depth="${depth}" data-file="${escapeHtml(file.path)}"
              onclick="Explorer.toggleFileExpand('${escapeJs(file.path)}')"
-             ondragover="Explorer.handleFileDragOver(event, '${escapeJs(file.path)}')"
+             ondragover="Explorer.handleDragExpandOver(event, '${escapeJs(file.path)}')"
              ondrop="Explorer.handleFileDrop(event, '${escapeJs(file.path)}')"
-             ondragleave="Explorer.handleFileDragLeave(event)"
+             ondragleave="Explorer.handleDragExpandLeave(event)"
              draggable="true"
              ondragstart="Explorer.handleFileDragStart(event, '${escapeJs(file.path)}')">
             ${hasObjects ? `<button class="tree-expand-btn${isExpanded ? ' expanded' : ''}" onclick="event.stopPropagation(); Explorer.toggleFileExpand('${escapeJs(file.path)}')">${expandIcon}</button>` : '<span class="tree-expand-placeholder"></span>'}
@@ -474,9 +474,9 @@ export function renderTargetPane() {
     html += `
     <div class="workspace-tree-row workspace-tree-row--root${isRootExpanded ? ' expanded' : ''}${isRootSelected ? ' selected' : ''}" data-depth="0" data-folder="${escapeHtml(state.configPath)}"
          onclick="Explorer.selectFolder('${escapeJs(state.configPath)}')"
-         ondragover="Explorer.handleFolderDragOver(event, '${escapeJs(state.configPath)}')"
+         ondragover="Explorer.handleDragExpandOver(event, '${escapeJs(state.configPath)}')"
          ondrop="Explorer.handleFolderDrop(event, '${escapeJs(state.configPath)}')"
-         ondragleave="Explorer.handleFolderDragLeave(event)">
+         ondragleave="Explorer.handleDragExpandLeave(event)">
         <button class="tree-expand-btn${isRootExpanded ? ' expanded' : ''}" onclick="event.stopPropagation(); Explorer.toggleFolderExpand('${escapeJs(state.configPath)}')">${rootExpandIcon}</button>
         <span class="tree-icon tree-icon--folder${isRootExpanded ? ' expanded' : ''}">${rootFolderIcon}</span>
         <span class="tree-label tree-label--folder tree-label--root">${escapeHtml(rootName)}</span>
@@ -651,39 +651,9 @@ export function toggleFileExpand(filePath) {
 // Drag and Drop Handlers - Files and Folders
 // ============================================================================
 
-let fileHoverTimeout = null;
-let fileHoverTarget = null;
-
-export function handleFileDragOver(event, filePath) {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    event.currentTarget.classList.add('drop-active');
-
-    if (filePath && !state.rightTreeExpansion.has(filePath)) {
-        if (fileHoverTarget !== filePath) {
-            if (fileHoverTimeout) {
-                clearTimeout(fileHoverTimeout);
-            }
-            fileHoverTarget = filePath;
-            fileHoverTimeout = setTimeout(() => {
-                if (fileHoverTarget === filePath) {
-                    state.rightTreeExpansion.add(filePath);
-                    renderTargetPane();
-                }
-            }, 800);
-        }
-    }
-}
-
-export function handleFileDragLeave(event) {
-    if (event.currentTarget.contains(event.relatedTarget)) {return;}
-    event.currentTarget.classList.remove('drop-active');
-    if (fileHoverTimeout) {
-        clearTimeout(fileHoverTimeout);
-        fileHoverTimeout = null;
-        fileHoverTarget = null;
-    }
-}
+const dragExpand = state.rightTreeExpansion.createDragHoverHandler(renderTargetPane);
+export const handleDragExpandOver = dragExpand.onDragOver;
+export const handleDragExpandLeave = dragExpand.onDragLeave;
 
 export async function handleFileDrop(event, targetFile) {
     event.preventDefault();
@@ -752,40 +722,6 @@ export function handleTargetObjectDragEnd(event) {
 // ============================================================================
 // Folder Drag and Drop
 // ============================================================================
-
-let folderHoverTimeout = null;
-let folderHoverTarget = null;
-
-export function handleFolderDragOver(event, folderPath) {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    event.currentTarget.classList.add('drop-active');
-
-    if (folderPath && !state.rightTreeExpansion.has(folderPath)) {
-        if (folderHoverTarget !== folderPath) {
-            if (folderHoverTimeout) {
-                clearTimeout(folderHoverTimeout);
-            }
-            folderHoverTarget = folderPath;
-            folderHoverTimeout = setTimeout(() => {
-                if (folderHoverTarget === folderPath) {
-                    state.rightTreeExpansion.add(folderPath);
-                    renderTargetPane();
-                }
-            }, 800);
-        }
-    }
-}
-
-export function handleFolderDragLeave(event) {
-    if (event.currentTarget.contains(event.relatedTarget)) {return;}
-    event.currentTarget.classList.remove('drop-active');
-    if (folderHoverTimeout) {
-        clearTimeout(folderHoverTimeout);
-        folderHoverTimeout = null;
-        folderHoverTarget = null;
-    }
-}
 
 export async function moveFileImmediate(sourcePath, targetFolder) {
     const result = await ApiClient.post('/api/files/move', { sourcePath, targetFolder }, { silent: true });
@@ -1236,14 +1172,12 @@ export async function confirmInlineCreate(type, name, row) {
 window.Explorer = window.Explorer || {};
 window.Explorer.selectFolder = selectFolder;
 window.Explorer.toggleFolderExpand = toggleFolderExpand;
-window.Explorer.handleFolderDragOver = handleFolderDragOver;
+window.Explorer.handleDragExpandOver = handleDragExpandOver;
+window.Explorer.handleDragExpandLeave = handleDragExpandLeave;
 window.Explorer.handleFolderDrop = handleFolderDrop;
-window.Explorer.handleFolderDragLeave = handleFolderDragLeave;
 window.Explorer.handleFolderDragStart = handleFolderDragStart;
 window.Explorer.toggleFileExpand = toggleFileExpand;
-window.Explorer.handleFileDragOver = handleFileDragOver;
 window.Explorer.handleFileDrop = handleFileDrop;
-window.Explorer.handleFileDragLeave = handleFileDragLeave;
 window.Explorer.handleFileDragStart = handleFileDragStart;
 window.Explorer.handleTargetObjectDragStart = handleTargetObjectDragStart;
 window.Explorer.handleTargetObjectDragEnd = handleTargetObjectDragEnd;
