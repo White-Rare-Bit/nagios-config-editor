@@ -75,24 +75,16 @@ export function navigateToObjectByIndex(index) {
         buildTree();
     }
 
-    // Expand the parent folder based on current view
+    // Expand the parent folder based on current view (via state, not DOM)
     const viewBtn = document.querySelector('.view-btn[data-view="file"]');
     const isFileView = viewBtn ? viewBtn.classList.contains('active') : true;
 
     if (isFileView) {
-        const folder = document.querySelector(`.tree-folder[data-file="${obj.source_file}"]`);
-        if (folder && !folder.classList.contains('open')) {
-            folder.classList.add('open');
-        }
+        state.leftTreeExpansion.add(obj.source_file);
     } else {
-        const folders = document.querySelectorAll('.tree-folder');
-        folders.forEach(folder => {
-            const nameEl = folder.querySelector('.tree-folder-name');
-            if (nameEl && nameEl.textContent === obj.object_type && !folder.classList.contains('open')) {
-                folder.classList.add('open');
-            }
-        });
+        state.leftTreeExpansion.add('type:' + obj.object_type);
     }
+    buildTree();
 
     // Open as tab (handles selection sync and center pane rendering)
     openTab(obj);
