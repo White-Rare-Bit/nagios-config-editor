@@ -135,7 +135,7 @@ function buildTypeDropdown(currentType) {
 
 export function createNewObject(targetFile) {
     // Ensure the target folder is expanded so we can see the new object
-    state.openTreeFolders.add(targetFile);
+    state.leftTreeExpansion.add(targetFile);
 
     // Clear selection first (update UI but don't hide center pane yet)
     clearSelection();

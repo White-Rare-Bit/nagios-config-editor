@@ -105,6 +105,13 @@ export function canEdit() { return true; }
 
 // Load data
 document.addEventListener('DOMContentLoaded', async () => {
+    // Restore expanded state from localStorage before loadObjects.
+    // Paths are stored as relative in localStorage and converted to absolute
+    // using current configPath (set by init from template), so they survive
+    // shadow→original transitions without migration.
+    state.leftTreeExpansion.restore(state.configPath);
+    state.rightTreeExpansion.restore(state.configPath);
+
     // Load objects, files, and folders from backend
     await loadObjects();
 
@@ -113,9 +120,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Restore tabs from sessionStorage
     restoreTabs();
-
-    // Restore tree folder expanded state from localStorage
-    restoreTreeFolderState();
 
     buildTree();
 
@@ -392,7 +396,7 @@ export function buildFileTree(container, objects) {
         .sort((a, b) => a[0].localeCompare(b[0]))
         .map(([file, objs]) => {
             const filePath = objs[0].source_file;
-            const isOpen = state.openTreeFolders.has(filePath);
+            const isOpen = state.leftTreeExpansion.has(filePath);
 
             const itemsHtml = objs
                 .sort((a, b) => a.line_number - b.line_number)
@@ -427,7 +431,7 @@ export function buildTypeTree(container, objects) {
         .sort((a, b) => a[0].localeCompare(b[0]))
         .map(([type, objs]) => {
             const folderKey = 'type:' + type;
-            const isOpen = state.openTreeFolders.has(folderKey);
+            const isOpen = state.leftTreeExpansion.has(folderKey);
             return `
             <div class="tree-folder${isOpen ? ' open' : ''}" data-file="${folderKey}">
                 <div class="tree-folder-header" onclick="Explorer.toggleFolder(this.parentElement)">
@@ -575,40 +579,17 @@ export function getEffectiveName(obj) {
 
 export function toggleFolder(folder) {
     folder.classList.toggle('open');
-    // Track folder state for persistence across tree rebuilds
     const filePath = folder.dataset.file;
     if (filePath) {
-        if (folder.classList.contains('open')) {
-            state.openTreeFolders.add(filePath);
-        } else {
-            state.openTreeFolders.delete(filePath);
-        }
-        // Save to localStorage for persistence across page refreshes
-        saveTreeFolderState();
+        state.leftTreeExpansion.toggle(filePath);
+        state.leftTreeExpansion.save(state.configPath);
     }
 }
 
-function saveTreeFolderState() {
-    try {
-        localStorage.setItem('nagios_openTreeFolders', JSON.stringify([...state.openTreeFolders]));
-    } catch (e) {
-        console.warn('Failed to save tree folder state:', e);
-    }
-}
-
-function restoreTreeFolderState() {
-    try {
-        const saved = localStorage.getItem('nagios_openTreeFolders');
-        if (saved) {
-            const arr = JSON.parse(saved);
-            if (Array.isArray(arr)) {
-                state.openTreeFolders = new Set(arr);
-            }
-        }
-    } catch (e) {
-        console.warn('Failed to restore tree folder state:', e);
-    }
-}
+window.addEventListener('beforeunload', () => {
+    state.leftTreeExpansion.save(state.configPath);
+    state.rightTreeExpansion.save(state.configPath);
+});
 
 export function filterTree() {
     buildTree();
