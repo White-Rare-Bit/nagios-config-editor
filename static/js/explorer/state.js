@@ -52,6 +52,20 @@ export class TreeExpansionState {
         else { this._set.add(key); }
     }
 
+    migratePaths(oldPrefix, newPrefix) {
+        const migrated = new Set();
+        for (const p of this._set) {
+            if (p === oldPrefix) {
+                migrated.add(newPrefix);
+            } else if (p.startsWith(oldPrefix + '/')) {
+                migrated.add(newPrefix + p.substring(oldPrefix.length));
+            } else {
+                migrated.add(p);
+            }
+        }
+        this._set = migrated;
+    }
+
     save(configPath) {
         try {
             if (this._set.size > 0) {

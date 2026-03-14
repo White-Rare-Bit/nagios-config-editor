@@ -104,6 +104,10 @@ export async function loadObjects() {
             }
         }
 
+        // Migrate expansion state (in-memory absolute paths)
+        state.leftTreeExpansion.migratePaths(oldPath, newConfigPath);
+        state.rightTreeExpansion.migratePaths(oldPath, newConfigPath);
+
         // Migrate editedObject.source_file so center pane key matches reloaded data
         if (state.editedObject) {
             const sf = state.editedObject.source_file;
