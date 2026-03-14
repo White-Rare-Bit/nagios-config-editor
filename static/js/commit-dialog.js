@@ -311,6 +311,13 @@ function buildShadowFilesHtml(shadowFiles) {
  */
 function renderDiffText(diffText) {
     if (!diffText) {return '';}
+
+    // Detect binary file markers from backend or git
+    const trimmed = diffText.trim();
+    if (trimmed.startsWith('Binary file') || (trimmed.includes('Binary files') && trimmed.includes('differ'))) {
+        return `<div class="diff-line context">${escapeHtml(trimmed)}</div>`;
+    }
+
     return diffText.split('\n').filter(line => line !== '').map(line => {
         let lineClass;
         if (line.startsWith('+') && !line.startsWith('+++')) {
@@ -782,14 +789,14 @@ export function showGitResultPanel(message, success, result, showRetryOption = f
         }
     }
 
-    // Append verification summary if available
-    if (verification) {
+    // Append verification summary if available (must have objectLevel structure)
+    if (verification?.objectLevel) {
         outputHtml += '\n' + buildVerificationHtml(verification);
     }
 
     // Downgrade title if commit succeeded but verification has warnings
     let title = isSuccess ? 'Git Commit Successful' : 'Git Commit Failed';
-    if (isSuccess && verification && !verification.passed) {
+    if (isSuccess && verification?.objectLevel && !verification.passed) {
         title = 'Committed with Warnings';
     }
 

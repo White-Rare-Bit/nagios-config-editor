@@ -182,6 +182,11 @@ export const state = {
     addAttrHighlightedIndex: -1,
     addAttrNameHighlightedIndex: -1,
 
+    // Staged creations (objects created but not yet applied)
+    stagedCreations: [],
+    newObjectStagedIndex: null,
+    selectedStagedIndices: new Set(),
+
     // Pending actions
     pendingHostgroupServiceLink: null,
 

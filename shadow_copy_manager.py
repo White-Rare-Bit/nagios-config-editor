@@ -450,6 +450,13 @@ class ShadowCopyManager:
         orig = self.original_path(relative_path)
         shad = self.shadow_path(relative_path)
 
+        # Detect binary files by checking for null bytes in first 8KB
+        for path in (orig, shad):
+            if os.path.isfile(path):
+                with open(path, "rb") as f:
+                    if b"\x00" in f.read(8192):
+                        return {"diff_text": f"Binary file {relative_path}\n"}
+
         orig_lines = []
         shad_lines = []
 

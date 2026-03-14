@@ -398,6 +398,11 @@ class GitService:
             return None
 
         try:
+            # Detect binary files by checking for null bytes
+            with open(full_path, "rb") as f:
+                if b"\x00" in f.read(8192):
+                    return f"Binary file {filepath}\n"
+
             with open(full_path) as f:
                 content = f.read()
             lines = content.split("\n")
