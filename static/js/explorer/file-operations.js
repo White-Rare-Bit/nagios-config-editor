@@ -5,7 +5,7 @@
  * afterFrontendMutation() to reload data + rebuild UI.
  */
 
-import { state, toRelativePaths, toAbsolutePaths } from './state.js';
+import { state } from './state.js';
 import { constants, isObjectTemplate, getTypeBadge, getTypeBadgeTier } from './constants.js';
 import { getObjectKey, findObjectByKey, getSelectedIndices, groupByType, getConfigRootName } from './main.js';
 import { isSelectedByIndex, clearSelection, addToSelectionByIndex, removeFromSelectionByIndex } from './state-management.js';
@@ -131,51 +131,11 @@ export function selectObjectByName(name) {
 // Target Pane (Right Side File Browser) - Setup
 // ============================================================================
 
-export function restoreExpandedState() {
-    try {
-        const savedFiles = localStorage.getItem('nagios_expandedFiles');
-        if (savedFiles) {
-            const arr = JSON.parse(savedFiles);
-            if (Array.isArray(arr)) {
-                state.expandedFiles = toAbsolutePaths(arr, state.configPath);
-            }
-        }
-        const savedFolders = localStorage.getItem('nagios_expandedFolders');
-        if (savedFolders) {
-            const arr = JSON.parse(savedFolders);
-            if (Array.isArray(arr)) {
-                state.expandedFolders = toAbsolutePaths(arr, state.configPath);
-            }
-        }
-    } catch (e) {
-        console.warn('Failed to restore expanded state:', e);
-    }
-}
-
-export function saveExpandedState() {
-    try {
-        if (state.expandedFiles.size > 0) {
-            localStorage.setItem('nagios_expandedFiles', JSON.stringify(toRelativePaths(state.expandedFiles, state.configPath)));
-        } else {
-            localStorage.removeItem('nagios_expandedFiles');
-        }
-        if (state.expandedFolders.size > 0) {
-            localStorage.setItem('nagios_expandedFolders', JSON.stringify(toRelativePaths(state.expandedFolders, state.configPath)));
-        } else {
-            localStorage.removeItem('nagios_expandedFolders');
-        }
-    } catch (e) {
-        console.warn('Failed to save expanded state:', e);
-    }
-}
-
-window.addEventListener('beforeunload', saveExpandedState);
-
 export function initTargetPane() {
     // restoreExpandedState() runs early in DOMContentLoaded. Apply defaults here
     // since configPath is guaranteed set by this point.
-    if (state.expandedFolders.size === 0 && state.configPath) {
-        state.expandedFolders.add(state.configPath);
+    if (state.rightTreeExpansion.size === 0 && state.configPath) {
+        state.rightTreeExpansion.add(state.configPath);
     }
     if (!state.selectedFolder && state.configPath) {
         state.selectedFolder = state.configPath;
@@ -245,9 +205,8 @@ export function handleCreateKeydown(event) {
 }
 
 export function collapseAllFolders() {
-    state.expandedFolders.clear();
-    state.expandedFiles.clear();
-    saveExpandedState();
+    state.rightTreeExpansion.clear();
+    state.rightTreeExpansion.save(state.configPath);
     renderTargetPane();
 }
 
@@ -393,7 +352,7 @@ export function renderTargetPane() {
     }
 
     function renderFolder(folder, name, depth) {
-        const isExpanded = state.expandedFolders.has(folder.path);
+        const isExpanded = state.rightTreeExpansion.has(folder.path);
         const isSelected = state.selectedFolder === folder.path;
         const subfolderNames = Object.keys(folder.folders).sort();
         const hasChildren = subfolderNames.length > 0 || folder.files.length > 0;
@@ -453,7 +412,7 @@ export function renderTargetPane() {
 
     function renderFileItem(file, depth = 0) {
         const fileObjects = state.allObjects.filter(o => o.source_file === file.path);
-        const isExpanded = state.expandedFiles.has(file.path);
+        const isExpanded = state.rightTreeExpansion.has(file.path);
         const hasObjects = fileObjects.length > 0;
 
         const expandIcon = hasObjects ? getIcon('chevron-right') : '';
@@ -498,7 +457,7 @@ export function renderTargetPane() {
     let html = '';
     const rootFolderNames = Object.keys(root.folders).sort();
     const rootName = state.configDisplayName || extractFileName(state.configPath);
-    const isRootExpanded = state.expandedFolders.has(state.configPath);
+    const isRootExpanded = state.rightTreeExpansion.has(state.configPath);
     const isRootSelected = state.selectedFolder === state.configPath;
     const hasRootChildren = rootFolderNames.length > 0 || root.files.length > 0;
 
@@ -544,19 +503,15 @@ export function renderTargetPane() {
 }
 
 export function toggleFolderExpand(folderPath) {
-    if (state.expandedFolders.has(folderPath)) {
-        state.expandedFolders.delete(folderPath);
-    } else {
-        state.expandedFolders.add(folderPath);
-    }
+    state.rightTreeExpansion.toggle(folderPath);
     state.selectedFolder = folderPath;
     renderTargetPane();
 }
 
 export function selectFolder(folderPath) {
     state.selectedFolder = folderPath;
-    if (!state.expandedFolders.has(folderPath)) {
-        state.expandedFolders.add(folderPath);
+    if (!state.rightTreeExpansion.has(folderPath)) {
+        state.rightTreeExpansion.add(folderPath);
     }
     renderTargetPane();
 }
@@ -681,18 +636,14 @@ export async function handleObjectDrop(event, targetFile, position) {
     }
 
     if (moved > 0) {
-        state.expandedFiles.add(targetFile);
+        state.rightTreeExpansion.add(targetFile);
         await afterFrontendMutation();
         showToast(`Moved ${moved} object(s) to ${extractFileName(targetFile)}`, 'success');
     }
 }
 
 export function toggleFileExpand(filePath) {
-    if (state.expandedFiles.has(filePath)) {
-        state.expandedFiles.delete(filePath);
-    } else {
-        state.expandedFiles.add(filePath);
-    }
+    state.rightTreeExpansion.toggle(filePath);
     renderTargetPane();
 }
 
@@ -708,7 +659,7 @@ export function handleFileDragOver(event, filePath) {
     event.dataTransfer.dropEffect = 'move';
     event.currentTarget.classList.add('drop-active');
 
-    if (filePath && !state.expandedFiles.has(filePath)) {
+    if (filePath && !state.rightTreeExpansion.has(filePath)) {
         if (fileHoverTarget !== filePath) {
             if (fileHoverTimeout) {
                 clearTimeout(fileHoverTimeout);
@@ -716,7 +667,7 @@ export function handleFileDragOver(event, filePath) {
             fileHoverTarget = filePath;
             fileHoverTimeout = setTimeout(() => {
                 if (fileHoverTarget === filePath) {
-                    state.expandedFiles.add(filePath);
+                    state.rightTreeExpansion.add(filePath);
                     renderTargetPane();
                 }
             }, 800);
@@ -810,7 +761,7 @@ export function handleFolderDragOver(event, folderPath) {
     event.dataTransfer.dropEffect = 'move';
     event.currentTarget.classList.add('drop-active');
 
-    if (folderPath && !state.expandedFolders.has(folderPath)) {
+    if (folderPath && !state.rightTreeExpansion.has(folderPath)) {
         if (folderHoverTarget !== folderPath) {
             if (folderHoverTimeout) {
                 clearTimeout(folderHoverTimeout);
@@ -818,7 +769,7 @@ export function handleFolderDragOver(event, folderPath) {
             folderHoverTarget = folderPath;
             folderHoverTimeout = setTimeout(() => {
                 if (folderHoverTarget === folderPath) {
-                    state.expandedFolders.add(folderPath);
+                    state.rightTreeExpansion.add(folderPath);
                     renderTargetPane();
                 }
             }, 800);
@@ -844,7 +795,7 @@ export async function moveFileImmediate(sourcePath, targetFolder) {
         return;
     }
 
-    state.expandedFolders.add(targetFolder);
+    state.rightTreeExpansion.add(targetFolder);
     await afterFrontendMutation();
     showToast(`Moved file to ${extractFileName(targetFolder)}/`, 'success');
 }
@@ -857,7 +808,7 @@ export async function moveFolderImmediate(sourcePath, targetFolder) {
         return;
     }
 
-    state.expandedFolders.add(targetFolder);
+    state.rightTreeExpansion.add(targetFolder);
     await afterFrontendMutation();
     showToast(`Moved folder to ${extractFileName(targetFolder)}/`, 'success');
 }
@@ -906,7 +857,7 @@ function resolveTargetFileInFolder(targetFolder) {
     if (filesInFolder.length === 1) {
         return filesInFolder[0];
     }
-    state.expandedFolders.add(targetFolder);
+    state.rightTreeExpansion.add(targetFolder);
     showToast('Multiple files in folder. Drop objects on a specific file.', 'info');
     return null;
 }
@@ -953,8 +904,8 @@ async function handleObjectsOnFolderDrop(data, targetFolder) {
                 migrateKeysAfterMove(o.source_file, targetFile, o.object_type, o.display_name ?? o.name ?? '');
             }
         }
-        state.expandedFiles.add(targetFile);
-        state.expandedFolders.add(targetFolder);
+        state.rightTreeExpansion.add(targetFile);
+        state.rightTreeExpansion.add(targetFolder);
         await afterFrontendMutation();
         scrollTargetFileIntoView(targetFile);
         showToast(`Moved ${result.data.moved} object(s) to ${extractFileName(targetFile)}`, 'success');
@@ -1116,7 +1067,7 @@ export async function createNewItem() {
             return;
         }
 
-        state.expandedFolders.add(fullPath);
+        state.rightTreeExpansion.add(fullPath);
         document.getElementById('newItemName').value = '';
         await afterFrontendMutation();
         showToast(`Created folder "${name}/"`, 'success');
@@ -1143,7 +1094,7 @@ export async function createNewItem() {
         return;
     }
 
-    state.expandedFiles.add(fullPath);
+    state.rightTreeExpansion.add(fullPath);
     document.getElementById('newItemName').value = '';
     await afterFrontendMutation();
     showToast(`Created file "${name}"`, 'success');
@@ -1246,7 +1197,7 @@ export async function confirmInlineCreate(type, name, row) {
             return;
         }
 
-        state.expandedFolders.add(fullPath);
+        state.rightTreeExpansion.add(fullPath);
         row.remove();
         await afterFrontendMutation();
         showToast(`Created folder "${folderName}/"`, 'success');
@@ -1274,7 +1225,7 @@ export async function confirmInlineCreate(type, name, row) {
             return;
         }
 
-        state.expandedFiles.add(fullPath);
+        state.rightTreeExpansion.add(fullPath);
         row.remove();
         await afterFrontendMutation();
         showToast(`Created file "${fileName}"`, 'success');
