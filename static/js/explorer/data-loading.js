@@ -61,13 +61,23 @@ export async function loadObjects() {
         state.configDisplayName = filesResult.data.config_display_name;
     }
 
-    // Sync configPath with server (may change when shadow copy is created)
+    // Sync configPath with server (may change when shadow copy is created/destroyed).
+    // Expansion state (leftTreeExpansion, rightTreeExpansion) is stored as
+    // relative paths in localStorage, so it doesn't need migration here — the
+    // TreeExpansionState save/restore methods handle the conversion.
     const newConfigPath = filesResult.data?.config_path;
     if (newConfigPath && newConfigPath !== state.configPath) {
         const oldPath = state.configPath;
         state.configPath = newConfigPath;
 
-        // Migrate expanded folders/files and selected folder to new path prefix
+        // Migrate selectedFolder (in-memory absolute path)
+        if (state.selectedFolder === oldPath) {
+            state.selectedFolder = newConfigPath;
+        } else if (state.selectedFolder?.startsWith(oldPath + '/')) {
+            state.selectedFolder = newConfigPath + state.selectedFolder.substring(oldPath.length);
+        }
+
+        // Migrate stable keys (source_file|type|name) in selections and tabs
         const migrateSet = (set) => {
             const migrated = new Set();
             for (const p of set) {
@@ -81,18 +91,6 @@ export async function loadObjects() {
             }
             return migrated;
         };
-        state.expandedFolders = migrateSet(state.expandedFolders);
-        state.expandedFiles = migrateSet(state.expandedFiles);
-        state.openTreeFolders = migrateSet(state.openTreeFolders);
-        if (state.selectedFolder === oldPath) {
-            state.selectedFolder = newConfigPath;
-        } else if (state.selectedFolder?.startsWith(oldPath + '/')) {
-            state.selectedFolder = newConfigPath + state.selectedFolder.substring(oldPath.length);
-        }
-
-        // Migrate stable keys (source_file|type|name) in selections and tabs.
-        // migrateSet works because source_file is the first component —
-        // startsWith(oldPath + '/') matches and the rest (|type|name) carries over.
         state.selectedKeys = migrateSet(state.selectedKeys);
 
         if (state.activeTabKey) {

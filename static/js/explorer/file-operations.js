@@ -124,7 +124,7 @@ export function selectObjectByName(name) {
 // ============================================================================
 
 export function initTargetPane() {
-    // restoreExpandedState() runs early in DOMContentLoaded. Apply defaults here
+    // Expansion state is restored early in DOMContentLoaded. Apply defaults here
     // since configPath is guaranteed set by this point.
     if (state.rightTreeExpansion.size === 0 && state.configPath) {
         state.rightTreeExpansion.add(state.configPath);
