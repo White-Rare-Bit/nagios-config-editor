@@ -5,7 +5,7 @@
  * afterFrontendMutation() to reload data + rebuild UI.
  */
 
-import { state } from './state.js';
+import { state, toRelativePaths, toAbsolutePaths } from './state.js';
 import { constants, isObjectTemplate, getTypeBadge, getTypeBadgeTier } from './constants.js';
 import { getObjectKey, findObjectByKey, getSelectedIndices, groupByType, getConfigRootName } from './main.js';
 import { isSelectedByIndex, clearSelection, addToSelectionByIndex, removeFromSelectionByIndex } from './state-management.js';
@@ -131,45 +131,38 @@ export function selectObjectByName(name) {
 // Target Pane (Right Side File Browser) - Setup
 // ============================================================================
 
-state.expandedFiles = new Set();
-
 export function restoreExpandedState() {
     try {
         const savedFiles = localStorage.getItem('nagios_expandedFiles');
         if (savedFiles) {
             const arr = JSON.parse(savedFiles);
             if (Array.isArray(arr)) {
-                state.expandedFiles = new Set(arr);
+                state.expandedFiles = toAbsolutePaths(arr, state.configPath);
             }
-            localStorage.removeItem('nagios_expandedFiles');
         }
         const savedFolders = localStorage.getItem('nagios_expandedFolders');
         if (savedFolders) {
             const arr = JSON.parse(savedFolders);
             if (Array.isArray(arr)) {
-                state.expandedFolders = new Set(arr);
+                state.expandedFolders = toAbsolutePaths(arr, state.configPath);
             }
-            localStorage.removeItem('nagios_expandedFolders');
         }
     } catch (e) {
         console.warn('Failed to restore expanded state:', e);
-    }
-
-    if (state.expandedFolders.size === 0 && state.configPath) {
-        state.expandedFolders.add(state.configPath);
-    }
-    if (!state.selectedFolder && state.configPath) {
-        state.selectedFolder = state.configPath;
     }
 }
 
 export function saveExpandedState() {
     try {
         if (state.expandedFiles.size > 0) {
-            localStorage.setItem('nagios_expandedFiles', JSON.stringify([...state.expandedFiles]));
+            localStorage.setItem('nagios_expandedFiles', JSON.stringify(toRelativePaths(state.expandedFiles, state.configPath)));
+        } else {
+            localStorage.removeItem('nagios_expandedFiles');
         }
         if (state.expandedFolders.size > 0) {
-            localStorage.setItem('nagios_expandedFolders', JSON.stringify([...state.expandedFolders]));
+            localStorage.setItem('nagios_expandedFolders', JSON.stringify(toRelativePaths(state.expandedFolders, state.configPath)));
+        } else {
+            localStorage.removeItem('nagios_expandedFolders');
         }
     } catch (e) {
         console.warn('Failed to save expanded state:', e);
@@ -179,7 +172,14 @@ export function saveExpandedState() {
 window.addEventListener('beforeunload', saveExpandedState);
 
 export function initTargetPane() {
-    restoreExpandedState();
+    // restoreExpandedState() runs early in DOMContentLoaded. Apply defaults here
+    // since configPath is guaranteed set by this point.
+    if (state.expandedFolders.size === 0 && state.configPath) {
+        state.expandedFolders.add(state.configPath);
+    }
+    if (!state.selectedFolder && state.configPath) {
+        state.selectedFolder = state.configPath;
+    }
     initWorkspaceToolbar();
     renderTargetPane();
 }
@@ -247,6 +247,7 @@ export function handleCreateKeydown(event) {
 export function collapseAllFolders() {
     state.expandedFolders.clear();
     state.expandedFiles.clear();
+    saveExpandedState();
     renderTargetPane();
 }
 
