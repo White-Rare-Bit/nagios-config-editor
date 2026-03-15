@@ -438,7 +438,7 @@ export function showCreateGroupDialog(idx) {
 
         // Create via API
         const result = await ApiClient.post('/api/objects/create', {
-            source_file: targetFile,
+            target_file: targetFile,
             object_type: 'hostgroup',
             attributes: {
                 hostgroup_name: name,

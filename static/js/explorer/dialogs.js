@@ -11,6 +11,7 @@ import { loadImpactAndRelationships } from './impact-section.js'; // circular �
 import { handleHostgroupServiceLink } from './analysis.js'; // circular — safe (function-level)
 import { afterFrontendMutation } from './data-loading.js'; // circular — safe (function-level)
 import { closeTab } from './tab-manager.js';
+import { navigateToObjectByIndex } from './file-operations.js'; // circular — safe (function-level)
 import { ApiClient } from '../api-client.js';
 import { showToast, showConfirmDialog } from '../ui-notifications.js';
 import { escapeHtml, generateUniqueId } from '../app.js';
@@ -134,46 +135,70 @@ function buildTypeDropdown(currentType) {
 // ============================================================================
 
 export function createNewObject(targetFile) {
-    // Ensure the target folder is expanded so we can see the new object
-    state.leftTreeExpansion.add(targetFile);
-
-    // Clear selection first (update UI but don't hide center pane yet)
-    clearSelection();
-    document.querySelectorAll('.tree-item').forEach(el => {
-        el.classList.remove('selected');
-    });
-
-    // Determine default type from file's existing objects
     const defaultType = getDominantTypeForFile(targetFile);
-    const newObj = {
-        object_type: defaultType,
-        attributes: {...getDefaultAttributes(defaultType)},
-        source_file: targetFile,
-        line_number: 999999,
-        display_name: '(new object)',
-        global_index: -1 // Special index for new objects
-    };
+    const singularize = (s) => s.endsWith('ies') ? s.slice(0, -3) + 'y' : s.endsWith('s') ? s.slice(0, -1) : s;
+    const typeOptions = Object.entries(constants.typeLabels)
+        .map(([type, label]) => `<option value="${type}"${type === defaultType ? ' selected' : ''}>${escapeHtml(singularize(label))}</option>`)
+        .join('');
 
-    // Set up editing state for new object
-    state.editedObject = newObj;
-    state.originalAttributes = {};
-    state.isNewObject = true;
-    state.newObjectStagedIndex = null;
+    showDialog('Create New Object', `
+        <div class="dialog-field">
+            <label for="newObjectTypeSelect">Object Type</label>
+            <select id="newObjectTypeSelect" class="dialog-select">${typeOptions}</select>
+        </div>
+    `, async () => {
+        const objectType = document.getElementById('newObjectTypeSelect').value;
+        closeDialog();
+        await createObjectOnServer(targetFile, objectType);
+    });
+}
 
-    // Stage immediately so it appears in the tree
-    stageNewObjectChanges();
+async function createObjectOnServer(targetFile, objectType) {
+    const attributes = getDefaultAttributes(objectType);
 
-    // Show in center pane with special handling for new objects
-    showCenterPaneNewObject(newObj, targetFile);
-
-    // Select the newly created item in the tree and scroll to it
-    setTimeout(() => {
-        const item = document.querySelector(`[data-staged-index="${state.newObjectStagedIndex}"]`);
-        if (item) {
-            item.classList.add('selected');
-            item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Ensure a unique placeholder name so the object has a valid stable key
+    const nameField = constants.nameFields[objectType] || 'name';
+    if (!attributes[nameField]) {
+        const existingNames = new Set(
+            state.allObjects
+                .filter(o => o.object_type === objectType)
+                .map(o => o.display_name)
+        );
+        let placeholderName = `new-${objectType}`;
+        let n = 2;
+        while (existingNames.has(placeholderName)) {
+            placeholderName = `new-${objectType}-${n++}`;
         }
-    }, 50);
+        attributes[nameField] = placeholderName;
+    }
+
+    // Create immediately on the server (shadow copy) — enables undo, diff, tree visibility
+    const result = await ApiClient.post('/api/objects/create', {
+        target_file: targetFile,
+        object_type: objectType,
+        attributes
+    }, { silent: true });
+
+    if (!result.success) {
+        showToast(result.data?.error || 'Failed to create object', 'error');
+        return;
+    }
+
+    // Reload objects so the new one appears in the tree
+    await afterFrontendMutation();
+
+    // Find the newly created object and navigate to it (opens tab, expands tree, scrolls).
+    // Match by type + name only — source_file changes when shadow copy is first created.
+    const displayName = attributes[nameField];
+    const targetFileName = targetFile.split('/').pop();
+    const newObj = state.allObjects.find(o =>
+        o.object_type === objectType &&
+        o.source_file.endsWith('/' + targetFileName) &&
+        (o.display_name === displayName || o.name === displayName)
+    );
+    if (newObj) {
+        navigateToObjectByIndex(newObj.global_index);
+    }
 }
 
 export function showCenterPaneNewObject(obj, targetFile) {

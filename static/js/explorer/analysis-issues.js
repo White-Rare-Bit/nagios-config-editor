@@ -9,7 +9,7 @@
 
 import { state } from './state.js';
 import { constants } from './constants.js';
-import { updateSuggestionsBadge, openNewObjectInEditor } from './analysis.js'; // circular — safe (function-level)
+import { updateSuggestionsBadge } from './analysis.js'; // circular — safe (function-level)
 import { afterFrontendMutation } from './data-loading.js'; // circular — safe (function-level)
 import { navigateToObjectByIndex } from './file-operations.js'; // circular — safe (function-level)
 import { showDialog, closeDialog } from './context-menu.js';
@@ -500,35 +500,54 @@ export function showCreateObjectForIssueDialog(objectType, attributes, suggested
             </div>
             <small class="text-muted">You can edit these after creation.</small>
         </div>
-    `, () => {
+    `, async () => {
         const targetFile = document.getElementById('resolveTargetFile').value;
         if (!targetFile) {
             showToast('Please select a target file', 'error');
             return;
         }
-        createObjectForIssue(objectType, attributes, targetFile, isTemplate);
+        await createObjectForIssue(objectType, attributes, targetFile);
     }, 'Create');
 }
 
-export function createObjectForIssue(objectType, attributes, targetFile, isTemplate) {
+export async function createObjectForIssue(objectType, attributes, targetFile) {
     const nameField = Object.keys(attributes)[0];
     const displayName = attributes[nameField];
 
     closeDialog();
 
-    // Create the new object and open it in the editor
-    const newObj = {
+    // Create via API so the object appears in tree immediately
+    const result = await ApiClient.post('/api/objects/create', {
+        target_file: targetFile,
         object_type: objectType,
-        attributes: { ...attributes },
-        source_file: targetFile,
-        display_name: displayName,
-        is_new: true
-    };
+        attributes
+    }, { silent: true });
 
-    // Open in editor so user can modify before staging
-    openNewObjectInEditor(newObj, targetFile);
+    if (!result.success) {
+        showToast(`Failed to create ${objectType}: ${result.error}`, 'error');
+        return;
+    }
 
-    showToast(`Edit the ${objectType} and save to create it`, 'info');
+    // Reload objects so the new one appears in the tree
+    state.healthCheckData = null;
+    await afterFrontendMutation();
+
+    // Find the newly created object and navigate to it.
+    // Match by type + name only — source_file changes when shadow copy is first created.
+    const targetFileName = targetFile.split('/').pop();
+    const newObj = state.allObjects.find(o =>
+        o.object_type === objectType &&
+        o.source_file.endsWith('/' + targetFileName) &&
+        (o.display_name === displayName || o.name === displayName)
+    );
+    if (newObj) {
+        navigateToObjectByIndex(newObj.global_index);
+    }
+
+    showToast(`Created ${objectType} "${displayName}"`, 'success');
+
+    // Refresh issues since we resolved one
+    loadIssues();
 }
 
 // ==========================================================================

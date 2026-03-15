@@ -16,6 +16,7 @@ import { getObjectIssue, getHostListInfo, getIssueShortLabel, getIssueIcon, getO
 import { ApiClient } from '../api-client.js';
 import { showToast, showConfirmDialog } from '../ui-notifications.js';
 import { escapeHtml, copyToClipboard } from '../app.js';
+import { NAGIOS_OBJECT_REFERENCE } from '../docs-data.js';
 import { DebugLogger, escapeJs } from '../base.js';
 import { baseState } from '../base-state.js';
 import { StableKey } from '../stable-key.js';
@@ -363,23 +364,22 @@ export function getAttributeSuggestions(attrName, objectType) {
         return getTemplatesForType(objectType);
     }
 
-    let refType = constants.ATTR_REFERENCE_MAP[attrName];
+    // Look up referenced type directly, then suppress if this field is an
+    // identity field on the current object type. A field like host_name defines
+    // the object on a host but references an existing host on services,
+    // escalations, and dependencies.
+    // Ref: https://assets.nagios.com/downloads/nagioscore/docs/nagioscore/3/en/objectdefinitions.html
+    let refType = constants.referenceFields[attrName] || null;
+    if (refType) {
+        const objIdentityFields = identityFields[objectType] || [];
+        if (objIdentityFields.includes(attrName)) {
+            refType = null;
+        }
+    }
     if (attrName === 'members') {
         if (objectType === 'hostgroup') {refType = 'host';}
         else if (objectType === 'servicegroup') {refType = 'service';}
         else if (objectType === 'contactgroup') {refType = 'contact';}
-    }
-
-    // Bug 058: Fall back to referenceFields for fields excluded from ATTR_REFERENCE_MAP
-    // (e.g., hostgroup_name/service_description are name fields for their own type
-    // but reference fields in escalation/dependency objects).
-    // Use identityFields (not nameFields) — identityFields tracks fields where users
-    // define new names; nameFields is just the display name mapping.
-    if (!refType && constants.referenceFields[attrName]) {
-        const objIdentityFields = identityFields[objectType] || [];
-        if (!objIdentityFields.includes(attrName)) {
-            refType = constants.referenceFields[attrName];
-        }
     }
 
     if (!refType) {return [];}
@@ -485,7 +485,7 @@ var docsPopoverHideTimer = null;
  * Also checks _template_directives for common template attrs (name, use, register).
  */
 function lookupDirective(objectType, attrName) {
-    var ref = window.NAGIOS_OBJECT_REFERENCE;
+    var ref = NAGIOS_OBJECT_REFERENCE;
     if (!ref) {return null;}
 
     var lower = attrName.toLowerCase();
@@ -793,7 +793,7 @@ export function showAutocompleteDropdown(input, suggestions, attrKey, options = 
     dropdown.innerHTML = suggestions.slice(0, maxItems).map((s, i) => {
         const handler = selectHandler
             ? selectHandler(s)
-            : `selectAttrAutocomplete('${escapeJs(attrKey)}', '${escapeJs(s)}')`;
+            : `Explorer.selectAttrAutocomplete('${escapeJs(attrKey)}', '${escapeJs(s)}')`;
         // S-01: HTML-escape the handler for safe insertion into HTML attribute
         // JS-escaped strings like \" would break out of HTML attributes otherwise
         return `<div class="attr-autocomplete-item" data-index="${i}" data-value="${escapeHtml(s)}" onmousedown="${escapeHtml(handler)}">${escapeHtml(s)}</div>`;
@@ -1023,7 +1023,7 @@ export function showAddAttrNameAutocomplete() {
     const maxNameItems = 50;
     const namesTruncated = filtered.length > maxNameItems;
     dropdown.innerHTML = filtered.slice(0, maxNameItems).map((s, i) => {
-        const handler = `selectAddAttrNameAutocomplete('${escapeJs(s)}')`;
+        const handler = `Explorer.selectAddAttrNameAutocomplete('${escapeJs(s)}')`;
         return `<div class="attr-autocomplete-item" data-index="${i}" data-value="${escapeHtml(s)}" onmousedown="${escapeHtml(handler)}">${escapeHtml(s)}</div>`;
     }).join('') + (namesTruncated ? `<div class="attr-autocomplete-more">and ${filtered.length - maxNameItems} more\u2026</div>` : '');
 
@@ -1088,7 +1088,7 @@ export function showAddAttrAutocomplete() {
     showAutocompleteDropdown(input, suggestions, attrName, {
         container,
         dropdownId: 'addAttrDropdown',
-        selectHandler: (s) => `selectAddAttrAutocomplete('${escapeJs(s)}')`,
+        selectHandler: (s) => `Explorer.selectAddAttrAutocomplete('${escapeJs(s)}')`,
         highlightKey: 'addAttrHighlightedIndex'
     });
 }

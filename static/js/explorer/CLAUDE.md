@@ -31,7 +31,7 @@ All modules use ES module `import`/`export` syntax. Shared state in `state.js`.
 ## Constants: Metadata vs Hardcoded
 
 From `/api/metadata` (source of truth: `nagios_model.py`):
-`typeLabels`, `nameFields`, `REQUIRED_FIELDS`, `referenceFields`, `ATTR_REFERENCE_MAP`, `NAGIOS_ATTRIBUTES`, `defaultAttributes`, `groupStructure`, notification options, failure criteria
+`typeLabels`, `nameFields`, `REQUIRED_FIELDS`, `referenceFields`, `NAGIOS_ATTRIBUTES`, `defaultAttributes`, `groupStructure`, notification options, failure criteria
 
 Hardcoded (UI-only, no backend equivalent):
 `identityFields`, `inheritanceAttrs`, `referenceAttrs`

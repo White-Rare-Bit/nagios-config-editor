@@ -87,7 +87,6 @@ export const constants = {
     nameFields: {},
     REQUIRED_FIELDS: {},
     referenceFields: {},
-    ATTR_REFERENCE_MAP: {},
     NAGIOS_ATTRIBUTES: {},
     defaultAttributes: {},
     notificationOptions: {},
@@ -140,16 +139,6 @@ function applyNotificationOptions(c, opts) {
     }
 }
 
-function buildAttrReferenceMap(c) {
-    const nameFieldValues = new Set(Object.values(c.nameFields));
-    c.ATTR_REFERENCE_MAP = {};
-    for (const [field, type] of Object.entries(c.referenceFields)) {
-        if (!nameFieldValues.has(field) || field === 'host_name') {
-            c.ATTR_REFERENCE_MAP[field] = type;
-        }
-    }
-}
-
 export function applyMetadata(meta) {
     const c = constants;
 
@@ -169,7 +158,6 @@ export function applyMetadata(meta) {
     }
     c.referenceAttrs = c.referenceTriggerAttrs;
 
-    buildAttrReferenceMap(c);
     applyNotificationOptions(c, meta.notification_options || {});
 }
 
