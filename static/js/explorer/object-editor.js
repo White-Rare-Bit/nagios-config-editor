@@ -185,6 +185,7 @@ export function showCenterPaneObject(obj) {
     // Shadow copy: object attributes on disk are the truth
     state.editedObject = obj;
     state.originalAttributes = {...obj.attributes};
+    state.editingStableKey = getObjectKey(obj);
 
     state.isNewObject = false;
     document.getElementById('centerCloseBtn').style.display = 'none';
@@ -276,6 +277,7 @@ export function syncCenterPaneAfterUndo() {
     // Shadow copy: attributes come directly from the parsed objects
     state.editedObject.attributes = {...obj.attributes};
     state.originalAttributes = {...obj.attributes};
+    state.editingStableKey = getObjectKey(obj);
 
     // Re-render the attributes display
     renderCenterAttributes();
@@ -899,8 +901,19 @@ function syncNameDisplays(key, value) {
 }
 
 export function updateAttribute(key, value, inputElement) {
-    state.editedObject.attributes[key] = value;
-    refreshRelatedSections(key, state.editedObject);
+    // Nagios attributes are single-line; strip newlines that textareas may introduce
+    const cleanValue = value.replace(/\n/g, '').trim();
+    if (inputElement && inputElement.value !== cleanValue) {
+        inputElement.value = cleanValue;
+    }
+    state.editedObject.attributes[key] = cleanValue;
+    const nameField = getNewObjectNameField(state.editedObject.object_type);
+    const isNameChange = key === nameField;
+    // Skip relationship refresh for name changes — the key is stale until
+    // the save lands, and stageCurrentChanges retriggers it on success.
+    if (!isNameChange) {
+        refreshRelatedSections(key, state.editedObject);
+    }
     syncNameDisplays(key, value);
     checkForChanges();
 }
@@ -1151,7 +1164,9 @@ export function checkForChanges() {
 }
 
 export async function stageCurrentChanges() {
-    const objKey = getObjectKey(state.editedObject);
+    // Use the stable key captured when the object was loaded — display_name
+    // may already have been mutated by syncNameDisplays for name changes.
+    const objKey = state.editingStableKey || getObjectKey(state.editedObject);
 
     // C-05: Validate required fields (warning only)
     const validation = validateRequiredFields(
@@ -1174,8 +1189,9 @@ export async function stageCurrentChanges() {
     }, { silent: true });
 
     if (result.success) {
-        // Update originalAttributes to match what's now on disk
+        // Update originalAttributes and stable key to match what's now on disk
         state.originalAttributes = {...state.editedObject.attributes};
+        state.editingStableKey = getObjectKey(state.editedObject);
         afterFrontendMutation();
         loadImpactAndRelationships(state.editedObject);
     } else {
