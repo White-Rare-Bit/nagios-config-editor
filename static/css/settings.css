@@ -244,6 +244,11 @@ body.editing-locked .settings-container #identityTab {
     max-width: 200px;
 }
 
+.form-select-path {
+    width: auto;
+    max-width: 100%;
+}
+
 .form-input-narrow {
     max-width: 120px;
 }
