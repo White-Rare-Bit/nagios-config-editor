@@ -144,9 +144,19 @@ def api_files():
                 if filename.endswith(".cfg") and filename not in PROTECTED_FILENAMES:
                     files.append(os.path.join(root, filename))
 
+    # Map shadow root paths to original directory names for display
+    sm = get_shadow_manager()
+    root_display_names = {}
+    if sm.has_shadow():
+        root_map = sm.get_root_map()
+        for shadow_name, original_root in root_map.items():
+            shadow_root = os.path.join(sm._config_dir, shadow_name)
+            root_display_names[shadow_root] = os.path.basename(original_root)
+
     return jsonify({
         "files": sorted(files),
         "roots": config_roots,
+        "root_display_names": root_display_names,
     })
 
 
