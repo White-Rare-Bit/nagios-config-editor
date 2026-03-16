@@ -58,18 +58,22 @@ class ShadowCopyManager:
 
     @property
     def _lock_file(self) -> str:
+        """Path to the lock file."""
         return os.path.join(self.shadow_base_path, "lock.json")
 
     @property
     def _snapshots_dir(self) -> str:
+        """Path to the snapshots directory."""
         return os.path.join(self.shadow_base_path, "snapshots")
 
     @property
     def _checksums_file(self) -> str:
+        """Path to the original-file checksums."""
         return os.path.join(self.shadow_base_path, "checksums.json")
 
     @property
     def _root_map_file(self) -> str:
+        """Path to the root map file."""
         return os.path.join(self.shadow_base_path, "root_map.json")
 
     # =========================================================================
@@ -150,11 +154,31 @@ class ShadowCopyManager:
         return os.path.join(original_root, rel)
 
     def shadow_path(self, relative_path: str) -> str:
-        """Return path in shadow for a relative path (backward compat, uses first root)."""
+        """Return absolute path to a file in the shadow config directory.
+
+        Backward compat: uses first root (root_0).
+
+        Args:
+            relative_path: Path relative to config root (e.g. "hosts.cfg")
+
+        Returns:
+            Absolute path into shadow config dir
+
+        """
         return os.path.join(self._config_dir, "root_0", relative_path)
 
     def original_path(self, relative_path: str) -> str:
-        """Return path in original for a relative path (backward compat, uses first root)."""
+        """Return absolute path to a file in the original config directory.
+
+        Backward compat: uses first root.
+
+        Args:
+            relative_path: Path relative to config root
+
+        Returns:
+            Absolute path into original config dir
+
+        """
         return os.path.join(self.config_path, relative_path)
 
     # =========================================================================
@@ -367,13 +391,19 @@ class ShadowCopyManager:
     ) -> str:
         """Take a snapshot of files before mutation for undo support.
 
+        For each relative path, copies the file from shadow config to a
+        snapshot directory. If the file doesn't exist, records it as "absent"
+        so undo can delete a newly created file.
+
         Args:
-            file_paths: List of relative paths (to first root) to snapshot
+            file_paths: List of relative paths to snapshot
             description: Human-readable description of the operation
-            moved_keys: Optional stable keys of objects being moved
+            moved_keys: Optional stable keys of objects being moved (for
+                reorder highlighting). Uses relative paths.
 
         Returns:
             Snapshot UUID
+
         """
         snapshot_id = f"{time.time():.6f}_{uuid.uuid4().hex[:8]}"
         snapshot_dir = os.path.join(self._snapshots_dir, snapshot_id)
@@ -511,7 +541,13 @@ class ShadowCopyManager:
 
     @staticmethod
     def _chunk_by_objects(lines: list[str]) -> list[str]:
-        """Group lines into object-level chunks for diffing."""
+        """Group lines into object-level chunks for diffing.
+
+        Each 'define type { ... }' block becomes a single string (one "line"
+        for difflib). Lines between objects stay individual. This prevents
+        the diff algorithm from matching identical 'define type {' lines
+        across different objects.
+        """
         chunks = []
         current_block = []
         in_block = False
