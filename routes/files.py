@@ -11,6 +11,7 @@ import shutil
 
 from flask import Blueprint, jsonify, request
 
+from config_discovery import PROTECTED_FILENAMES
 from file_operations import is_safe_path as file_ops_is_safe_path
 
 from .helpers import (
@@ -114,42 +115,50 @@ def _validate_move_paths(data):
 
 @bp.route("/api/files")
 def api_files():
-    """Get list of all .cfg files in the active config directory."""
-    config_dir = _get_active_config_path()
+    """Get list of all .cfg files across all config roots.
+
+    Returns files from the active config directories (shadow when active,
+    original otherwise), along with the list of config roots.
+    """
+    service = get_service()
+    config_roots = service.cfg_dirs
     files = []
 
-    if os.path.exists(config_dir):
-        for root, dirs, filenames in os.walk(config_dir):
+    for root_dir in config_roots:
+        if not os.path.exists(root_dir):
+            continue
+        for root, dirs, filenames in os.walk(root_dir):
             dirs[:] = [d for d in dirs if d not in ("backups", "backup")]
             for filename in filenames:
-                if filename.endswith(".cfg"):
+                if filename.endswith(".cfg") and filename not in PROTECTED_FILENAMES:
                     files.append(os.path.join(root, filename))
 
-    # Provide the original config dir name for display (shadow dir is named "config")
-    from .helpers import get_server_config
-    server_config = get_server_config()
-    original_name = os.path.basename(server_config.paths.primary_dir) if server_config else ""
     return jsonify({
         "files": sorted(files),
-        "config_path": config_dir,
-        "config_display_name": original_name,
+        "roots": config_roots,
     })
 
 
 @bp.route("/api/folders", methods=["GET"])
 def api_list_folders():
-    """List all folders in the active config directory."""
-    config_dir = _get_active_config_path()
+    """List all folders across all config roots."""
+    service = get_service()
+    config_roots = service.cfg_dirs
     folders = []
 
-    if os.path.exists(config_dir):
-        for root, dirs, _files in os.walk(config_dir):
+    for root_dir in config_roots:
+        if not os.path.exists(root_dir):
+            continue
+        for root, dirs, _files in os.walk(root_dir):
             dirs[:] = [d for d in dirs if d not in ["backups", "backup"] and not d.startswith(".")]
             for d in dirs:
                 folder_path = os.path.join(root, d)
                 folders.append(folder_path)
 
-    return jsonify({"folders": sorted(folders)})
+    return jsonify({
+        "folders": sorted(folders),
+        "roots": config_roots,
+    })
 
 
 # ═══════════════════════════════════════════════════════════════════════
