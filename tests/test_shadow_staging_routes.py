@@ -141,6 +141,21 @@ class TestApplyStaging:
                 content = f.read()
             assert "MODIFIED" in content
 
+    def test_apply_creates_empty_folder(self, shadow_with_changes):
+        app, client = shadow_with_changes
+        with app.app_context():
+            sm = app.extensions["shadow"]
+            new_dir = os.path.join(sm.shadow_cfg_dirs[0], "emptyfolder")
+            os.makedirs(new_dir)
+            original_root = list(sm.get_root_map().values())[0]
+
+        resp = client.post("/api/staging/apply")
+        assert resp.status_code == 200
+        assert resp.json["success"] is True
+
+        # Empty folder should exist in original
+        assert os.path.isdir(os.path.join(original_root, "emptyfolder"))
+
     def test_apply_no_shadow_succeeds(self, shadow_client):
         resp = shadow_client.post("/api/staging/apply")
         assert resp.status_code == 200

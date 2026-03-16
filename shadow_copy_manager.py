@@ -845,7 +845,10 @@ class ShadowCopyManager:
                     orig = os.path.join(original_root, rel_path)
                     shad = os.path.join(self._config_dir, shadow_name, rel_path)
 
-                    if change["status"] == "deleted":
+                    if change.get("is_dir"):
+                        if change["status"] == "added":
+                            os.makedirs(orig, exist_ok=True)
+                    elif change["status"] == "deleted":
                         if os.path.isfile(orig):
                             os.remove(orig)
                             parent = os.path.dirname(orig)
