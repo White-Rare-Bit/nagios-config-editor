@@ -10,11 +10,13 @@ let browseTargetField = null;
 
 // Path field configuration - used for validation and real-time feedback
 const PATH_FIELDS = [
-    { id: 'nagiosConfigPath', name: 'Nagios Config Path' },
     { id: 'backupPath', name: 'Backup Path' },
     { id: 'nagiosBin', name: 'Nagios Binary' },
     { id: 'nagiosCfg', name: 'Nagios Config File' }
 ];
+
+// Current extra_cfg_dirs for managing add/remove
+let currentExtraDirs = [];
 
 // =============================================================================
 // Path Validation (C-03: Client-side feedback for invalid paths)
@@ -92,6 +94,7 @@ function validateAllPaths() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    loadServerSettings();
     refreshStatus();
     loadGitIdentity();
     loadLoggingSettings();
@@ -148,6 +151,11 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (action === 'switchTab') {
             const tab = actionEl.dataset.tab;
             if (tab) {switchTab(tab);}
+        } else if (action === 'addExtraDir') {
+            addExtraDir();
+        } else if (action === 'removeExtraDir') {
+            const idx = parseInt(actionEl.dataset.index, 10);
+            removeExtraDir(idx);
         } else if (action === 'loadDirectory') {
             const path = actionEl.dataset.path;
             if (path) {loadDirectory(path);}
@@ -202,9 +210,10 @@ async function refreshStatus() {
     const result = await ApiClient.get('/api/summary', { silent: true });
 
     if (result.success) {
+        const nagiosCfg = document.getElementById('nagiosCfg')?.value || '';
         document.getElementById('statusContent').innerHTML = `
             <table class="settings-status-table">
-                <tr><td>Config Path</td><td>${escapeHtml(document.getElementById('nagiosConfigPath').value)}</td></tr>
+                <tr><td>nagios.cfg</td><td>${escapeHtml(nagiosCfg || '(not set)')}</td></tr>
                 <tr><td>Objects</td><td><strong>${result.data.total_objects}</strong></td></tr>
                 <tr><td>Config Files</td><td><strong>${result.data.files.length}</strong></td></tr>
             </table>
@@ -213,6 +222,102 @@ async function refreshStatus() {
         document.getElementById('statusContent').innerHTML =
             `<div class="settings-empty" style="color:#dc3545">Error: ${escapeHtml(result.error)}</div>`;
     }
+}
+
+async function loadServerSettings() {
+    const result = await ApiClient.get('/api/settings', { silent: true });
+    if (!result.success) return;
+
+    const data = result.data;
+    const paths = data.paths || {};
+    const discovered = data.discovered || {};
+
+    // Populate path fields
+    const nagiosCfg = document.getElementById('nagiosCfg');
+    if (nagiosCfg) nagiosCfg.value = paths.nagios_cfg || '';
+    const nagiosBin = document.getElementById('nagiosBin');
+    if (nagiosBin) nagiosBin.value = paths.nagios_bin || '';
+    const backupPath = document.getElementById('backupPath');
+    if (backupPath) backupPath.value = paths.backup_path || '';
+    const resourceCfg = document.getElementById('resourceCfg');
+    if (resourceCfg) resourceCfg.value = discovered.resource_file || paths.resource_cfg || '';
+
+    // Populate discovered directories
+    renderDiscoveredDirs(discovered.cfg_dirs || []);
+
+    // Populate extra dirs
+    currentExtraDirs = paths.extra_cfg_dirs || [];
+    renderExtraDirs();
+
+    // Populate primary dir dropdown
+    const allDirs = (discovered.cfg_dirs || [])
+        .filter(d => d.accessible)
+        .map(d => d.path);
+    const extraDirs = paths.extra_cfg_dirs || [];
+    const allOptions = [...new Set([...allDirs, ...extraDirs])];
+    const primarySelect = document.getElementById('primaryDir');
+    if (primarySelect) {
+        primarySelect.innerHTML = '<option value="">Auto (first discovered)</option>';
+        for (const dir of allOptions) {
+            const opt = document.createElement('option');
+            opt.value = dir;
+            opt.textContent = dir;
+            if (dir === paths.primary_dir) opt.selected = true;
+            primarySelect.appendChild(opt);
+        }
+    }
+}
+
+function renderDiscoveredDirs(dirs) {
+    const container = document.getElementById('discoveredDirs');
+    if (!container) return;
+
+    if (!dirs.length) {
+        container.innerHTML = '<span class="settings-empty">No directories discovered (set nagios.cfg path)</span>';
+        return;
+    }
+
+    container.innerHTML = dirs.map(d => {
+        const statusClass = d.accessible ? 'settings-dir-ok' : 'settings-dir-error';
+        const icon = d.accessible ? '&#x2713;' : '&#x2717;';
+        const error = d.error ? ` &mdash; <span class="settings-dir-error-text">${escapeHtml(d.error)}</span>` : '';
+        return `<div class="${statusClass}">${icon} ${escapeHtml(d.path)}${error}</div>`;
+    }).join('');
+}
+
+function renderExtraDirs() {
+    const container = document.getElementById('extraCfgDirs');
+    if (!container) return;
+
+    if (!currentExtraDirs.length) {
+        container.innerHTML = '<span class="settings-empty">None</span>';
+        return;
+    }
+
+    container.innerHTML = currentExtraDirs.map((dir, i) =>
+        `<div class="settings-extra-dir-item">
+            <span>${escapeHtml(dir)}</span>
+            <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--xs" data-action="removeExtraDir" data-index="${i}">&times;</button>
+        </div>`
+    ).join('');
+}
+
+function addExtraDir() {
+    const input = document.getElementById('newExtraDir');
+    const dir = input?.value?.trim();
+    if (!dir) return;
+    if (currentExtraDirs.includes(dir)) {
+        showToast('Directory already added', 'info');
+        return;
+    }
+    currentExtraDirs.push(dir);
+    input.value = '';
+    renderExtraDirs();
+}
+
+function removeExtraDir(index) {
+    currentExtraDirs.splice(index, 1);
+    renderExtraDirs();
 }
 
 async function saveIdentity() {
@@ -257,11 +362,15 @@ async function saveServerSettings() {
     }
 
     // Save server settings (config paths)
+    const primaryDir = document.getElementById('primaryDir')?.value || '';
     const settings = {
-        nagios_config_path: document.getElementById('nagiosConfigPath').value,
-        backup_path: document.getElementById('backupPath').value || null,
-        nagios_bin: document.getElementById('nagiosBin').value,
-        nagios_cfg: document.getElementById('nagiosCfg').value
+        paths: {
+            nagios_cfg: document.getElementById('nagiosCfg').value,
+            nagios_bin: document.getElementById('nagiosBin').value,
+            backup_path: document.getElementById('backupPath').value || null,
+            extra_cfg_dirs: currentExtraDirs,
+            primary_dir: primaryDir,
+        }
     };
 
     const result = await ApiClient.post('/api/settings', settings, { silent: true });
@@ -287,10 +396,13 @@ async function saveServerSettings() {
 }
 
 function resetToDefaults() {
-    document.getElementById('nagiosConfigPath').value = './sample-config';
+    document.getElementById('nagiosCfg').value = '';
     document.getElementById('backupPath').value = '';
     document.getElementById('nagiosBin').value = '/usr/local/nagios/bin/nagios';
-    document.getElementById('nagiosCfg').value = './sample-config/nagios.cfg';
+    currentExtraDirs = [];
+    renderExtraDirs();
+    const primarySelect = document.getElementById('primaryDir');
+    if (primarySelect) primarySelect.value = '';
     showToast('Settings reset to defaults (not saved yet)', 'info');
 }
 

@@ -48,40 +48,61 @@
         <!-- Server Settings Tab -->
         <div class="nbe-tab-content active" id="serverTab">
             <div class="settings-section">
-                <div class="settings-section-title">Configuration Paths</div>
+                <div class="settings-section-title">Configuration Discovery</div>
                 <div class="settings-section-content">
                     <div class="settings-field">
-                        <label class="settings-label">Nagios Configuration Directory</label>
+                        <label class="settings-label">nagios.cfg Path</label>
                         <div class="form-input-group">
-                            <input type="text" class="form-input" id="nagiosConfigPath"
-                                   value="{{ config.nagios_config_path }}"
-                                   placeholder="./sample-config">
-                            <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--sm" data-action="browseDir" data-target="nagiosConfigPath">Browse</button>
+                            <input type="text" class="form-input" id="nagiosCfg"
+                                   placeholder="./sample-config/nagios.cfg">
+                            <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--sm" data-action="browseFile" data-target="nagiosCfg">Browse</button>
                         </div>
-                        <span class="form-hint">Directory containing your Nagios .cfg files</span>
+                        <span class="form-hint">Path to nagios.cfg — config directories are discovered from cfg_dir/cfg_file directives</span>
                     </div>
 
                     <div class="settings-field">
-                        <label class="settings-label">Backup Directory</label>
-                        <div class="form-input-group">
-                            <input type="text" class="form-input" id="backupPath"
-                                   value="{{ config.backup_path or '' }}"
-                                   placeholder="Leave empty for default (config_path/backups)">
-                            <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--sm" data-action="browseDir" data-target="backupPath">Browse</button>
+                        <label class="settings-label">Discovered Directories</label>
+                        <div id="discoveredDirs" class="settings-discovered-list">
+                            <span class="settings-empty">Loading...</span>
                         </div>
-                        <span class="form-hint">Where to store configuration backups</span>
+                        <span class="form-hint">Directories found in nagios.cfg (read-only)</span>
+                    </div>
+
+                    <div class="settings-field">
+                        <label class="settings-label">Additional Directories</label>
+                        <div id="extraCfgDirs" class="settings-extra-dirs">
+                            <span class="settings-empty">None</span>
+                        </div>
+                        <div class="form-input-group" style="margin-top: 0.5rem">
+                            <input type="text" class="form-input" id="newExtraDir" placeholder="/path/to/extra/configs">
+                            <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--sm" data-action="addExtraDir">Add</button>
+                        </div>
+                        <span class="form-hint">Extra directories to include beyond nagios.cfg discovery</span>
+                    </div>
+
+                    <div class="settings-field">
+                        <label class="settings-label">Primary Directory</label>
+                        <select class="form-input form-select-narrow" id="primaryDir">
+                            <option value="">Auto (first discovered)</option>
+                        </select>
+                        <span class="form-hint">Default directory for new files and git operations</span>
+                    </div>
+
+                    <div class="settings-field">
+                        <label class="settings-label">Resource File</label>
+                        <input type="text" class="form-input form-input-readonly" id="resourceCfg" readonly>
+                        <span class="form-hint">Discovered from nagios.cfg resource_file directive (read-only)</span>
                     </div>
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="settings-section-title">Nagios Validation</div>
+                <div class="settings-section-title">Paths</div>
                 <div class="settings-section-content">
                     <div class="settings-field">
                         <label class="settings-label">Nagios Binary Path</label>
                         <div class="form-input-group">
                             <input type="text" class="form-input" id="nagiosBin"
-                                   value="{{ config.nagios_bin }}"
                                    placeholder="/usr/local/nagios/bin/nagios">
                             <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--sm" data-action="browseFile" data-target="nagiosBin">Browse</button>
                         </div>
@@ -89,14 +110,13 @@
                     </div>
 
                     <div class="settings-field">
-                        <label class="settings-label">Main Nagios Config File</label>
+                        <label class="settings-label">Backup Directory</label>
                         <div class="form-input-group">
-                            <input type="text" class="form-input" id="nagiosCfg"
-                                   value="{{ config.nagios_cfg }}"
-                                   placeholder="./sample-config/nagios.cfg">
-                            <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--sm" data-action="browseFile" data-target="nagiosCfg">Browse</button>
+                            <input type="text" class="form-input" id="backupPath"
+                                   placeholder="Leave empty for default">
+                            <button class="nbe-btn nbe-btn--dark nbe-btn--outlined nbe-btn--sm" data-action="browseDir" data-target="backupPath">Browse</button>
                         </div>
-                        <span class="form-hint">Path to nagios.cfg (for validation)</span>
+                        <span class="form-hint">Where to store configuration backups</span>
                     </div>
                 </div>
             </div>

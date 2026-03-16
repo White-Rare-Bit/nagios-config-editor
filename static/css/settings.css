@@ -438,3 +438,46 @@ body.editing-locked .settings-container #identityTab {
 .settings-main::-webkit-scrollbar-thumb:hover {
     background: var(--nbe-dark-text-muted);
 }
+
+/* Discovered directories list */
+.settings-discovered-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nbe-space-xs);
+}
+
+.settings-dir-ok {
+    color: var(--nbe-dark-text-secondary);
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-font-size-secondary);
+}
+
+.settings-dir-error {
+    color: var(--nbe-dark-validation-error, #dc3545);
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-font-size-secondary);
+}
+
+.settings-dir-error-text {
+    font-style: italic;
+    opacity: 0.8;
+}
+
+/* Extra directories list */
+.settings-extra-dirs {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nbe-space-xs);
+}
+
+.settings-extra-dir-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--nbe-space-xs) var(--nbe-space-sm);
+    background: var(--nbe-dark-bg-secondary);
+    border-radius: var(--nbe-radius-sm);
+    font-family: var(--nbe-font-mono);
+    font-size: var(--nbe-font-size-secondary);
+    color: var(--nbe-dark-text-secondary);
+}
