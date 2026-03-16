@@ -35,12 +35,13 @@ class LoggingConfig:
 class PathsConfig:
     """Path configuration settings."""
 
-    nagios_config_path: str = "./sample-config"
+    nagios_cfg: str = ""
+    nagios_bin: str = "/usr/local/nagios/bin/nagios"
     backup_path: str | None = None
     shadow_path: str | None = None
-    nagios_bin: str = "/usr/local/nagios/bin/nagios"
-    nagios_cfg: str = "./sample-config/nagios.cfg"
     resource_cfg: str = ""
+    extra_cfg_dirs: list[str] = field(default_factory=list)
+    primary_dir: str = ""
 
 
 @dataclass
@@ -68,12 +69,13 @@ class ServerConfig:
         return cls(
             version=data.get("version", CONFIG_VERSION),
             paths=PathsConfig(
-                nagios_config_path=paths_data.get("nagios_config_path", "./sample-config"),
+                nagios_cfg=paths_data.get("nagios_cfg", ""),
+                nagios_bin=paths_data.get("nagios_bin", "/usr/local/nagios/bin/nagios"),
                 backup_path=paths_data.get("backup_path"),
                 shadow_path=paths_data.get("shadow_path"),
-                nagios_bin=paths_data.get("nagios_bin", "/usr/local/nagios/bin/nagios"),
-                nagios_cfg=paths_data.get("nagios_cfg", "./sample-config/nagios.cfg"),
                 resource_cfg=paths_data.get("resource_cfg", ""),
+                extra_cfg_dirs=paths_data.get("extra_cfg_dirs", []),
+                primary_dir=paths_data.get("primary_dir", ""),
             ),
             logging=LoggingConfig(
                 enabled=logging_data.get("enabled", True),
@@ -86,14 +88,6 @@ class ServerConfig:
         )
 
     # Convenience accessors for backward compatibility
-    @property
-    def nagios_config_path(self) -> str:
-        return self.paths.nagios_config_path
-
-    @nagios_config_path.setter
-    def nagios_config_path(self, value: str):
-        self.paths.nagios_config_path = value
-
     @property
     def backup_path(self) -> str | None:
         return self.paths.backup_path
@@ -139,23 +133,17 @@ def _apply_env_overrides(config: ServerConfig) -> ServerConfig:
     Environment variables take precedence over file settings.
     """
     # Path overrides
-    if env_val := os.environ.get("NAGIOS_CONFIG_PATH"):
-        config.paths.nagios_config_path = os.path.abspath(env_val)
-    else:
-        # Normalize the path from config
-        config.paths.nagios_config_path = os.path.abspath(config.paths.nagios_config_path)
+    if env_val := os.environ.get("NAGIOS_CFG"):
+        config.paths.nagios_cfg = env_val
+
+    if env_val := os.environ.get("NAGIOS_BIN"):
+        config.paths.nagios_bin = env_val
 
     if env_val := os.environ.get("BACKUP_PATH"):
         config.paths.backup_path = env_val
 
     if env_val := os.environ.get("NBE_SHADOW_PATH"):
         config.paths.shadow_path = env_val
-
-    if env_val := os.environ.get("NAGIOS_BIN"):
-        config.paths.nagios_bin = env_val
-
-    if env_val := os.environ.get("NAGIOS_CFG"):
-        config.paths.nagios_cfg = env_val
 
     return config
 
@@ -217,18 +205,17 @@ def save_config(config: ServerConfig) -> None:
 def _apply_paths_updates(config: ServerConfig, paths_dict: dict) -> None:
     """Apply path updates from a dictionary to config.paths.
 
-    nagios_config_path is normalized to absolute path; others are set directly.
-
     Args:
         config: ServerConfig to update
         paths_dict: Dictionary of path field updates
 
     """
-    if "nagios_config_path" in paths_dict:
-        config.paths.nagios_config_path = os.path.abspath(paths_dict["nagios_config_path"])
-    for key in ("backup_path", "shadow_path", "nagios_bin", "nagios_cfg"):
+    for key in ("nagios_cfg", "nagios_bin", "backup_path", "shadow_path",
+                "resource_cfg", "primary_dir"):
         if key in paths_dict:
             setattr(config.paths, key, paths_dict[key])
+    if "extra_cfg_dirs" in paths_dict:
+        config.paths.extra_cfg_dirs = list(paths_dict["extra_cfg_dirs"])
 
 
 def _apply_logging_updates(config: ServerConfig, logging_dict: dict) -> None:
@@ -250,9 +237,9 @@ def update_config(updates: dict) -> ServerConfig:
 
     Args:
         updates: Dictionary of updates. Supports nested keys like:
-                 {'paths': {'nagios_config_path': '/new/path'}}
+                 {'paths': {'nagios_cfg': '/new/path'}}
                  or flat keys for convenience:
-                 {'nagios_config_path': '/new/path'}
+                 {'nagios_cfg': '/new/path'}
 
     Returns:
         Updated ServerConfig

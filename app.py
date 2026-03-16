@@ -114,11 +114,8 @@ def create_app(config_path: str | None = None, log_dir_override: str | None = No
     # Load server configuration from config/settings.json (with env var overrides)
     _server_config = load_server_config()
 
-    # Use provided config_path or fall back to server config
-    nagios_config_path = config_path or _server_config.nagios_config_path
-    if config_path:
-        # Update server config if override provided
-        _server_config.paths.nagios_config_path = os.path.abspath(config_path)
+    # Use provided config_path or fall back to primary_dir from discovery
+    nagios_config_path = config_path or _server_config.paths.primary_dir or "./sample-config"
     backup_path = _server_config.backup_path
 
     # Configure stdlib logging
@@ -160,7 +157,7 @@ def create_app(config_path: str | None = None, log_dir_override: str | None = No
 def get_config_path() -> str:
     """Get current Nagios config path."""
     if _server_config:
-        return _server_config.nagios_config_path
+        return _server_config.paths.primary_dir or "./sample-config"
     return "./sample-config"
 
 
