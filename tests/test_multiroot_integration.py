@@ -1,8 +1,24 @@
 """Integration test: multi-root config discovery through full stack."""
 
 import os
+import shutil
+
+import pytest
 
 from app import create_app
+from server_config import CONFIG_FILE
+
+
+@pytest.fixture(autouse=True)
+def _preserve_settings():
+    """Save and restore config/settings.json around tests that modify it."""
+    backup = CONFIG_FILE.with_suffix(".json.bak")
+    if CONFIG_FILE.exists():
+        shutil.copy2(CONFIG_FILE, backup)
+    yield
+    if backup.exists():
+        shutil.copy2(backup, CONFIG_FILE)
+        backup.unlink()
 
 
 class TestMultiRootIntegration:

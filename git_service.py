@@ -767,6 +767,10 @@ class GitService:
                 f.write(".staging/\n")
                 f.write("*.bak\n")
                 f.write("*.tmp\n")
+                f.write("\n# Daemon/system configs (not object definitions)\n")
+                f.write("nagios.cfg\n")
+                f.write("cgi.cfg\n")
+                f.write("resource.cfg\n")
 
         return OperationResult(success=True, data=result.data)
 

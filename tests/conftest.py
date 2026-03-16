@@ -1,6 +1,8 @@
 """Shared test fixtures for Nagios Bulk Editor tests."""
 
+import glob
 import os
+import shutil
 
 import pytest
 
@@ -14,6 +16,28 @@ def sample_config_path():
     path = os.path.abspath(path)
     assert os.path.isdir(path), f"sample-config not found at {path}"
     return path
+
+
+def _cleanup_test_artifacts():
+    """Remove shadow copies, backups, and log files created during tests."""
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    shadow_dir = os.path.join(project_root, ".shadow")
+    if os.path.isdir(shadow_dir):
+        shutil.rmtree(shadow_dir, ignore_errors=True)
+    sample_config = os.path.join(project_root, "sample-config")
+    backup_dir = os.path.join(sample_config, "backups")
+    if os.path.isdir(backup_dir):
+        shutil.rmtree(backup_dir, ignore_errors=True)
+    log_dir = os.path.join(project_root, "logs")
+    for f in glob.glob(os.path.join(log_dir, "*.log*")):
+        os.remove(f)
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_after_test():
+    """Auto-cleanup test artifacts after every test."""
+    yield
+    _cleanup_test_artifacts()
 
 
 @pytest.fixture

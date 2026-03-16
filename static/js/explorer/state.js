@@ -175,6 +175,7 @@ export const state = {
 
     // Config
     configPath: '',
+    configDisplayName: '',  // Original dir name (survives shadow path changes)
     configRoots: [],
 
     // Session
