@@ -268,6 +268,37 @@ class TestStagingDiff:
         assert "hosts.cfg" in hosts_diff["display_path"]
 
 
+class TestCreateFolder:
+    """POST /api/folders creates folder in shadow with undo support."""
+
+    def test_create_folder_succeeds(self, shadow_client):
+        resp = shadow_client.post(
+            "/api/folders",
+            json={"path": "newfolder"},
+            headers={"X-Session-Id": "s1"},
+        )
+        assert resp.status_code == 200
+        assert resp.json["success"] is True
+
+    def test_create_folder_has_undo(self, shadow_client):
+        shadow_client.post(
+            "/api/folders",
+            json={"path": "newfolder"},
+            headers={"X-Session-Id": "s1"},
+        )
+        resp = shadow_client.get("/api/staging/info")
+        assert resp.json["data"]["undoCount"] == 1
+
+    def test_create_folder_shows_in_changed_files(self, shadow_client):
+        shadow_client.post(
+            "/api/folders",
+            json={"path": "newfolder"},
+            headers={"X-Session-Id": "s1"},
+        )
+        resp = shadow_client.get("/api/staging/info")
+        assert resp.json["data"]["changedFiles"] >= 1
+
+
 class TestFolderUndo:
     """Undo support for folder creation."""
 

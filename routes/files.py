@@ -256,16 +256,30 @@ def api_create_folder():
 
     sm = get_shadow_manager()
     config_path = sm._config_dir
+    shadow_config = os.path.abspath(config_path)
 
     # Normalize path into shadow dir
-    abs_folder_path = os.path.abspath(folder_path)
-    orig_config = get_config_path()
-    if abs_folder_path.startswith(os.path.abspath(orig_config)):
-        rel = os.path.relpath(abs_folder_path, orig_config)
-        abs_folder_path = os.path.join(config_path, rel)
+    if not os.path.isabs(folder_path):
+        # Relative path — resolve against primary shadow root
+        abs_folder_path = os.path.normpath(os.path.join(config_path, "root_0", folder_path))
+    else:
+        abs_folder_path = os.path.abspath(folder_path)
+        if abs_folder_path.startswith(shadow_config + os.sep):
+            # Already a shadow path — use as-is
+            pass
+        else:
+            # Remap from original root to shadow equivalent
+            abs_folder_path = os.path.abspath(sm.shadow_path_for(abs_folder_path))
 
-    if not abs_folder_path.startswith(os.path.abspath(config_path)):
+    if not abs_folder_path.startswith(shadow_config):
         return jsonify({"error": "Path must be within config directory"}), 400
+
+    if os.path.isdir(abs_folder_path):
+        return jsonify({"error": "Folder already exists"}), 400
+
+    # Snapshot before creation so undo can remove it
+    rel_path = os.path.relpath(abs_folder_path, config_path)
+    sm.snapshot_files([], f"create folder {rel_path}", dir_paths=[rel_path])
 
     os.makedirs(abs_folder_path, exist_ok=True)
 
