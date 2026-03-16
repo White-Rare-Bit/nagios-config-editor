@@ -41,35 +41,65 @@ class NagiosConfigParser:
         "timeperiod_name", "alias", "use", "name", "register", "exclude",
     })
 
-    def __init__(self, config_path: str = "./sample-config"):
-        # Always use absolute path to ensure consistent file paths
-        self.config_path = Path(config_path).resolve()
+    def __init__(self, config_path=None, *, cfg_dirs=None, cfg_files=None):
+        """Initialize parser.
+
+        Args:
+            config_path: Single directory (backward compat). Treated as sole cfg_dir.
+            cfg_dirs: List of directories to recursively scan for .cfg files.
+            cfg_files: List of individual .cfg file paths to parse.
+        """
+        if config_path is not None:
+            self.cfg_dirs = [Path(config_path).resolve()]
+            self.cfg_files = []
+        else:
+            self.cfg_dirs = [Path(d).resolve() for d in (cfg_dirs or [])]
+            self.cfg_files = [Path(f).resolve() for f in (cfg_files or [])]
+        # Keep config_path for backward compat (first dir or None)
+        self.config_path = self.cfg_dirs[0] if self.cfg_dirs else None
         self.objects: list[NagiosObject] = []
         self.files_parsed: list[str] = []
 
+    def _should_skip(self, file_path: str, cfg_file_name: str) -> bool:
+        """Check if a file should be skipped based on name/path patterns."""
+        if "/backups/" in file_path or "/backup/" in file_path:
+            return True
+        if ".bak" in file_path or ".backup" in file_path:
+            return True
+        if "/.staging/" in file_path or "/.nagios_staging/" in file_path:
+            return True
+        if any(
+            part.isdigit() and len(part) >= _MIN_TIMESTAMP_DIGITS
+            for part in cfg_file_name.replace("_", ".").split(".")
+        ):
+            return True
+        return False
+
     def parse_all(self) -> list[NagiosObject]:
-        """Parse all .cfg files in the config directory, excluding backups."""
+        """Parse all config files from cfg_dirs and cfg_files."""
         self.objects = []
         self.files_parsed = []
+        seen: set[str] = set()
 
-        if not self.config_path.exists():
-            return self.objects
+        # Parse individual cfg_file entries first
+        for f in self.cfg_files:
+            resolved = str(f)
+            if f.exists() and resolved not in seen:
+                seen.add(resolved)
+                self.parse_file(resolved)
 
-        for cfg_file in self.config_path.rglob("*.cfg"):
-            # Skip backup files and directories
-            file_path = str(cfg_file)
-            if "/backups/" in file_path or "/backup/" in file_path:
+        # Then recurse cfg_dir entries
+        for d in self.cfg_dirs:
+            if not d.exists():
                 continue
-            if ".bak" in file_path or ".backup" in file_path:
-                continue
-            # Skip staging directories (shadow copies, baselines)
-            if "/.staging/" in file_path or "/.nagios_staging/" in file_path:
-                continue
-            # Skip files with timestamp patterns like _20240115_ or .20240115.
-            parts = cfg_file.name
-            if any(part.isdigit() and len(part) >= _MIN_TIMESTAMP_DIGITS for part in parts.replace("_", ".").split(".")):
-                continue
-            self.parse_file(file_path)
+            for cfg_file in d.rglob("*.cfg"):
+                file_path = str(cfg_file)
+                if file_path in seen:
+                    continue
+                if self._should_skip(file_path, cfg_file.name):
+                    continue
+                seen.add(file_path)
+                self.parse_file(file_path)
 
         return self.objects
 
