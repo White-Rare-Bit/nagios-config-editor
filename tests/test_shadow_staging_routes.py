@@ -230,3 +230,33 @@ class TestStagingDiff:
         assert hosts_diff is not None
         assert "diff" in hosts_diff
         assert "MODIFIED" in hosts_diff["diff"]["diff_text"]
+
+    def test_changed_files_include_display_path(self, shadow_with_changes):
+        app, client = shadow_with_changes
+        resp = client.get("/api/staging/diff")
+        files = resp.json["data"]["files"]
+        hosts_diff = next((f for f in files if "hosts.cfg" in f["path"]), None)
+        assert hosts_diff is not None
+        assert "display_path" in hosts_diff
+        # display_path uses original dir basename, not root_0
+        assert not hosts_diff["display_path"].startswith("root_0")
+        assert "hosts.cfg" in hosts_diff["display_path"]
+
+
+class TestChangedFilesNewDir:
+    """get_changed_files detects new empty directories."""
+
+    def test_new_empty_folder_detected(self, shadow_with_changes):
+        app, client = shadow_with_changes
+        with app.app_context():
+            sm = app.extensions["shadow"]
+            # Create empty folder in shadow
+            new_dir = os.path.join(sm.shadow_cfg_dirs[0], "newsubdir")
+            os.makedirs(new_dir)
+
+        resp = client.get("/api/staging/diff")
+        files = resp.json["data"]["files"]
+        dir_entry = next((f for f in files if "newsubdir" in f.get("display_path", f["path"])), None)
+        assert dir_entry is not None
+        assert dir_entry["status"] == "added"
+        assert dir_entry.get("is_dir") is True

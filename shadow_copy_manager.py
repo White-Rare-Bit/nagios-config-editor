@@ -508,6 +508,19 @@ class ShadowCopyManager:
                 result.add(rel)
         return result
 
+    @staticmethod
+    def _collect_dirs_for_root(directory: str) -> set[str]:
+        """Collect all directory paths relative to directory."""
+        result = set()
+        if not os.path.isdir(directory):
+            return result
+        for dirpath, dirnames, _filenames in os.walk(directory):
+            for d in dirnames:
+                full = os.path.join(dirpath, d)
+                rel = os.path.relpath(full, directory)
+                result.add(rel)
+        return result
+
     def get_changed_files(self) -> list[dict]:
         """Compute file-level diff between shadow and originals across all roots.
 
@@ -523,6 +536,7 @@ class ShadowCopyManager:
 
         for shadow_name, original_root in root_map.items():
             shadow_subdir = os.path.join(self._config_dir, shadow_name)
+            display_root = os.path.basename(original_root)
             original_files = self._collect_files_for_root(original_root)
             shadow_files = self._collect_files_for_root(shadow_subdir)
 
@@ -531,16 +545,30 @@ class ShadowCopyManager:
                               if os.path.basename(f) not in PROTECTED_FILENAMES}
 
             for f in sorted(shadow_files - original_files):
-                changes.append({"path": f"{shadow_name}/{f}", "status": "added"})
+                changes.append({"path": f"{shadow_name}/{f}", "display_path": f"{display_root}/{f}", "status": "added"})
 
             for f in sorted(original_files - shadow_files):
-                changes.append({"path": f"{shadow_name}/{f}", "status": "deleted"})
+                changes.append({"path": f"{shadow_name}/{f}", "display_path": f"{display_root}/{f}", "status": "deleted"})
 
             for f in sorted(original_files & shadow_files):
                 orig = os.path.join(original_root, f)
                 shad = os.path.join(shadow_subdir, f)
                 if not filecmp.cmp(orig, shad, shallow=False):
-                    changes.append({"path": f"{shadow_name}/{f}", "status": "modified"})
+                    changes.append({"path": f"{shadow_name}/{f}", "display_path": f"{display_root}/{f}", "status": "modified"})
+
+            # Detect new empty directories
+            original_dirs = self._collect_dirs_for_root(original_root)
+            shadow_dirs = self._collect_dirs_for_root(shadow_subdir)
+            for d in sorted(shadow_dirs - original_dirs):
+                # Only report if the directory has no files (non-empty dirs covered by file changes)
+                dir_abs = os.path.join(shadow_subdir, d)
+                if not any(os.path.join(shadow_subdir, f).startswith(dir_abs + os.sep) for f in shadow_files):
+                    changes.append({
+                        "path": f"{shadow_name}/{d}",
+                        "display_path": f"{display_root}/{d}",
+                        "status": "added",
+                        "is_dir": True,
+                    })
 
         return changes
 
