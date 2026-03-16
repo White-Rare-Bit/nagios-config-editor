@@ -1,5 +1,7 @@
 """Shared helper functions for route blueprints."""
 
+import os
+
 from flask import current_app, jsonify, request
 
 from nagios_model import OperationResult
@@ -46,6 +48,20 @@ def get_config_path() -> str:
     if service:
         return service.config_path
     return ""
+
+
+def make_relative_path(path, config_path):
+    """Convert an absolute path to a path relative to the config directory's parent.
+
+    For config_path=/etc/nagios/objects and path=/etc/nagios/objects/hosts.cfg,
+    returns "objects/hosts.cfg". This preserves the config dir name while
+    stripping server filesystem structure from audit logs.
+    """
+    if not path:
+        return path
+    if config_path and path.startswith(config_path):
+        return os.path.relpath(path, os.path.dirname(config_path))
+    return path
 
 
 def get_server_config() -> ServerConfig:

@@ -20,6 +20,7 @@ from .helpers import (
     get_server_config,
     get_service,
     get_shadow_manager,
+    make_relative_path,
 )
 
 bp = Blueprint("staging", __name__)
@@ -61,21 +62,6 @@ def _restore_service_to_original_roots():
                 service.set_roots(cfg_dirs=[server_config.paths.primary_dir], cfg_files=[])
 
     service.reload()
-
-
-def _make_relative_path(path):
-    """Convert an absolute path to a path relative to the config directory's parent.
-
-    For config_path=/etc/nagios/objects and path=/etc/nagios/objects/hosts.cfg,
-    returns "objects/hosts.cfg". This preserves the config dir name while
-    stripping server filesystem structure from audit logs.
-    """
-    if not path:
-        return path
-    config_path = get_config_path()
-    if config_path and path.startswith(config_path):
-        return os.path.relpath(path, os.path.dirname(config_path))
-    return path
 
 
 def _run_post_apply_validation():

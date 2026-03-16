@@ -114,3 +114,22 @@ class TestLogAudit:
             assert len(msg[txn_start:txn_end]) > 0
         finally:
             audit.removeHandler(handler)
+
+
+class TestMakeRelativePath:
+    """Test make_relative_path helper."""
+
+    def test_strips_config_parent(self):
+        from routes.helpers import make_relative_path
+        result = make_relative_path("/etc/nagios/objects/hosts.cfg", "/etc/nagios/objects")
+        assert result == "objects/hosts.cfg"
+
+    def test_non_config_path_unchanged(self):
+        from routes.helpers import make_relative_path
+        result = make_relative_path("/tmp/other/file.cfg", "/etc/nagios/objects")
+        assert result == "/tmp/other/file.cfg"
+
+    def test_none_path_passthrough(self):
+        from routes.helpers import make_relative_path
+        result = make_relative_path(None, "/etc/nagios/objects")
+        assert result is None
