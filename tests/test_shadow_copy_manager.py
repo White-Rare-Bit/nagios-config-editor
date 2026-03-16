@@ -34,9 +34,9 @@ class TestShadowLifecycle:
         result = scm.create_shadow("session-1", "user", "user@test.com")
         assert result.success
         assert scm.has_shadow()
-        # Verify files copied
-        shadow_hosts = os.path.join(shadow_base, "config", "hosts.cfg")
-        shadow_services = os.path.join(shadow_base, "config", "subdir", "services.cfg")
+        # Verify files copied (now under root_0/ subdir)
+        shadow_hosts = os.path.join(shadow_base, "config", "root_0", "hosts.cfg")
+        shadow_services = os.path.join(shadow_base, "config", "root_0", "subdir", "services.cfg")
         assert os.path.exists(shadow_hosts)
         assert os.path.exists(shadow_services)
 
@@ -73,12 +73,13 @@ class TestShadowLifecycle:
         with open(checksums_path) as f:
             checksums = json.load(f)
 
-        # Should have an entry for each .cfg file in config_dir
+        # Should have an entry for each .cfg file (keyed as root_0/rel_path)
         cfg_files = []
         for root, _dirs, files in os.walk(config_dir):
             for fn in files:
                 if fn.endswith(".cfg"):
-                    cfg_files.append(os.path.relpath(os.path.join(root, fn), config_dir))
+                    rel = os.path.relpath(os.path.join(root, fn), config_dir)
+                    cfg_files.append(f"root_0/{rel}")
 
         assert set(checksums.keys()) == set(cfg_files)
         # Each value should be a 64-char hex string (SHA-256)
@@ -225,7 +226,7 @@ class TestDiffComputation:
             f.write("modified content\n")
         changed = scm.get_changed_files()
         assert len(changed) == 1
-        assert changed[0]["path"] == "hosts.cfg"
+        assert changed[0]["path"] == "root_0/hosts.cfg"
         assert changed[0]["status"] == "modified"
 
     def test_new_file_detected(self, setup_dirs):
@@ -238,7 +239,7 @@ class TestDiffComputation:
             f.write("define host {\n    host_name new\n}\n")
         changed = scm.get_changed_files()
         assert len(changed) == 1
-        assert changed[0]["path"] == "new.cfg"
+        assert changed[0]["path"] == "root_0/new.cfg"
         assert changed[0]["status"] == "added"
 
     def test_deleted_file_detected(self, setup_dirs):
@@ -249,7 +250,7 @@ class TestDiffComputation:
         os.remove(scm.shadow_path("hosts.cfg"))
         changed = scm.get_changed_files()
         assert len(changed) == 1
-        assert changed[0]["path"] == "hosts.cfg"
+        assert changed[0]["path"] == "root_0/hosts.cfg"
         assert changed[0]["status"] == "deleted"
 
     def test_get_file_diff_returns_unified_diff(self, setup_dirs):
@@ -423,7 +424,7 @@ class TestConflictDetection:
         result = scm.apply()
         assert not result.success
         assert result.error == "conflicts"
-        assert "hosts.cfg" in result.data["conflicts"]
+        assert "root_0/hosts.cfg" in result.data["conflicts"]
 
     def test_apply_succeeds_when_no_conflicts(self, setup_dirs):
         """apply() should succeed when originals are unchanged."""
@@ -467,7 +468,7 @@ class TestConflictDetection:
         result = scm.apply()
         assert not result.success
         assert result.error == "conflicts"
-        assert "hosts.cfg" in result.data["conflicts"]
+        assert "root_0/hosts.cfg" in result.data["conflicts"]
 
     def test_apply_skips_check_when_no_checksums_file(self, setup_dirs):
         """apply() should succeed without checksums.json (backward compat)."""
