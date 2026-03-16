@@ -17,7 +17,7 @@ def parse_nagios_cfg(nagios_cfg_path):
         dict with 'cfg_dirs' (list of str) and 'cfg_files' (list of str).
         Returns empty lists if the file doesn't exist or can't be read.
     """
-    result = {"cfg_dirs": [], "cfg_files": []}
+    result = {"cfg_dirs": [], "cfg_files": [], "resource_file": ""}
     if not nagios_cfg_path or not os.path.isfile(nagios_cfg_path):
         return result
 
@@ -36,6 +36,8 @@ def parse_nagios_cfg(nagios_cfg_path):
                     result["cfg_dirs"].append(value)
                 elif key == "cfg_file":
                     result["cfg_files"].append(value)
+                elif key == "resource_file":
+                    result["resource_file"] = value
     except (OSError, UnicodeDecodeError):
         pass
 
