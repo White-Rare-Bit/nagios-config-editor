@@ -28,15 +28,26 @@ logger = logging.getLogger("nagios_bulk_editor.files")
 
 
 def is_safe_path(path: str, base_dir: str = None):
-    """Wrapper that provides get_config_path() as default for base_dir.
+    """Check if path is within any config root (or a specific base_dir).
+
+    For multi-root, accepts paths within any of the service's cfg_dirs.
 
     Returns:
         OperationResult with success=True if safe, success=False with error if unsafe.
 
     """
-    if base_dir is None:
-        base_dir = get_config_path()
-    return file_ops_is_safe_path(path, base_dir)
+    if base_dir is not None:
+        return file_ops_is_safe_path(path, base_dir)
+
+    # Multi-root: check against all config roots
+    service = get_service()
+    for root in service.cfg_dirs:
+        result = file_ops_is_safe_path(path, root)
+        if result.success:
+            return result
+
+    # None matched — return error from primary dir
+    return file_ops_is_safe_path(path, get_config_path())
 
 
 def _get_active_config_path():
@@ -193,24 +204,21 @@ def api_create_file():
         return error
 
     sm = get_shadow_manager()
-    config_path = sm._config_dir
 
     # Normalize path into shadow dir
     if not os.path.isabs(file_path):
-        file_path = os.path.normpath(os.path.join(config_path, file_path))
+        # Relative path — resolve against primary shadow root
+        file_path = os.path.normpath(os.path.join(sm._config_dir, "root_0", file_path))
     else:
-        # Remap from original config to shadow
-        orig_config = get_config_path()
-        if file_path.startswith(orig_config):
-            rel = os.path.relpath(file_path, orig_config)
-            file_path = os.path.join(config_path, rel)
-        file_path = os.path.normpath(file_path)
+        # Absolute path — remap from original root to shadow equivalent
+        shadow_path = sm.shadow_path_for(file_path)
+        file_path = os.path.normpath(shadow_path)
 
     if os.path.exists(file_path):
         return jsonify({"error": "File already exists"}), 400
 
     # Snapshot, then create the file directly
-    rel_path = os.path.relpath(file_path, config_path)
+    rel_path = os.path.relpath(file_path, sm._config_dir)
     sm.snapshot_files([rel_path], f"create file {rel_path}")
 
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
