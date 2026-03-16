@@ -155,7 +155,7 @@ export async function updateBadges() {
 
     if (infoResult.success) {
         const info = infoResult.data.data || infoResult.data;
-        let count = info.totalCount || 0;
+        let count = Math.max(info.totalCount || 0, info.changedFiles || 0);
 
         // Update object-level change tracking
         state.changedObjectKeys = new Set(info.changedObjectKeys || []);
@@ -192,7 +192,10 @@ export async function loadChangedFiles() {
     const diffData = result.data?.data || result.data;
     if (result.success && diffData?.files) {
         for (const f of diffData.files) {
-            state.changedFilesMap.set(f.path, f.status);
+            // Strip shadow root prefix (e.g. "root_0/") to get path relative
+            // to the config root, matching what toRelativePath() produces.
+            const key = f.path.includes('/') ? f.path.substring(f.path.indexOf('/') + 1) : f.path;
+            state.changedFilesMap.set(key, f.status);
         }
     }
 }

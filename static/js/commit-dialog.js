@@ -285,7 +285,8 @@ function buildShadowFilesHtml(shadowFiles) {
             typeClass = '';
         }
 
-        const fileName = file.path.split('/').pop();
+        const displayPath = file.display_path || file.path;
+        const fileName = displayPath.split('/').pop();
         const diffText = (file.diff && file.diff.diff_text) || '';
         const diffContent = renderDiffText(diffText);
 
@@ -295,7 +296,7 @@ function buildShadowFilesHtml(shadowFiles) {
                     <span class="commit-item-expand">&#9658;</span>
                     <span class="commit-item-type ${typeClass}">${statusLabel}</span>
                     <span class="commit-item-name">${escapeHtml(fileName)}</span>
-                    <span class="commit-item-file">${escapeHtml(file.path)}</span>
+                    <span class="commit-item-file">${escapeHtml(displayPath)}</span>
                 </div>
                 <div class="commit-item-diff">
                     <div class="diff-content">${diffContent || '<div class="diff-line context">No changes to display</div>'}</div>
