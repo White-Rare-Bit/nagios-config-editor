@@ -197,6 +197,15 @@ class ShadowCopyManager:
 
         Copies each cfg_dir into shadow_base/config/<root_N>/, filtering
         protected files. Writes root_map.json and lock.json.
+
+        Args:
+            session_id: Session ID of the lock owner
+            user_name: Display name of the user
+            user_email: Email of the user
+
+        Returns:
+            OperationResult with success/error
+
         """
         with self._lock:
             if self.has_shadow():
@@ -266,7 +275,12 @@ class ShadowCopyManager:
                 return OperationResult(success=False, error=str(e))
 
     def destroy_shadow(self) -> OperationResult:
-        """Destroy the shadow copy and release the lock."""
+        """Destroy the shadow copy and release the lock.
+
+        Returns:
+            OperationResult with success/error
+
+        """
         with self._lock:
             try:
                 self._cleanup_shadow_dirs()
@@ -290,7 +304,12 @@ class ShadowCopyManager:
     # =========================================================================
 
     def get_lock_status(self) -> dict:
-        """Get current lock status."""
+        """Get current lock status.
+
+        Returns:
+            Dict with locked, session_id, user_name, user_email, created_at
+
+        """
         if not os.path.isfile(self._lock_file):
             return {"locked": False}
 
@@ -308,7 +327,18 @@ class ShadowCopyManager:
             return {"locked": False}
 
     def can_modify(self, session_id: str) -> bool:
-        """Check if the given session can modify the shadow copy."""
+        """Check if the given session can modify the shadow copy.
+
+        If no shadow exists, any session can start one (returns True).
+        If shadow exists, only the lock owner can modify.
+
+        Args:
+            session_id: Session ID to check
+
+        Returns:
+            True if the session can modify
+
+        """
         if not self.has_shadow():
             return True
         status = self.get_lock_status()
@@ -317,7 +347,12 @@ class ShadowCopyManager:
         return status.get("session_id") == session_id
 
     def break_lock(self) -> OperationResult:
-        """Force-break the lock by destroying the shadow copy."""
+        """Force-break the lock by destroying the shadow copy.
+
+        Returns:
+            OperationResult with success/error
+
+        """
         return self.destroy_shadow()
 
     # =========================================================================
@@ -369,7 +404,12 @@ class ShadowCopyManager:
         return snapshot_id
 
     def undo(self) -> OperationResult:
-        """Undo the most recent operation by restoring from snapshot."""
+        """Undo the most recent operation by restoring from snapshot.
+
+        Returns:
+            OperationResult with success/error
+
+        """
         with self._lock:
             if not os.path.isdir(self._snapshots_dir):
                 return OperationResult(success=False, error="No undo history")
@@ -437,7 +477,8 @@ class ShadowCopyManager:
         """Compute file-level diff between shadow and originals across all roots.
 
         Returns:
-            List of dicts with 'path' (shadow_name/rel) and 'status'
+            List of dicts with 'path' (shadow_name/rel) and 'status' (added/modified/deleted)
+
         """
         if not self.has_shadow():
             return []
@@ -497,9 +538,17 @@ class ShadowCopyManager:
     def get_file_diff(self, relative_path: str, context_lines: int = 3) -> dict:
         """Compute unified diff for a single file.
 
+        Uses object-aware chunking so that each 'define type { ... }' block
+        is treated as an atomic unit, preventing the diff algorithm from
+        splitting object boundaries.
+
         Args:
             relative_path: Path relative to config root (or shadow_name/rel for multi-root)
-            context_lines: Number of context lines around changes
+            context_lines: Number of context lines around changes (default 3)
+
+        Returns:
+            Dict with 'diff_text' containing unified diff string
+
         """
         orig = self.original_path(relative_path)
         shad = self.shadow_path(relative_path)
@@ -550,7 +599,15 @@ class ShadowCopyManager:
         return {"diff_text": "".join(result_lines)}
 
     def get_changed_object_keys(self) -> list[str]:
-        """Return stable keys of all changed Nagios objects between shadow and originals."""
+        """Return stable keys of all changed Nagios objects between shadow and originals.
+
+        Parses both original and shadow directories and compares objects by stable key.
+        Also includes moved keys recorded in snapshot metadata.
+
+        Returns:
+            List of stable keys for added, modified, deleted, or moved objects
+
+        """
         from nagios_parser import NagiosConfigParser
         from stable_keys import generate_stable_key
 
@@ -617,7 +674,12 @@ class ShadowCopyManager:
     # =========================================================================
 
     def _detect_conflicts(self) -> list[str]:
-        """Compare current originals against stored checksums."""
+        """Compare current originals against stored checksums.
+
+        Returns:
+            List of relative paths that have changed externally.
+            Empty list if checksums.json doesn't exist (backward compat).
+        """
         if not os.path.isfile(self._checksums_file):
             return []
 
@@ -641,8 +703,17 @@ class ShadowCopyManager:
     def apply(self, backup_manager=None, force: bool = False) -> OperationResult:
         """Apply shadow changes back to the original config directories.
 
+        Checks for external modifications first (unless force=True).
         For each root, copies changed files from shadow back to original,
         removes deleted files, then destroys the shadow copy.
+
+        Args:
+            backup_manager: Optional BackupManager to create pre-apply backup
+            force: If True, skip conflict detection and overwrite
+
+        Returns:
+            OperationResult with data={'changed_files': [...]} on success
+
         """
         with self._lock:
             if not self.has_shadow():
