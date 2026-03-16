@@ -386,7 +386,8 @@ def api_delete_file(file_path):
 
     sm = get_shadow_manager()
     config_path = sm._config_dir
-    abs_path = os.path.abspath(os.path.join(config_path, file_path))
+    shadow_root = sm.shadow_cfg_dirs[0] if sm.shadow_cfg_dirs else config_path
+    abs_path = os.path.abspath(os.path.join(shadow_root, file_path))
 
     if not abs_path.startswith(os.path.abspath(config_path)):
         return jsonify({"error": "Path must be within config directory"}), 400
@@ -417,12 +418,16 @@ def api_delete_folder(folder_path):
 
     sm = get_shadow_manager()
     config_path = sm._config_dir
-    abs_path = os.path.abspath(os.path.join(config_path, folder_path))
+    shadow_root = sm.shadow_cfg_dirs[0] if sm.shadow_cfg_dirs else config_path
+    abs_path = os.path.abspath(os.path.join(shadow_root, folder_path))
 
     if not abs_path.startswith(os.path.abspath(config_path)):
         return jsonify({"error": "Path must be within config directory"}), 400
 
     if abs_path == os.path.abspath(config_path):
+        return jsonify({"error": "Cannot delete config root directory"}), 400
+
+    if abs_path in [os.path.abspath(d) for d in sm.shadow_cfg_dirs]:
         return jsonify({"error": "Cannot delete config root directory"}), 400
 
     if not os.path.isdir(abs_path):

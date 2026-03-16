@@ -326,6 +326,40 @@ class TestFolderUndo:
             assert not os.path.isdir(new_dir)
 
 
+class TestDeleteFileAndFolder:
+    """DELETE /api/files and /api/folders resolves paths against shadow root."""
+
+    def test_delete_created_file(self, shadow_client):
+        # Create a file first
+        shadow_client.post(
+            "/api/files/create",
+            json={"path": "deleteme.cfg"},
+            headers={"X-Session-Id": "s1"},
+        )
+        # Delete it using relative path
+        resp = shadow_client.delete(
+            "/api/files/deleteme.cfg",
+            headers={"X-Session-Id": "s1"},
+        )
+        assert resp.status_code == 200
+        assert resp.json["success"] is True
+
+    def test_delete_created_folder(self, shadow_client):
+        # Create a folder first
+        shadow_client.post(
+            "/api/folders",
+            json={"path": "deletedir"},
+            headers={"X-Session-Id": "s1"},
+        )
+        # Delete it using relative path
+        resp = shadow_client.delete(
+            "/api/folders/deletedir",
+            headers={"X-Session-Id": "s1"},
+        )
+        assert resp.status_code == 200
+        assert resp.json["success"] is True
+
+
 class TestChangedFilesNewDir:
     """get_changed_files detects new empty directories."""
 
