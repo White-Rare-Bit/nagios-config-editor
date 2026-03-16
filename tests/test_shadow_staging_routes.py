@@ -268,6 +268,33 @@ class TestStagingDiff:
         assert "hosts.cfg" in hosts_diff["display_path"]
 
 
+class TestFolderUndo:
+    """Undo support for folder creation."""
+
+    def test_undo_removes_created_folder(self, shadow_with_changes):
+        app, client = shadow_with_changes
+        with app.app_context():
+            sm = app.extensions["shadow"]
+            shadow_root = sm.shadow_cfg_dirs[0]
+            new_dir = os.path.join(shadow_root, "undome")
+            rel_path = os.path.relpath(new_dir, sm._config_dir)
+            sm.snapshot_files([], f"create folder {rel_path}", dir_paths=[rel_path])
+            os.makedirs(new_dir)
+
+            assert os.path.isdir(new_dir)
+            assert sm.get_undo_count() == 1
+
+        resp = client.post(
+            "/api/staging/undo",
+            headers={"X-Session-Id": "test-session"},
+        )
+        assert resp.json["success"] is True
+
+        with app.app_context():
+            sm = app.extensions["shadow"]
+            assert not os.path.isdir(new_dir)
+
+
 class TestChangedFilesNewDir:
     """get_changed_files detects new empty directories."""
 

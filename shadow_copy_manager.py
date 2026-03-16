@@ -393,6 +393,7 @@ class ShadowCopyManager:
         file_paths: list[str],
         description: str,
         moved_keys: list[str] | None = None,
+        dir_paths: list[str] | None = None,
     ) -> str:
         """Take a snapshot of files before mutation for undo support.
 
@@ -426,6 +427,14 @@ class ShadowCopyManager:
             else:
                 file_records.append({"path": rel_path, "status": "absent"})
 
+        dir_records = []
+        for rel_path in (dir_paths or []):
+            _orig, shadow_dir = self._resolve_paths(rel_path)
+            if os.path.isdir(shadow_dir):
+                dir_records.append({"path": rel_path, "status": "exists"})
+            else:
+                dir_records.append({"path": rel_path, "status": "absent"})
+
         meta: dict = {
             "description": description,
             "timestamp": time.time(),
@@ -433,6 +442,8 @@ class ShadowCopyManager:
         }
         if moved_keys:
             meta["moved_keys"] = moved_keys
+        if dir_records:
+            meta["dirs"] = dir_records
         with open(os.path.join(snapshot_dir, "meta.json"), "w", encoding="utf-8") as f:
             json.dump(meta, f)
 
@@ -473,6 +484,16 @@ class ShadowCopyManager:
                         src = os.path.join(files_dir, rel_path)
                         os.makedirs(os.path.dirname(shadow_file), exist_ok=True)
                         shutil.copy2(src, shadow_file)
+
+                # Undo directory creation (remove dirs that were absent before)
+                for dir_record in meta.get("dirs", []):
+                    rel_path = dir_record["path"]
+                    _orig, shadow_dir = self._resolve_paths(rel_path)
+                    if dir_record["status"] == "absent" and os.path.isdir(shadow_dir):
+                        try:
+                            os.rmdir(shadow_dir)  # Only removes empty dirs
+                        except OSError:
+                            pass  # Dir not empty — leave it
 
                 shutil.rmtree(snapshot_dir)
 
