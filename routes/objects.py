@@ -4,10 +4,15 @@ All mutations operate on the shadow copy (or original if no shadow).
 """
 
 import os
+import uuid
 
 from flask import Blueprint, jsonify, request
 
-from .helpers import get_service, get_shadow_manager, operation_response
+from audit_service import log_audit
+from .helpers import (
+    get_service, get_shadow_manager, operation_response,
+    get_audit_user_identity, format_audit_user, make_relative_path, get_config_path,
+)
 from .files import ensure_shadow_lock
 
 
@@ -104,9 +109,30 @@ def api_update_object():
     rel_path = os.path.relpath(obj.source_file, sm._config_dir)
     sm.snapshot_files([rel_path], f"edit {obj.object_type} {obj.get_display_name()}")
 
+    # Capture old attributes before mutation for audit diffing
+    old_attrs = dict(obj.attributes)
+
     result = service.update_object(
         obj.source_file, obj.line_number, new_attrs, obj.object_type,
     )
+
+    if result.success:
+        identity = get_audit_user_identity()
+        user = format_audit_user(identity)
+        config_path = get_config_path()
+        file_display = make_relative_path(obj.source_file, config_path)
+        txn = uuid.uuid4().hex[:8]
+        for field_name in set(list(old_attrs.keys()) + list(new_attrs.keys())):
+            old_val = old_attrs.get(field_name, "")
+            new_val = new_attrs.get(field_name, "")
+            if old_val != new_val:
+                log_audit(
+                    action="object_edit", user=user, txn=txn,
+                    type=obj.object_type, name=obj.get_display_name(),
+                    file=file_display, field=field_name,
+                    from_val=old_val, to_val=new_val,
+                )
+
     return operation_response(result)
 
 
