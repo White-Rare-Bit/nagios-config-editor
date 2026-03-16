@@ -12,6 +12,7 @@ import { handleHostgroupServiceLink } from './analysis.js'; // circular — safe
 import { afterFrontendMutation } from './data-loading.js'; // circular — safe (function-level)
 import { closeTab } from './tab-manager.js';
 import { navigateToObjectByIndex } from './file-operations.js'; // circular — safe (function-level)
+import { toRelativePath } from './ui-utils.js';
 import { ApiClient } from '../api-client.js';
 import { showToast, showConfirmDialog } from '../ui-notifications.js';
 import { escapeHtml, generateUniqueId } from '../app.js';
@@ -197,6 +198,10 @@ async function createObjectOnServer(targetFile, objectType) {
         (o.display_name === displayName || o.name === displayName)
     );
     if (newObj) {
+        // Track as a creation so tree renders green staged-creation style
+        const relPath = toRelativePath(newObj.source_file);
+        const name = newObj.display_name ?? newObj.name ?? ('idx:' + newObj.global_index);
+        state.createdObjectKeys.add(relPath + '|' + newObj.object_type + '|' + name);
         navigateToObjectByIndex(newObj.global_index);
     }
 }

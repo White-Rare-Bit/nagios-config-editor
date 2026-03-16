@@ -160,10 +160,18 @@ export async function updateBadges() {
         // Update object-level change tracking
         state.changedObjectKeys = new Set(info.changedObjectKeys || []);
 
+        // Prune created keys that are no longer changed (deleted or undone)
+        for (const key of state.createdObjectKeys) {
+            if (!state.changedObjectKeys.has(key)) {
+                state.createdObjectKeys.delete(key);
+            }
+        }
+
         updateUndoButton(info.undoCount || 0);
 
-        // If no shadow changes, check git for external changes
+        // If no shadow changes, clear created keys and check git for external changes
         if (count === 0) {
+            state.createdObjectKeys.clear();
             const gitResult = await ApiClient.get('/api/git/status', { silent: true });
             if (gitResult.success && gitResult.data?.has_changes) {
                 count = gitResult.data.files.length;

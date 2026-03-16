@@ -170,6 +170,9 @@ export const state = {
     // Changed object stable keys (from /api/staging/info)
     changedObjectKeys: new Set(),
 
+    // Created object stable keys (tracked client-side for green highlighting)
+    createdObjectKeys: new Set(),
+
     // Config
     configPath: '',
 

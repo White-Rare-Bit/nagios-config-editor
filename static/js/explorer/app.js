@@ -447,6 +447,17 @@ export function buildTypeTree(container, objects) {
 }
 
 /**
+ * Check if an object was created in this session (for green staged-creation highlighting).
+ */
+function isObjectCreated(obj) {
+    if (state.createdObjectKeys.size === 0) { return false; }
+    const relPath = toRelativePath(obj.source_file);
+    const name = obj.display_name ?? obj.name ?? ('idx:' + obj.global_index);
+    const relKey = relPath + '|' + obj.object_type + '|' + name;
+    return state.createdObjectKeys.has(relKey);
+}
+
+/**
  * Check if an object has changed vs the original config (using relative-path stable keys).
  */
 function isObjectChanged(obj) {
@@ -464,7 +475,7 @@ export function renderTreeItem(obj, showType = false) {
     const hostListInfo = getHostListInfo(obj);
     const issue = getObjectIssue(obj);
     const orphanClass = isOrphan ? 'is-orphan' : '';
-    const changedClass = isObjectChanged(obj) ? 'is-changed' : '';
+    const changedClass = isObjectCreated(obj) ? 'staged-creation' : isObjectChanged(obj) ? 'is-changed' : '';
     const longListClass = hostListInfo.shouldGroup ? 'has-long-list' : '';
     const typeLabel = getTypeBadge(obj.object_type, isTemplate);
     const badgeCompact = getTypeBadgeTier(obj.object_type, isTemplate, 'compact');

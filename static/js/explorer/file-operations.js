@@ -512,6 +512,13 @@ export function selectFolder(folderPath) {
 // File Object Rendering
 // ============================================================================
 
+function isObjectCreated(obj) {
+    if (state.createdObjectKeys.size === 0) { return false; }
+    const relPath = toRelativePath(obj.source_file);
+    const name = obj.display_name ?? obj.name ?? ('idx:' + obj.global_index);
+    return state.createdObjectKeys.has(relPath + '|' + obj.object_type + '|' + name);
+}
+
 function isObjectChanged(obj) {
     if (state.changedObjectKeys.size === 0) { return false; }
     const relPath = toRelativePath(obj.source_file);
@@ -523,7 +530,7 @@ function buildExistingObjectRow(obj, gripIcon, filePath) {
     const displayName = obj.display_name || obj.name || '(unnamed)';
     const isTemplate = isObjectTemplate(obj);
     const typeLabel = getTypeBadge(obj.object_type, isTemplate);
-    const changedClass = isObjectChanged(obj) ? ' is-changed' : '';
+    const changedClass = isObjectCreated(obj) ? ' staged-creation' : isObjectChanged(obj) ? ' is-changed' : '';
     return `
         <div class="workspace-object-row${changedClass}" data-index="${obj.global_index}" data-file="${escapeHtml(filePath)}"
              draggable="true"
