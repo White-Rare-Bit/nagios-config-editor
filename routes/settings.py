@@ -19,39 +19,74 @@ logger = logging.getLogger(__name__)
 
 @bp.route("/api/settings", methods=["GET"])
 def api_get_settings():
-    """Get current settings."""
+    """Get current settings including discovered config roots."""
     server_config = get_server_config()
     if not server_config:
         return jsonify({})
 
+    discovery = current_app.extensions.get("discovery", {})
+
     return jsonify({
-        "nagios_config_path": server_config.nagios_config_path,
-        "backup_path": server_config.backup_path,
-        "nagios_bin": server_config.nagios_bin,
-        "nagios_cfg": server_config.nagios_cfg,
+        "paths": {
+            "nagios_cfg": server_config.paths.nagios_cfg,
+            "nagios_bin": server_config.paths.nagios_bin,
+            "backup_path": server_config.paths.backup_path,
+            "shadow_path": server_config.paths.shadow_path,
+            "resource_cfg": server_config.paths.resource_cfg,
+            "extra_cfg_dirs": server_config.paths.extra_cfg_dirs,
+            "primary_dir": server_config.paths.primary_dir,
+        },
+        "discovered": {
+            "cfg_dirs": discovery.get("directories", []),
+            "resource_file": discovery.get("resource_file", ""),
+        },
     })
 
 
 @bp.route("/api/settings", methods=["POST"])
 def api_update_settings():
-    """Update settings and persist to config/settings.json."""
+    """Update settings and persist to config/settings.json.
+
+    Accepts nested paths dict: {"paths": {"nagios_cfg": "...", ...}}
+    or flat keys for backward compat: {"backup_path": "...", ...}
+    """
     server_config = get_server_config()
     if not server_config:
         return jsonify({"error": "Server config not initialized"}), 500
 
     data = request.get_json() or {}
+    # Support both nested {"paths": {...}} and flat keys
+    paths_data = data.get("paths", {})
+    # Merge flat keys into paths_data for backward compat
+    for key in ("backup_path", "nagios_bin", "nagios_cfg", "extra_cfg_dirs", "primary_dir"):
+        if key in data and key not in paths_data:
+            paths_data[key] = data[key]
+
     updated = []
     errors = []
 
-    if "nagios_config_path" in data:
-        _update_config_path(server_config, data["nagios_config_path"], updated, errors)
-    if "backup_path" in data:
-        _update_backup_path(server_config, data["backup_path"], updated, errors)
-    if "nagios_bin" in data:
-        _update_nagios_bin(server_config, data["nagios_bin"], updated, errors)
-    if "nagios_cfg" in data:
-        server_config.paths.nagios_cfg = data["nagios_cfg"]
+    if "backup_path" in paths_data:
+        _update_backup_path(server_config, paths_data["backup_path"], updated, errors)
+    if "nagios_bin" in paths_data:
+        _update_nagios_bin(server_config, paths_data["nagios_bin"], updated, errors)
+
+    # Simple field updates
+    needs_rediscovery = False
+    if "nagios_cfg" in paths_data:
+        server_config.paths.nagios_cfg = paths_data["nagios_cfg"]
         updated.append("nagios_cfg")
+        needs_rediscovery = True
+    if "extra_cfg_dirs" in paths_data:
+        server_config.paths.extra_cfg_dirs = list(paths_data["extra_cfg_dirs"])
+        updated.append("extra_cfg_dirs")
+        needs_rediscovery = True
+    if "primary_dir" in paths_data:
+        server_config.paths.primary_dir = paths_data["primary_dir"]
+        updated.append("primary_dir")
+
+    # Re-run discovery and reinitialize services if nagios_cfg or extra_dirs changed
+    if needs_rediscovery and not errors:
+        _rediscover_and_reinit(server_config, errors)
 
     if updated and not errors:
         try:
@@ -59,56 +94,72 @@ def api_update_settings():
         except (OSError, ValueError) as e:
             errors.append(f"Failed to save config: {e}")
 
+    discovery = current_app.extensions.get("discovery", {})
+
     return jsonify({
         "success": len(errors) == 0,
         "updated": updated,
         "errors": errors,
         "config": {
-            "nagios_config_path": server_config.nagios_config_path,
-            "backup_path": server_config.backup_path,
-            "nagios_bin": server_config.nagios_bin,
-            "nagios_cfg": server_config.nagios_cfg,
+            "paths": {
+                "nagios_cfg": server_config.paths.nagios_cfg,
+                "nagios_bin": server_config.paths.nagios_bin,
+                "backup_path": server_config.paths.backup_path,
+                "extra_cfg_dirs": server_config.paths.extra_cfg_dirs,
+                "primary_dir": server_config.paths.primary_dir,
+            },
+            "discovered": {
+                "cfg_dirs": discovery.get("directories", []),
+                "resource_file": discovery.get("resource_file", ""),
+            },
         },
     })
 
 
-def _update_config_path(server_config, path, updated, errors):
-    """Update the Nagios config directory path.
+def _rediscover_and_reinit(server_config, errors):
+    """Re-run config discovery and reinitialize services.
 
-    F-05: Creates all services BEFORE updating config to prevent inconsistent state.
-    Appends to updated/errors lists in place.
+    Called when nagios_cfg or extra_cfg_dirs changes. Creates all services
+    BEFORE updating app.extensions to prevent inconsistent state.
     """
-    if not os.path.isdir(path):
-        errors.append(f"Invalid directory: {path}")
-        return
-
     from backup_manager import BackupManager
+    from config_discovery import discover_config_roots
     from git_service import GitService
     from nagios_service import NagiosService
     from shadow_copy_manager import ShadowCopyManager
 
-    normalized_path = os.path.abspath(path)
-
     try:
-        new_service = NagiosService(normalized_path)
-        _ = new_service.parser  # Force init to catch config errors early
-        new_backup = BackupManager(normalized_path, server_config.backup_path)
-        new_git = GitService(normalized_path)
+        discovery = discover_config_roots(
+            server_config.paths.nagios_cfg,
+            extra_cfg_dirs=server_config.paths.extra_cfg_dirs,
+        )
+        accessible_dirs = [d["path"] for d in discovery["directories"] if d["accessible"]]
+        cfg_files = discovery["cfg_files"]
 
-        # Re-initialize shadow manager with new config path
+        if discovery["resource_file"]:
+            server_config.paths.resource_cfg = discovery["resource_file"]
+        if not server_config.paths.primary_dir and accessible_dirs:
+            server_config.paths.primary_dir = accessible_dirs[0]
+
+        primary_dir = server_config.paths.primary_dir or "./sample-config"
+
+        new_service = NagiosService(cfg_dirs=accessible_dirs, cfg_files=cfg_files)
+        _ = new_service.parser  # Force init to catch config errors early
+        new_backup = BackupManager(primary_dir, server_config.backup_path)
+        new_git = GitService(primary_dir)
+
         shadow_path = server_config.shadow_path
         if not shadow_path:
-            shadow_path = os.path.join(os.path.dirname(normalized_path), ".shadow")
-        new_shadow = ShadowCopyManager(normalized_path, shadow_path)
+            shadow_path = os.path.join(os.path.dirname(os.path.abspath(primary_dir)), ".shadow")
+        new_shadow = ShadowCopyManager(cfg_dirs=accessible_dirs, shadow_base_path=shadow_path)
 
-        server_config.paths.nagios_config_path = normalized_path
         current_app.extensions["service"] = new_service
         current_app.extensions["shadow"] = new_shadow
         current_app.extensions["backup"] = new_backup
         current_app.extensions["git"] = new_git
-        updated.append("nagios_config_path")
+        current_app.extensions["discovery"] = discovery
     except Exception as e:  # noqa: BLE001
-        errors.append(f"Failed to initialize services for path: {e}")
+        errors.append(f"Failed to reinitialize services: {e}")
 
 
 def _update_backup_path(server_config, path, updated, errors):
@@ -123,9 +174,8 @@ def _update_backup_path(server_config, path, updated, errors):
     server_config.paths.backup_path = path or None
 
     from backup_manager import BackupManager
-    backup_manager = BackupManager(
-        server_config.nagios_config_path, server_config.backup_path,
-    )
+    primary_dir = server_config.paths.primary_dir or "./sample-config"
+    backup_manager = BackupManager(primary_dir, server_config.backup_path)
     current_app.extensions["backup"] = backup_manager
     updated.append("backup_path")
 
