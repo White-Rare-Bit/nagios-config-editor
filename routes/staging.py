@@ -277,5 +277,6 @@ def api_staging_diff():
     context_lines = request.args.get("context_lines", 3, type=int)
     files = sm.get_changed_files()
     for f in files:
-        f["diff"] = sm.get_file_diff(f["path"], context_lines=context_lines)
+        f["diff"] = sm.get_file_diff(f["path"], context_lines=context_lines,
+                                         display_path=f.get("display_path", ""))
     return jsonify({"success": True, "data": {"files": files}})

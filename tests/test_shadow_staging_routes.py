@@ -231,6 +231,16 @@ class TestStagingDiff:
         assert "diff" in hosts_diff
         assert "MODIFIED" in hosts_diff["diff"]["diff_text"]
 
+    def test_diff_headers_use_display_path(self, shadow_with_changes):
+        app, client = shadow_with_changes
+        resp = client.get("/api/staging/diff")
+        files = resp.json["data"]["files"]
+        hosts_diff = next((f for f in files if "hosts.cfg" in f["path"]), None)
+        diff_text = hosts_diff["diff"]["diff_text"]
+        # Diff headers should NOT contain root_0
+        assert "a/root_0/" not in diff_text
+        assert "b/root_0/" not in diff_text
+
     def test_changed_files_include_display_path(self, shadow_with_changes):
         app, client = shadow_with_changes
         resp = client.get("/api/staging/diff")

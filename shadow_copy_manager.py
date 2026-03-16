@@ -629,7 +629,8 @@ class ShadowCopyManager:
         # Fallback: use backward-compat methods
         return self.original_path(composite_path), self.shadow_path(composite_path)
 
-    def get_file_diff(self, relative_path: str, context_lines: int = 3) -> dict:
+    def get_file_diff(self, relative_path: str, context_lines: int = 3,
+                      display_path: str = "") -> dict:
         """Compute unified diff for a single file.
 
         Uses object-aware chunking so that each 'define type { ... }' block
@@ -645,12 +646,13 @@ class ShadowCopyManager:
 
         """
         orig, shad = self._resolve_paths(relative_path)
+        label = display_path or relative_path
 
         for path in (orig, shad):
             if os.path.isfile(path):
                 with open(path, "rb") as f:
                     if b"\x00" in f.read(8192):
-                        return {"diff_text": f"Binary file {relative_path}\n"}
+                        return {"diff_text": f"Binary file {label}\n"}
 
         orig_lines = []
         shad_lines = []
@@ -668,8 +670,8 @@ class ShadowCopyManager:
         diff = difflib.unified_diff(
             orig_chunks,
             shad_chunks,
-            fromfile=f"a/{relative_path}",
-            tofile=f"b/{relative_path}",
+            fromfile=f"a/{label}",
+            tofile=f"b/{label}",
             n=context_lines,
         )
 
