@@ -447,7 +447,7 @@ body.editing-locked .settings-container #identityTab {
 }
 
 .settings-dir-ok {
-    color: var(--nbe-dark-text-secondary);
+    color: var(--color-create, #4caf50);
     font-family: var(--nbe-font-mono);
     font-size: var(--nbe-font-size-secondary);
 }

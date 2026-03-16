@@ -175,6 +175,7 @@ export const state = {
 
     // Config
     configPath: '',
+    configRoots: [],
 
     // Session
     sessionId: null,

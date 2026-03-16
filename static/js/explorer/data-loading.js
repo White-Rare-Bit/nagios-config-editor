@@ -56,16 +56,16 @@ export async function loadObjects() {
     state.allFiles = filesResult.data?.files || [];
     state.existingFolders = foldersResult.data?.folders || [];
 
-    // Store original config display name (shadow dir is named "config" internally)
-    if (filesResult.data?.config_display_name) {
-        state.configDisplayName = filesResult.data.config_display_name;
+    // Store config roots from multi-root API response
+    if (filesResult.data?.roots) {
+        state.configRoots = filesResult.data.roots;
     }
 
     // Sync configPath with server (may change when shadow copy is created/destroyed).
     // Expansion state (leftTreeExpansion, rightTreeExpansion) is stored as
     // relative paths in localStorage, so it doesn't need migration here — the
     // TreeExpansionState save/restore methods handle the conversion.
-    const newConfigPath = filesResult.data?.config_path;
+    const newConfigPath = state.configRoots[0] || filesResult.data?.config_path;
     if (newConfigPath && newConfigPath !== state.configPath) {
         const oldPath = state.configPath;
         state.configPath = newConfigPath;
