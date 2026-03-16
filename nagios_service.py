@@ -9,6 +9,7 @@ import multiprocessing
 import os
 import re
 from contextlib import contextmanager
+from pathlib import Path
 from file_operations import (
     add_object_to_file,
     delete_object_from_file,
@@ -30,8 +31,13 @@ class NagiosService:
     with automatic state synchronization (reload after write).
     """
 
-    def __init__(self, config_path: str):
-        self._config_path = config_path
+    def __init__(self, config_path=None, *, cfg_dirs=None, cfg_files=None):
+        if config_path is not None:
+            self._cfg_dirs = [config_path]
+            self._cfg_files = []
+        else:
+            self._cfg_dirs = list(cfg_dirs or [])
+            self._cfg_files = list(cfg_files or [])
         self._parser: NagiosConfigParser | None = None
         self._lock = multiprocessing.Lock()
         # Flag to indicate parser state is inconsistent with disk state.
@@ -40,12 +46,32 @@ class NagiosService:
 
     @property
     def config_path(self) -> str:
-        return self._config_path
+        """First cfg_dir for backward compat. Returns empty string if none."""
+        if self._cfg_dirs:
+            return str(Path(self._cfg_dirs[0]).resolve())
+        return ""
 
     @config_path.setter
     def config_path(self, path: str) -> None:
+        """Set single config path (backward compat, replaces all dirs)."""
         with self._lock:
-            self._config_path = path
+            self._cfg_dirs = [path]
+            self._cfg_files = []
+            self._parser = None
+
+    @property
+    def cfg_dirs(self) -> list[str]:
+        return list(self._cfg_dirs)
+
+    @property
+    def cfg_files(self) -> list[str]:
+        return list(self._cfg_files)
+
+    def set_roots(self, cfg_dirs, cfg_files):
+        """Update config roots and clear parser cache."""
+        with self._lock:
+            self._cfg_dirs = list(cfg_dirs)
+            self._cfg_files = list(cfg_files)
             self._parser = None
 
     @property
@@ -53,7 +79,10 @@ class NagiosService:
         """Get or create the parser (thread-safe)."""
         with self._lock:
             if self._parser is None:
-                self._parser = NagiosConfigParser(self._config_path)
+                self._parser = NagiosConfigParser(
+                    cfg_dirs=self._cfg_dirs,
+                    cfg_files=self._cfg_files,
+                )
                 self._parser.parse_all()
             return self._parser
 
@@ -64,10 +93,13 @@ class NagiosService:
         CRUD operations to resume after a reload.
         """
         with self._lock:
-            self._parser = NagiosConfigParser(self._config_path)
+            self._parser = NagiosConfigParser(
+                cfg_dirs=self._cfg_dirs,
+                cfg_files=self._cfg_files,
+            )
             self._parser.parse_all()
-            self._parser_corrupted = False  # Clear corrupted flag on successful reload
-            logger.debug("Parser reload: config_path=%s", self._config_path)
+            self._parser_corrupted = False
+            logger.debug("Parser reload: cfg_dirs=%s", self._cfg_dirs)
             return self._parser
 
     def _validate_path_safety(
@@ -83,7 +115,7 @@ class NagiosService:
             Tuple of (is_safe, error_message). error_message is None if safe.
 
         """
-        safe_result = is_safe_path(path, self._config_path)
+        safe_result = is_safe_path(path, self.config_path)
         if not safe_result.success:
             return (False, f"Unsafe {path_type} path {path}: {safe_result.error}")
         return (True, None)
@@ -130,7 +162,10 @@ class NagiosService:
         """
         with self._lock:
             if self._parser is None:
-                self._parser = NagiosConfigParser(self._config_path)
+                self._parser = NagiosConfigParser(
+                    cfg_dirs=self._cfg_dirs,
+                    cfg_files=self._cfg_files,
+                )
                 self._parser.parse_all()
             yield self._parser
 
@@ -263,7 +298,10 @@ class NagiosService:
 
         """
         try:
-            new_parser = NagiosConfigParser(self._config_path)
+            new_parser = NagiosConfigParser(
+                cfg_dirs=self._cfg_dirs,
+                cfg_files=self._cfg_files,
+            )
             new_parser.parse_all()
             self._parser = new_parser
             self._parser_corrupted = False
