@@ -17,6 +17,7 @@ from .helpers import (
     get_backup_manager,
     get_config,
     get_config_path,
+    get_server_config,
     get_service,
     get_shadow_manager,
 )
@@ -28,6 +29,38 @@ logger = logging.getLogger("nagios_bulk_editor.staging")
 # =========================================================================
 # Internal helpers
 # =========================================================================
+
+
+def _restore_service_to_original_roots():
+    """Reset the service to point at original config roots after apply/destroy.
+
+    Reads original roots from the shadow manager's root_map (before destroy)
+    or from the discovery stored in app.extensions.
+    """
+    from flask import current_app
+
+    service = get_service()
+    sm = get_shadow_manager()
+
+    # Try root_map first (available before shadow is destroyed)
+    root_map = sm.get_root_map()
+    if root_map:
+        original_dirs = list(root_map.values())
+        service.set_roots(cfg_dirs=original_dirs, cfg_files=[])
+    else:
+        # Fall back to discovery stored at app init
+        discovery = current_app.extensions.get("discovery", {})
+        accessible_dirs = [d["path"] for d in discovery.get("directories", []) if d["accessible"]]
+        cfg_files = discovery.get("cfg_files", [])
+        if accessible_dirs or cfg_files:
+            service.set_roots(cfg_dirs=accessible_dirs, cfg_files=cfg_files)
+        else:
+            # Last resort: use primary_dir from server config
+            server_config = get_server_config()
+            if server_config and server_config.paths.primary_dir:
+                service.set_roots(cfg_dirs=[server_config.paths.primary_dir], cfg_files=[])
+
+    service.reload()
 
 
 def _make_relative_path(path):
@@ -126,12 +159,9 @@ def api_delete_staging():
     if not sm.has_shadow():
         return jsonify({"success": True})
 
-    # Reload service to point back at original config
+    # Restore service to original roots before destroying shadow
+    _restore_service_to_original_roots()
     result = sm.destroy_shadow()
-    if result.success:
-        service = get_service()
-        service.config_path = sm.config_path
-        service.reload()
     return jsonify({"success": result.success, "error": result.error})
 
 
@@ -180,9 +210,7 @@ def api_apply_staging():
         return jsonify({"success": False, "error": result.error}), 500
 
     # Reload service to pick up applied changes (now on original config)
-    service = get_service()
-    service.config_path = sm.config_path
-    service.reload()
+    _restore_service_to_original_roots()
 
     # Audit log
     changed = result.data.get("changed_files", []) if result.data else []
@@ -233,11 +261,10 @@ def api_get_lock_status():
 def api_break_lock():
     """Force break the lock — destroys shadow copy."""
     sm = get_shadow_manager()
+    # Restore service to original roots before breaking lock
+    if sm.has_shadow():
+        _restore_service_to_original_roots()
     result = sm.break_lock()
-    if result.success:
-        service = get_service()
-        service.config_path = sm.config_path
-        service.reload()
     return jsonify({"success": result.success, "error": result.error})
 
 

@@ -78,7 +78,7 @@ class TestGetStaging:
         assert data["success"] is True
         assert len(data["data"]["changes"]) >= 1
         paths = [c["path"] for c in data["data"]["changes"]]
-        assert "hosts.cfg" in paths
+        assert "root_0/hosts.cfg" in paths
 
 
 class TestDeleteStaging:
@@ -226,7 +226,7 @@ class TestStagingDiff:
         files = resp.json["data"]["files"]
         assert len(files) >= 1
         # Find hosts.cfg diff
-        hosts_diff = next((f for f in files if f["path"] == "hosts.cfg"), None)
+        hosts_diff = next((f for f in files if f["path"] == "root_0/hosts.cfg"), None)
         assert hosts_diff is not None
         assert "diff" in hosts_diff
         assert "MODIFIED" in hosts_diff["diff"]["diff_text"]

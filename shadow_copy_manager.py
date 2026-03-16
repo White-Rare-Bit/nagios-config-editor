@@ -51,6 +51,11 @@ class ShadowCopyManager:
         """First config root for backward compat."""
         return self._cfg_dirs[0] if self._cfg_dirs else ""
 
+    @config_path.setter
+    def config_path(self, path: str) -> None:
+        """Set single config path (backward compat, replaces all dirs)."""
+        self._cfg_dirs = [os.path.abspath(path)]
+
     @property
     def _config_dir(self) -> str:
         """Path to the shadow config directory (top level)."""
@@ -412,11 +417,11 @@ class ShadowCopyManager:
 
         file_records = []
         for rel_path in file_paths:
-            src = self.shadow_path(rel_path)
-            if os.path.isfile(src):
+            _orig, shadow_file = self._resolve_paths(rel_path)
+            if os.path.isfile(shadow_file):
                 dest = os.path.join(files_dir, rel_path)
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
-                shutil.copy2(src, dest)
+                shutil.copy2(shadow_file, dest)
                 file_records.append({"path": rel_path, "status": "exists"})
             else:
                 file_records.append({"path": rel_path, "status": "absent"})
@@ -459,7 +464,7 @@ class ShadowCopyManager:
                 files_dir = os.path.join(snapshot_dir, "files")
                 for file_record in meta["files"]:
                     rel_path = file_record["path"]
-                    shadow_file = self.shadow_path(rel_path)
+                    _orig, shadow_file = self._resolve_paths(rel_path)
 
                     if file_record["status"] == "absent":
                         if os.path.isfile(shadow_file):
@@ -571,6 +576,31 @@ class ShadowCopyManager:
 
         return chunks
 
+    def _resolve_paths(self, composite_path: str) -> tuple[str, str]:
+        """Resolve a composite path (shadow_name/rel) to original and shadow absolute paths.
+
+        For composite paths like 'root_0/hosts.cfg', splits into shadow_name and
+        relative path, then resolves using the root map.
+
+        Args:
+            composite_path: Either a composite 'shadow_name/rel' path or a simple relative path
+
+        Returns:
+            Tuple of (original_abs_path, shadow_abs_path)
+
+        """
+        root_map = self.get_root_map()
+        # Check if path starts with a known shadow name
+        for shadow_name, original_root in root_map.items():
+            prefix = shadow_name + "/"
+            if composite_path.startswith(prefix):
+                rel = composite_path[len(prefix):]
+                orig = os.path.join(original_root, rel)
+                shad = os.path.join(self._config_dir, shadow_name, rel)
+                return orig, shad
+        # Fallback: use backward-compat methods
+        return self.original_path(composite_path), self.shadow_path(composite_path)
+
     def get_file_diff(self, relative_path: str, context_lines: int = 3) -> dict:
         """Compute unified diff for a single file.
 
@@ -586,8 +616,7 @@ class ShadowCopyManager:
             Dict with 'diff_text' containing unified diff string
 
         """
-        orig = self.original_path(relative_path)
-        shad = self.shadow_path(relative_path)
+        orig, shad = self._resolve_paths(relative_path)
 
         for path in (orig, shad):
             if os.path.isfile(path):

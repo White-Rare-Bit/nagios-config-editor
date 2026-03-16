@@ -38,7 +38,7 @@ def _resolve_target_file(target_file: str) -> str:
         return target_file
 
     # Remap: strip old config root prefix, join with active dir
-    original_dir = os.path.abspath(get_server_config().nagios_config_path)
+    original_dir = os.path.abspath(get_server_config().paths.primary_dir or "")
     if abs_target.startswith(original_dir + os.sep):
         rel = abs_target[len(original_dir) + 1:]
         return os.path.join(service.config_path, rel)

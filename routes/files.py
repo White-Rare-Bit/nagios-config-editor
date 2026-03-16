@@ -66,9 +66,9 @@ def ensure_shadow_lock(session_id: str) -> tuple:
         )
         if not result.success:
             return False, (jsonify({"error": result.error or "Failed to create shadow"}), 500)
-        # Point service at shadow directory
+        # Point service at shadow directory roots
         service = get_service()
-        service.config_path = sm._config_dir
+        service.set_roots(cfg_dirs=sm.shadow_cfg_dirs, cfg_files=[])
         service.reload()
         return True, None
 
@@ -128,7 +128,7 @@ def api_files():
     # Provide the original config dir name for display (shadow dir is named "config")
     from .helpers import get_server_config
     server_config = get_server_config()
-    original_name = os.path.basename(server_config.nagios_config_path) if server_config else ""
+    original_name = os.path.basename(server_config.paths.primary_dir) if server_config else ""
     return jsonify({
         "files": sorted(files),
         "config_path": config_dir,

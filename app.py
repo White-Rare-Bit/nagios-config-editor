@@ -11,6 +11,7 @@ from logging.handlers import RotatingFileHandler
 from flask import Flask
 
 from backup_manager import BackupManager
+from config_discovery import discover_config_roots
 from git_service import GitService
 from nagios_service import NagiosService
 from server_config import ServerConfig
@@ -114,29 +115,52 @@ def create_app(config_path: str | None = None, log_dir_override: str | None = No
     # Load server configuration from config/settings.json (with env var overrides)
     _server_config = load_server_config()
 
-    # Use provided config_path or fall back to primary_dir from discovery
-    nagios_config_path = config_path or _server_config.paths.primary_dir or "./sample-config"
-    backup_path = _server_config.backup_path
-
     # Configure stdlib logging
     _setup_logging(_server_config, log_dir_override)
 
-    # Initialize service instances
-    service = NagiosService(nagios_config_path)
-    backup_manager = BackupManager(nagios_config_path, backup_path)
+    # Discover config roots from nagios.cfg (or use config_path override)
+    if config_path:
+        # Test/override mode: single directory, no discovery
+        accessible_dirs = [os.path.abspath(config_path)]
+        cfg_files = []
+        discovery = {"directories": [], "cfg_files": [], "resource_file": ""}
+    else:
+        # Production mode: discover from nagios.cfg
+        discovery = discover_config_roots(
+            _server_config.paths.nagios_cfg,
+            extra_cfg_dirs=_server_config.paths.extra_cfg_dirs,
+        )
+        accessible_dirs = [d["path"] for d in discovery["directories"] if d["accessible"]]
+        cfg_files = discovery["cfg_files"]
 
-    # Shadow copy manager
+        # Update resource_cfg from discovery
+        if discovery["resource_file"]:
+            _server_config.paths.resource_cfg = discovery["resource_file"]
+
+    # Set primary_dir default
+    if not _server_config.paths.primary_dir and accessible_dirs:
+        _server_config.paths.primary_dir = accessible_dirs[0]
+
+    # Primary dir for backward-compat services (backup, git)
+    primary_dir = _server_config.paths.primary_dir or "./sample-config"
+    backup_path = _server_config.backup_path
+
+    # Initialize service instances with multi-root support
+    service = NagiosService(cfg_dirs=accessible_dirs, cfg_files=cfg_files)
+    backup_manager = BackupManager(primary_dir, backup_path)
+
+    # Shadow copy manager with multi-root support
     shadow_path = _server_config.shadow_path
     if not shadow_path:
-        shadow_path = os.path.join(os.path.dirname(os.path.abspath(nagios_config_path)), ".shadow")
-    shadow_manager = ShadowCopyManager(nagios_config_path, shadow_path)
+        shadow_path = os.path.join(os.path.dirname(os.path.abspath(primary_dir)), ".shadow")
+    shadow_manager = ShadowCopyManager(cfg_dirs=accessible_dirs, shadow_base_path=shadow_path)
     # Clear stale shadow from previous server session
     if shadow_manager.has_shadow():
         logger.info("Clearing stale shadow copy from previous session")
         shadow_manager.destroy_shadow()
 
-    # Initialize git service
-    git_service = GitService(nagios_config_path)
+    # Initialize git service (uses primary dir)
+    git_service = GitService(primary_dir)
 
     # Store in app.extensions for access via current_app
     app.extensions["service"] = service
@@ -144,6 +168,7 @@ def create_app(config_path: str | None = None, log_dir_override: str | None = No
     app.extensions["backup"] = backup_manager
     app.extensions["git"] = git_service
     app.extensions["server_config"] = _server_config
+    app.extensions["discovery"] = discovery
 
     # Register blueprints only once
     if "blueprints_registered" not in app.extensions:

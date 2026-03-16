@@ -32,14 +32,19 @@ def operation_response(result: OperationResult, success_data: dict = None, error
     return jsonify({"error": result.error or "Operation failed"}), error_code
 
 
+def get_config_roots() -> list[str]:
+    """Get list of active config directory paths."""
+    service = current_app.extensions.get("service")
+    if service:
+        return service.cfg_dirs
+    return []
+
+
 def get_config_path() -> str:
-    """Get current config path (shadow dir when active, original otherwise)."""
+    """Get primary config path (first cfg_dir, backward compat)."""
     service = current_app.extensions.get("service")
     if service:
         return service.config_path
-    server_config = get_server_config()
-    if server_config:
-        return server_config.nagios_config_path
     return ""
 
 
@@ -57,7 +62,6 @@ def get_config() -> dict:
     if not server_config:
         return {}
     return {
-        "nagios_config_path": server_config.nagios_config_path,
         "backup_path": server_config.backup_path,
         "nagios_bin": server_config.nagios_bin,
         "nagios_cfg": server_config.nagios_cfg,
