@@ -151,11 +151,13 @@ class ShadowCopyManager:
                 return OperationResult(success=False, error=str(e))
 
     def _cleanup_shadow_dirs(self) -> None:
-        """Remove shadow config, lock, and snapshots."""
+        """Remove shadow config, lock, checksums, and snapshots."""
         if os.path.isdir(self._config_dir):
             shutil.rmtree(self._config_dir)
         if os.path.isfile(self._lock_file):
             os.remove(self._lock_file)
+        if os.path.isfile(self._checksums_file):
+            os.remove(self._checksums_file)
         if os.path.isdir(self._snapshots_dir):
             shutil.rmtree(self._snapshots_dir)
 
