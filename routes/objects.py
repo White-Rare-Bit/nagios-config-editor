@@ -336,6 +336,9 @@ def api_delete_multiple_objects():
 
     sm.snapshot_files(list(files_to_snapshot), f"delete {len(to_delete)} objects")
 
+    # Capture metadata before deletion for audit
+    obj_metadata = [(obj.object_type, obj.get_display_name(), obj.source_file) for obj in to_delete]
+
     # Delete in reverse line order within each file to maintain line numbers
     to_delete.sort(key=lambda o: (o.source_file, -o.line_number))
 
@@ -354,5 +357,16 @@ def api_delete_multiple_objects():
             "error": f"Deleted {deleted}/{len(to_delete)} objects. Errors: {'; '.join(errors)}",
             "deleted": deleted,
         }), 500
+
+    if deleted > 0:
+        identity = get_audit_user_identity()
+        user = format_audit_user(identity)
+        txn = uuid.uuid4().hex[:8]
+        for obj_type, obj_name, source_file in obj_metadata[:deleted]:
+            log_audit(
+                action="object_delete", user=user, txn=txn,
+                type=obj_type, name=obj_name,
+                file=audit_file_path(source_file),
+            )
 
     return jsonify({"success": True, "deleted": deleted})

@@ -152,6 +152,85 @@ class TestObjectDeleteAudit:
             assert "root_0" not in l
 
 
+@pytest.fixture
+def audit_app_multi():
+    """App with multiple hosts for bulk operation testing."""
+    test_dir = os.path.realpath(tempfile.mkdtemp())
+    config_path = Path(test_dir) / "nagios"
+    config_path.mkdir()
+
+    (config_path / "hosts.cfg").write_text("""\
+define host {
+    host_name       host-a
+    address         1.1.1.1
+}
+
+define host {
+    host_name       host-b
+    address         2.2.2.2
+}
+
+define host {
+    host_name       host-c
+    address         3.3.3.3
+}
+""")
+
+    app = create_app(config_path=str(config_path))
+    app.config["TESTING"] = True
+
+    with app.app_context():
+        server_config = app.extensions.get("server_config")
+        if server_config:
+            server_config.paths.primary_dir = str(config_path)
+
+    yield app
+
+    with app.app_context():
+        sm = app.extensions.get("shadow")
+        if sm and sm.has_shadow():
+            sm.destroy_shadow()
+    shutil.rmtree(test_dir, ignore_errors=True)
+
+
+class TestBulkDeleteAudit:
+    def test_delete_multiple_logs_per_object(self, audit_app_multi, caplog):
+        client = audit_app_multi.test_client()
+        resp = client.get("/api/objects")
+        objects = resp.json
+        keys = [
+            f"{o['source_file']}|{o['object_type']}|{o['display_name']}"
+            for o in objects if o["attributes"].get("host_name") in ("host-a", "host-b")
+        ]
+
+        audit_logger = logging.getLogger("audit")
+        audit_logger.propagate = True
+        try:
+            with caplog.at_level(logging.INFO, logger="audit"):
+                resp = client.post("/api/objects/delete-multiple", json={
+                    "stable_keys": keys,
+                }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
+        finally:
+            audit_logger.propagate = False
+
+        assert resp.status_code == 200
+        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
+        delete_lines = [l for l in audit_lines if "action=object_delete" in l]
+        assert len(delete_lines) == 2
+
+        # All should share the same txn
+        txns = set()
+        for l in delete_lines:
+            m = re.search(r"txn=(\w+)", l)
+            if m:
+                txns.add(m.group(1))
+        assert len(txns) == 1
+
+        # No shadow path leakage
+        for l in delete_lines:
+            assert "root_0" not in l
+
+
 class TestObjectMoveAudit:
     def test_object_move_logs_audit(self, audit_app, caplog):
         client = audit_app.test_client()
