@@ -186,7 +186,13 @@ def api_batch_mutations():
                 continue
             _, obj = found
             files_to_snapshot.add(os.path.relpath(obj.source_file, sm._config_dir))
-            resolved_ops.append({"action": "update", "stable_key": stable_key, "attributes": op["attributes"]})
+            resolved_ops.append({
+                "action": "update", "stable_key": stable_key, "attributes": op["attributes"],
+                "old_attrs": dict(obj.attributes),
+                "obj_type": obj.object_type,
+                "obj_name": obj.get_display_name(),
+                "obj_file": obj.source_file,
+            })
         elif action == "create":
             target_file = _resolve_target_file(op.get("target_file", ""))
             files_to_snapshot.add(os.path.relpath(target_file, sm._config_dir))
@@ -195,6 +201,9 @@ def api_batch_mutations():
                 "target_file": target_file,
                 "object_type": op["object_type"],
                 "attributes": op["attributes"],
+                "name": op["attributes"].get(
+                    next((k for k in op["attributes"] if "name" in k.lower()), ""), ""
+                ),
             })
 
     if not resolved_ops:
@@ -206,6 +215,7 @@ def api_batch_mutations():
     # Execute each operation sequentially
     completed = 0
     errors = []
+    succeeded = []
     for op in resolved_ops:
         if op["action"] == "update":
             found = service.find_object_by_stable_key(op["stable_key"])
@@ -225,8 +235,33 @@ def api_batch_mutations():
 
         if result.success:
             completed += 1
+            succeeded.append(op)
         else:
             errors.append(result.error)
+
+    # Audit all succeeded operations
+    if succeeded:
+        identity = get_audit_user_identity()
+        user = format_audit_user(identity)
+        txn = uuid.uuid4().hex[:8]
+        for op in succeeded:
+            if op["action"] == "update" and "old_attrs" in op:
+                for field_name in op["old_attrs"].keys() | op["attributes"].keys():
+                    old_val = op["old_attrs"].get(field_name, "")
+                    new_val = op["attributes"].get(field_name, "")
+                    if old_val != new_val:
+                        log_audit(
+                            action="object_edit", user=user, txn=txn,
+                            type=op["obj_type"], name=op["obj_name"],
+                            file=audit_file_path(op["obj_file"]),
+                            field=field_name, from_val=old_val, to_val=new_val,
+                        )
+            elif op["action"] == "create":
+                log_audit(
+                    action="object_create", user=user, txn=txn,
+                    type=op["object_type"], name=op.get("name", ""),
+                    file=audit_file_path(op["target_file"]),
+                )
 
     return jsonify({
         "success": True,

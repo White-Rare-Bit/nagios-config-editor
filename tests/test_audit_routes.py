@@ -278,6 +278,53 @@ class TestBulkMoveAudit:
             assert "root_0" not in l
 
 
+class TestBatchMutationsAudit:
+    def test_batch_update_logs_field_diffs(self, audit_client, caplog):
+        obj = _get_object(audit_client, "test-host-1")
+        new_attrs = dict(obj["attributes"])
+        new_attrs["alias"] = "Batch Updated"
+
+        audit_logger = logging.getLogger("audit")
+        audit_logger.propagate = True
+        try:
+            with caplog.at_level(logging.INFO, logger="audit"):
+                resp = audit_client.post("/api/batch-mutations", json={
+                    "description": "test batch",
+                    "operations": [
+                        {"action": "update", "stable_key": obj["stable_key"], "attributes": new_attrs},
+                    ],
+                }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
+        finally:
+            audit_logger.propagate = False
+
+        assert resp.status_code == 200
+        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
+        assert any("action=object_edit" in l and "field=alias" in l for l in audit_lines)
+        assert any('to="Batch Updated"' in l for l in audit_lines)
+
+    def test_batch_create_logs_audit(self, audit_client, caplog):
+        obj = _get_object(audit_client, "test-host-1")
+        target_file = obj["source_file"]
+
+        audit_logger = logging.getLogger("audit")
+        audit_logger.propagate = True
+        try:
+            with caplog.at_level(logging.INFO, logger="audit"):
+                resp = audit_client.post("/api/batch-mutations", json={
+                    "description": "test batch create",
+                    "operations": [
+                        {"action": "create", "target_file": target_file, "object_type": "host",
+                         "attributes": {"host_name": "batch-host", "address": "5.5.5.5"}},
+                    ],
+                }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
+        finally:
+            audit_logger.propagate = False
+
+        assert resp.status_code == 200
+        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
+        assert any("action=object_create" in l and "name=batch-host" in l for l in audit_lines)
+
+
 class TestObjectMoveAudit:
     def test_object_move_logs_audit(self, audit_app, caplog):
         client = audit_app.test_client()
