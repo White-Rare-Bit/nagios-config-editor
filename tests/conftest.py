@@ -28,9 +28,9 @@ def _cleanup_test_artifacts():
     backup_dir = os.path.join(sample_config, "backups")
     if os.path.isdir(backup_dir):
         shutil.rmtree(backup_dir, ignore_errors=True)
-    log_dir = os.path.join(project_root, "logs")
-    for f in glob.glob(os.path.join(log_dir, "*.log*")):
-        os.remove(f)
+    # Note: do NOT remove files from logs/ — those are production log files
+    # that may be in use by a running app instance. Tests should use
+    # log_dir_override to isolate their log output.
 
 
 @pytest.fixture(autouse=True)

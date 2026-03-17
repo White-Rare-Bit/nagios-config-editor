@@ -27,7 +27,8 @@ define host {
 }
 """)
 
-    app = create_app(config_path=str(config_path))
+    log_dir = os.path.join(test_dir, "logs")
+    app = create_app(config_path=str(config_path), log_dir_override=log_dir)
     app.config["TESTING"] = True
 
     # Override primary_dir so _resolve_stable_key can remap paths to shadow
@@ -176,7 +177,8 @@ define host {
 }
 """)
 
-    app = create_app(config_path=str(config_path))
+    log_dir = os.path.join(test_dir, "logs")
+    app = create_app(config_path=str(config_path), log_dir_override=log_dir)
     app.config["TESTING"] = True
 
     with app.app_context():
