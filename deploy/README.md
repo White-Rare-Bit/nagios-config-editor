@@ -116,7 +116,7 @@ sudo a2enconf nagios-bulk-editor
 sudo systemctl reload apache2
 ```
 
-The editor is now available at `http://<host>/editor/`.
+The editor is now available at `http://<host>/`.
 
 ## Logs
 

@@ -85,7 +85,7 @@ python3 app.py                 # run locally
 
 The `sample-config/` directory contains a test Nagios configuration for local development.
 
-Only dependency: `flask>=2.0.0,<4.0.0`
+Dependencies: `flask` and `gunicorn` (see `requirements.txt`)
 
 ## License
 

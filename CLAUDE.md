@@ -8,7 +8,7 @@ python3 app.py
 # Access at http://localhost:8080
 ```
 
-Dependencies: `flask>=2.0.0,<4.0.0`
+Dependencies: `flask>=2.0.0,<4.0.0`, `gunicorn>=21.2.0,<24.0.0`
 
 ## Documentation Index
 
