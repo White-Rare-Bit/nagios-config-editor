@@ -72,6 +72,10 @@ Settings are stored in `config/settings.json`. Environment variables override fi
 5. **Apply** to write to disk, or **Discard** to throw them away
 6. Optionally **commit** via git for version history
 
+## Production Deployment
+
+For running on a production Linux host alongside Nagios (systemd + Gunicorn + Apache), see [deploy/README.md](deploy/README.md).
+
 ## Contributing
 
 ```bash
