@@ -13,6 +13,7 @@ ExecStart=/opt/nagios-bulk-editor/venv/bin/gunicorn \
     --timeout 120 \
     --access-logfile - \
     --error-logfile - \
+    --env SCRIPT_NAME=/editor \
     wsgi:app
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=on-failure
