@@ -231,6 +231,53 @@ class TestBulkDeleteAudit:
             assert "root_0" not in l
 
 
+class TestBulkMoveAudit:
+    def test_move_objects_logs_per_object(self, audit_app_multi, caplog):
+        client = audit_app_multi.test_client()
+
+        # Get objects to move
+        resp = client.get("/api/objects")
+        objects = resp.json
+        keys = []
+        for o in objects:
+            if o["attributes"].get("host_name") in ("host-a", "host-b"):
+                key = f"{o['source_file']}|{o['object_type']}|{o['display_name']}"
+                keys.append(key)
+
+        with audit_app_multi.app_context():
+            config_path = audit_app_multi.extensions["service"].config_path
+        target = os.path.join(config_path, "moved.cfg")
+
+        audit_logger = logging.getLogger("audit")
+        audit_logger.propagate = True
+        try:
+            with caplog.at_level(logging.INFO, logger="audit"):
+                resp = client.post("/api/move-objects", json={
+                    "stable_keys": keys,
+                    "target_file": target,
+                }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
+        finally:
+            audit_logger.propagate = False
+
+        assert resp.status_code == 200
+        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
+        move_lines = [l for l in audit_lines if "action=object_move" in l]
+        assert len(move_lines) == 2
+        assert all("from_file=" in l and "to_file=" in l for l in move_lines)
+
+        # All should share the same txn
+        txns = set()
+        for l in move_lines:
+            m = re.search(r"txn=(\w+)", l)
+            if m:
+                txns.add(m.group(1))
+        assert len(txns) == 1
+
+        # No shadow path leakage
+        for l in move_lines:
+            assert "root_0" not in l
+
+
 class TestObjectMoveAudit:
     def test_object_move_logs_audit(self, audit_app, caplog):
         client = audit_app.test_client()

@@ -2,11 +2,13 @@
 
 import logging
 import os
+import uuid
 
 from flask import Blueprint, jsonify, request
 
+from audit_service import log_audit
 from .files import ensure_shadow_lock
-from .helpers import get_service, get_shadow_manager
+from .helpers import get_audit_user_identity, format_audit_user, audit_file_path, get_service, get_shadow_manager
 
 bp = Blueprint("bulk_ops", __name__)
 logger = logging.getLogger("nagios_bulk_editor.bulk_ops")
@@ -84,6 +86,9 @@ def api_move_objects():
         moved_keys=moved_keys,
     )
 
+    # Capture source files before moves for audit (obj.source_file changes after move)
+    obj_metadata = [(obj.object_type, obj.get_display_name(), obj.source_file) for obj in to_move]
+
     # Move each object using service.move_object (reloads after each)
     moved = 0
     errors = []
@@ -112,6 +117,18 @@ def api_move_objects():
                 insert_pos = placed[1].line_number if placed else None
         else:
             errors.append(result.error)
+
+    if moved > 0:
+        identity = get_audit_user_identity()
+        user = format_audit_user(identity)
+        txn = uuid.uuid4().hex[:8]
+        for obj_type, obj_name, source_file in obj_metadata[:moved]:
+            log_audit(
+                action="object_move", user=user, txn=txn,
+                type=obj_type, name=obj_name,
+                from_file=audit_file_path(source_file),
+                to_file=audit_file_path(target_file),
+            )
 
     if errors:
         return jsonify({
