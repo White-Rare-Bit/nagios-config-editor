@@ -325,6 +325,78 @@ class TestBatchMutationsAudit:
         assert any("action=object_create" in l and "name=batch-host" in l for l in audit_lines)
 
 
+class TestFileMutationAudit:
+    def test_create_file_logs_audit(self, audit_app, caplog):
+        client = audit_app.test_client()
+        audit_logger = logging.getLogger("audit")
+        audit_logger.propagate = True
+        try:
+            with caplog.at_level(logging.INFO, logger="audit"):
+                resp = client.post("/api/files/create", json={
+                    "path": "newfile.cfg",
+                }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
+        finally:
+            audit_logger.propagate = False
+
+        assert resp.status_code == 200
+        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
+        assert any("action=file_create" in l for l in audit_lines)
+
+    def test_delete_file_logs_audit(self, audit_app, caplog):
+        client = audit_app.test_client()
+        # First create a file to delete
+        client.post("/api/files/create", json={"path": "todelete.cfg"},
+                     headers={"X-Session-Id": "test-session"})
+
+        audit_logger = logging.getLogger("audit")
+        audit_logger.propagate = True
+        try:
+            with caplog.at_level(logging.INFO, logger="audit"):
+                resp = client.delete("/api/files/todelete.cfg",
+                    headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
+        finally:
+            audit_logger.propagate = False
+
+        assert resp.status_code == 200
+        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
+        assert any("action=file_delete" in l for l in audit_lines)
+
+    def test_create_folder_logs_audit(self, audit_app, caplog):
+        client = audit_app.test_client()
+        audit_logger = logging.getLogger("audit")
+        audit_logger.propagate = True
+        try:
+            with caplog.at_level(logging.INFO, logger="audit"):
+                resp = client.post("/api/folders", json={
+                    "path": "newfolder",
+                }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
+        finally:
+            audit_logger.propagate = False
+
+        assert resp.status_code == 200
+        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
+        assert any("action=folder_create" in l for l in audit_lines)
+
+    def test_delete_folder_logs_audit(self, audit_app, caplog):
+        client = audit_app.test_client()
+        # Create a folder first
+        client.post("/api/folders", json={"path": "rmfolder"},
+                     headers={"X-Session-Id": "test-session"})
+
+        audit_logger = logging.getLogger("audit")
+        audit_logger.propagate = True
+        try:
+            with caplog.at_level(logging.INFO, logger="audit"):
+                resp = client.delete("/api/folders/rmfolder",
+                    headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
+        finally:
+            audit_logger.propagate = False
+
+        assert resp.status_code == 200
+        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
+        assert any("action=folder_delete" in l for l in audit_lines)
+
+
 class TestObjectMoveAudit:
     def test_object_move_logs_audit(self, audit_app, caplog):
         client = audit_app.test_client()

@@ -11,10 +11,12 @@ import shutil
 
 from flask import Blueprint, jsonify, request
 
+from audit_service import log_audit
 from config_discovery import PROTECTED_FILENAMES
 from file_operations import is_safe_path as file_ops_is_safe_path
 
 from .helpers import (
+    format_audit_user,
     get_audit_user_identity,
     get_backup_manager,
     get_config_path,
@@ -238,6 +240,10 @@ def api_create_file():
     # Reload parser to pick up new file
     get_service().reload()
 
+    identity = get_audit_user_identity()
+    user = format_audit_user(identity)
+    log_audit(action="file_create", user=user, file=rel_path)
+
     return jsonify({
         "success": True,
         "path": file_path,
@@ -293,6 +299,10 @@ def api_create_folder():
 
     os.makedirs(abs_folder_path, exist_ok=True)
 
+    identity = get_audit_user_identity()
+    user = format_audit_user(identity)
+    log_audit(action="folder_create", user=user, folder=rel_path)
+
     return jsonify({
         "success": True,
         "path": abs_folder_path,
@@ -331,6 +341,10 @@ def api_move_file():
     shutil.move(abs_source, target_path)
 
     get_service().reload()
+
+    identity = get_audit_user_identity()
+    user = format_audit_user(identity)
+    log_audit(action="file_move", user=user, from_file=rel_source, to_file=rel_target)
 
     return jsonify({
         "success": True,
@@ -379,6 +393,11 @@ def api_move_folder():
 
     get_service().reload()
 
+    identity = get_audit_user_identity()
+    user = format_audit_user(identity)
+    rel_target = os.path.relpath(target_path, config_path)
+    log_audit(action="folder_move", user=user, from_folder=rel_source, to_folder=rel_target)
+
     return jsonify({
         "success": True,
         "newPath": target_path,
@@ -411,6 +430,10 @@ def api_delete_file(file_path):
     os.remove(abs_path)
 
     get_service().reload()
+
+    identity = get_audit_user_identity()
+    user = format_audit_user(identity)
+    log_audit(action="file_delete", user=user, file=rel_path)
 
     return jsonify({
         "success": True,
@@ -456,6 +479,10 @@ def api_delete_folder(folder_path):
     shutil.rmtree(abs_path)
 
     get_service().reload()
+
+    identity = get_audit_user_identity()
+    user = format_audit_user(identity)
+    log_audit(action="folder_delete", user=user, folder=rel_path)
 
     return jsonify({
         "success": True,
