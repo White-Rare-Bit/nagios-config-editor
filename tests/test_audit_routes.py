@@ -104,3 +104,79 @@ class TestObjectEditAudit:
         for line in audit_lines:
             assert "file=nagios/hosts.cfg" in line or "file=hosts.cfg" in line
             assert "root_0" not in line
+
+
+class TestObjectCreateAudit:
+    def test_object_create_logs_audit(self, audit_client, caplog):
+        obj = _get_object(audit_client, "test-host-1")
+        target_file = obj["source_file"]
+
+        audit_logger = logging.getLogger("audit")
+        audit_logger.propagate = True
+        try:
+            with caplog.at_level(logging.INFO, logger="audit"):
+                resp = audit_client.post("/api/objects/create", json={
+                    "target_file": target_file,
+                    "object_type": "host",
+                    "attributes": {"host_name": "new-host", "address": "1.2.3.4"},
+                }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
+        finally:
+            audit_logger.propagate = False
+
+        assert resp.status_code == 200
+        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
+        assert any("action=object_create" in l and "name=new-host" in l and "type=host" in l for l in audit_lines)
+        # Verify file path doesn't leak shadow internals
+        for l in audit_lines:
+            assert "root_0" not in l
+
+
+class TestObjectDeleteAudit:
+    def test_object_delete_logs_audit(self, audit_client, caplog):
+        obj = _get_object(audit_client, "test-host-1")
+
+        audit_logger = logging.getLogger("audit")
+        audit_logger.propagate = True
+        try:
+            with caplog.at_level(logging.INFO, logger="audit"):
+                resp = audit_client.post("/api/objects/delete", json={
+                    "stable_key": obj["stable_key"],
+                }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
+        finally:
+            audit_logger.propagate = False
+
+        assert resp.status_code == 200
+        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
+        assert any("action=object_delete" in l and "name=test-host-1" in l and "type=host" in l for l in audit_lines)
+        for l in audit_lines:
+            assert "root_0" not in l
+
+
+class TestObjectMoveAudit:
+    def test_object_move_logs_audit(self, audit_app, caplog):
+        client = audit_app.test_client()
+        obj = _get_object(client, "test-host-1")
+
+        with audit_app.app_context():
+            config_path = audit_app.extensions["service"].config_path
+
+        # Move to a new file (the service will create it)
+        target_file = os.path.join(config_path, "other.cfg")
+
+        audit_logger = logging.getLogger("audit")
+        audit_logger.propagate = True
+        try:
+            with caplog.at_level(logging.INFO, logger="audit"):
+                resp = client.post("/api/objects/move", json={
+                    "stable_key": obj["stable_key"],
+                    "target_file": target_file,
+                }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
+        finally:
+            audit_logger.propagate = False
+
+        assert resp.status_code == 200
+        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
+        assert any("action=object_move" in l and "name=test-host-1" in l for l in audit_lines)
+        assert any("from_file=" in l and "to_file=" in l for l in audit_lines)
+        for l in audit_lines:
+            assert "root_0" not in l

@@ -173,6 +173,17 @@ def api_create_object():
     sm.snapshot_files([rel_path], f"create {obj_type}")
 
     result = service.create_object(target_file, obj_type, attrs, after_block_line=after_line)
+
+    if result.success:
+        identity = get_audit_user_identity()
+        user = format_audit_user(identity)
+        name = attrs.get(next((k for k in attrs if "name" in k.lower()), ""), "")
+        file_display = audit_file_path(target_file)
+        log_audit(
+            action="object_create", user=user,
+            type=obj_type, name=name, file=file_display,
+        )
+
     return operation_response(result)
 
 
@@ -207,6 +218,16 @@ def api_delete_object():
     sm.snapshot_files([rel_path], f"delete {obj.object_type} {obj.get_display_name()}")
 
     result = service.delete_object(obj.source_file, obj.line_number)
+
+    if result.success:
+        identity = get_audit_user_identity()
+        user = format_audit_user(identity)
+        file_display = audit_file_path(obj.source_file)
+        log_audit(
+            action="object_delete", user=user,
+            type=obj.object_type, name=obj.get_display_name(), file=file_display,
+        )
+
     return operation_response(result)
 
 
@@ -263,6 +284,17 @@ def api_move_object():
         obj.object_type, dict(obj.attributes),
         insert_line=after_line,
     )
+
+    if result.success:
+        identity = get_audit_user_identity()
+        user = format_audit_user(identity)
+        log_audit(
+            action="object_move", user=user,
+            type=obj.object_type, name=obj.get_display_name(),
+            from_file=audit_file_path(obj.source_file),
+            to_file=audit_file_path(target_file),
+        )
+
     return operation_response(result)
 
 
