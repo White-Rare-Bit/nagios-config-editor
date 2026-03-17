@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "paths": {
+    "nagios_cfg": "/usr/local/nagios/etc/nagios.cfg",
+    "nagios_bin": "/usr/local/nagios/bin/nagios",
+    "backup_path": null,
+    "shadow_path": null,
+    "resource_cfg": "/usr/local/nagios/etc/resource.cfg",
+    "extra_cfg_dirs": [],
+    "primary_dir": "/usr/local/nagios/etc"
+  },
+  "logging": {
+    "enabled": true,
+    "log_level": "INFO",
+    "log_dir": "logs",
+    "log_filename": "operations.jsonl",
+    "max_file_size_mb": 10,
+    "max_backup_files": 5
+  }
+}
