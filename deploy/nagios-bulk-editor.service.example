@@ -1,0 +1,35 @@
+[Unit]
+Description=Nagios Bulk Editor
+After=network.target
+
+[Service]
+Type=notify
+User=nagios
+Group=nagios
+WorkingDirectory=/opt/nagios-bulk-editor
+ExecStart=/opt/nagios-bulk-editor/venv/bin/gunicorn \
+    --workers 2 \
+    --bind 127.0.0.1:8080 \
+    --timeout 120 \
+    --access-logfile - \
+    --error-logfile - \
+    wsgi:app
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+
+# Environment variables — edit these for your installation
+Environment="NAGIOS_CFG=/usr/local/nagios/etc/nagios.cfg"
+Environment="NAGIOS_BIN=/usr/local/nagios/bin/nagios"
+Environment="FLASK_SECRET_KEY=CHANGE_ME_TO_A_RANDOM_STRING"
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/nagios-bulk-editor/logs
+ReadWritePaths=/opt/nagios-bulk-editor/config
+ReadWritePaths=/opt/nagios-bulk-editor/.shadow
+ReadWritePaths=/usr/local/nagios/etc
+
+[Install]
+WantedBy=multi-user.target
