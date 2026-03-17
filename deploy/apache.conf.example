@@ -1,0 +1,29 @@
+# Nagios Bulk Editor — Apache reverse proxy configuration
+#
+# This proxies /editor/ to the Gunicorn backend. Adjust paths to
+# match your installation.
+#
+# Install:
+#   sudo cp deploy/apache.conf.example /etc/apache2/conf-available/nagios-bulk-editor.conf
+#   sudo a2enmod proxy proxy_http headers
+#   sudo a2enconf nagios-bulk-editor
+#   sudo systemctl reload apache2
+#
+# If you want the editor on its own port or subdomain instead of
+# a subpath, use a <VirtualHost> block instead of <Location>.
+
+ProxyPass        /editor/ http://127.0.0.1:8080/
+ProxyPassReverse /editor/ http://127.0.0.1:8080/
+
+<Location /editor/>
+    # Optional: protect with the same basic auth as your Nagios web UI.
+    # Uncomment and adjust AuthUserFile to match your setup.
+    #
+    # AuthType Basic
+    # AuthName "Nagios Bulk Editor"
+    # AuthUserFile /usr/local/nagios/etc/htpasswd.users
+    # Require valid-user
+
+    RequestHeader set X-Forwarded-Proto expr=%{REQUEST_SCHEME}
+    RequestHeader set X-Forwarded-For expr=%{REMOTE_ADDR}
+</Location>
