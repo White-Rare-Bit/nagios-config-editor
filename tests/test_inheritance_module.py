@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from inheritance import (
+from app.inheritance import (
     INHERITANCE_META,
     build_template_index,
     build_template_lookup,
@@ -34,7 +34,7 @@ class _Obj:
     source_file: str = "test.cfg"
 
     def get_name(self):
-        from nagios_model import NAME_FIELDS
+        from app.nagios_model import NAME_FIELDS
         nf = NAME_FIELDS.get(self.object_type)
         return self.attributes.get(nf) if nf else self.attributes.get("name")
 

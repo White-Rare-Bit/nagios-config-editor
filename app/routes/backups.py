@@ -5,7 +5,7 @@ import os
 
 from flask import Blueprint, jsonify, request
 
-from audit_service import log_audit
+from ..audit_service import log_audit
 
 from .helpers import (
     format_audit_user,

@@ -8,7 +8,7 @@ import uuid
 
 from flask import Blueprint, jsonify, request
 
-from audit_service import log_audit
+from ..audit_service import log_audit
 from .helpers import (
     get_service, get_shadow_manager, operation_response,
     get_audit_user_identity, format_audit_user, audit_file_path,

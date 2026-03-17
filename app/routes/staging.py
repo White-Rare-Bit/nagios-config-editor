@@ -10,7 +10,7 @@ import uuid
 
 from flask import Blueprint, jsonify, request
 
-from audit_service import log_audit
+from ..audit_service import log_audit
 
 from .helpers import (
     format_audit_user,
@@ -76,7 +76,7 @@ def _run_post_apply_validation():
         nagios_bin = config.get("nagios_bin", "")
         nagios_cfg = config.get("nagios_cfg", "")
         if nagios_bin and nagios_cfg:
-            from validator import NagiosValidator
+            from ..validator import NagiosValidator
 
             validator = NagiosValidator(nagios_bin, nagios_cfg)
             val_result = validator.validate()

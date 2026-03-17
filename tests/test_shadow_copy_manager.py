@@ -3,7 +3,7 @@ import os
 import shutil
 import tempfile
 import pytest
-from shadow_copy_manager import ShadowCopyManager
+from app.shadow_copy_manager import ShadowCopyManager
 
 
 @pytest.fixture
@@ -549,7 +549,7 @@ class TestApply:
 
     def test_apply_creates_backup_when_manager_provided(self, setup_dirs):
         config_dir, shadow_base = setup_dirs
-        from backup_manager import BackupManager
+        from app.backup_manager import BackupManager
         backup_path = tempfile.mkdtemp()
         bm = BackupManager(config_dir, backup_path)
         scm = ShadowCopyManager(config_dir, shadow_base)

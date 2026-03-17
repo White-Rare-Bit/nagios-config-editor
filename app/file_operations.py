@@ -11,7 +11,7 @@ import os
 import re
 from pathlib import Path
 
-from nagios_model import OperationResult, format_object_block
+from .nagios_model import OperationResult, format_object_block
 
 logger = logging.getLogger(__name__)
 

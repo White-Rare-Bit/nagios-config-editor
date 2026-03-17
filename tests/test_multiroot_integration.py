@@ -6,7 +6,7 @@ import shutil
 import pytest
 
 from app import create_app
-from server_config import CONFIG_FILE
+from app.server_config import CONFIG_FILE
 
 
 @pytest.fixture(autouse=True)
@@ -46,7 +46,7 @@ class TestMultiRootIntegration:
         (tmp_path / "resources.cfg").write_text("$USER1$=/usr/lib/nagios/plugins\n")
 
         # Create app with this nagios.cfg via server config override
-        from server_config import ServerConfig, save_config
+        from app.server_config import ServerConfig, save_config
         config = ServerConfig()
         config.paths.nagios_cfg = str(nagios_cfg)
         save_config(config)
@@ -129,7 +129,7 @@ class TestMultiRootIntegration:
         nagios_cfg = tmp_path / "nagios.cfg"
         nagios_cfg.write_text(f"cfg_file={tmp_path}/commands.cfg\n")
 
-        from server_config import ServerConfig, save_config
+        from app.server_config import ServerConfig, save_config
         config = ServerConfig()
         config.paths.nagios_cfg = str(nagios_cfg)
         save_config(config)
@@ -149,7 +149,7 @@ class TestMultiRootIntegration:
         nagios_cfg = tmp_path / "nagios.cfg"
         nagios_cfg.write_text("cfg_dir=/nonexistent/path\n")
 
-        from server_config import ServerConfig, save_config
+        from app.server_config import ServerConfig, save_config
         config = ServerConfig()
         config.paths.nagios_cfg = str(nagios_cfg)
         save_config(config)

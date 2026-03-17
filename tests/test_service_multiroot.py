@@ -1,4 +1,4 @@
-from nagios_service import NagiosService
+from app.nagios_service import NagiosService
 
 
 class TestNagiosServiceMultiRoot:

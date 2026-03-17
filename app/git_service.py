@@ -15,7 +15,7 @@ import subprocess
 import time
 from dataclasses import dataclass, field
 
-from nagios_model import OperationResult
+from .nagios_model import OperationResult
 
 logger = logging.getLogger("nagios_bulk_editor.git")
 

@@ -18,8 +18,8 @@ import shutil
 import time
 import uuid
 
-from config_discovery import PROTECTED_FILENAMES
-from nagios_model import OperationResult
+from .config_discovery import PROTECTED_FILENAMES
+from .nagios_model import OperationResult
 
 logger = logging.getLogger(__name__)
 
@@ -724,8 +724,8 @@ class ShadowCopyManager:
             List of stable keys for added, modified, deleted, or moved objects
 
         """
-        from nagios_parser import NagiosConfigParser
-        from stable_keys import generate_stable_key
+        from .nagios_parser import NagiosConfigParser
+        from .stable_keys import generate_stable_key
 
         if not self.has_shadow():
             return []

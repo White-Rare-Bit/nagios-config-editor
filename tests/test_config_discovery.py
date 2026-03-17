@@ -1,8 +1,8 @@
 import os
 import tempfile
 
-from config_discovery import PROTECTED_FILENAMES, discover_config_roots
-from nagios_cfg import parse_nagios_cfg
+from app.config_discovery import PROTECTED_FILENAMES, discover_config_roots
+from app.nagios_cfg import parse_nagios_cfg
 
 
 class TestParseNagiosCfg:

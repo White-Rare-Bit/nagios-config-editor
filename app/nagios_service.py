@@ -10,16 +10,16 @@ import os
 import re
 from contextlib import contextmanager
 from pathlib import Path
-from file_operations import (
+from .file_operations import (
     add_object_to_file,
     delete_object_from_file,
     edit_object_in_file,
     is_safe_path,
     move_object_between_files,
 )
-from nagios_model import NAME_FIELDS, NagiosObject, OperationResult
-from nagios_parser import NagiosConfigParser
-from stable_keys import parse_stable_key
+from .nagios_model import NAME_FIELDS, NagiosObject, OperationResult
+from .nagios_parser import NagiosConfigParser
+from .stable_keys import parse_stable_key
 
 logger = logging.getLogger(__name__)
 

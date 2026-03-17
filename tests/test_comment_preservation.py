@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from nagios_parser import NagiosConfigParser
-from nagios_writer import NagiosConfigWriter
+from app.nagios_parser import NagiosConfigParser
+from app.nagios_writer import NagiosConfigWriter
 
 
 @pytest.fixture
@@ -99,7 +99,7 @@ class TestInlineCommentPreservation:
 
     def test_edit_object_in_file_preserves_comments(self, config_with_comments):
         """edit_object_in_file preserves inline comments when passed."""
-        from file_operations import edit_object_in_file
+        from app.file_operations import edit_object_in_file
         config_path, _ = config_with_comments
         host_file = os.path.join(config_path, "hosts.cfg")
 
@@ -133,7 +133,7 @@ class TestInlineCommentPreservation:
 
     def test_edit_object_in_file_without_comments(self, config_with_comments):
         """edit_object_in_file without inline_comments strips comments (old behavior)."""
-        from file_operations import edit_object_in_file
+        from app.file_operations import edit_object_in_file
         config_path, _ = config_with_comments
         host_file = os.path.join(config_path, "hosts.cfg")
 
@@ -151,7 +151,7 @@ class TestInlineCommentPreservation:
 
     def test_new_object_without_comments_works(self, config_with_comments):
         """Objects created without comments still format correctly."""
-        from nagios_model import NagiosObject
+        from app.nagios_model import NagiosObject
         obj = NagiosObject(
             object_type="host",
             attributes={"host_name": "test", "address": "1.2.3.4"},

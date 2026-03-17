@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from validator import NagiosValidator
+from app.validator import NagiosValidator
 
 
 class TestParseOutput:

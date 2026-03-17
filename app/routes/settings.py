@@ -6,8 +6,8 @@ import os
 
 from flask import Blueprint, current_app, jsonify, request, send_file
 
-from server_config import save_config as save_server_config
-from validator import verify_nagios_binary
+from ..server_config import save_config as save_server_config
+from ..validator import verify_nagios_binary
 
 from .helpers import (
     get_server_config,
@@ -122,11 +122,11 @@ def _rediscover_and_reinit(server_config, errors):
     Called when nagios_cfg or extra_cfg_dirs changes. Creates all services
     BEFORE updating app.extensions to prevent inconsistent state.
     """
-    from backup_manager import BackupManager
-    from config_discovery import discover_config_roots
-    from git_service import GitService
-    from nagios_service import NagiosService
-    from shadow_copy_manager import ShadowCopyManager
+    from ..backup_manager import BackupManager
+    from ..config_discovery import discover_config_roots
+    from ..git_service import GitService
+    from ..nagios_service import NagiosService
+    from ..shadow_copy_manager import ShadowCopyManager
 
     try:
         discovery = discover_config_roots(
@@ -173,7 +173,7 @@ def _update_backup_path(server_config, path, updated, errors):
 
     server_config.paths.backup_path = path or None
 
-    from backup_manager import BackupManager
+    from ..backup_manager import BackupManager
     primary_dir = server_config.paths.primary_dir or "./sample-config"
     backup_manager = BackupManager(primary_dir, server_config.backup_path)
     current_app.extensions["backup"] = backup_manager

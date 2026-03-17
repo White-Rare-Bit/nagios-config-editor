@@ -2,7 +2,7 @@
 
 from flask import Blueprint, jsonify
 
-from nagios_model import (
+from ..nagios_model import (
     ATTRIBUTE_SORT_ORDER,
     DEFAULT_ATTRIBUTES,
     GROUP_STRUCTURE,

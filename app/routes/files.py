@@ -11,9 +11,9 @@ import shutil
 
 from flask import Blueprint, jsonify, request
 
-from audit_service import log_audit
-from config_discovery import PROTECTED_FILENAMES
-from file_operations import is_safe_path as file_ops_is_safe_path
+from ..audit_service import log_audit
+from ..config_discovery import PROTECTED_FILENAMES
+from ..file_operations import is_safe_path as file_ops_is_safe_path
 
 from .helpers import (
     format_audit_user,

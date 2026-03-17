@@ -13,7 +13,7 @@ Key design choices:
 - Implied inheritance: cross-object-type field inheritance (lowest priority)
 """
 
-from nagios_model import IMPLIED_CONTACT_FIELDS, IMPLIED_INHERITANCE, NAME_FIELDS
+from .nagios_model import IMPLIED_CONTACT_FIELDS, IMPLIED_INHERITANCE, NAME_FIELDS
 
 # Attributes excluded from inheritance resolution
 INHERITANCE_META = frozenset({"use", "name", "register"})

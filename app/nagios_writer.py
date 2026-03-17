@@ -9,7 +9,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from nagios_model import NagiosObject, format_object_block
+from .nagios_model import NagiosObject, format_object_block
 
 logger = logging.getLogger(__name__)
 

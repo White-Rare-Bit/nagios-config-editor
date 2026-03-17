@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from app import create_app
-from nagios_model import (
+from app.nagios_model import (
     DEFAULT_ATTRIBUTES,
     GROUP_STRUCTURE,
     HOST_SCOPED_TYPES,
@@ -156,7 +156,7 @@ class TestNewObjectTypeParsing:
     def test_hostextinfo_parsed(self):
         test_dir = tempfile.mkdtemp()
         try:
-            from nagios_parser import NagiosConfigParser
+            from app.nagios_parser import NagiosConfigParser
 
             cfg_path = Path(test_dir) / "nagios"
             cfg_path.mkdir()
@@ -178,7 +178,7 @@ define hostextinfo {
     def test_module_parsed(self):
         test_dir = tempfile.mkdtemp()
         try:
-            from nagios_parser import NagiosConfigParser
+            from app.nagios_parser import NagiosConfigParser
 
             cfg_path = Path(test_dir) / "nagios"
             cfg_path.mkdir()

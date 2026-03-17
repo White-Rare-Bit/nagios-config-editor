@@ -10,8 +10,8 @@ import os
 import re
 from pathlib import Path
 
-from nagios_model import REFERENCE_FIELDS, NagiosObject
-from nagios_model import format_object_block as _model_format_object_block
+from .nagios_model import REFERENCE_FIELDS, NagiosObject
+from .nagios_model import format_object_block as _model_format_object_block
 
 logger = logging.getLogger("nagios_bulk_editor.parser")
 

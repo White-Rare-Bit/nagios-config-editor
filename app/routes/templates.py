@@ -4,7 +4,7 @@ import base64
 
 from flask import Blueprint, jsonify, request
 
-from inheritance import build_type_template_lookup, resolve_chain
+from ..inheritance import build_type_template_lookup, resolve_chain
 
 from .helpers import get_service
 from .objects import _resolve_stable_key

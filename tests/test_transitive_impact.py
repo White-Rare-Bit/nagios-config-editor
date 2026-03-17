@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from app import create_app
-from stable_keys import generate_stable_key
+from app.stable_keys import generate_stable_key
 
 
 @pytest.fixture

@@ -1,7 +1,7 @@
 import json
 import os
 
-from shadow_copy_manager import ShadowCopyManager
+from app.shadow_copy_manager import ShadowCopyManager
 
 
 class TestMultiRootShadow:

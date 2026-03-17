@@ -6,7 +6,7 @@ import uuid
 
 from flask import Blueprint, jsonify, request
 
-from audit_service import log_audit
+from ..audit_service import log_audit
 from .files import ensure_shadow_lock
 from .helpers import get_audit_user_identity, format_audit_user, audit_file_path, get_service, get_shadow_manager
 
@@ -95,7 +95,7 @@ def api_move_objects():
     insert_pos = after_line
     for obj in to_move:
         # Re-find by stable key since reloads may shift state
-        from stable_keys import generate_stable_key_for_object
+        from ..stable_keys import generate_stable_key_for_object
         key = generate_stable_key_for_object(obj)
         refound = service.find_object_by_stable_key(key)
         if not refound:

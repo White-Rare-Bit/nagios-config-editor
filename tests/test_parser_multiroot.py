@@ -1,4 +1,4 @@
-from nagios_parser import NagiosConfigParser
+from app.nagios_parser import NagiosConfigParser
 
 
 class TestMultiRootParser:

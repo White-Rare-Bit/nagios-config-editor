@@ -11,7 +11,7 @@ class TestServerConfigSaveAtomic:
 
     def test_server_config_save_uses_atomic_pattern(self, app):
         """save_config() must use temp file + fsync + os.replace."""
-        from server_config import CONFIG_DIR, CONFIG_FILE, ServerConfig, save_config
+        from app.server_config import CONFIG_DIR, CONFIG_FILE, ServerConfig, save_config
 
         fsync_calls = []
         replace_calls = []
@@ -33,8 +33,8 @@ class TestServerConfigSaveAtomic:
 
             config = ServerConfig()
 
-            with patch("server_config.CONFIG_DIR", tmp_config_dir), \
-                 patch("server_config.CONFIG_FILE", tmp_config_file), \
+            with patch("app.server_config.CONFIG_DIR", tmp_config_dir), \
+                 patch("app.server_config.CONFIG_FILE", tmp_config_file), \
                  patch("os.fsync", side_effect=tracking_fsync), \
                  patch("os.replace", side_effect=tracking_replace):
                 save_config(config)

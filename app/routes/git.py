@@ -4,8 +4,8 @@ import logging
 
 from flask import Blueprint, jsonify, request
 
-from audit_service import log_audit
-from file_operations import is_safe_path
+from ..audit_service import log_audit
+from ..file_operations import is_safe_path
 
 from .helpers import (
     format_audit_user,

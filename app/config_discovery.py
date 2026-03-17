@@ -6,7 +6,7 @@ then builds a unified list of config directories with accessibility checks.
 
 import os
 
-from nagios_cfg import parse_nagios_cfg
+from .nagios_cfg import parse_nagios_cfg
 
 # Files that are never editable, never shown in file tree, never copied to shadow
 PROTECTED_FILENAMES = frozenset({"nagios.cfg", "resource.cfg", "cgi.cfg"})

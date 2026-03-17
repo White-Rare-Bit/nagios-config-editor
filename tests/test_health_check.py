@@ -8,10 +8,10 @@ from pathlib import Path
 import pytest
 
 from app import create_app
-from file_operations import edit_object_in_file
-from git_service import GitService
-from nagios_model import REQUIRED_FIELDS
-from stable_keys import generate_stable_key
+from app.file_operations import edit_object_in_file
+from app.git_service import GitService
+from app.nagios_model import REQUIRED_FIELDS
+from app.stable_keys import generate_stable_key
 
 
 @pytest.fixture

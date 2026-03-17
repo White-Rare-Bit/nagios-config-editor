@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from nagios_parser import NagiosConfigParser
+from app.nagios_parser import NagiosConfigParser
 
 
 @pytest.fixture
@@ -193,7 +193,7 @@ define timeperiod {
         """Writing and re-reading a timeperiod preserves date-range keys."""
         import os
 
-        from nagios_writer import NagiosConfigWriter
+        from app.nagios_writer import NagiosConfigWriter
 
         tp = None
         for obj in parser_with_timeperiods.objects:

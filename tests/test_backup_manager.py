@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from backup_manager import BackupManager
+from app.backup_manager import BackupManager
 
 
 @pytest.fixture

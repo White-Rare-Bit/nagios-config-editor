@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from git_service import (
+from app.git_service import (
     GitService,
     _classify_status,
     _parse_log_entries,

@@ -10,13 +10,13 @@ from logging.handlers import RotatingFileHandler
 
 from flask import Flask
 
-from backup_manager import BackupManager
-from config_discovery import discover_config_roots
-from git_service import GitService
-from nagios_service import NagiosService
-from server_config import ServerConfig
-from server_config import load_config as load_server_config
-from shadow_copy_manager import ShadowCopyManager
+from .backup_manager import BackupManager
+from .config_discovery import discover_config_roots
+from .git_service import GitService
+from .nagios_service import NagiosService
+from .server_config import ServerConfig
+from .server_config import load_config as load_server_config
+from .shadow_copy_manager import ShadowCopyManager
 
 logger = logging.getLogger("nagios_bulk_editor")
 
@@ -172,7 +172,7 @@ def create_app(config_path: str | None = None, log_dir_override: str | None = No
 
     # Register blueprints only once
     if "blueprints_registered" not in app.extensions:
-        from routes import register_blueprints
+        from .routes import register_blueprints
         register_blueprints(app)
         app.extensions["blueprints_registered"] = True
 
@@ -189,9 +189,3 @@ def get_config_path() -> str:
 # Initialize app services with default config
 create_app()
 
-
-if __name__ == "__main__":
-    print("Nagios Bulk Editor")  # noqa: T201
-    print(f"Config path: {get_config_path()}")  # noqa: T201
-    print("Starting server on http://localhost:8080")  # noqa: T201
-    app.run(debug=True, host="127.0.0.1", port=8080)

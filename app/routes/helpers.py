@@ -4,8 +4,8 @@ import os
 
 from flask import current_app, jsonify, request
 
-from nagios_model import OperationResult
-from server_config import ServerConfig
+from ..nagios_model import OperationResult
+from ..server_config import ServerConfig
 
 
 def operation_response(result: OperationResult, success_data: dict = None, error_code: int = 500):

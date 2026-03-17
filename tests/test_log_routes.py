@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from routes.logs import parse_audit_line, parse_app_line
+from app.routes.logs import parse_audit_line, parse_app_line
 
 
 class TestParseAuditLine:

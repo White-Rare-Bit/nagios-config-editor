@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from app import create_app
-from stable_keys import generate_stable_key_for_object, parse_stable_key
+from app.stable_keys import generate_stable_key_for_object, parse_stable_key
 
 
 def test_parse_stable_key_with_pipe_in_name():
@@ -55,7 +55,7 @@ define service {
 def test_duplicate_service_descriptions_get_unique_keys(app_with_duplicate_services):
     """Services with same service_description on different hosts must have unique stable keys."""
     with app_with_duplicate_services.app_context():
-        from routes.helpers import get_service
+        from app.routes.helpers import get_service
         service = get_service()
         services = [o for o in service.get_objects() if o.object_type == "service"]
 
@@ -71,7 +71,7 @@ def test_duplicate_service_descriptions_get_unique_keys(app_with_duplicate_servi
 def test_find_object_by_stable_key_with_display_name(app_with_duplicate_services):
     """find_object_by_stable_key should resolve keys that use display_name."""
     with app_with_duplicate_services.app_context():
-        from routes.helpers import get_service
+        from app.routes.helpers import get_service
         service = get_service()
         services = [o for o in service.get_objects() if o.object_type == "service"]
 
@@ -90,7 +90,7 @@ def test_find_object_by_stable_key_with_display_name(app_with_duplicate_services
 def test_inheritance_api_resolves_correct_service(app_with_duplicate_services):
     """GET /api/templates/inheritance/<key> should find the right service by display_name."""
     with app_with_duplicate_services.app_context():
-        from routes.helpers import get_service
+        from app.routes.helpers import get_service
         service = get_service()
         services = [o for o in service.get_objects() if o.object_type == "service"]
 

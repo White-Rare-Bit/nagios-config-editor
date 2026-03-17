@@ -4,7 +4,7 @@
 
 ```bash
 pip install -r requirements.txt
-python3 app.py
+python3 -m app
 # Access at http://localhost:8080
 ```
 
@@ -14,11 +14,11 @@ Dependencies: `flask>=2.0.0,<4.0.0`, `gunicorn>=21.2.0,<24.0.0`
 
 **Reference docs** (`.claude/`): ROUTES_REFERENCE.md, API_REFERENCE.md, GIT_REFERENCE.md, FILE_OPS_REFERENCE.md, TYPOGRAPHY_REFERENCE.md, DECISION_LOG.md
 
-**Module docs**: routes/CLAUDE.md, templates/CLAUDE.md, static/css/CLAUDE.md, static/js/CLAUDE.md, static/js/explorer/CLAUDE.md
+**Module docs**: app/routes/CLAUDE.md, app/templates/CLAUDE.md, app/static/css/CLAUDE.md, app/static/js/CLAUDE.md, app/static/js/explorer/CLAUDE.md
 
 ## Backend Architecture
 
-### App Factory (app.py)
+### App Factory (app/__init__.py)
 
 Services stored in `app.extensions`, accessed via helpers:
 
@@ -45,25 +45,25 @@ All service methods return `OperationResult(success: bool, error: str = None, da
 
 | Module | What |
 |--------|------|
-| `app.py` | App factory, service init |
-| `server_config.py` | Config load/save, env overrides |
-| `nagios_service.py` | CRUD operations, reload |
-| `shadow_copy_manager.py` | Shadow copy lifecycle, session lock, file-level undo, apply/destroy |
-| `stable_keys.py` | Stable key generation and lookup helpers |
-| `backup_manager.py` | Zip backups, restore |
-| `nagios_parser.py` | Parse .cfg files |
-| `nagios_writer.py` | Write .cfg files |
-| `nagios_model.py` | NagiosObject, NAME_FIELDS, REFERENCE_FIELDS, domain constants |
-| `file_operations.py` | Atomic file ops, path safety |
-| `git_service.py` | Git wrapper, retry logic |
-| `validator.py` | nagios -v validation |
-| `audit_service.py` | JSON audit log (append-only JSONL) |
+| `app/__init__.py` | App factory, service init |
+| `app/server_config.py` | Config load/save, env overrides |
+| `app/nagios_service.py` | CRUD operations, reload |
+| `app/shadow_copy_manager.py` | Shadow copy lifecycle, session lock, file-level undo, apply/destroy |
+| `app/stable_keys.py` | Stable key generation and lookup helpers |
+| `app/backup_manager.py` | Zip backups, restore |
+| `app/nagios_parser.py` | Parse .cfg files |
+| `app/nagios_writer.py` | Write .cfg files |
+| `app/nagios_model.py` | NagiosObject, NAME_FIELDS, REFERENCE_FIELDS, domain constants |
+| `app/file_operations.py` | Atomic file ops, path safety |
+| `app/git_service.py` | Git wrapper, retry logic |
+| `app/validator.py` | nagios -v validation |
+| `app/audit_service.py` | JSON audit log (append-only JSONL) |
 
 ## Domain Metadata
 
-All Nagios domain constants are defined in `nagios_model.py` and served via `GET /api/metadata`. The frontend fetches once at startup into `Explorer.constants`. **Never hardcode domain metadata in JavaScript.**
+All Nagios domain constants are defined in `app/nagios_model.py` and served via `GET /api/metadata`. The frontend fetches once at startup into `Explorer.constants`. **Never hardcode domain metadata in JavaScript.**
 
-To add a new object type or reference field: update `nagios_model.py` — frontend picks it up automatically.
+To add a new object type or reference field: update `app/nagios_model.py` — frontend picks it up automatically.
 
 ## Shadow Copy Architecture
 

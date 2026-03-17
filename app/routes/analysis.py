@@ -6,7 +6,7 @@ from collections import defaultdict
 
 from flask import Blueprint, jsonify, request
 
-from inheritance import (
+from ..inheritance import (
     build_template_index,
     build_template_lookup,
     build_template_names_set,
@@ -18,8 +18,8 @@ from inheritance import (
     resolve_inherited_attrs,
     walk_inheritance_chain,
 )
-from nagios_model import NagiosObject
-from nagios_writer import NagiosConfigWriter
+from ..nagios_model import NagiosObject
+from ..nagios_writer import NagiosConfigWriter
 
 from .helpers import (
     get_backup_manager,
@@ -1374,7 +1374,7 @@ def api_object_references():
     obj_name = obj.get_name() or obj.get_display_name()
     obj_template_name = obj.attributes.get("name")
 
-    from nagios_model import REFERENCE_FIELDS
+    from ..nagios_model import REFERENCE_FIELDS
 
     obj_to_index = {id(o): idx for idx, o in enumerate(objects)}
 

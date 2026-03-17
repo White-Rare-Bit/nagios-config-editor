@@ -9,7 +9,7 @@ import re
 import subprocess
 from dataclasses import dataclass
 
-from nagios_model import OperationResult
+from .nagios_model import OperationResult
 
 
 @dataclass

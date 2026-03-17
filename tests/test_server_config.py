@@ -1,4 +1,4 @@
-from server_config import PathsConfig, ServerConfig, load_config, save_config
+from app.server_config import PathsConfig, ServerConfig, load_config, save_config
 
 
 class TestPathsConfig:

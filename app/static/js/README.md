@@ -39,7 +39,7 @@ If no rule exists for a (nodeType, preset) combination, nothing expands. This fo
 
 ## Adding a New Relationship Field
 
-1. Backend (`routes/analysis.py`): Add to `relationship_fields` dict
+1. Backend (`app/routes/analysis.py`): Add to `relationship_fields` dict
 2. `dependencies-config.js`: Add to appropriate `edgeCategories` array
 3. `dependencies-config.js`: Add label to `edgeLabelMap`, color to `edgeColors`
 4. Check if existing presets should include it via its category

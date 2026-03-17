@@ -46,7 +46,7 @@ Nagios object reference for all object types with attribute descriptions, requir
 git clone https://github.com/White-Rare-Bit/nagios-config-editor.git
 cd nagios-config-editor
 pip install -r requirements.txt
-python3 app.py
+python3 -m app
 ```
 
 Then open [http://localhost:8080](http://localhost:8080).
@@ -80,7 +80,7 @@ For running on a production Linux host alongside Nagios (systemd + Gunicorn + Ap
 
 ```bash
 python3 -m pytest tests/ -v   # run tests
-python3 app.py                 # run locally
+python3 -m app                 # run locally
 ```
 
 The `sample-config/` directory contains a test Nagios configuration for local development.

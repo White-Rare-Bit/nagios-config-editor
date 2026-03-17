@@ -2,7 +2,7 @@
 
 from flask import Blueprint, jsonify
 
-from validator import NagiosValidator
+from ..validator import NagiosValidator
 
 from .helpers import get_config, get_service
 
@@ -45,7 +45,7 @@ def api_validate():
 @bp.route("/api/health-check")
 def api_health_check():
     """Analyze configuration for potential issues."""
-    from inheritance import build_template_lookup
+    from ..inheritance import build_template_lookup
     from .health_checks import run_all_checks
     from .helpers import get_server_config
 

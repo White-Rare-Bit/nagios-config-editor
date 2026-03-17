@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from nagios_parser import NagiosConfigParser
+from app.nagios_parser import NagiosConfigParser
 
 
 class TestMalformedDefineBlocks:
