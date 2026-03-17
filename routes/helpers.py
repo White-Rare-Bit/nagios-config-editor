@@ -64,6 +64,22 @@ def make_relative_path(path, config_path):
     return path
 
 
+def audit_file_path(source_file):
+    """Convert a source file path (possibly in shadow) to a display path for audit logs.
+
+    Resolves shadow paths back to original paths, then makes them relative
+    to the config directory's parent (e.g. "objects/hosts.cfg").
+    """
+    sm = get_shadow_manager()
+    if sm.has_shadow():
+        original = sm.original_path_for(source_file)
+    else:
+        original = source_file
+    server_config = get_server_config()
+    config_path = server_config.paths.primary_dir if server_config else ""
+    return make_relative_path(original, config_path)
+
+
 def get_server_config() -> ServerConfig:
     """Get the server configuration object."""
     return current_app.extensions.get("server_config")

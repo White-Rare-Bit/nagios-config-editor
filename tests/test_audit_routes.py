@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -90,3 +91,16 @@ class TestObjectEditAudit:
         assert "action=object_edit" in address_lines[0]
         assert "type=host" in address_lines[0]
         assert "name=test-host-1" in address_lines[0]
+
+        # All lines should share the same txn
+        txn_values = set()
+        for line in audit_lines:
+            m = re.search(r"txn=(\w+)", line)
+            if m:
+                txn_values.add(m.group(1))
+        assert len(txn_values) == 1
+
+        # file= should show original path, not shadow internal path
+        for line in audit_lines:
+            assert "file=nagios/hosts.cfg" in line or "file=hosts.cfg" in line
+            assert "root_0" not in line

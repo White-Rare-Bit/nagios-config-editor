@@ -11,7 +11,7 @@ from flask import Blueprint, jsonify, request
 from audit_service import log_audit
 from .helpers import (
     get_service, get_shadow_manager, operation_response,
-    get_audit_user_identity, format_audit_user, make_relative_path, get_config_path,
+    get_audit_user_identity, format_audit_user, audit_file_path,
 )
 from .files import ensure_shadow_lock
 
@@ -119,10 +119,9 @@ def api_update_object():
     if result.success:
         identity = get_audit_user_identity()
         user = format_audit_user(identity)
-        config_path = get_config_path()
-        file_display = make_relative_path(obj.source_file, config_path)
+        file_display = audit_file_path(obj.source_file)
         txn = uuid.uuid4().hex[:8]
-        for field_name in set(list(old_attrs.keys()) + list(new_attrs.keys())):
+        for field_name in old_attrs.keys() | new_attrs.keys():
             old_val = old_attrs.get(field_name, "")
             new_val = new_attrs.get(field_name, "")
             if old_val != new_val:
