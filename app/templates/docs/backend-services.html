@@ -30,20 +30,19 @@
             <text x="180" y="64" text-anchor="middle" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="13" font-weight="600">NagiosService</text>
 
             <text x="48" y="96" fill="#888" font-family="Inter, sans-serif" font-size="10" font-weight="600">QUERY</text>
-            <text x="48" y="112" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">get_objects() · find_by_key()</text>
-            <text x="48" y="126" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">get_references() · get_health()</text>
+            <text x="48" y="112" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">get_objects() · find_by_index()</text>
+            <text x="48" y="126" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">find_by_stable_key()</text>
 
             <line x1="48" y1="136" x2="312" y2="136" stroke="#404040"/>
 
             <text x="48" y="154" fill="#888" font-family="Inter, sans-serif" font-size="10" font-weight="600">MUTATION</text>
             <text x="48" y="170" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">create() · update() · delete()</text>
-            <text x="48" y="184" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">move() · clone() · bulk_rename()</text>
+            <text x="48" y="184" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">move() · update_references()</text>
 
             <line x1="48" y1="194" x2="312" y2="194" stroke="#404040"/>
 
             <text x="48" y="212" fill="#888" font-family="Inter, sans-serif" font-size="10" font-weight="600">OTHER</text>
-            <text x="48" y="228" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">reload() · get_name_field()</text>
-            <text x="48" y="242" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">get_object_stats()</text>
+            <text x="48" y="228" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="10">reload() · transform_name()</text>
 
             <rect x="38" y="270" width="64" height="14" rx="3" fill="rgba(255, 193, 7, 0.15)" stroke="rgba(255, 193, 7, 0.3)"/>
             <text x="70" y="280" text-anchor="middle" fill="#ffb74d" font-family="Inter, sans-serif" font-size="9">mp.Lock</text>
@@ -158,7 +157,7 @@
     </p>
 
     <details class="docs-details">
-        <summary>Query Methods (6 methods)</summary>
+        <summary>Query Methods (3 methods)</summary>
 
     <table>
         <thead>
@@ -171,40 +170,25 @@
         <tbody>
             <tr>
                 <td><code>get_objects()</code></td>
-                <td><code>List[NagiosObject]</code></td>
+                <td><code>list[NagiosObject]</code></td>
                 <td>Return all parsed objects from all config files</td>
             </tr>
             <tr>
                 <td><code>find_object_by_index(idx)</code></td>
-                <td><code>Optional[NagiosObject]</code></td>
+                <td><code>NagiosObject | None</code></td>
                 <td>Get a single object by its global index</td>
             </tr>
             <tr>
                 <td><code>find_object_by_stable_key(key)</code></td>
-                <td><code>Optional[Tuple[int, NagiosObject]]</code></td>
+                <td><code>tuple[int, NagiosObject] | None</code></td>
                 <td>Get object by stable key (survives parser reloads)</td>
-            </tr>
-            <tr>
-                <td><code>search_objects(query, type, field, regex)</code></td>
-                <td><code>List[NagiosObject]</code></td>
-                <td>Search objects with optional type/field/regex filters</td>
-            </tr>
-            <tr>
-                <td><code>get_object_stats()</code></td>
-                <td><code>Dict</code></td>
-                <td>Counts grouped by object type and source file</td>
-            </tr>
-            <tr>
-                <td><code>get_name_field(object_type)</code></td>
-                <td><code>str</code></td>
-                <td>Get the name field for a given object type (e.g., <code>host_name</code> for hosts)</td>
             </tr>
         </tbody>
     </table>
     </details>
 
     <details class="docs-details">
-        <summary>Mutation Methods (6 methods)</summary>
+        <summary>Mutation Methods (5 methods)</summary>
 
     <table>
         <thead>
@@ -240,17 +224,12 @@
                 <td><code>int</code></td>
                 <td>Update all references when an object is renamed (returns count updated)</td>
             </tr>
-            <tr>
-                <td><code>transform_name(name, find, replace, prefix, suffix, regex)</code></td>
-                <td><code>Optional[str]</code></td>
-                <td>Transform a name using find/replace, prefix, or suffix</td>
-            </tr>
         </tbody>
     </table>
     </details>
 
     <details class="docs-details">
-        <summary>Other Methods (1 method)</summary>
+        <summary>Other Methods (2 methods)</summary>
 
     <table>
         <thead>
@@ -265,6 +244,11 @@
                 <td><code>reload()</code></td>
                 <td><code>NagiosConfigParser</code></td>
                 <td>Force parser to re-read all config files from disk</td>
+            </tr>
+            <tr>
+                <td><code>transform_name(name, find, replace, prefix, suffix, regex)</code></td>
+                <td><code>str | None</code></td>
+                <td>Transform a name string using find/replace, prefix, or suffix (helper, not a mutation)</td>
             </tr>
         </tbody>
     </table>

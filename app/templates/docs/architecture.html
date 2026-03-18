@@ -20,13 +20,13 @@
     <h3>App Factory</h3>
 
     <p>
-        The application is created by <code>create_app()</code> in <code>app.py</code>. During
+        The application is created by <code>create_app()</code> in <code>app/__init__.py</code>. During
         initialization, all service instances are stored in <code>app.extensions</code>, a
         dictionary attached to the Flask app object. Route handlers access services through
         helper functions rather than importing service instances directly:
     </p>
 
-    <pre><code>from .helpers import get_service, get_shadow_manager, get_backup_manager, get_server_config</code></pre>
+    <pre><code>from .routes.helpers import get_service, get_shadow_manager, get_backup_manager, get_server_config</code></pre>
 
     <p>
         This pattern keeps service creation centralized and makes testing easier — you can
@@ -268,7 +268,7 @@ return jsonify({'success': True, 'data': result.data})</code></pre>
         </thead>
         <tbody>
             <tr>
-                <td><code>app.py</code></td>
+                <td><code>app/__init__.py</code></td>
                 <td>App factory, service initialization, extension registration</td>
             </tr>
             <tr>
@@ -312,12 +312,20 @@ return jsonify({'success': True, 'data': result.data})</code></pre>
                 <td>Run <code>nagios -v</code> validation</td>
             </tr>
             <tr>
-                <td><code>operation_logger.py</code></td>
-                <td>Structured JSON logging for operations</td>
+                <td><code>audit_service.py</code></td>
+                <td>Key=value audit log writer for tracking user actions</td>
             </tr>
             <tr>
-                <td><code>audit_service.py</code></td>
-                <td>Audit log writer for tracking user actions</td>
+                <td><code>config_discovery.py</code></td>
+                <td>Resolve config roots from nagios.cfg (cfg_dir/cfg_file directives)</td>
+            </tr>
+            <tr>
+                <td><code>nagios_cfg.py</code></td>
+                <td>Lightweight parser for nagios.cfg and resource.cfg ($USERn$ macros)</td>
+            </tr>
+            <tr>
+                <td><code>inheritance.py</code></td>
+                <td>Unified template inheritance resolution, chain walking, analysis</td>
             </tr>
         </tbody>
     </table>
@@ -343,7 +351,7 @@ return jsonify({'success': True, 'data': result.data})</code></pre>
             </tr>
             <tr>
                 <td><code>objects.py</code></td>
-                <td>Object CRUD (<code>/api/objects</code>, <code>/api/delete-objects</code>, <code>/api/clone-objects</code>)</td>
+                <td>Object CRUD (<code>/api/objects</code>, <code>/api/objects/update</code>, <code>/create</code>, <code>/delete</code>, <code>/move</code>, <code>/delete-multiple</code>)</td>
             </tr>
             <tr>
                 <td><code>staging.py</code></td>
@@ -359,7 +367,7 @@ return jsonify({'success': True, 'data': result.data})</code></pre>
             </tr>
             <tr>
                 <td><code>bulk_ops.py</code></td>
-                <td>Bulk rename and move (<code>/api/apply-rename</code>, <code>/api/move-objects</code>)</td>
+                <td>Bulk move and batch mutations (<code>/api/move-objects</code>, <code>/api/batch-mutations</code>)</td>
             </tr>
             <tr>
                 <td><code>backups.py</code></td>
@@ -374,8 +382,20 @@ return jsonify({'success': True, 'data': result.data})</code></pre>
                 <td>Config reload, validation, health checks</td>
             </tr>
             <tr>
+                <td><code>templates.py</code></td>
+                <td>Template listing, inheritance chains (<code>/api/templates</code>)</td>
+            </tr>
+            <tr>
+                <td><code>metadata.py</code></td>
+                <td>Domain metadata (<code>/api/metadata</code>)</td>
+            </tr>
+            <tr>
+                <td><code>logs.py</code></td>
+                <td>Audit and application logs (<code>/api/logs/audit</code>, <code>/api/logs/app</code>)</td>
+            </tr>
+            <tr>
                 <td><code>settings.py</code></td>
-                <td>App settings, logging config, audit log</td>
+                <td>App settings, logging config (<code>/api/settings</code>)</td>
             </tr>
         </tbody>
     </table>

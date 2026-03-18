@@ -13,9 +13,9 @@
 
     <p>
         The frontend is vanilla JavaScript with no build system, no framework, and no bundler.
-        All modules use the IIFE (Immediately Invoked Function Expression) pattern. Explorer
-        modules attach to the <code>window.Explorer</code> namespace; core modules are standalone
-        globals.
+        All modules use ES module <code>import</code>/<code>export</code> syntax. The entry point
+        is <code>base.js</code> (loaded as <code>type="module"</code>), which imports all core
+        modules. Explorer modules are loaded from <code>explorer/main.js</code>.
     </p>
 
     <div class="docs-diagram">
@@ -73,32 +73,23 @@
             <text x="175" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">backups</text>
 
             <rect x="224" y="164" width="82" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
-            <text x="265" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">settings</text>
+            <text x="265" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">logs</text>
 
-            <rect x="314" y="164" width="82" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
-            <text x="355" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">audit-log</text>
+            <rect x="314" y="164" width="110" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="369" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">dependencies</text>
 
-            <rect x="404" y="164" width="82" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
-            <text x="445" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">validate</text>
+            <rect x="432" y="164" width="82" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="473" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">settings</text>
 
-            <rect x="494" y="164" width="110" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
-            <text x="549" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">dependencies</text>
-
-            <rect x="612" y="164" width="110" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
-            <text x="667" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">inheritance</text>
-
-            <rect x="730" y="164" width="110" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
-            <text x="785" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">bulk-rename</text>
-
-            <rect x="848" y="164" width="110" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
-            <text x="903" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">reorganize</text>
+            <rect x="522" y="164" width="82" height="32" rx="4" fill="#2d2d2d" stroke="#404040"/>
+            <text x="563" y="185" text-anchor="middle" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="9">docs</text>
 
             <!-- Arrow down -->
             <line x1="510" y1="208" x2="510" y2="226" stroke="#4ec9b0" stroke-width="1.5" marker-end="url(#fe-arrow)"/>
 
             <!-- Tier 3: Explorer Modules -->
             <rect x="30" y="228" width="960" height="140" rx="5" fill="rgba(255, 193, 7, 0.04)" stroke="rgba(255, 193, 7, 0.15)"/>
-            <text x="50" y="246" fill="#ffb74d" font-family="Inter, sans-serif" font-size="11" font-weight="600">EXPLORER MODULES (16 modules, window.Explorer namespace)</text>
+            <text x="50" y="246" fill="#ffb74d" font-family="Inter, sans-serif" font-size="11" font-weight="600">EXPLORER MODULES (21 modules, ES imports from explorer/)</text>
 
             <!-- Row 1 -->
             <rect x="44" y="256" width="108" height="32" rx="4" fill="#2d2d2d" stroke="#ffb74d" stroke-opacity="0.4"/>
@@ -252,15 +243,25 @@
                 <td><code>/settings</code></td>
                 <td>Identity config, git preferences, config paths</td>
             </tr>
+            <tr>
+                <td><code>docs.js</code></td>
+                <td><code>/docs</code></td>
+                <td>Documentation page navigation, search, Nagios reference rendering</td>
+            </tr>
+            <tr>
+                <td><code>docs-data.js</code></td>
+                <td><code>/docs</code></td>
+                <td>Nagios object reference data and inheritance documentation</td>
+            </tr>
         </tbody>
     </table>
 
     <h3>Explorer Component Architecture</h3>
 
     <p>
-        The Object Explorer (<code>/explorer</code>) is the most complex page, with 16 modules
-        in the <code>Explorer</code> namespace. All modules attach to <code>window.Explorer</code>
-        and share state via <code>Explorer.state</code>.
+        The Object Explorer (<code>/explorer</code>) is the most complex page, with 21 modules
+        in the <code>explorer/</code> directory. They use ES module imports and share state via
+        a dedicated <code>state.js</code> module.
     </p>
 
     <table>
@@ -273,15 +274,23 @@
         <tbody>
             <tr>
                 <td><code>main.js</code></td>
-                <td>Namespace definition, state structure (allObjects, selections, staging maps, undo stack)</td>
+                <td>Entry point: imports, initializes event delegation, registers callbacks</td>
+            </tr>
+            <tr>
+                <td><code>state.js</code></td>
+                <td>Shared state object (allObjects, selections, filters), <code>TreeExpansionState</code> class, path utilities</td>
             </tr>
             <tr>
                 <td><code>constants.js</code></td>
-                <td>Domain metadata from <code>/api/metadata</code>, UI-only constants, shared helpers</td>
+                <td>Domain metadata from <code>/api/metadata</code> via <code>applyMetadata()</code>, badge tiers, UI-only constants</td>
             </tr>
             <tr>
                 <td><code>state-management.js</code></td>
-                <td>Stable key helpers, pending edit get/set, <code>refreshAfterObjectChange()</code></td>
+                <td>Stable key helpers, pending edit get/set, <code>rebuildUI()</code></td>
+            </tr>
+            <tr>
+                <td><code>action-registry.js</code></td>
+                <td>Maps <code>data-action</code> names to handler functions for event delegation</td>
             </tr>
             <tr>
                 <td><code>app.js</code></td>
@@ -293,7 +302,7 @@
             </tr>
             <tr>
                 <td><code>file-operations.js</code></td>
-                <td>Right pane: file tree, navigation, folder operations. Helper: <code>afterStagingChange()</code></td>
+                <td>Right pane: file tree, navigation, folder operations</td>
             </tr>
             <tr>
                 <td><code>context-menu.js</code></td>
@@ -336,8 +345,16 @@
                 <td>Impact analysis and resolved attributes in center pane</td>
             </tr>
             <tr>
+                <td><code>panel-resizer.js</code></td>
+                <td>Resizable panel dividers</td>
+            </tr>
+            <tr>
+                <td><code>tab-manager.js</code></td>
+                <td>Tab switching for center/right panes</td>
+            </tr>
+            <tr>
                 <td><code>ui-utils.js</code></td>
-                <td>Icons, <code>formatObjectName()</code>, <code>buildBreadcrumb()</code>, tab switching</td>
+                <td>Icons, <code>switchTabs()</code>, <code>updateBadge()</code>, path utilities, <code>handleApiError()</code></td>
             </tr>
         </tbody>
     </table>
@@ -402,9 +419,9 @@ const actionHandlers = {
     </ul>
 
     <p>
-        State is updated in response to API calls and user interactions. When staging state
-        changes, the Explorer calls <code>refreshAfterObjectChange()</code> to re-render
-        affected UI components.
+        State is updated in response to API calls and user interactions. After mutations,
+        the Explorer calls <code>afterFrontendMutation()</code> or <code>afterServerSync()</code>
+        (from <code>data-loading.js</code>) to re-render affected UI components.
     </p>
 
     <h3>Domain Metadata</h3>
@@ -611,8 +628,8 @@ const actionHandlers = {
 
     <ul>
         <li><strong>Light theme</strong> — <code>--nbe-{category}-{variant}</code></li>
-        <li><strong>Dark theme</strong> — <code>--nbe-dark-{category}-{variant}</code> (Explorer page only)</li>
-        <li><strong>Categories</strong> — <code>bg</code>, <code>text</code>, <code>border</code>, <code>accent</code>, <code>input</code>, <code>btn</code>, <code>tab</code>, <code>validation</code></li>
+        <li><strong>Dark theme</strong> — <code>--nbe-dark-{category}-{variant}</code> (all dark pages: Explorer, Git, Backups, Logs, Settings, Dependencies, Docs)</li>
+        <li><strong>Categories</strong> — <code>bg</code>, <code>text</code>, <code>border</code>, <code>accent</code>, <code>input</code>, <code>btn</code>, <code>tab</code>, <code>validation</code>, <code>prose</code>, <code>type</code></li>
     </ul>
 
     <p>

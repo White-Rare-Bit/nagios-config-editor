@@ -7,8 +7,8 @@ All modules use ES module `import`/`export` syntax. Shared state in `state.js`.
 | File | What |
 |------|------|
 | `main.js` | Entry point: imports, initializes event delegation, registers callbacks |
-| `state.js` | Shared state object (allObjects, selections, filters, etc.) |
-| `constants.js` | Domain metadata from `/api/metadata`, UI-only constants, shared helpers |
+| `state.js` | Shared state object (allObjects, selections, filters, etc.), `TreeExpansionState` class, path conversion utilities |
+| `constants.js` | Domain metadata from `/api/metadata` via `applyMetadata()`, badge tiers, UI-only constants (`identityFields`, `inheritanceAttrs`), `isObjectTemplate()` |
 | `state-management.js` | Stable key helpers, pending edit get/set, `rebuildUI()` |
 | `action-registry.js` | Maps `data-action` names to handler functions for event delegation |
 | `app.js` | Left pane: tree rendering, filtering, selection, autocomplete |
@@ -26,7 +26,7 @@ All modules use ES module `import`/`export` syntax. Shared state in `state.js`.
 | `impact-section.js` | Impact analysis and resolved attributes in center pane |
 | `panel-resizer.js` | Resizable panel dividers |
 | `tab-manager.js` | Tab switching for center/right panes |
-| `ui-utils.js` | Icons, `formatObjectName()`, `buildBreadcrumb()`, tab switching |
+| `ui-utils.js` | Icons (`icons`, `getIcon()`), `switchTabs()`, `updateBadge()`, `explorerShowToast()`, path utilities (`extractFileName`, `toRelativePath`, `toDisplayPath`), `handleApiError()` |
 
 ## Constants: Metadata vs Hardcoded
 

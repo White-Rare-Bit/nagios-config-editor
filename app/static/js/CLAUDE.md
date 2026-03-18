@@ -17,6 +17,12 @@ All modules use ES module `import`/`export` syntax. Explorer modules in `explore
 | `commit-dialog.js` | Commit overlay, shadow diff display |
 | `base.js` | Initialization, event delegation, keyboard shortcuts, DebugLogger |
 
+## Shared Modules
+
+| File | What |
+|------|------|
+| `shared/pagination.js` | `renderPagination()` — reusable pagination component used by logs, backups, git |
+
 ## Page Modules
 
 | File | What |

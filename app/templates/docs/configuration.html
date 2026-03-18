@@ -33,7 +33,7 @@
             <rect x="140" y="44" width="840" height="44" rx="5" fill="#2d2d2d" stroke="#4ec9b0" stroke-width="2"/>
             <text x="170" y="70" fill="#4ec9b0" font-family="Inter, sans-serif" font-size="13" font-weight="600">Environment Variables</text>
             <text x="560" y="70" fill="#888" font-family="Inter, sans-serif" font-size="11">Override everything at load time</text>
-            <text x="810" y="70" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="11">NAGIOS_CONFIG_PATH=...</text>
+            <text x="810" y="70" fill="#d4d4d4" font-family="JetBrains Mono, monospace" font-size="11">NAGIOS_CFG=...</text>
 
             <!-- Layer 2: Config File -->
             <rect x="140" y="96" width="840" height="44" rx="5" fill="#2d2d2d" stroke="#569cd6" stroke-width="2"/>
@@ -73,16 +73,10 @@
         </thead>
         <tbody>
             <tr>
-                <td><code>nagios_config_path</code></td>
+                <td><code>nagios_cfg</code></td>
                 <td><code>str</code></td>
-                <td><code>"./sample-config"</code></td>
-                <td>Path to the directory containing Nagios <code>.cfg</code> files</td>
-            </tr>
-            <tr>
-                <td><code>backup_path</code></td>
-                <td><code>str | null</code></td>
-                <td><code>null</code></td>
-                <td>Custom path for storing backups (defaults to a <code>backups/</code> subdirectory inside the config path)</td>
+                <td><code>""</code></td>
+                <td>Path to the main <code>nagios.cfg</code> file. Config directories are auto-discovered from <code>cfg_dir</code>/<code>cfg_file</code> directives within this file.</td>
             </tr>
             <tr>
                 <td><code>nagios_bin</code></td>
@@ -91,16 +85,34 @@
                 <td>Path to the Nagios binary (for <code>nagios -v</code> validation)</td>
             </tr>
             <tr>
-                <td><code>nagios_cfg</code></td>
-                <td><code>str</code></td>
-                <td><code>"./sample-config/nagios.cfg"</code></td>
-                <td>Path to the main <code>nagios.cfg</code> file (used by validation)</td>
+                <td><code>backup_path</code></td>
+                <td><code>str | null</code></td>
+                <td><code>null</code></td>
+                <td>Custom path for storing backups (defaults to a <code>backups/</code> subdirectory inside the config path)</td>
+            </tr>
+            <tr>
+                <td><code>shadow_path</code></td>
+                <td><code>str | null</code></td>
+                <td><code>null</code></td>
+                <td>Custom path for the shadow copy directory (defaults to auto-generated)</td>
             </tr>
             <tr>
                 <td><code>resource_cfg</code></td>
                 <td><code>str</code></td>
                 <td><code>""</code></td>
-                <td>Path to a <code>resource.cfg</code> file (for macro resolution)</td>
+                <td>Path to a <code>resource.cfg</code> file (for <code>$USERn$</code> macro resolution)</td>
+            </tr>
+            <tr>
+                <td><code>primary_dir</code></td>
+                <td><code>str</code></td>
+                <td><code>""</code></td>
+                <td>Primary config directory (usually auto-set from <code>nagios_cfg</code>)</td>
+            </tr>
+            <tr>
+                <td><code>extra_cfg_dirs</code></td>
+                <td><code>list[str]</code></td>
+                <td><code>[]</code></td>
+                <td>Additional config directories beyond those discovered from <code>nagios.cfg</code></td>
             </tr>
         </tbody>
     </table>
@@ -161,11 +173,13 @@
     <pre><code>{
   "version": 1,
   "paths": {
-    "nagios_config_path": "/etc/nagios/objects",
-    "backup_path": null,
-    "nagios_bin": "/usr/local/nagios/bin/nagios",
     "nagios_cfg": "/etc/nagios/nagios.cfg",
-    "resource_cfg": ""
+    "nagios_bin": "/usr/local/nagios/bin/nagios",
+    "backup_path": null,
+    "shadow_path": null,
+    "resource_cfg": "",
+    "primary_dir": "/etc/nagios/objects",
+    "extra_cfg_dirs": []
   },
   "logging": {
     "enabled": true,
@@ -194,28 +208,27 @@
         </thead>
         <tbody>
             <tr>
-                <td><code>NAGIOS_CONFIG_PATH</code></td>
-                <td><code>paths.nagios_config_path</code> (normalized to absolute path)</td>
-            </tr>
-            <tr>
-                <td><code>BACKUP_PATH</code></td>
-                <td><code>paths.backup_path</code></td>
+                <td><code>NAGIOS_CFG</code></td>
+                <td><code>paths.nagios_cfg</code></td>
             </tr>
             <tr>
                 <td><code>NAGIOS_BIN</code></td>
                 <td><code>paths.nagios_bin</code></td>
             </tr>
             <tr>
-                <td><code>NAGIOS_CFG</code></td>
-                <td><code>paths.nagios_cfg</code></td>
+                <td><code>BACKUP_PATH</code></td>
+                <td><code>paths.backup_path</code></td>
+            </tr>
+            <tr>
+                <td><code>NBE_SHADOW_PATH</code></td>
+                <td><code>paths.shadow_path</code></td>
             </tr>
         </tbody>
     </table>
 
     <div class="docs-note">
-        The <code>nagios_config_path</code> is always normalized to an absolute path, whether
-        set via environment variable or config file. Relative paths are resolved against the
-        application's working directory.
+        Path settings are normalized to absolute paths when loaded. Relative paths are
+        resolved against the application's working directory.
     </div>
 
     <h3>Config Loading</h3>
@@ -259,11 +272,8 @@
         supports both flat and nested key formats:
     </p>
 
-    <pre><code># Flat keys (backward compatibility)
-update_config({'nagios_config_path': '/new/path'})
-
-# Nested keys
-update_config({'paths': {'nagios_config_path': '/new/path'}})
+    <pre><code># Nested keys
+update_config({'paths': {'nagios_cfg': '/etc/nagios/nagios.cfg'}})
 
 # Logging updates
 update_config({'logging': {'log_level': 'DEBUG'}})</code></pre>

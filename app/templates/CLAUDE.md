@@ -19,9 +19,9 @@ base.html
 
 **CSS** (in `<head>`): Bootstrap → FontAwesome → `tokens.css` → `forms.css` → `style.css` → `{% block extra_css %}`
 
-**JS** (before `</body>`): Bootstrap JS → `app.js` → `base-state.js` → `session-manager.js` → `ui-notifications.js` → `git-ui.js` → `stable-key.js` → `api-client.js` → `commit-dialog.js` → `base.js` → `{% block scripts %}`
+**JS** (before `</body>`, ES modules): Bootstrap JS → `base.js` (type="module", imports all core modules via ES imports) → `{% block scripts %}`
 
-Page scripts can rely on all the above being loaded.
+Page scripts use `type="module"` and import dependencies directly via ES module syntax.
 
 ## Global Components (base.html)
 

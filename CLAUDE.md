@@ -12,7 +12,7 @@ Dependencies: `flask>=2.0.0,<4.0.0`, `gunicorn>=21.2.0,<24.0.0`
 
 ## Documentation Index
 
-**Reference docs** (`.claude/`): ROUTES_REFERENCE.md, API_REFERENCE.md, GIT_REFERENCE.md, FILE_OPS_REFERENCE.md, TYPOGRAPHY_REFERENCE.md, DECISION_LOG.md
+**Reference docs** (`.claude/`): ROUTES_REFERENCE.md, API_REFERENCE.md, STAGING_REFERENCE.md, GIT_REFERENCE.md, FILE_OPS_REFERENCE.md, TYPOGRAPHY_REFERENCE.md, DECISION_LOG.md
 
 **Module docs**: app/routes/CLAUDE.md, app/templates/CLAUDE.md, app/static/css/CLAUDE.md, app/static/js/CLAUDE.md, app/static/js/explorer/CLAUDE.md
 
@@ -23,7 +23,7 @@ Dependencies: `flask>=2.0.0,<4.0.0`, `gunicorn>=21.2.0,<24.0.0`
 Services stored in `app.extensions`, accessed via helpers:
 
 ```python
-from .helpers import get_service, get_shadow_manager, get_backup_manager, get_server_config
+from .routes.helpers import get_service, get_shadow_manager, get_backup_manager, get_server_config
 ```
 
 ### Thread Safety
@@ -57,7 +57,10 @@ All service methods return `OperationResult(success: bool, error: str = None, da
 | `app/file_operations.py` | Atomic file ops, path safety |
 | `app/git_service.py` | Git wrapper, retry logic |
 | `app/validator.py` | nagios -v validation |
-| `app/audit_service.py` | JSON audit log (append-only JSONL) |
+| `app/audit_service.py` | Key=value audit log (append-only, stdlib logging) |
+| `app/config_discovery.py` | Resolve config roots from nagios.cfg (cfg_dir/cfg_file directives) |
+| `app/nagios_cfg.py` | Lightweight parser for nagios.cfg and resource.cfg ($USERn$ macros) |
+| `app/inheritance.py` | Unified template inheritance resolution, chain walking, analysis |
 
 ## Domain Metadata
 

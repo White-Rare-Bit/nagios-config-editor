@@ -14,10 +14,7 @@ Design tokens in `tokens.css`, component styles, and page-specific CSS.
 | `backups.css` | Backup list, restore modal |
 | `dependencies.css` | Graph view: legend, zoom, node/edge styles |
 | `logs.css` | Logs page: table, filter chips, badges |
-| `inheritance.css` | Inheritance tree visualization |
 | `settings.css` | Settings page forms |
-| `bulk-rename.css` | Bulk rename page |
-| `validate.css` | Validation output display |
 | `docs.css` | Docs page: prose, callouts, directive table |
 
 ## Color System
@@ -30,19 +27,18 @@ Token-based. Dark pages use `{% block body_class %} nbe-dark-page{% endblock %}`
 
 **Load order**: Bootstrap → FontAwesome → `tokens.css` → `forms.css` → `dark-page.css` → `style.css` → page CSS
 
-**Naming**: `--nbe-dark-{category}-{variant}` — categories: `bg`, `text`, `border`, `accent`, `input`, `btn`, `tab`, `validation`, `prose`.
+**Naming**: `--nbe-dark-{category}-{variant}` — categories: `bg`, `text`, `border`, `accent`, `input`, `btn`, `tab`, `validation`, `prose`, `type`.
 
-**Dark pages**: Explorer, Git, Backups, Logs, Settings, Validate, Dependencies, Docs
+**Dark pages**: Explorer, Git, Backups, Logs, Settings, Dependencies, Docs
 
 ## Button System
 
 Base class `.nbe-btn` with modifiers. All defined in `tokens.css`.
 
-**Emphasis (MD3 hierarchy, high → low)**: `--filled`, `--tonal`, `--outlined`, `--text`
-**Color role**: `--danger` (destructive actions, any emphasis level)
-**Sizes**: `--xs`, `--sm`, (default), `--lg`
+**Color roles**: `--primary`, `--secondary`, `--danger`, `--info`, `--ghost`
+**Sizes**: `--xs`, `--sm`, (default)
 **Modifiers**: `--icon` (square), `--full` (width:100%), `.nbe-btn-group`
-**Dark theme**: Add `--dark` (e.g. `.nbe-btn--dark.nbe-btn--filled`)
+**Dark theme**: Add `--dark` with emphasis levels: `--filled`, `--tonal`, `--outlined`, `--text` (e.g. `.nbe-btn--dark.nbe-btn--filled`)
 **Loading state**: Set `data-loading="true"` in JS
 
 ## Spacing Tokens

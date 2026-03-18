@@ -85,11 +85,11 @@
     <h4>Parser Modification</h4>
 
     <p>
-        When multiple parser mutations need to run atomically, use the context manager:
+        When performing mutations that need a parser pointed at the shadow copy, use:
     </p>
 
-    <pre><code>with get_parser_for_modification() as p:
-    # multi-step mutation — lock is held, parser reloads on exit</code></pre>
+    <pre><code>parser = get_parser_for_modification()
+# parser is configured to read from shadow copy paths</code></pre>
 
     <h3>Frontend Patterns</h3>
 
@@ -197,7 +197,7 @@ if (!result.success) {
 
     <p>
         Dark theme tokens follow the pattern <code>--nbe-dark-{category}-{variant}</code>
-        and are currently used on the Explorer page only:
+        and are used on all dark pages (Explorer, Git, Backups, Logs, Settings, Dependencies, Docs):
     </p>
 
     <pre><code>--nbe-dark-bg-primary
@@ -208,7 +208,7 @@ if (!result.success) {
     <p>
         Categories include: <code>bg</code>, <code>text</code>, <code>border</code>,
         <code>accent</code>, <code>input</code>, <code>btn</code>, <code>tab</code>,
-        <code>validation</code>.
+        <code>validation</code>, <code>prose</code>, <code>type</code>.
     </p>
 
     <h4>Button System</h4>
@@ -218,10 +218,10 @@ if (!result.success) {
     </p>
 
     <ul>
-        <li><strong>Variants</strong>: <code>--filled</code>, <code>--outlined</code>, <code>--danger</code>, <code>--info</code>, <code>--ghost</code></li>
-        <li><strong>Sizes</strong>: <code>--xs</code>, <code>--sm</code>, (default), <code>--lg</code></li>
+        <li><strong>Color roles</strong>: <code>--primary</code>, <code>--secondary</code>, <code>--danger</code>, <code>--info</code>, <code>--ghost</code></li>
+        <li><strong>Sizes</strong>: <code>--xs</code>, <code>--sm</code>, (default)</li>
         <li><strong>Modifiers</strong>: <code>--icon</code> (square), <code>--full</code> (full width), <code>.nbe-btn-group</code></li>
-        <li><strong>Dark theme</strong>: Add <code>--dark</code> (e.g., <code>.nbe-btn--dark.nbe-btn--filled</code>)</li>
+        <li><strong>Dark theme</strong>: Add <code>--dark</code> with emphasis levels: <code>--filled</code>, <code>--tonal</code>, <code>--outlined</code>, <code>--text</code> (e.g., <code>.nbe-btn--dark.nbe-btn--filled</code>)</li>
         <li><strong>Loading state</strong>: Set <code>data-loading="true"</code> via JavaScript</li>
     </ul>
 
