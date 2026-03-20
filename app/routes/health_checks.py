@@ -581,98 +581,6 @@ def check_duplicate_dependencies(ctx):
 # Check 10: Hosts without services
 # ---------------------------------------------------------------------------
 
-def check_hosts_without_services(ctx):
-    """Check 10: Non-template hosts that have no services assigned."""
-    issues = []
-    objects = ctx["objects"]
-    obj_to_index = ctx["obj_to_index"]
-    hosts = ctx["hosts"]
-
-    host_to_hostgroups = _build_host_to_hostgroups(objects, ctx["template_lookup"])
-    hostgroup_to_hosts = _build_hostgroup_to_hosts(objects)
-    hosts_with_services = _find_hosts_with_services(
-        objects, hosts, host_to_hostgroups, hostgroup_to_hosts,
-    )
-
-    for obj in objects:
-        if obj.object_type != "host" or is_template_object(obj):
-            continue
-        hname = obj.get_name()
-        if hname and hname not in hosts_with_services:
-            issues.append({
-                "type": "host_without_services",
-                "severity": "warning",
-                "object": hname,
-                "object_type": "host",
-                "file": obj.source_file,
-                "global_index": obj_to_index.get(id(obj)),
-                "message": "Host has no services assigned (directly or via hostgroup)",
-            })
-    return issues
-
-
-def _build_host_to_hostgroups(objects, template_lookup=None):
-    """Map host names to their hostgroup memberships.
-
-    Resolves template inheritance so hosts that inherit hostgroups via
-    'use' are correctly mapped (e.g. host uses 24x7-oncall-host which
-    defines hostgroups).
-    """
-    host_to_hg = {}
-    for obj in objects:
-        if obj.object_type == "host" and not is_template_object(obj):
-            hname = obj.get_name()
-            if hname:
-                if template_lookup:
-                    resolved = resolve_inherited_attrs(obj, template_lookup)
-                    hgs = resolved.get("hostgroups", "")
-                else:
-                    hgs = obj.attributes.get("hostgroups", "")
-                if hgs:
-                    host_to_hg[hname] = {
-                        strip_prefix(g)
-                        for g in hgs.split(",") if strip_prefix(g)
-                    }
-    return host_to_hg
-
-
-def _build_hostgroup_to_hosts(objects):
-    """Map hostgroup names to their explicit members."""
-    hg_to_hosts = {}
-    for obj in objects:
-        if obj.object_type == "hostgroup":
-            gname = obj.get_name()
-            if gname and "members" in obj.attributes:
-                hg_to_hosts[gname] = {
-                    strip_prefix(h) for h in obj.attributes["members"].split(",") if strip_prefix(h)
-                }
-    return hg_to_hosts
-
-
-def _find_hosts_with_services(objects, hosts, host_to_hg, hg_to_hosts):
-    """Find all hosts that have at least one service assigned."""
-    from app.nagios_model import expand_service_hosts
-
-    # Build full hostgroup→hosts map (includes both directions)
-    full_hg_to_hosts = {}
-    for hg_name, host_set in hg_to_hosts.items():
-        full_hg_to_hosts[hg_name] = set(host_set)
-    for hname, hg_set in host_to_hg.items():
-        for hg in hg_set:
-            full_hg_to_hosts.setdefault(hg, set()).add(hname)
-
-    hosts_with_services = set()
-    for obj in objects:
-        if obj.object_type != "service" or is_template_object(obj):
-            continue
-        effective = expand_service_hosts(
-            obj.attributes.get("host_name", ""),
-            obj.attributes.get("hostgroup_name", ""),
-            full_hg_to_hosts,
-            all_hosts=hosts,
-        )
-        hosts_with_services.update(effective)
-    return hosts_with_services
 
 
 # ---------------------------------------------------------------------------
@@ -2094,7 +2002,6 @@ ALL_CHECKS = [
     check_empty_groups,             # 7
     check_unused_templates,         # 8
     check_duplicate_dependencies,   # 9
-    check_hosts_without_services,   # 10
     check_missing_check_command,    # 11
     check_command_arg_mismatch,     # 12
     check_template_conflicts,       # 13
