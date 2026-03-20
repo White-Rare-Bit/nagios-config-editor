@@ -13,7 +13,7 @@ Key design choices:
 - Implied inheritance: cross-object-type field inheritance (lowest priority)
 """
 
-from .nagios_model import IMPLIED_CONTACT_FIELDS, IMPLIED_INHERITANCE, NAME_FIELDS, is_template_object
+from .nagios_model import ADDITIVE_FIELDS, IMPLIED_CONTACT_FIELDS, IMPLIED_INHERITANCE, NAME_FIELDS, is_template_object
 
 # Attributes excluded from inheritance resolution
 INHERITANCE_META = frozenset({"use", "name", "register"})
@@ -130,6 +130,7 @@ def _resolve_with_important(obj, template_lookup, visited):
             isinstance(value, str) and value.startswith("+")
             and not key.startswith("_")
             and key not in INHERITANCE_META
+            and key in ADDITIVE_FIELDS.get(obj.object_type, set())
         ):
             stripped = value[1:]
             existing = resolved.get(key)
@@ -194,6 +195,7 @@ def resolve_inherited_attrs(obj, template_lookup, visited=None):
             value.startswith("+")
             and not key.startswith("_")
             and key not in INHERITANCE_META
+            and key in ADDITIVE_FIELDS.get(obj.object_type, set())
         ):
             stripped = value[1:]
             existing = resolved.get(key)
@@ -434,6 +436,7 @@ def _resolve_chain_with_important(obj, obj_type, template_lookup, visited):
             elif (
                 value.startswith("+")
                 and not key.startswith("_")
+                and key in ADDITIVE_FIELDS.get(obj.object_type, set())
             ):
                 stripped = value[1:]
                 existing = inherited.get(key)
@@ -526,6 +529,7 @@ def resolve_chain(obj, obj_type, template_lookup, visited=None):
             elif (
                 value.startswith("+")
                 and not key.startswith("_")
+                and key in ADDITIVE_FIELDS.get(obj.object_type, set())
             ):
                 stripped = value[1:]
                 existing = inherited.get(key)
