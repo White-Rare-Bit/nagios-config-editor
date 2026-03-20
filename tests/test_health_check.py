@@ -1131,6 +1131,89 @@ define timeperiod {
             f"False positive: services with same name on different hosts flagged as duplicate: {flagged}"
 
 
+class TestDuplicateSeverityByType:
+    """Duplicate services are warnings (first definition wins), hosts remain errors."""
+
+    @pytest.fixture
+    def app_with_dup_services(self):
+        test_dir = tempfile.mkdtemp()
+        test_config_path = Path(test_dir) / "nagios"
+        test_config_path.mkdir()
+
+        (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name       dup-host
+    alias           First
+    address         10.0.0.1
+}
+
+define host {
+    host_name       dup-host
+    alias           Second
+    address         10.0.0.2
+}
+
+define host {
+    host_name       web-01
+    alias           Web
+    address         10.0.0.3
+}
+""")
+
+        (test_config_path / "services.cfg").write_text("""
+define service {
+    host_name               web-01
+    service_description     HTTP
+    check_command           check_http
+}
+
+define service {
+    host_name               web-01
+    service_description     HTTP
+    check_command           check_http
+}
+""")
+
+        (test_config_path / "commands.cfg").write_text("""
+define command {
+    command_name    check_http
+    command_line    /usr/lib/nagios/plugins/check_http -H $HOSTADDRESS$
+}
+""")
+
+        app = create_app(config_path=str(test_config_path))
+        app.config["TESTING"] = True
+        yield app
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_duplicate_service_is_warning(self, app_with_dup_services):
+        """Duplicate service definitions should be warnings, not errors."""
+        client = app_with_dup_services.test_client()
+        resp = client.get("/api/health-check")
+        data = resp.get_json()
+
+        dup_service_issues = [i for i in data["issues"]
+                              if i["type"] == "duplicate" and i["object_type"] == "service"]
+        assert len(dup_service_issues) > 0, "Expected duplicate service issues"
+        for issue in dup_service_issues:
+            assert issue["severity"] == "warning", \
+                f"Duplicate service should be warning, got {issue['severity']}"
+            assert "first definition wins" in issue["message"]
+
+    def test_duplicate_host_is_error(self, app_with_dup_services):
+        """Duplicate host definitions should remain errors."""
+        client = app_with_dup_services.test_client()
+        resp = client.get("/api/health-check")
+        data = resp.get_json()
+
+        dup_host_issues = [i for i in data["issues"]
+                           if i["type"] == "duplicate" and i["object_type"] == "host"]
+        assert len(dup_host_issues) > 0, "Expected duplicate host issues"
+        for issue in dup_host_issues:
+            assert issue["severity"] == "error", \
+                f"Duplicate host should be error, got {issue['severity']}"
+
+
 # ============================================================
 # Comprehensive fixture for new health-check analysis checks
 # ============================================================

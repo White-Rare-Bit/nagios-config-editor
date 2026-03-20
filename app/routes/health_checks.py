@@ -1167,15 +1167,23 @@ def check_duplicate_objects(ctx):
         files = [o.source_file.rsplit("/", 1)[-1] for o in objs]
         for obj in objs:
             other_files = [f for f, o in zip(files, objs, strict=True) if o is not obj]
+            # Nagios: duplicate services are warnings (first definition kept),
+            # duplicate hosts are fatal errors
+            if obj_type in ("service", "serviceescalation", "servicedependency"):
+                severity = "warning"
+                msg = f'Duplicate {obj_type} definition — first definition wins (also in {", ".join(other_files)})'
+            else:
+                severity = "error"
+                msg = f'Duplicate {obj_type} definition (also in {", ".join(other_files)})'
             issues.append({
                 "type": "duplicate",
-                "severity": "error",
+                "severity": severity,
                 "object": identity,
                 "object_type": obj_type,
                 "file": obj.source_file,
                 "global_index": obj_to_index.get(id(obj)),
                 "related_objects": related_objects,
-                "message": f'Duplicate {obj_type} definition (also in {", ".join(other_files)})',
+                "message": msg,
             })
     return issues
 
