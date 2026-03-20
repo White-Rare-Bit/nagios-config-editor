@@ -216,3 +216,46 @@ def test_stable_keys_unique_for_malformed_commented_out():
     key1 = generate_stable_key_for_object(obj1)
     key2 = generate_stable_key_for_object(obj2)
     assert key1 != key2
+
+
+# --- Writer tests ---
+
+from app.nagios_writer import NagiosConfigWriter
+
+
+def test_writer_preserves_commented_out_object():
+    """Writer should output raw_block verbatim for commented-out objects."""
+    raw = "    #host_name       old-server\n    #address         10.0.0.1"
+    obj = NagiosObject(
+        object_type="host",
+        is_commented_out=True,
+        raw_block=raw,
+        commented_attributes={"host_name": "old-server"},
+    )
+    writer = NagiosConfigWriter()
+    output = writer.object_to_string(obj)
+    assert "#host_name" in output
+    assert "#address" in output
+    assert "define host {" in output
+    assert "}" in output
+
+
+def test_writer_round_trips_commented_out_object(tmp_path):
+    """Parse -> write -> parse should preserve commented-out object."""
+    cfg = tmp_path / "hosts.cfg"
+    original = """define host {
+    #host_name       old-server
+    #alias           Old Server
+    #address         10.0.0.1
+}
+"""
+    cfg.write_text(original)
+    parser = NagiosConfigParser(str(tmp_path))
+    objects = parser.parse_all()
+    assert len(objects) == 1
+    assert objects[0].is_commented_out is True
+
+    writer = NagiosConfigWriter()
+    output = writer.object_to_string(objects[0])
+    assert "#host_name       old-server" in output
+    assert "#address         10.0.0.1" in output
