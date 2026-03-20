@@ -45,8 +45,10 @@ export function validateRequiredFields(objectType, attributes) {
         return { valid: true, errors: [] };
     }
 
-    // Check if this is a template (register=0)
-    const isTemplate = attributes.register === '0';
+    // Check if this is a template — matches isObjectTemplate() in constants.js
+    const nameField = constants.nameFields[objectType];
+    const isTemplate = attributes.register === '0' ||
+        Boolean(attributes.name && nameField && !attributes[nameField]);
 
     // Templates need 'name' field instead of type-specific name field
     if (isTemplate) {
