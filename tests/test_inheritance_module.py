@@ -153,6 +153,12 @@ class TestBuildTemplateNamesSet:
         result = build_template_names_set([obj])
         assert len(result) == 0
 
+    def test_name_without_register_0_is_template(self):
+        """Objects with 'name' but no identity field are templates."""
+        obj = _Obj(object_type="host", attributes={"name": "generic-host"})
+        result = build_template_names_set([obj])
+        assert ("host", "generic-host") in result
+
 
 class TestBuildTemplateIndex:
     def test_returns_by_type_and_all(self):
@@ -163,6 +169,13 @@ class TestBuildTemplateIndex:
         assert "base-svc" in by_type["service"]
         assert ("host", "base-host") in all_tmpls
         assert ("service", "base-svc") in all_tmpls
+
+    def test_name_without_register_0_is_indexed(self):
+        """Objects with 'name' but no identity field are indexed."""
+        obj = _Obj(object_type="host", attributes={"name": "generic-host"})
+        by_type, all_tmpls = build_template_index([obj])
+        assert "generic-host" in by_type["host"]
+        assert ("host", "generic-host") in all_tmpls
 
 
 # ─────────────────────────────────────────────────────────────────────

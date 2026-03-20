@@ -13,7 +13,7 @@ Key design choices:
 - Implied inheritance: cross-object-type field inheritance (lowest priority)
 """
 
-from .nagios_model import IMPLIED_CONTACT_FIELDS, IMPLIED_INHERITANCE, NAME_FIELDS
+from .nagios_model import IMPLIED_CONTACT_FIELDS, IMPLIED_INHERITANCE, NAME_FIELDS, is_template_object
 
 # Attributes excluded from inheritance resolution
 INHERITANCE_META = frozenset({"use", "name", "register"})
@@ -53,10 +53,10 @@ def build_type_template_lookup(objects, obj_type):
 
 
 def build_template_names_set(objects):
-    """Build set of (object_type, name) for template objects (register=0)."""
+    """Build set of (object_type, name) for template objects."""
     template_names = set()
     for obj in objects:
-        if obj.attributes.get("register", "1") == "0":
+        if is_template_object(obj):
             obj_name = obj.attributes.get("name")
             if obj_name:
                 template_names.add((obj.object_type, obj_name))
@@ -74,7 +74,7 @@ def build_template_index(objects):
     templates_by_type = {}
     all_templates = set()
     for obj in objects:
-        if obj.attributes.get("register", "1") == "0":
+        if is_template_object(obj):
             obj_type = obj.object_type
             if obj_type not in templates_by_type:
                 templates_by_type[obj_type] = {}
