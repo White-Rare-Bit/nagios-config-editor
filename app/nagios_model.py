@@ -564,6 +564,46 @@ class NagiosObject:
         return result
 
 
+def expand_service_hosts(host_name_attr, hostgroup_name_attr, hostgroup_to_hosts, all_hosts=None):
+    """Expand a service's effective host list with cross-boundary ! exclusions.
+
+    Matches Nagios Core behavior: ! exclusions in host_name also exclude hosts
+    resolved via hostgroup_name. Both fields share a single reject set.
+
+    Args:
+        host_name_attr: raw host_name attribute value (comma-separated, may contain ! prefixes)
+        hostgroup_name_attr: raw hostgroup_name attribute value (comma-separated, may contain +/! prefixes)
+        hostgroup_to_hosts: dict mapping hostgroup name -> set of member host names
+        all_hosts: set of all known hosts (required when host_name contains *)
+
+    Returns:
+        set of effective host names after applying all exclusions
+    """
+    included = set()
+    excluded = set()
+
+    # Parse host_name: collect inclusions and exclusions
+    if host_name_attr:
+        if host_name_attr.strip() == "*":
+            included = set(all_hosts) if all_hosts else set()
+        else:
+            for h in host_name_attr.split(","):
+                h = h.strip()
+                if h.startswith("!"):
+                    excluded.add(h[1:].strip())
+                elif h:
+                    included.add(h)
+
+    # Parse hostgroup_name: expand hostgroups to hosts
+    if hostgroup_name_attr:
+        for hg in hostgroup_name_attr.split(","):
+            hg = hg.strip().lstrip("+!").strip()
+            if hg and hg in hostgroup_to_hosts:
+                included.update(hostgroup_to_hosts[hg])
+
+    return included - excluded
+
+
 def format_object_block(obj_type: str, attrs: dict[str, str], indent: str = "    ",
                         inline_comments: dict[str, str] = None) -> str:
     """Format a Nagios object definition block.
