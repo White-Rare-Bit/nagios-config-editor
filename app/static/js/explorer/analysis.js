@@ -98,7 +98,7 @@ function processDuplicateIssue(issue, obj, objectsByIndex) {
     if (!existingDup) {
         state.allCleanupSuggestions.push({
             type: 'duplicate',
-            severity: 'error',
+            severity: issue.severity || 'error',
             object: obj || null,
             objects: duplicateGroup,
             title: `Duplicate ${issue.object_type}: ${issue.object}`,
@@ -872,7 +872,11 @@ function renderCleanupItem(s, i) {
 
 function renderCleanupGroup(groupType, items) {
     const config = CLEANUP_GROUP_CONFIG[groupType] || { icon: '?', label: groupType, severity: 'info', bulkAction: null };
-    const severityClass = `section-${config.severity}`;
+    // Derive section severity from worst item (items may have mixed severity, e.g. duplicate hosts=error, services=warning)
+    const worstSeverity = items.some(({ suggestion: s }) => s.severity === 'error') ? 'error'
+        : items.some(({ suggestion: s }) => s.severity === 'warning') ? 'warning'
+        : config.severity;
+    const severityClass = `section-${worstSeverity}`;
 
     let bulkActionBtn = '';
     if (config.bulkAction === 'deleteAll' && items.length > 1) {

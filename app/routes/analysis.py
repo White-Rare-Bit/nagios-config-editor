@@ -18,7 +18,7 @@ from ..inheritance import (
     resolve_inherited_attrs,
     walk_inheritance_chain,
 )
-from ..nagios_model import NagiosObject, is_template_object
+from ..nagios_model import ADDITIVE_FIELDS, NagiosObject, is_template_object
 from ..nagios_writer import NagiosConfigWriter
 
 from .helpers import (
@@ -275,7 +275,7 @@ def _process_obj_relationships(obj, node_id, resolved_attrs, graph_state):
         # must compare against the raw attribute to detect additive references.
         additive_targets = set()
         raw_obj_value = obj.attributes.get(field, "")
-        if raw_obj_value.startswith("+") and field not in ("use", "name", "register"):
+        if raw_obj_value.startswith("+") and field in ADDITIVE_FIELDS.get(obj.object_type, set()):
             for t in raw_obj_value.split(","):
                 t = t.strip()
                 if t.startswith("+"):
