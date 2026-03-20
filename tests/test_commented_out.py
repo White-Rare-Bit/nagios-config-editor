@@ -318,3 +318,40 @@ define host {
     assert len(commented) == 1
     assert commented[0]["severity"] == "info"
     assert "old-server" in commented[0]["object"]
+
+
+# --- Integration test ---
+
+
+def test_api_objects_includes_commented_out_flag(tmp_path):
+    """GET /api/objects should include is_commented_out and commented_attributes."""
+    test_config_path = tmp_path / "nagios"
+    test_config_path.mkdir()
+    (test_config_path / "hosts.cfg").write_text("""
+define host {
+    #host_name       old-server
+    #address         10.0.0.1
+}
+
+define host {
+    host_name       live-server
+    address         10.0.0.2
+}
+""")
+    from app import create_app
+    app = create_app(config_path=str(test_config_path))
+    app.config["TESTING"] = True
+    client = app.test_client()
+
+    resp = client.get("/api/objects")
+    assert resp.status_code == 200
+    objects = resp.json
+
+    commented = [o for o in objects if o.get("is_commented_out")]
+    assert len(commented) == 1
+    assert commented[0]["commented_attributes"]["host_name"] == "old-server"
+    assert commented[0]["display_name"] == "old-server (commented out)"
+
+    live = [o for o in objects if not o.get("is_commented_out")]
+    assert len(live) == 1
+    assert live[0]["attributes"]["host_name"] == "live-server"
