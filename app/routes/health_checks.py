@@ -1445,64 +1445,6 @@ def check_required_fields(ctx):
 # Check 25: Services bound to empty hostgroups
 # ---------------------------------------------------------------------------
 
-def check_services_on_empty_hostgroups(ctx):
-    """Check 25: Services referencing hostgroups with zero members."""
-    issues = []
-    obj_to_index = ctx["obj_to_index"]
-    objects = ctx["objects"]
-
-    # Build set of hostgroup names that have members
-    populated_hostgroups = set()
-    for obj in objects:
-        if obj.object_type == "hostgroup":
-            hg_name = obj.attributes.get("hostgroup_name", "")
-            members = obj.attributes.get("members", "").strip()
-            if members:
-                populated_hostgroups.add(hg_name)
-        # Also check hosts that point to hostgroups via hostgroups attr
-        if obj.object_type == "host" and not is_template_object(obj):
-            for hg in obj.attributes.get("hostgroups", "").split(","):
-                hg = strip_prefix(hg)
-                if hg:
-                    populated_hostgroups.add(hg)
-
-    # Find all defined hostgroups
-    all_hostgroups = set()
-    for obj in objects:
-        if obj.object_type == "hostgroup":
-            hg_name = obj.attributes.get("hostgroup_name", "")
-            if hg_name:
-                all_hostgroups.add(hg_name)
-
-    empty_hostgroups = all_hostgroups - populated_hostgroups
-
-    if not empty_hostgroups:
-        return issues
-
-    for obj in objects:
-        if obj.object_type != "service":
-            continue
-        if is_template_object(obj):
-            continue
-        hg_ref = obj.attributes.get("hostgroup_name", "")
-        if not hg_ref:
-            continue
-        for hg in hg_ref.split(","):
-            hg = strip_prefix(hg)
-            if hg in empty_hostgroups:
-                obj_name = obj.get_name() or obj.get_display_name()
-                issues.append({
-                    "type": "service_on_empty_hostgroup",
-                    "severity": "warning",
-                    "object": obj_name,
-                    "object_type": "service",
-                    "file": obj.source_file,
-                    "global_index": obj_to_index.get(id(obj)),
-                    "message": f"Service bound to empty hostgroup '{hg}' (no hosts are members)",
-                })
-    return issues
-
-
 # ---------------------------------------------------------------------------
 # Check 26: Redundant escalation contacts
 # ---------------------------------------------------------------------------
@@ -2017,7 +1959,6 @@ ALL_CHECKS = [
     check_long_host_lists,          # 22
     check_template_opportunities,   # 23
     check_required_fields,          # 24
-    check_services_on_empty_hostgroups,  # 25
     check_redundant_escalation_contacts,  # 26
     check_escalation_coverage_gaps,  # 27
     check_notification_period_criticality,  # 28
