@@ -1,9 +1,7 @@
 """Tests for commented-out object detection and handling."""
 
-import tempfile
-from pathlib import Path
-
 from app.nagios_model import NagiosObject, NAME_FIELDS
+from app.nagios_parser import NagiosConfigParser
 
 
 def test_nagios_object_has_commented_out_fields():
@@ -61,3 +59,101 @@ def test_display_name_empty_commented_attributes():
         line_number=15,
     )
     assert obj.get_display_name() == "[commented-out host@L15]"
+
+
+def test_parser_detects_commented_out_object_hash(tmp_path):
+    """Parser should detect object with all #-commented attributes."""
+    cfg = tmp_path / "hosts.cfg"
+    cfg.write_text("""
+define host {
+    #host_name       old-server
+    #alias           Old Server
+    #address         10.0.0.1
+}
+""")
+    parser = NagiosConfigParser(str(tmp_path))
+    objects = parser.parse_all()
+    assert len(objects) == 1
+    obj = objects[0]
+    assert obj.is_commented_out is True
+    assert obj.commented_attributes["host_name"] == "old-server"
+    assert obj.commented_attributes["address"] == "10.0.0.1"
+    assert obj.attributes == {}
+
+
+def test_parser_detects_commented_out_object_semicolon(tmp_path):
+    """Parser should detect object with all ;-commented attributes."""
+    cfg = tmp_path / "hosts.cfg"
+    cfg.write_text("""
+define host {
+    ;host_name       old-server
+    ;address         10.0.0.1
+}
+""")
+    parser = NagiosConfigParser(str(tmp_path))
+    objects = parser.parse_all()
+    assert len(objects) == 1
+    assert objects[0].is_commented_out is True
+    assert objects[0].commented_attributes["host_name"] == "old-server"
+
+
+def test_parser_preserves_raw_block(tmp_path):
+    """Parser should store the raw block content for commented-out objects."""
+    cfg = tmp_path / "hosts.cfg"
+    cfg.write_text("""
+define host {
+    #host_name       old-server
+    #address         10.0.0.1
+}
+""")
+    parser = NagiosConfigParser(str(tmp_path))
+    objects = parser.parse_all()
+    assert "#host_name" in objects[0].raw_block
+    assert "#address" in objects[0].raw_block
+
+
+def test_parser_normal_object_not_commented_out(tmp_path):
+    """Normal object with real attributes should not be flagged."""
+    cfg = tmp_path / "hosts.cfg"
+    cfg.write_text("""
+define host {
+    host_name       live-server
+    address         10.0.0.2
+}
+""")
+    parser = NagiosConfigParser(str(tmp_path))
+    objects = parser.parse_all()
+    assert len(objects) == 1
+    assert objects[0].is_commented_out is False
+    assert objects[0].commented_attributes == {}
+    assert objects[0].raw_block == ""
+
+
+def test_parser_empty_define_block_not_commented_out(tmp_path):
+    """Truly empty define block (no content at all) is not commented-out."""
+    cfg = tmp_path / "hosts.cfg"
+    cfg.write_text("""
+define host {
+}
+""")
+    parser = NagiosConfigParser(str(tmp_path))
+    objects = parser.parse_all()
+    assert len(objects) == 1
+    assert objects[0].is_commented_out is False
+
+
+def test_parser_mixed_comments_and_attrs_not_commented_out(tmp_path):
+    """Object with some commented and some real attributes is NOT commented-out."""
+    cfg = tmp_path / "hosts.cfg"
+    cfg.write_text("""
+define host {
+    host_name       live-server
+    #old_alias      Old Name
+    address         10.0.0.2
+}
+""")
+    parser = NagiosConfigParser(str(tmp_path))
+    objects = parser.parse_all()
+    assert len(objects) == 1
+    assert objects[0].is_commented_out is False
+    assert objects[0].attributes["host_name"] == "live-server"

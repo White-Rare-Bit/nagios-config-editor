@@ -135,12 +135,42 @@ class NagiosConfigParser:
         for obj_type, block_content, line_num in self._find_define_blocks(content):
             attributes, inline_comments = self._parse_attributes(block_content, object_type=obj_type)
 
+            # Detect fully commented-out objects: no parsed attributes but
+            # block has comment lines (# or ; prefixed)
+            is_commented_out = (
+                not attributes
+                and any(
+                    line.strip().startswith("#") or line.strip().startswith(";")
+                    for line in block_content.split("\n")
+                    if line.strip()
+                )
+            )
+
+            commented_attributes = {}
+            raw_block = ""
+            if is_commented_out:
+                # Store raw block for lossless round-trip writing
+                raw_block = block_content
+                # Strip comment prefixes and re-parse to extract ghost attributes
+                stripped = "\n".join(
+                    line.strip().lstrip("#;").lstrip()
+                    if line.strip().startswith("#") or line.strip().startswith(";")
+                    else line
+                    for line in block_content.split("\n")
+                )
+                commented_attributes, _ = self._parse_attributes(
+                    stripped, object_type=obj_type,
+                )
+
             obj = NagiosObject(
                 object_type=obj_type,
                 attributes=attributes,
                 source_file=filepath,
                 line_number=line_num,
                 inline_comments=inline_comments,
+                is_commented_out=is_commented_out,
+                commented_attributes=commented_attributes,
+                raw_block=raw_block,
             )
             objects.append(obj)
             self.objects.append(obj)
