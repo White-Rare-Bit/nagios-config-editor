@@ -89,6 +89,8 @@ def build_context(objects, obj_to_index, template_lookup, config_paths=None):
     }
 
     for obj in objects:
+        if obj.is_commented_out:
+            continue
         name = obj.get_name()
         if not name:
             continue
@@ -2057,6 +2059,25 @@ def check_retry_interval(ctx):
     return issues
 
 
+def check_commented_out_objects(ctx):
+    """Check 35: Flag fully commented-out objects for cleanup."""
+    issues = []
+    obj_to_index = ctx["obj_to_index"]
+    for obj in ctx["objects"]:
+        if not obj.is_commented_out:
+            continue
+        issues.append({
+            "type": "commented_out_object",
+            "severity": "info",
+            "object": obj.get_display_name(),
+            "object_type": obj.object_type,
+            "file": obj.source_file,
+            "global_index": obj_to_index.get(id(obj)),
+            "message": "Fully commented-out object — consider removing",
+        })
+    return issues
+
+
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
@@ -2099,6 +2120,7 @@ ALL_CHECKS = [
     check_cfg_dir_coverage,         # 32
     check_undefined_macros,         # 33
     check_retry_interval,           # 34
+    check_commented_out_objects,    # 35
 ]
 
 

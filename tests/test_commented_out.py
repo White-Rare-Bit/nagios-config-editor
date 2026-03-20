@@ -259,3 +259,62 @@ def test_writer_round_trips_commented_out_object(tmp_path):
     output = writer.object_to_string(objects[0])
     assert "#host_name       old-server" in output
     assert "#address         10.0.0.1" in output
+
+
+# --- Health check tests ---
+
+from app.inheritance import build_template_lookup
+from app.routes.health_checks import run_all_checks
+
+
+def test_health_check_skips_commented_out_objects(tmp_path):
+    """Commented-out objects should not appear in health check issues (except the dedicated check)."""
+    cfg = tmp_path / "hosts.cfg"
+    cfg.write_text("""
+define host {
+    #host_name       old-server
+    #address         10.0.0.1
+}
+
+define host {
+    host_name       live-server
+    address         10.0.0.2
+    check_command   check-host-alive
+}
+
+define command {
+    command_name    check-host-alive
+    command_line    /usr/lib/nagios/plugins/check_ping -H $HOSTADDRESS$
+}
+""")
+    parser = NagiosConfigParser(str(tmp_path))
+    objects = parser.parse_all()
+    obj_to_index = {id(obj): i for i, obj in enumerate(objects)}
+    template_lookup = build_template_lookup(objects)
+    issues = run_all_checks(objects, obj_to_index, template_lookup)
+
+    # Should NOT have "host_without_services" for the commented-out host
+    hws = [i for i in issues if i["type"] == "host_without_services"]
+    assert not any("old-server" in i.get("object", "") for i in hws), \
+        f"Commented-out host should not be flagged: {hws}"
+
+
+def test_health_check_reports_commented_out_objects(tmp_path):
+    """Dedicated check should flag commented-out objects as info."""
+    cfg = tmp_path / "hosts.cfg"
+    cfg.write_text("""
+define host {
+    #host_name       old-server
+    #address         10.0.0.1
+}
+""")
+    parser = NagiosConfigParser(str(tmp_path))
+    objects = parser.parse_all()
+    obj_to_index = {id(obj): i for i, obj in enumerate(objects)}
+    template_lookup = build_template_lookup(objects)
+    issues = run_all_checks(objects, obj_to_index, template_lookup)
+
+    commented = [i for i in issues if i["type"] == "commented_out_object"]
+    assert len(commented) == 1
+    assert commented[0]["severity"] == "info"
+    assert "old-server" in commented[0]["object"]
