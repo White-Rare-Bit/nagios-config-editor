@@ -3678,3 +3678,91 @@ define service {
     missing_tmpl = [i for i in issues if i["type"] == "missing_template"]
     assert not any("generic-host" in i["message"] for i in missing_tmpl), \
         "generic-host should be recognized as a valid template"
+
+
+def test_hostgroup_template_with_identity_field_not_flagged_as_missing(tmp_path):
+    """Hostgroup templates with register 0 but hostgroup_name set should not
+    be flagged as missing. Nagios adds all objects with identity fields to its
+    lookup skiplists at parse time, regardless of register 0."""
+    test_config_path = tmp_path / "nagios"
+    test_config_path.mkdir()
+    (test_config_path / "hostgroups.cfg").write_text("""
+define hostgroup {
+    hostgroup_name  customer-juniper
+    alias           customer-juniper
+    register        0
+}
+""")
+    (test_config_path / "hosts.cfg").write_text("""
+define host {
+    host_name       custMVC01
+    alias           custMVC01
+    address         192.168.1.1
+    hostgroups      +customer-juniper
+}
+""")
+    from app.nagios_parser import NagiosConfigParser
+    parser = NagiosConfigParser(str(test_config_path))
+    objects = parser.parse_all()
+
+    obj_to_index = {id(obj): i for i, obj in enumerate(objects)}
+    template_lookup = build_template_lookup(objects)
+    issues = run_all_checks(objects, obj_to_index, template_lookup)
+
+    missing_hg = [i for i in issues if i["type"] == "missing_hostgroup"]
+    assert not any("customer-juniper" in i["message"] for i in missing_hg), \
+        "hostgroup template with hostgroup_name and register 0 should not be flagged as missing"
+
+
+def test_host_inheriting_hostgroups_not_flagged_without_services(tmp_path):
+    """A host that inherits hostgroups from its template should not be flagged
+    as 'host without services' when services target those inherited hostgroups."""
+    test_config_path = tmp_path / "nagios"
+    test_config_path.mkdir()
+    (test_config_path / "objects.cfg").write_text("""
+define host {
+    name                    24x7-oncall-host
+    hostgroups              template_24x7-oncall-host
+    register                0
+}
+
+define hostgroup {
+    hostgroup_name  template_24x7-oncall-host
+    alias           Template 24x7 Oncall Host
+}
+
+define host {
+    host_name       customer.com
+    alias           CUSTOMER NAME
+    address         192.168.1.1
+    check_command   check-host-alive
+    use             24x7-oncall-host
+}
+
+define command {
+    command_name    check-host-alive
+    command_line    /usr/lib/nagios/plugins/check_ping -H $HOSTADDRESS$
+}
+
+define command {
+    command_name    check_ping
+    command_line    /usr/lib/nagios/plugins/check_ping -H $HOSTADDRESS$
+}
+
+define service {
+    hostgroup_name          template_24x7-oncall-host
+    service_description     PING
+    check_command           check_ping
+}
+""")
+    from app.nagios_parser import NagiosConfigParser
+    parser = NagiosConfigParser(str(test_config_path))
+    objects = parser.parse_all()
+
+    obj_to_index = {id(obj): i for i, obj in enumerate(objects)}
+    template_lookup = build_template_lookup(objects)
+    issues = run_all_checks(objects, obj_to_index, template_lookup)
+
+    host_no_svc = [i for i in issues if i["type"] == "host_without_services"]
+    assert not any(i["object"] == "customer.com" for i in host_no_svc), \
+        "host inheriting hostgroups via template should not be flagged as having no services"

@@ -97,6 +97,11 @@ def build_context(objects, obj_to_index, template_lookup, config_paths=None):
             _add_to_lookup_set(ctx, obj.object_type, name)
             if obj.object_type == "contact":
                 ctx["contact_objects"][obj.attributes.get("contact_name", "")] = obj
+        elif NAME_FIELDS.get(obj.object_type) in obj.attributes:
+            # Nagios adds all objects with identity fields to its lookup
+            # skiplists at parse time, regardless of register 0. References
+            # to these templates don't cause errors during recombobulation.
+            _add_to_lookup_set(ctx, obj.object_type, name)
         if obj.object_type == "contactgroup":
             ctx["contactgroup_objects"][obj.attributes.get("contactgroup_name", "")] = obj
         if "name" in obj.attributes:
@@ -581,7 +586,7 @@ def check_hosts_without_services(ctx):
     obj_to_index = ctx["obj_to_index"]
     hosts = ctx["hosts"]
 
-    host_to_hostgroups = _build_host_to_hostgroups(objects)
+    host_to_hostgroups = _build_host_to_hostgroups(objects, ctx["template_lookup"])
     hostgroup_to_hosts = _build_hostgroup_to_hosts(objects)
     hosts_with_services = _find_hosts_with_services(
         objects, hosts, host_to_hostgroups, hostgroup_to_hosts,
@@ -604,14 +609,23 @@ def check_hosts_without_services(ctx):
     return issues
 
 
-def _build_host_to_hostgroups(objects):
-    """Map host names to their hostgroup memberships."""
+def _build_host_to_hostgroups(objects, template_lookup=None):
+    """Map host names to their hostgroup memberships.
+
+    Resolves template inheritance so hosts that inherit hostgroups via
+    'use' are correctly mapped (e.g. host uses 24x7-oncall-host which
+    defines hostgroups).
+    """
     host_to_hg = {}
     for obj in objects:
         if obj.object_type == "host" and not is_template_object(obj):
             hname = obj.get_name()
             if hname:
-                hgs = obj.attributes.get("hostgroups", "")
+                if template_lookup:
+                    resolved = resolve_inherited_attrs(obj, template_lookup)
+                    hgs = resolved.get("hostgroups", "")
+                else:
+                    hgs = obj.attributes.get("hostgroups", "")
                 if hgs:
                     host_to_hg[hname] = {
                         strip_prefix(g)
