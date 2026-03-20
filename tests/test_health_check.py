@@ -1131,6 +1131,64 @@ define timeperiod {
             f"False positive: services with same name on different hosts flagged as duplicate: {flagged}"
 
 
+def test_service_retry_interval_zero_flagged():
+    """Service with retry_interval=0 should be flagged (Nagios requires > 0 for services)."""
+    test_dir = tempfile.mkdtemp()
+    try:
+        test_config_path = Path(test_dir) / "nagios"
+        test_config_path.mkdir()
+
+        (test_config_path / "config.cfg").write_text("""
+define host {
+    host_name       web-01
+    alias           Web 01
+    address         10.0.0.1
+    retry_interval  0
+}
+
+define service {
+    host_name               web-01
+    service_description     HTTP
+    check_command           check_http
+    retry_interval          0
+}
+
+define service {
+    host_name               web-01
+    service_description     PING
+    check_command           check_http
+    retry_interval          5
+}
+
+define command {
+    command_name    check_http
+    command_line    /usr/lib/nagios/plugins/check_http -H $HOSTADDRESS$
+}
+""")
+
+        app = create_app(config_path=str(test_config_path))
+        app.config["TESTING"] = True
+        client = app.test_client()
+
+        resp = client.get("/api/health-check")
+        data = resp.get_json()
+
+        retry_issues = [i for i in data["issues"]
+                        if i["type"] == "invalid_retry_interval"]
+
+        # Service with retry_interval=0 should be flagged
+        assert len(retry_issues) == 1, \
+            f"Expected 1 retry_interval issue (service only), got {len(retry_issues)}: {retry_issues}"
+        assert retry_issues[0]["object_type"] == "service"
+
+        # Host with retry_interval=0 should NOT be flagged
+        host_retry_issues = [i for i in retry_issues if i["object_type"] == "host"]
+        assert len(host_retry_issues) == 0, \
+            "Host retry_interval=0 should not be flagged"
+    finally:
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+
 class TestDuplicateSeverityByType:
     """Duplicate services are warnings (first definition wins), hosts remain errors."""
 

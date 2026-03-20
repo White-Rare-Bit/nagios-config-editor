@@ -2004,6 +2004,46 @@ def check_undefined_macros(ctx):
 
 
 # ---------------------------------------------------------------------------
+# Check 34: Service retry_interval must be > 0
+# ---------------------------------------------------------------------------
+
+def check_retry_interval(ctx):
+    """Service retry_interval must be strictly > 0 (Nagios objects.c:1468).
+
+    Hosts have no such restriction — retry_interval can be 0 or negative.
+    """
+    issues = []
+    obj_to_index = ctx["obj_to_index"]
+    template_lookup = ctx["template_lookup"]
+
+    for obj in ctx["objects"]:
+        if obj.object_type != "service":
+            continue
+        if is_template_object(obj):
+            continue
+        resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"])
+        retry = resolved.get("retry_interval")
+        if retry is None:
+            continue
+        try:
+            val = float(retry)
+        except (ValueError, TypeError):
+            continue  # Non-numeric values caught by other validation
+        if val <= 0:
+            obj_name = obj.get_name() or obj.get_display_name()
+            issues.append({
+                "type": "invalid_retry_interval",
+                "severity": "error",
+                "object": obj_name,
+                "object_type": obj.object_type,
+                "file": obj.source_file,
+                "global_index": obj_to_index.get(id(obj)),
+                "message": f"Service retry_interval must be > 0, got {retry}",
+            })
+    return issues
+
+
+# ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
 
@@ -2044,6 +2084,7 @@ ALL_CHECKS = [
     check_inheritance_depth,        # 31
     check_cfg_dir_coverage,         # 32
     check_undefined_macros,         # 33
+    check_retry_interval,           # 34
 ]
 
 
