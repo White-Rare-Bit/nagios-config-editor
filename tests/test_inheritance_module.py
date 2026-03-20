@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 
+from app.nagios_model import is_template_object
 from app.inheritance import (
     INHERITANCE_META,
     build_template_index,
@@ -52,6 +53,40 @@ def _host(**attrs):
 
 def _tmpl(obj_type, name, **attrs):
     return _Obj(object_type=obj_type, attributes={"name": name, "register": "0", **attrs})
+
+
+# ─────────────────────────────────────────────────────────────────────
+# is_template_object()
+# ─────────────────────────────────────────────────────────────────────
+
+class TestIsTemplateObject:
+    def test_register_0_is_template(self):
+        obj = _tmpl("host", "generic-host")
+        assert is_template_object(obj) is True
+
+    def test_name_without_identity_field_is_template(self):
+        """Objects with 'name' but no identity field are templates (Nagios behavior)."""
+        obj = _Obj(object_type="host", attributes={"name": "generic-host"})
+        assert is_template_object(obj) is True
+
+    def test_name_with_identity_field_is_not_template(self):
+        """Objects with both 'name' and identity field are registered objects."""
+        obj = _Obj(object_type="host", attributes={"name": "generic-host", "host_name": "web-01"})
+        assert is_template_object(obj) is False
+
+    def test_regular_object_is_not_template(self):
+        obj = _host(host_name="web-01")
+        assert is_template_object(obj) is False
+
+    def test_service_with_name_no_description_is_template(self):
+        obj = _Obj(object_type="service", attributes={"name": "generic-service"})
+        assert is_template_object(obj) is True
+
+    def test_service_with_name_and_description_is_not_template(self):
+        obj = _Obj(object_type="service", attributes={
+            "name": "generic-service", "service_description": "HTTP"
+        })
+        assert is_template_object(obj) is False
 
 
 # ─────────────────────────────────────────────────────────────────────

@@ -26,6 +26,25 @@ NAME_FIELDS: dict[str, str] = {
     "module": "module_name",
 }
 
+
+def is_template_object(obj) -> bool:
+    """Check if a NagiosObject is a template.
+
+    An object is a template if:
+    - register=0 is set explicitly, OR
+    - It has a 'name' attribute but lacks its identity field
+
+    This matches Nagios behavior: objects with 'name' but no identity
+    field (e.g. host_name) never enter the registration skiplist.
+    """
+    if obj.attributes.get("register", "1") == "0":
+        return True
+    if "name" not in obj.attributes:
+        return False
+    identity_field = NAME_FIELDS.get(obj.object_type)
+    return bool(identity_field and identity_field not in obj.attributes)
+
+
 # C-05: Required fields per object type for validation
 # Each entry is a list of field requirements:
 # - String: field is required
