@@ -30,3 +30,34 @@ def test_to_dict_includes_commented_attributes():
     )
     d = obj.to_dict()
     assert d["commented_attributes"] == {"host_name": "old-server", "address": "10.0.0.1"}
+
+
+def test_display_name_uses_commented_attributes():
+    """Commented-out object should use name from commented_attributes."""
+    obj = NagiosObject(
+        object_type="host",
+        is_commented_out=True,
+        commented_attributes={"host_name": "old-server", "address": "10.0.0.1"},
+    )
+    assert obj.get_display_name() == "old-server (commented out)"
+
+
+def test_display_name_fallback_to_line_number():
+    """Commented-out object with no name field falls back to line number."""
+    obj = NagiosObject(
+        object_type="host",
+        is_commented_out=True,
+        commented_attributes={"address": "10.0.0.1"},
+        line_number=42,
+    )
+    assert obj.get_display_name() == "[commented-out host@L42]"
+
+
+def test_display_name_empty_commented_attributes():
+    """Commented-out object with empty commented_attributes falls back to line number."""
+    obj = NagiosObject(
+        object_type="host",
+        is_commented_out=True,
+        line_number=15,
+    )
+    assert obj.get_display_name() == "[commented-out host@L15]"

@@ -557,6 +557,13 @@ class NagiosObject:
         to distinguish services with the same service_description on different targets.
         For escalations and dependencies, shows the target host/hostgroup.
         """
+        # Commented-out objects: use name from commented attributes if available
+        if self.is_commented_out:
+            name_field = NAME_FIELDS.get(self.object_type)
+            if name_field and self.commented_attributes.get(name_field):
+                return f"{self.commented_attributes[name_field]} (commented out)"
+            return f"[commented-out {self.object_type}@L{self.line_number}]"
+
         name = self.get_name()
 
         # For services and service-related objects, include context
