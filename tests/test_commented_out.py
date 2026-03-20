@@ -157,3 +157,62 @@ define host {
     assert len(objects) == 1
     assert objects[0].is_commented_out is False
     assert objects[0].attributes["host_name"] == "live-server"
+
+
+# --- Stable key tests ---
+
+from app.stable_keys import generate_stable_key_for_object
+
+
+def test_stable_key_uses_commented_name():
+    """Stable key should use commented-out name, not [unnamed]."""
+    obj = NagiosObject(
+        object_type="host",
+        source_file="/etc/nagios/hosts.cfg",
+        is_commented_out=True,
+        commented_attributes={"host_name": "old-server"},
+    )
+    key = generate_stable_key_for_object(obj)
+    assert "old-server (commented out)" in key
+    assert "[unnamed" not in key
+
+
+def test_stable_keys_unique_for_multiple_commented_out(tmp_path):
+    """Multiple commented-out objects in same file should have unique stable keys."""
+    cfg = tmp_path / "hosts.cfg"
+    cfg.write_text("""
+define host {
+    #host_name       server-a
+    #address         10.0.0.1
+}
+
+define host {
+    #host_name       server-b
+    #address         10.0.0.2
+}
+""")
+    parser = NagiosConfigParser(str(tmp_path))
+    objects = parser.parse_all()
+    keys = [generate_stable_key_for_object(obj) for obj in objects]
+    assert len(set(keys)) == 2, f"Expected 2 unique keys, got: {keys}"
+
+
+def test_stable_keys_unique_for_malformed_commented_out():
+    """Commented-out objects without name field use line_number for uniqueness."""
+    obj1 = NagiosObject(
+        object_type="host",
+        source_file="/etc/nagios/hosts.cfg",
+        line_number=10,
+        is_commented_out=True,
+        commented_attributes={"address": "10.0.0.1"},
+    )
+    obj2 = NagiosObject(
+        object_type="host",
+        source_file="/etc/nagios/hosts.cfg",
+        line_number=20,
+        is_commented_out=True,
+        commented_attributes={"address": "10.0.0.2"},
+    )
+    key1 = generate_stable_key_for_object(obj1)
+    key2 = generate_stable_key_for_object(obj2)
+    assert key1 != key2
