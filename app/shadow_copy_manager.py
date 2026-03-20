@@ -59,7 +59,7 @@ class ShadowCopyManager:
     @property
     def _config_dir(self) -> str:
         """Path to the shadow config directory (top level)."""
-        return os.path.join(self.shadow_base_path, "config")
+        return os.path.realpath(os.path.join(self.shadow_base_path, "config"))
 
     @property
     def _lock_file(self) -> str:
