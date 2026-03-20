@@ -85,8 +85,20 @@ def api_update_settings():
         updated.append("primary_dir")
 
     # Re-run discovery and reinitialize services if nagios_cfg or extra_dirs changed
+    git_initialized = False
     if needs_rediscovery and not errors:
         _rediscover_and_reinit(server_config, errors)
+        # Auto-init git repo in config directory if none exists
+        if not errors:
+            git_svc = current_app.extensions.get("git")
+            if git_svc:
+                git_dir = os.path.join(git_svc._config_path, ".git")
+                if not os.path.isdir(git_dir):
+                    init_result = git_svc.init_repo()
+                    if init_result.success:
+                        git_initialized = True
+                    else:
+                        logger.warning("Auto git init failed: %s", init_result.error)
 
     if updated and not errors:
         try:
@@ -100,6 +112,7 @@ def api_update_settings():
         "success": len(errors) == 0,
         "updated": updated,
         "errors": errors,
+        "git_initialized": git_initialized,
         "config": {
             "paths": {
                 "nagios_cfg": server_config.paths.nagios_cfg,

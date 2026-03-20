@@ -385,6 +385,9 @@ async function saveServerSettings() {
         } else {
             showToast('Server settings unchanged', 'info');
         }
+        if (result.data.git_initialized) {
+            showToast('Git repository initialized in config directory', 'success');
+        }
         refreshStatus();
     } else {
         const errors = result.data?.errors || [result.error];
