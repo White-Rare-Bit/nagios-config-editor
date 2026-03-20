@@ -501,6 +501,9 @@ class NagiosObject:
     source_file: str = ""
     line_number: int = 0
     inline_comments: dict[str, str] = field(default_factory=dict)
+    is_commented_out: bool = False
+    commented_attributes: dict[str, str] = field(default_factory=dict)
+    raw_block: str = ""
 
     def get_name(self) -> str | None:
         """Get the primary name/identifier for this object.
@@ -616,9 +619,12 @@ class NagiosObject:
             "line_number": self.line_number,
             "name": self.get_name(),
             "display_name": self.get_display_name(),
+            "is_commented_out": self.is_commented_out,
         }
         if self.inline_comments:
             result["inline_comments"] = self.inline_comments
+        if self.commented_attributes:
+            result["commented_attributes"] = self.commented_attributes
         return result
 
 
