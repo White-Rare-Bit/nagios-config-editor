@@ -1,0 +1,10 @@
+# Ignore backups directory
+backups/
+
+# Ignore staging directory
+.staging/
+
+# Daemon/system configs (not object definitions)
+nagios.cfg
+cgi.cfg
+resource.cfg
