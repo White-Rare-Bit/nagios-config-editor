@@ -69,8 +69,10 @@ def strip_prefix(s):
 
 def build_context(objects, obj_to_index, template_lookup, config_paths=None):
     """Build lookup sets and shared data used by multiple checks."""
+    active_objects = [obj for obj in objects if not obj.is_commented_out]
     ctx = {
-        "objects": objects,
+        "objects": active_objects,
+        "all_objects": objects,
         "obj_to_index": obj_to_index,
         "template_lookup": template_lookup,
         "config_paths": config_paths or {},
@@ -88,9 +90,7 @@ def build_context(objects, obj_to_index, template_lookup, config_paths=None):
         "contactgroup_objects": {},
     }
 
-    for obj in objects:
-        if obj.is_commented_out:
-            continue
+    for obj in active_objects:
         name = obj.get_name()
         if not name:
             continue
@@ -2063,7 +2063,7 @@ def check_commented_out_objects(ctx):
     """Check 35: Flag fully commented-out objects for cleanup."""
     issues = []
     obj_to_index = ctx["obj_to_index"]
-    for obj in ctx["objects"]:
+    for obj in ctx["all_objects"]:
         if not obj.is_commented_out:
             continue
         issues.append({

@@ -293,10 +293,12 @@ define command {
     template_lookup = build_template_lookup(objects)
     issues = run_all_checks(objects, obj_to_index, template_lookup)
 
-    # Should NOT have "host_without_services" for the commented-out host
-    hws = [i for i in issues if i["type"] == "host_without_services"]
-    assert not any("old-server" in i.get("object", "") for i in hws), \
-        f"Commented-out host should not be flagged: {hws}"
+    # No issues should reference the commented-out host except the dedicated check
+    non_dedicated = [i for i in issues
+                     if i["type"] != "commented_out_object"
+                     and "old-server" in i.get("object", "")]
+    assert non_dedicated == [], \
+        f"Commented-out host should only appear in dedicated check, got: {non_dedicated}"
 
 
 def test_health_check_reports_commented_out_objects(tmp_path):
