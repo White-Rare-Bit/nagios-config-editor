@@ -9,7 +9,7 @@ import re
 
 from ..inheritance import has_attr_in_chain, resolve_all_attrs, resolve_inherited_attrs
 from ..nagios_cfg import parse_nagios_cfg, parse_resource_cfg
-from ..nagios_model import NAME_FIELDS, REFERENCE_FIELDS, REQUIRED_FIELDS
+from ..nagios_model import NAME_FIELDS, REFERENCE_FIELDS, REQUIRED_FIELDS, is_template_object
 from ..stable_keys import generate_stable_key_for_object
 
 # Minimum common prefix length for auto-generating template names
@@ -92,7 +92,7 @@ def build_context(objects, obj_to_index, template_lookup, config_paths=None):
         name = obj.get_name()
         if not name:
             continue
-        is_template = obj.attributes.get("register", "1") == "0"
+        is_template = is_template_object(obj)
         if not is_template:
             _add_to_lookup_set(ctx, obj.object_type, name)
             if obj.object_type == "contact":
@@ -192,7 +192,7 @@ def check_missing_parents(ctx):
     for obj in ctx["objects"]:
         if obj.object_type != "host":
             continue
-        if obj.attributes.get("register", "1") == "0":
+        if is_template_object(obj):
             continue
         obj_name = obj.get_name() or obj.get_display_name()
         parents_ref = obj.attributes.get("parents", "")
@@ -588,7 +588,7 @@ def check_hosts_without_services(ctx):
     )
 
     for obj in objects:
-        if obj.object_type != "host" or obj.attributes.get("register", "1") == "0":
+        if obj.object_type != "host" or is_template_object(obj):
             continue
         hname = obj.get_name()
         if hname and hname not in hosts_with_services:
@@ -608,7 +608,7 @@ def _build_host_to_hostgroups(objects):
     """Map host names to their hostgroup memberships."""
     host_to_hg = {}
     for obj in objects:
-        if obj.object_type == "host" and obj.attributes.get("register", "1") != "0":
+        if obj.object_type == "host" and not is_template_object(obj):
             hname = obj.get_name()
             if hname:
                 hgs = obj.attributes.get("hostgroups", "")
@@ -637,7 +637,7 @@ def _find_hosts_with_services(objects, hosts, host_to_hg, hg_to_hosts):
     """Find all hosts that have at least one service assigned."""
     hosts_with_services = set()
     for obj in objects:
-        if obj.object_type != "service" or obj.attributes.get("register", "1") == "0":
+        if obj.object_type != "service" or is_template_object(obj):
             continue
         host_ref = obj.attributes.get("host_name", "")
         if host_ref == "*":
@@ -679,7 +679,7 @@ def check_missing_check_command(ctx):
     for obj in ctx["objects"]:
         if obj.object_type != "service":
             continue
-        if obj.attributes.get("register", "1") == "0":
+        if is_template_object(obj):
             continue
         resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"])
         if "check_command" not in resolved:
@@ -711,7 +711,7 @@ def check_command_arg_mismatch(ctx):
     for obj in ctx["objects"]:
         if obj.object_type not in ("service", "host"):
             continue
-        if obj.attributes.get("register", "1") == "0":
+        if is_template_object(obj):
             continue
         resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"])
         check_cmd = resolved.get("check_command", "")
@@ -748,7 +748,7 @@ def check_template_conflicts(ctx):
     template_lookup = ctx["template_lookup"]
 
     for obj in ctx["objects"]:
-        if obj.attributes.get("register", "1") == "0":
+        if is_template_object(obj):
             continue
         use_value = obj.attributes.get("use", "")
         if not use_value:
@@ -881,7 +881,7 @@ def check_service_host_notification_reachability(ctx):
     for obj in ctx["objects"]:
         if obj.object_type not in ("host", "service"):
             continue
-        if obj.attributes.get("register", "1") == "0":
+        if is_template_object(obj):
             continue
 
         resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"])
@@ -991,7 +991,7 @@ def check_unused_contacts(ctx):
     used_contacts = _collect_used_contacts(objects)
 
     for obj in objects:
-        if obj.object_type == "contact" and obj.attributes.get("register", "1") != "0":
+        if obj.object_type == "contact" and not is_template_object(obj):
             contact_name = obj.attributes.get("contact_name", "")
             if contact_name and contact_name not in used_contacts:
                 issues.append({
@@ -1010,7 +1010,7 @@ def _collect_used_contacts(objects):
     """Collect the set of all referenced contact names."""
     used = set()
     for obj in objects:
-        if obj.attributes.get("register", "1") == "0":
+        if is_template_object(obj):
             continue
         if "contacts" in obj.attributes:
             for c in obj.attributes["contacts"].split(","):
@@ -1063,7 +1063,7 @@ def _collect_used_contactgroups(objects):
 
 def _collect_cg_refs_from_object(obj, used):
     """Collect contactgroup references from a single object."""
-    is_template = obj.attributes.get("register", "1") == "0"
+    is_template = is_template_object(obj)
     if not is_template and "contact_groups" in obj.attributes:
         for cg in obj.attributes["contact_groups"].split(","):
             cg = strip_prefix(cg)
@@ -1093,7 +1093,7 @@ def check_unused_timeperiods(ctx):
     used_timeperiods = _collect_used_timeperiods(objects)
 
     for obj in objects:
-        if obj.object_type == "timeperiod" and obj.attributes.get("register", "1") != "0":
+        if obj.object_type == "timeperiod" and not is_template_object(obj):
             tp_name = obj.attributes.get("timeperiod_name", "")
             if tp_name and tp_name not in used_timeperiods:
                 issues.append({
@@ -1117,7 +1117,7 @@ def _collect_used_timeperiods(objects):
     ]
     used = set()
     for obj in objects:
-        if obj.attributes.get("register", "1") == "0":
+        if is_template_object(obj):
             continue
         for tp_field in tp_fields_single:
             if tp_field in obj.attributes:
@@ -1147,7 +1147,7 @@ def check_duplicate_objects(ctx):
 
     identity_map = {}
     for obj in objects:
-        if obj.attributes.get("register", "1") == "0":
+        if is_template_object(obj):
             continue
         name = obj.get_name()
         if not name:
@@ -1215,7 +1215,7 @@ def detect_orphans(objects, template_lookup):
     by_type = {}
     orphan_objects = []
     for global_idx, obj in enumerate(objects):
-        if obj.attributes.get("register", "1") == "0":
+        if is_template_object(obj):
             continue
         obj_name = obj.get_name()
         refs = referenced_names.get(obj.object_type)
@@ -1333,7 +1333,7 @@ def check_missing_contacts_on_objects(ctx):
     for obj in objects:
         if obj.object_type not in ("host", "service"):
             continue
-        if obj.attributes.get("register", "1") == "0":
+        if is_template_object(obj):
             continue
         resolved = resolve_all_attrs(obj, template_lookup, objects)
         has_contacts = bool(resolved.get("contacts"))
@@ -1364,7 +1364,7 @@ def check_long_host_lists(ctx):
     for obj in ctx["objects"]:
         if obj.object_type != "service":
             continue
-        if obj.attributes.get("register", "1") == "0":
+        if is_template_object(obj):
             continue
         host_ref = obj.attributes.get("host_name", "")
         if not host_ref:
@@ -1479,7 +1479,7 @@ def check_required_fields(ctx):
     for obj in ctx["objects"]:
         if obj.object_type not in REQUIRED_FIELDS:
             continue
-        if obj.attributes.get("register", "1") == "0":
+        if is_template_object(obj):
             continue
 
         resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"])
@@ -1535,7 +1535,7 @@ def check_services_on_empty_hostgroups(ctx):
             if members:
                 populated_hostgroups.add(hg_name)
         # Also check hosts that point to hostgroups via hostgroups attr
-        if obj.object_type == "host" and obj.attributes.get("register", "1") != "0":
+        if obj.object_type == "host" and not is_template_object(obj):
             for hg in obj.attributes.get("hostgroups", "").split(","):
                 hg = strip_prefix(hg)
                 if hg:
@@ -1557,7 +1557,7 @@ def check_services_on_empty_hostgroups(ctx):
     for obj in objects:
         if obj.object_type != "service":
             continue
-        if obj.attributes.get("register", "1") == "0":
+        if is_template_object(obj):
             continue
         hg_ref = obj.attributes.get("hostgroup_name", "")
         if not hg_ref:
@@ -1606,11 +1606,11 @@ def check_redundant_escalation_contacts(ctx):
     # Index base objects by identity
     base_contacts = {}
     for obj in objects:
-        if obj.object_type == "host" and obj.attributes.get("register", "1") != "0":
+        if obj.object_type == "host" and not is_template_object(obj):
             host_name = obj.attributes.get("host_name", "")
             if host_name:
                 base_contacts[("host", host_name, "")] = get_contact_set(obj)
-        elif obj.object_type == "service" and obj.attributes.get("register", "1") != "0":
+        elif obj.object_type == "service" and not is_template_object(obj):
             host_name = obj.attributes.get("host_name", "")
             svc_desc = obj.attributes.get("service_description", "")
             if svc_desc:
@@ -1729,7 +1729,7 @@ def check_notification_period_criticality(ctx):
     for obj in objects:
         if obj.object_type != "service":
             continue
-        if obj.attributes.get("register", "1") == "0":
+        if is_template_object(obj):
             continue
 
         resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"])
@@ -1783,7 +1783,7 @@ def check_host_reachability(ctx):
     for obj in objects:
         if obj.object_type != "host":
             continue
-        if obj.attributes.get("register", "1") == "0":
+        if is_template_object(obj):
             continue
         parents = obj.attributes.get("parents", "").strip()
         if not parents:

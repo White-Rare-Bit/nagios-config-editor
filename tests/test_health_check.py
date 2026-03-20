@@ -12,6 +12,8 @@ from app.file_operations import edit_object_in_file
 from app.git_service import GitService
 from app.nagios_model import REQUIRED_FIELDS
 from app.stable_keys import generate_stable_key
+from app.inheritance import build_template_lookup
+from app.routes.health_checks import run_all_checks
 
 
 @pytest.fixture
@@ -3428,3 +3430,48 @@ define service {
             f"Expected 'No Contacts Service' to be flagged, got: {flagged_names}"
         assert "bare-host" in flagged_names, \
             f"Expected 'bare-host' to be flagged, got: {flagged_names}"
+
+
+def test_template_without_register_0_not_flagged(tmp_path):
+    """Templates with 'name' but no register=0 should not be flagged as hosts without services."""
+    test_config_path = tmp_path / "nagios"
+    test_config_path.mkdir()
+    (test_config_path / "templates.cfg").write_text("""
+define host {
+    name                    generic-host
+    check_command           check-host-alive
+    notification_period     24x7
+    max_check_attempts      3
+}
+
+define host {
+    host_name       web-01
+    alias           Web Server 1
+    address         192.168.1.1
+    use             generic-host
+}
+""")
+    (test_config_path / "services.cfg").write_text("""
+define service {
+    host_name               web-01
+    service_description     PING
+    check_command           check_ping
+}
+""")
+    from app.nagios_parser import NagiosConfigParser
+    parser = NagiosConfigParser(str(test_config_path))
+    objects = parser.parse_all()
+
+    obj_to_index = {id(obj): i for i, obj in enumerate(objects)}
+    template_lookup = build_template_lookup(objects)
+    issues = run_all_checks(objects, obj_to_index, template_lookup)
+
+    # generic-host should NOT appear as "host without services"
+    host_without_svc = [i for i in issues if i["type"] == "host_without_services"]
+    assert not any(i["object"] == "generic-host" for i in host_without_svc), \
+        "generic-host (template without register=0) should not be flagged"
+
+    # generic-host should NOT appear as "missing template"
+    missing_tmpl = [i for i in issues if i["type"] == "missing_template"]
+    assert not any("generic-host" in i["message"] for i in missing_tmpl), \
+        "generic-host should be recognized as a valid template"
