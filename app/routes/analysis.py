@@ -18,7 +18,7 @@ from ..inheritance import (
     resolve_inherited_attrs,
     walk_inheritance_chain,
 )
-from ..nagios_model import NagiosObject
+from ..nagios_model import NagiosObject, is_template_object
 from ..nagios_writer import NagiosConfigWriter
 
 from .helpers import (
@@ -556,7 +556,7 @@ def _build_escalation_lookups(objects):
     contact_objects = {}
     cg_objects = {}
     for obj in objects:
-        if obj.object_type == "contact" and obj.attributes.get("register", "1") != "0":
+        if obj.object_type == "contact" and not is_template_object(obj):
             contact_objects[obj.attributes.get("contact_name", "")] = obj
         elif obj.object_type == "contactgroup":
             cg_objects[obj.attributes.get("contactgroup_name", "")] = obj
@@ -960,7 +960,7 @@ def _collect_group_members(obj, obj_name, global_index, objects):
         return _collect_contactgroup_members(obj, obj_name, objects), None
     if obj.object_type == "servicegroup":
         return _collect_servicegroup_members(obj, obj_name, objects), None
-    if obj.attributes.get("register", "1") == "0":
+    if is_template_object(obj):
         return _collect_template_inheritors(obj, global_index, objects)
     return [], None
 
@@ -1061,7 +1061,7 @@ def _count_transitive_inheritors(template_name, _obj_type, exclude_idx, objects)
 
     def is_template(o):
         """Check if an object is itself a template."""
-        return "name" in o.attributes or o.attributes.get("register", "1") == "0"
+        return is_template_object(o)
 
     direct = find_inheritors(template_name)
     direct_count = len(direct)
@@ -1222,7 +1222,7 @@ def api_inheritance_list(object_type):
     service = get_service()
     templates = []
     for obj in service.get_objects():
-        if obj.object_type == object_type and obj.attributes.get("register", "1") == "0":
+        if obj.object_type == object_type and is_template_object(obj):
             templates.append(obj.to_dict())
     return jsonify(templates)
 
@@ -1262,7 +1262,7 @@ def api_smart_grouping_suggest():
     MAX_SUGGESTIONS = 20
 
     hosts = [obj for obj in service.get_objects()
-             if obj.object_type == "host" and obj.attributes.get("register", "1") != "0"]
+             if obj.object_type == "host" and not is_template_object(obj)]
 
     if not hosts:
         return jsonify({"suggestions": [], "total_hosts": 0})

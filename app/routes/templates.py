@@ -5,6 +5,7 @@ import base64
 from flask import Blueprint, jsonify, request
 
 from ..inheritance import build_type_template_lookup, resolve_chain
+from ..nagios_model import is_template_object
 
 from .helpers import get_service
 from .objects import _resolve_stable_key
@@ -19,7 +20,7 @@ def list_templates():
     templates_by_type = {}
 
     for obj in service.get_objects():
-        if obj.attributes.get("register", "1") == "0":
+        if is_template_object(obj):
             obj_type = obj.object_type
             if obj_type not in templates_by_type:
                 templates_by_type[obj_type] = []
