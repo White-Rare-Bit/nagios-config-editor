@@ -476,6 +476,7 @@ export function renderTreeItem(obj, showType = false) {
     const issue = getObjectIssue(obj);
     const orphanClass = isOrphan ? 'is-orphan' : '';
     const changedClass = isObjectCreated(obj) ? 'staged-creation' : isObjectChanged(obj) ? 'is-changed' : '';
+    const commentedClass = obj.is_commented_out ? 'commented-out' : '';
     const longListClass = hostListInfo.shouldGroup ? 'has-long-list' : '';
     const typeLabel = getTypeBadge(obj.object_type, isTemplate);
     const badgeCompact = getTypeBadgeTier(obj.object_type, isTemplate, 'compact');
@@ -485,7 +486,7 @@ export function renderTreeItem(obj, showType = false) {
     const displayName = obj.display_name || obj.name || '(unnamed)';
 
     return `
-        <div class="tree-item ${selected} ${orphanClass} ${changedClass} ${longListClass}"
+        <div class="tree-item ${selected} ${orphanClass} ${changedClass} ${longListClass} ${commentedClass}"
              data-index="${obj.global_index}"
              draggable="true"
              onclick="Explorer.handleItemClick(event, ${obj.global_index})"

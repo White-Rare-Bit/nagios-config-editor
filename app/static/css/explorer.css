@@ -1021,6 +1021,11 @@
 .tree-item-type.type-serviceescalation { background: var(--nbe-type-deps-bg); color: var(--nbe-type-deps-text); }
 .tree-item-type.type-hostescalation { background: var(--nbe-type-deps-bg-alt); color: var(--nbe-type-deps-text-alt); }
 
+.tree-item.commented-out .tree-item-name {
+    text-decoration: line-through;
+    opacity: 0.5;
+}
+
 .tree-item.staged-creation {
     background: var(--nbe-dark-validation-success-bg);
     border-left: 3px solid var(--nbe-success);
