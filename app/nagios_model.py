@@ -170,6 +170,26 @@ IMPLIED_INHERITANCE = {
 # suppresses inheritance of contact_groups and vice versa.
 IMPLIED_CONTACT_FIELDS = frozenset({"contacts", "contact_groups"})
 
+# Fields that support + additive inheritance per Nagios Core.
+# Only these fields use xodtemplate_get_inherited_string() which handles
+# the + prefix. Other fields use xod_inherit_str() (simple override).
+ADDITIVE_FIELDS: dict[str, set[str]] = {
+    "host": {"parents", "hostgroups", "contact_groups", "contacts"},
+    "service": {"parents", "host_name", "hostgroup_name", "servicegroups", "contact_groups", "contacts"},
+    "contact": {"host_notification_commands", "service_notification_commands", "contactgroups"},
+    "hostgroup": {"members", "hostgroup_members"},
+    "servicegroup": {"members", "servicegroup_members"},
+    "contactgroup": {"members", "contactgroup_members"},
+    "hostescalation": {"contacts", "contact_groups", "host_name", "hostgroup_name"},
+    "serviceescalation": {"contacts", "contact_groups", "host_name", "hostgroup_name"},
+    "hostdependency": {"host_name", "hostgroup_name", "dependent_host_name", "dependent_hostgroup_name"},
+    "servicedependency": {
+        "host_name", "hostgroup_name", "service_description", "servicegroup_name",
+        "dependent_host_name", "dependent_hostgroup_name",
+        "dependent_service_description", "dependent_servicegroup_name",
+    },
+}
+
 VALID_ATTRIBUTES: dict[str, list[str]] = {
     "host": [
         "host_name", "alias", "display_name", "address", "parents", "importance",
