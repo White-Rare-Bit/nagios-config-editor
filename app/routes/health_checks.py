@@ -635,35 +635,28 @@ def _build_hostgroup_to_hosts(objects):
 
 def _find_hosts_with_services(objects, hosts, host_to_hg, hg_to_hosts):
     """Find all hosts that have at least one service assigned."""
+    from app.nagios_model import expand_service_hosts
+
+    # Build full hostgroup→hosts map (includes both directions)
+    full_hg_to_hosts = {}
+    for hg_name, host_set in hg_to_hosts.items():
+        full_hg_to_hosts[hg_name] = set(host_set)
+    for hname, hg_set in host_to_hg.items():
+        for hg in hg_set:
+            full_hg_to_hosts.setdefault(hg, set()).add(hname)
+
     hosts_with_services = set()
     for obj in objects:
         if obj.object_type != "service" or is_template_object(obj):
             continue
-        host_ref = obj.attributes.get("host_name", "")
-        if host_ref == "*":
-            return hosts.copy()
-        if host_ref:
-            for h in host_ref.split(","):
-                h = h.strip()
-                if h and not h.startswith("!"):
-                    hosts_with_services.add(h)
-        hg_ref = obj.attributes.get("hostgroup_name", "")
-        if hg_ref:
-            _add_hosts_from_hostgroups(hg_ref, host_to_hg, hg_to_hosts, hosts_with_services)
+        effective = expand_service_hosts(
+            obj.attributes.get("host_name", ""),
+            obj.attributes.get("hostgroup_name", ""),
+            full_hg_to_hosts,
+            all_hosts=hosts,
+        )
+        hosts_with_services.update(effective)
     return hosts_with_services
-
-
-def _add_hosts_from_hostgroups(hg_ref, host_to_hg, hg_to_hosts, result):
-    """Add hosts to result set based on hostgroup references."""
-    for hg in hg_ref.split(","):
-        hg = strip_prefix(hg)
-        if not hg:
-            continue
-        for hname, hg_set in host_to_hg.items():
-            if hg in hg_set:
-                result.add(hname)
-        if hg in hg_to_hosts:
-            result.update(hg_to_hosts[hg])
 
 
 # ---------------------------------------------------------------------------

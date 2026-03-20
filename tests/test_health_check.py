@@ -259,6 +259,68 @@ define command {
         shutil.rmtree(test_dir, ignore_errors=True)
 
 
+def test_health_check_exclusion_crosses_hostgroup_boundary():
+    """!host in host_name should also exclude from hostgroup expansion (check 10)."""
+    test_dir = tempfile.mkdtemp()
+    try:
+        test_config_path = Path(test_dir) / "nagios"
+        test_config_path.mkdir()
+
+        (test_config_path / "config.cfg").write_text("""
+define host {
+    host_name       web-01
+    alias           Web 01
+    address         10.0.0.1
+    hostgroups      web-servers
+}
+
+define host {
+    host_name       web-02
+    alias           Web 02
+    address         10.0.0.2
+    hostgroups      web-servers
+}
+
+define hostgroup {
+    hostgroup_name  web-servers
+    alias           Web Servers
+}
+
+define service {
+    host_name               !web-01
+    hostgroup_name          web-servers
+    service_description     HTTP
+    check_command           check_http
+}
+
+define command {
+    command_name    check_http
+    command_line    /usr/lib/nagios/plugins/check_http -H $HOSTADDRESS$
+}
+""")
+
+        app = create_app(config_path=str(test_config_path))
+        app.config["TESTING"] = True
+        client = app.test_client()
+
+        resp = client.get("/api/health-check")
+        data = resp.json
+
+        no_service_issues = [i for i in data["issues"]
+                             if i["type"] == "host_without_services"]
+        flagged_hosts = [i["object"] for i in no_service_issues]
+
+        # web-01 is excluded via !web-01, so it should be flagged as having no services
+        assert "web-01" in flagged_hosts, \
+            f"Expected 'web-01' flagged (excluded via !), got: {flagged_hosts}"
+
+        # web-02 gets the service via hostgroup, should NOT be flagged
+        assert "web-02" not in flagged_hosts, \
+            "False positive: 'web-02' has services via hostgroup but was flagged"
+    finally:
+        shutil.rmtree(test_dir, ignore_errors=True)
+
+
 def test_required_fields_host_only_requires_host_name():
     """REQUIRED_FIELDS for host should only require host_name per Nagios spec."""
     host_fields = REQUIRED_FIELDS.get("host", [])
