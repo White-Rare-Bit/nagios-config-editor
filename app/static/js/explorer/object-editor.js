@@ -644,6 +644,35 @@ window.addEventListener('resize', hideDocsPopover);
 export function renderCenterAttributes() {
     const container = document.getElementById('centerCardAttributes');
     if (!state.editedObject) {return;}
+
+    const addAttrBtn = container.parentElement.querySelector('.add-attr-btn');
+
+    // Commented-out objects: show read-only view with banner
+    if (state.editedObject.is_commented_out) {
+        if (addAttrBtn) {addAttrBtn.style.display = 'none';}
+        const attrs = state.editedObject.commented_attributes || {};
+        const attrRows = Object.entries(attrs)
+            .map(([key, value]) => `
+                <div class="attr-row" data-attr="${escapeHtml(key)}">
+                    <span class="attr-name">${escapeHtml(key)}</span>
+                    <input type="text" class="attr-value" value="${escapeHtml(value).replace(/"/g, '&quot;')}" disabled>
+                </div>
+            `).join('');
+        container.innerHTML = `
+            <div class="commented-out-banner" style="padding: 8px 12px; margin-bottom: 12px; border-radius: 4px; background: var(--nbe-dark-validation-info-bg); border: 1px solid var(--nbe-dark-validation-info-border); color: var(--nbe-dark-text-secondary); font-size: var(--nbe-font-size-secondary);">
+                <i class="fa-solid fa-comment-slash" style="margin-right: 6px;"></i>
+                This object is commented out (decommissioned)
+            </div>
+            ${attrRows || '<div style="padding: 8px 12px; color: var(--nbe-dark-text-muted);">No attributes found</div>'}
+            <button class="nbe-btn nbe-btn--dark nbe-btn--danger nbe-btn--sm" style="margin-top: 12px;" data-action="deleteObject">
+                <i class="fa-solid fa-trash"></i> Delete Object
+            </button>
+        `;
+        return;
+    }
+
+    if (addAttrBtn) {addAttrBtn.style.display = '';}
+
     const objectType = state.editedObject.object_type;
     const isLocked = baseState.isEditingLocked;
     const disabledAttr = isLocked ? ' disabled' : '';
