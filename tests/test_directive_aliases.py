@@ -1,6 +1,10 @@
 """Tests for directive alias normalization."""
 
+import tempfile
+from pathlib import Path
+
 from app.nagios_model import normalize_attribute_name
+from app.nagios_parser import NagiosConfigParser
 
 
 def test_host_alias_on_service():
@@ -43,3 +47,27 @@ def test_alias_not_applied_to_wrong_type():
 
 def test_description_alias_on_serviceescalation():
     assert normalize_attribute_name("serviceescalation", "description") == "service_description"
+
+
+def test_parser_normalizes_host_alias():
+    """Parser should store 'host' as 'host_name' for service objects."""
+    test_dir = tempfile.mkdtemp()
+    try:
+        cfg_path = Path(test_dir) / "services.cfg"
+        cfg_path.write_text("""
+define service {
+    host            web-01
+    description     HTTP Check
+    check_command   check_http
+}
+""")
+        parser = NagiosConfigParser(test_dir)
+        parser.parse_all()
+        svc = parser.objects[0]
+        assert svc.attributes.get("host_name") == "web-01"
+        assert svc.attributes.get("service_description") == "HTTP Check"
+        assert "host" not in svc.attributes
+        assert "description" not in svc.attributes
+    finally:
+        import shutil
+        shutil.rmtree(test_dir, ignore_errors=True)

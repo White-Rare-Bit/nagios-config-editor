@@ -10,7 +10,7 @@ import os
 import re
 from pathlib import Path
 
-from .nagios_model import REFERENCE_FIELDS, NagiosObject
+from .nagios_model import REFERENCE_FIELDS, NagiosObject, normalize_attribute_name
 from .nagios_model import format_object_block as _model_format_object_block
 
 logger = logging.getLogger("nagios_bulk_editor.parser")
@@ -274,6 +274,7 @@ class NagiosConfigParser:
             # Remove inline comments (semicolons outside quotes)
             value = self._strip_inline_comment(value)
 
+            key = normalize_attribute_name(object_type, key)
             attributes[key] = value.strip()
             if comment:
                 inline_comments[key] = comment
