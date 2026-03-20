@@ -97,6 +97,44 @@ SPECIAL_DIRECTIVES: dict[str, str] = {
     "action_url": "URL for actions related to the object.",
 }
 
+# Directive aliases per Nagios Core source (xodtemplate.c).
+# Maps (object_type, alias) -> canonical_name. These aliases are context-dependent:
+# e.g., "hostgroups" is an alias for "hostgroup_name" on services, but on hosts
+# it's a real field meaning "which hostgroups this host belongs to."
+_SERVICE_LIKE_TYPES = frozenset({
+    "service", "servicedependency", "serviceescalation", "serviceextinfo",
+})
+_HOST_REF_TYPES = frozenset({
+    "service", "servicedependency", "serviceescalation", "serviceextinfo",
+    "hostdependency", "hostescalation", "hostextinfo",
+})
+
+ATTRIBUTE_ALIASES: dict[tuple[str, str], str] = {}
+
+# host/hosts -> host_name (on services, dependencies, escalations, extinfo)
+for _t in _HOST_REF_TYPES:
+    ATTRIBUTE_ALIASES[(_t, "host")] = "host_name"
+    ATTRIBUTE_ALIASES[(_t, "hosts")] = "host_name"
+
+# hostgroup/hostgroups -> hostgroup_name (on service-like types only)
+for _t in _SERVICE_LIKE_TYPES:
+    ATTRIBUTE_ALIASES[(_t, "hostgroup")] = "hostgroup_name"
+    ATTRIBUTE_ALIASES[(_t, "hostgroups")] = "hostgroup_name"
+
+# description -> service_description (on service-like types)
+for _t in _SERVICE_LIKE_TYPES:
+    ATTRIBUTE_ALIASES[(_t, "description")] = "service_description"
+
+
+def normalize_attribute_name(object_type: str, attr_name: str) -> str:
+    """Normalize a directive name using Nagios aliases.
+
+    Returns the canonical name if an alias exists for the given object type,
+    otherwise returns the original name unchanged.
+    """
+    return ATTRIBUTE_ALIASES.get((object_type, attr_name), attr_name)
+
+
 # Implied inheritance: fields auto-inherited from associated objects.
 # Key: (child_type, parent_type, parent_key_field)
 # Value: list of (child_field, parent_field) tuples
