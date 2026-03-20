@@ -463,7 +463,7 @@ class NagiosConfigParser:
 
                 value = obj.attributes[field_name]
                 # Handle comma-separated lists
-                values = [v.strip() for v in value.split(",")]
+                values = [v.strip().lstrip("+!").strip() for v in value.split(",")]
 
                 if name in values:
                     references.append((obj, field_name))
