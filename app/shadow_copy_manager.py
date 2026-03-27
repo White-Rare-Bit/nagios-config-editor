@@ -517,13 +517,20 @@ class ShadowCopyManager:
     # Diff computation
     # =========================================================================
 
+    # Editor temp files that should be ignored in shadow diffs
+    _TEMP_FILE_SUFFIXES = (".swp", ".swo", ".swn", ".swx", "~")
+    _TEMP_FILE_PREFIXES = (".#",)
+
     def _collect_files_for_root(self, directory: str) -> set[str]:
-        """Collect all file paths relative to directory."""
+        """Collect all file paths relative to directory, excluding editor temp files."""
         result = set()
         if not os.path.isdir(directory):
             return result
         for dirpath, _dirnames, filenames in os.walk(directory):
             for filename in filenames:
+                if (filename.endswith(self._TEMP_FILE_SUFFIXES)
+                        or filename.startswith(self._TEMP_FILE_PREFIXES)):
+                    continue
                 full = os.path.join(dirpath, filename)
                 rel = os.path.relpath(full, directory)
                 result.add(rel)
