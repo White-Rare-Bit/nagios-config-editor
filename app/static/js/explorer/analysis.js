@@ -812,13 +812,14 @@ export async function loadCleanupSuggestions(forceRefresh = false) {
 // Cleanup Analysis Rendering
 // =============================================================================
 
-const CLEANUP_GROUP_ORDER = ['duplicate', 'empty_group', 'orphan', 'long_host_list',
+const CLEANUP_GROUP_ORDER = ['duplicate', 'commented_out_object', 'empty_group', 'orphan', 'long_host_list',
     'unused_template', 'unused_command', 'unused_contact', 'unused_contactgroup',
     'unused_timeperiod', 'missing_hostgroup', 'missing_servicegroup',
     'missing_contact', 'missing_contactgroup', 'missing_timeperiod'];
 
 const CLEANUP_GROUP_CONFIG = {
     'duplicate': { icon: '<i class="fa-solid fa-copy"></i>', label: 'Duplicate Definitions', severity: 'error', bulkAction: null },
+    'commented_out_object': { icon: '<i class="fa-solid fa-comment-slash"></i>', label: 'Commented Out', severity: 'info', bulkAction: 'deleteAll' },
     'empty_group': { icon: '<i class="fa-solid fa-folder-open"></i>', label: 'Empty Groups', severity: 'warning', bulkAction: 'deleteAll' },
     'orphan': { icon: '<i class="fa-solid fa-plug"></i>', label: 'Orphans', severity: 'info', bulkAction: null },
     'long_host_list': { icon: '<i class="fa-solid fa-list"></i>', label: 'Long Host Lists', severity: 'info', bulkAction: null },
@@ -958,6 +959,7 @@ export function bulkDeleteCleanupGroup(groupType) {
 
     // Get label for display
     const groupLabels = {
+        'commented_out_object': 'commented-out objects',
         'empty_group': 'empty groups',
         'unused_template': 'unused templates',
         'unused_command': 'unused commands',
