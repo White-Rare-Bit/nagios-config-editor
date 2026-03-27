@@ -142,7 +142,11 @@ def _locate_define_pos(content: str, char_pos: int, target_line: int, lines: lis
 
     """
     line_content = lines[target_line - 1] if target_line <= len(lines) else ""
-    define_on_line = line_content.strip().startswith("define")
+    stripped = line_content.strip()
+    # Also match commented-out define lines like "# define host {"
+    if stripped.startswith(("#", ";")):
+        stripped = stripped.lstrip("#; \t")
+    define_on_line = stripped.startswith("define")
 
     if define_on_line:
         define_pos = content.find("define", char_pos)
@@ -190,6 +194,14 @@ def find_block_range(content: str, target_line: int) -> tuple[int, int] | None:
     end_pos = _find_matching_brace(content, brace_open)
     if end_pos is None:
         return None
+
+    # Extend start backward to include comment prefix (e.g. "# " before "define")
+    # so that deleting commented-out blocks removes the entire line
+    line_start = content.rfind("\n", 0, define_pos)
+    line_start = line_start + 1 if line_start >= 0 else 0
+    prefix = content[line_start:define_pos]
+    if prefix and all(c in "#; \t" for c in prefix):
+        define_pos = line_start
 
     return (define_pos, end_pos)
 
