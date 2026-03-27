@@ -620,7 +620,7 @@ export async function handleObjectDrop(event, targetFile, position) {
         .map(o => `${o.source_file}|${o.object_type}|${o.display_name ?? o.name ?? ''}`);
 
     const payload = { stable_keys: stableKeys, target_file: targetFile };
-    if (position > 0) {payload.after_line = position;}
+    if (position >= 0) {payload.after_line = position;}
 
     const result = await ApiClient.post('/api/move-objects', payload, { silent: true });
 
