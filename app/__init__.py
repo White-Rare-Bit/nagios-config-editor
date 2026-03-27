@@ -9,6 +9,7 @@ import warnings
 from logging.handlers import RotatingFileHandler
 
 from flask import Flask
+from flask_compress import Compress
 
 from .backup_manager import BackupManager
 from .config_discovery import discover_config_roots
@@ -25,6 +26,7 @@ _server_config: ServerConfig | None = None
 
 # Create the Flask app instance (module-level for route decorators)
 app = Flask(__name__)
+Compress(app)
 
 # Secret key: use environment variable or generate random key at startup
 _flask_secret_key = os.environ.get("FLASK_SECRET_KEY")
