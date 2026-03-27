@@ -159,9 +159,14 @@ const ISSUE_TYPE_HANDLERS = {
         if (!obj) {return;}
         state.orphanIndices.add(getObjectKey(obj));
     },
-    service_on_empty_hostgroup: (issue, obj) => {
+    commented_out_object: (issue, obj) => {
         if (!obj) {return;}
-        state.orphanIndices.add(getObjectKey(obj));
+        state.allCleanupSuggestions.push({
+            type: 'commented_out_object', severity: 'info', object: obj,
+            title: `Commented out: ${issue.object}`,
+            description: issue.message || 'Fully commented-out object — consider removing',
+            action: 'delete'
+        });
     },
     command_arg_mismatch: () => {
         // Already tracked in issuesByObject — no additional state needed

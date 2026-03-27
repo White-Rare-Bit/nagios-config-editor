@@ -8,7 +8,7 @@
 import { setView, switchRightTab, toggleSuggestionSection, toggleActionsMenu,
          navigateToObjectIssue, openInGraphView, closeObjectDetail, filterTree,
          selectObjectByStableKey } from './app.js';
-import { toggleSection, showAddAttribute } from './object-editor.js';
+import { toggleSection, showAddAttribute, deleteCurrentObject } from './object-editor.js';
 import { selectAllVisible, selectByType, selectByPattern, discardNewObject,
          showBulkRenameDialog, showEditAttributesDialog, runValidationFull } from './dialogs.js';
 import { createInlineFile, createInlineFolder } from './file-operations.js';
@@ -35,6 +35,7 @@ export const actionHandlers = {
     openInGraphView: () => openInGraphView(),
     discardNewObject: () => discardNewObject(),
     showAddAttribute: () => showAddAttribute(),
+    deleteObject: () => deleteCurrentObject(),
 
     // File/folder operations
     createInlineFile: () => createInlineFile(),

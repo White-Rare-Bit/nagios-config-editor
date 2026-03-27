@@ -122,6 +122,10 @@ const ISSUE_BADGE_FORMATTERS = {
             title: `This ${obj.object_type} has ${hostCount} hosts listed individually. Consider using a hostgroup instead.`
         };
     },
+    commented_out_object: (issue, obj, displayName) => ({
+        label: `Commented out: ${displayName}`,
+        title: 'This object is fully commented out — consider removing'
+    }),
 };
 
 const MISSING_REF_PATTERNS = {
@@ -251,6 +255,26 @@ export function hideCenterPaneObject() {
     emptyState.style.display = 'flex';
     content.classList.add('u-hidden');
     content.style.display = 'none';
+}
+
+export async function deleteCurrentObject() {
+    if (!state.editedObject) {return;}
+    const obj = state.editedObject;
+    const key = getObjectKey(obj);
+    if (!key) {return;}
+
+    const result = await ApiClient.post('/api/objects/delete', {
+        stable_key: key
+    }, { silent: true });
+
+    if (!result.success) {
+        showToast(result.error || 'Failed to delete', 'error');
+        return;
+    }
+
+    hideCenterPaneObject();
+    await afterFrontendMutation();
+    showToast(`Deleted ${obj.object_type} "${obj.display_name || obj.name}"`, 'success');
 }
 
 /**
