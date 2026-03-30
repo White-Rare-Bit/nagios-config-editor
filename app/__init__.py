@@ -139,8 +139,11 @@ def create_app(config_path: str | None = None, log_dir_override: str | None = No
         if discovery["resource_file"]:
             _server_config.paths.resource_cfg = discovery["resource_file"]
 
-    # Set primary_dir default
-    if not _server_config.paths.primary_dir and accessible_dirs:
+    # Set primary_dir default (always override in test/config_path mode so
+    # _resolve_target_file can remap stable keys to the shadow directory)
+    if config_path:
+        _server_config.paths.primary_dir = accessible_dirs[0]
+    elif not _server_config.paths.primary_dir and accessible_dirs:
         _server_config.paths.primary_dir = accessible_dirs[0]
 
     # Primary dir for backward-compat services (backup, git)

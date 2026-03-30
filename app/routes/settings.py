@@ -64,11 +64,12 @@ def api_update_settings():
 
     updated = []
     errors = []
+    warnings = []  # Non-blocking validation issues (e.g. missing nagios binary)
 
     if "backup_path" in paths_data:
         _update_backup_path(server_config, paths_data["backup_path"], updated, errors)
     if "nagios_bin" in paths_data:
-        _update_nagios_bin(server_config, paths_data["nagios_bin"], updated, errors)
+        _update_nagios_bin(server_config, paths_data["nagios_bin"], updated, warnings)
 
     # Simple field updates
     needs_rediscovery = False
@@ -112,6 +113,7 @@ def api_update_settings():
         "success": len(errors) == 0,
         "updated": updated,
         "errors": errors,
+        "warnings": warnings,
         "git_initialized": git_initialized,
         "config": {
             "paths": {
