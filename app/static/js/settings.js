@@ -1,5 +1,5 @@
 // Settings page
-import { ApiClient } from './api-client.js';
+import { ApiClient, apiUrl } from './api-client.js';
 import { showToast } from './ui-notifications.js';
 import { escapeHtml } from './app.js';
 import { getUserIdentity, setUserIdentity } from './session-manager.js';
@@ -573,5 +573,5 @@ async function saveLoggingSettings() {
 }
 
 function downloadLog() {
-    window.location.href = '/api/logs/operations/download';
+    window.location.href = apiUrl('/api/logs/operations/download');
 }

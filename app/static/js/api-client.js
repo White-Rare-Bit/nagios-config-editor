@@ -5,6 +5,11 @@
 import { showToast } from './ui-notifications.js';
 import { getStagingHeaders } from './session-manager.js';
 
+/** Prepend the WSGI script root (e.g. "/editor") so requests work behind a reverse proxy sub-path. */
+export function apiUrl(path) {
+    return (window.__scriptRoot__ || '') + path;
+}
+
 /**
  * Internal helper to handle response and errors consistently.
  * @param {Response} response - Fetch response
@@ -81,7 +86,7 @@ async function request(url, method, data, options = {}) {
         if (data !== undefined) {
             fetchOptions.body = JSON.stringify(data);
         }
-        const response = await fetch(url, fetchOptions);
+        const response = await fetch(apiUrl(url), fetchOptions);
         return handleResponse(response, opts);
     } catch (e) {
         return handleError(e, opts);
@@ -122,4 +127,4 @@ export function del(url, options = {}) {
 }
 
 // Also export as namespace for backward compat in callers
-export const ApiClient = { post, get, del };
+export const ApiClient = { post, get, del, apiUrl };

@@ -7,7 +7,7 @@ import { escapeHtml, handleGlobalKeydown, reloadConfig } from './app.js';
 import { baseState } from './base-state.js';
 import { getSessionId, getUserIdentity, setUserIdentity, hasUserIdentity } from './session-manager.js';
 import { showToast, showConfirmDialog } from './ui-notifications.js';
-import { ApiClient } from './api-client.js';
+import { ApiClient, apiUrl } from './api-client.js';
 import { closeGitResultPanel } from './git-ui.js';
 import { handleCommitClick, closeGlobalCommitDialog } from './commit-dialog.js';
 import { checkLockStatus, breakLock } from './lock-manager.js';
@@ -51,7 +51,7 @@ async function flush() {
     // Send each log entry (could batch in future if needed)
     for (const entry of logsToSend) {
         try {
-            await fetch('/api/logs/frontend', {
+            await fetch(apiUrl('/api/logs/frontend'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(entry)

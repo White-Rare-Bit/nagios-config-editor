@@ -1,6 +1,6 @@
 /* Docs page — App documentation + Nagios object reference browser */
 import { NAGIOS_OBJECT_REFERENCE, NAGIOS_INHERITANCE_REFERENCE } from './docs-data.js';
-import { ApiClient } from './api-client.js';
+import { ApiClient, apiUrl } from './api-client.js';
 import { escapeHtml } from './app.js';
 
     var REF = NAGIOS_OBJECT_REFERENCE;
@@ -355,7 +355,7 @@ import { escapeHtml } from './app.js';
 
         container.innerHTML = '<div class="empty-state empty-state--dark empty-state--flex"><div class="empty-icon"><i class="fa-solid fa-spinner fa-spin"></i></div><p>Loading...</p></div>';
 
-        fetch('/api/docs/' + encodeURIComponent(slug))
+        fetch(apiUrl('/api/docs/' + encodeURIComponent(slug)))
             .then(function(resp) {
                 if (!resp.ok) {throw new Error('Not found');}
                 return resp.text();

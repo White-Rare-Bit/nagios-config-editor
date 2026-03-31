@@ -5,7 +5,7 @@
  */
 
 import { DepsConfig } from './dependencies-config.js';
-import { ApiClient } from './api-client.js';
+import { ApiClient, apiUrl } from './api-client.js';
 import { escapeHtml } from './app.js';
 import { showToast } from './ui-notifications.js';
 
@@ -1167,7 +1167,7 @@ const {
 
     async function loadAllData() {
         try {
-            const response = await fetch('/api/dependencies');
+            const response = await fetch(apiUrl('/api/dependencies'));
             const data = await response.json();
             allNodes = data.nodes || [];
             allEdges = data.edges || [];
