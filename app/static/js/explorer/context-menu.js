@@ -14,7 +14,7 @@ import { afterFrontendMutation } from './data-loading.js'; // circular — safe 
 import { showCenterPaneObject } from './object-editor.js'; // circular — safe (function-level)
 import { loadImpactAndRelationships } from './impact-section.js'; // circular — safe (function-level)
 import { cleanupDragState } from './drag-drop.js';
-import { ApiClient } from '../api-client.js';
+import { ApiClient, apiUrl } from '../api-client.js';
 import { showToast } from '../ui-notifications.js';
 import { escapeHtml } from '../app.js';
 import { escapeJs } from '../base.js';
@@ -794,7 +794,7 @@ export function viewInGraph() {
     });
 
     // Navigate to graph page with object info
-    window.location.href = `/dependencies?${params.toString()}`;
+    window.location.href = apiUrl(`/dependencies?${params.toString()}`);
 }
 
 export async function addToGroup(groupName) {

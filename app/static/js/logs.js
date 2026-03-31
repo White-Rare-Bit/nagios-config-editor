@@ -6,7 +6,7 @@
  * renderPagination component.
  */
 
-import { ApiClient } from './api-client.js';
+import { ApiClient, apiUrl } from './api-client.js';
 import { showToast, showConfirmDialog } from './ui-notifications.js';
 import { escapeHtml } from './app.js';
 import { renderPagination } from './shared/pagination.js';
@@ -390,7 +390,7 @@ function setLogPageSize(size) {
 
 function downloadLog() {
     const config = TAB_CONFIG[activeTab];
-    window.location.href = config.downloadUrl;
+    window.location.href = apiUrl(config.downloadUrl);
 }
 
 async function clearLog() {

@@ -2482,7 +2482,7 @@ const {
             showToast(`"${name}" is not defined in any config file`, 'warning');
             return;
         }
-        window.location.href = `/explorer?search=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}`;
+        window.location.href = apiUrl(`/explorer?search=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}`);
     }
 
     // Expose functions to global scope for inline onclick handlers

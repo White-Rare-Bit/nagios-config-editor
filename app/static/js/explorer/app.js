@@ -5,6 +5,7 @@
  */
 
 import { state } from './state.js';
+import { apiUrl } from '../api-client.js';
 import { constants, isObjectTemplate, getTypeBadge, getTypeBadgeTier } from './constants.js';
 import { getObjectKey, findObjectByKey, getSelectedIndices, getConfigRootName } from './main.js';
 import { isSelectedByIndex, removeFromSelectionByIndex, clearSelection } from './state-management.js';
@@ -895,7 +896,7 @@ export function openInGraphView() {
     }
 
     // Navigate to graph view with this node and expand=true
-    const url = `/dependencies?node=${encodeURIComponent(nodeId)}&expand=true`;
+    const url = apiUrl(`/dependencies?node=${encodeURIComponent(nodeId)}&expand=true`);
     window.location.href = url;
 }
 
