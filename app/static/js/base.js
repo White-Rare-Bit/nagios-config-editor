@@ -71,7 +71,7 @@ window.addEventListener('beforeunload', () => {
             message: entry.message,
             context: entry.context
         })));
-        navigator.sendBeacon('/api/logs/frontend', new Blob([data], { type: 'application/json' }));
+        navigator.sendBeacon(apiUrl('/api/logs/frontend'), new Blob([data], { type: 'application/json' }));
     }
 });
 

@@ -5,7 +5,7 @@ import { baseState } from './base-state.js';
 import { getUserIdentity, hasUserIdentity } from './session-manager.js';
 import { showToast, showConfirmDialog } from './ui-notifications.js';
 import { showGitRunningPanel, showGitOperationResult, closeGitResultOverlay } from './git-ui.js';
-import { ApiClient } from './api-client.js';
+import { ApiClient, apiUrl } from './api-client.js';
 import { escapeHtml } from './app.js';
 import { pluralize, updateNavCommitButton, updateUndoButton } from './base.js'; // circular
 
@@ -68,7 +68,7 @@ function buildCommitFooterHtml(isGitConfigured, discardFn, applyFn) {
                 <span class="git-config-warning-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
                 <div>
                     <strong>Git identity not configured</strong><br>
-                    <span class="git-config-warning-text">Configure your name and email in <a href="/settings">Settings</a> to enable commits.</span>
+                    <span class="git-config-warning-text">Configure your name and email in <a href="${apiUrl('/settings')}">Settings</a> to enable commits.</span>
                 </div>
             </div>`;
     }

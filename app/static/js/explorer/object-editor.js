@@ -13,7 +13,7 @@ import { computeStagedIssues, refreshCenterPaneIssueBadge } from './badge-issues
 import { showDialog, closeDialog } from './context-menu.js'; // circular — safe (function-level)
 import { getNewObjectNameField, stageNewObjectChanges } from './dialogs.js'; // circular — safe (function-level)
 import { getObjectIssue, getHostListInfo, getIssueShortLabel, getIssueIcon, getObjectTypeIcon, getNameFieldForObject, hideAutocompleteDropdown, handleAutocompleteKeyNav, refreshRelatedSections, getEffectiveName } from './app.js'; // circular — safe (function-level)
-import { ApiClient } from '../api-client.js';
+import { ApiClient, apiUrl } from '../api-client.js';
 import { showToast, showConfirmDialog } from '../ui-notifications.js';
 import { escapeHtml, copyToClipboard } from '../app.js';
 import { NAGIOS_OBJECT_REFERENCE } from '../docs-data.js';
@@ -620,7 +620,7 @@ function showDocsPopover(targetEl, directive, objectType) {
     // Build the deep link: /docs#objectType/directiveName
     // Use the first alias for the link (before any "|")
     var directiveName = directive.name.split('|')[0].trim();
-    var docsHref = '/docs#' + encodeURIComponent(objectType) + '/' + encodeURIComponent(directiveName);
+    var docsHref = apiUrl('/docs#' + encodeURIComponent(objectType) + '/' + encodeURIComponent(directiveName));
 
     el.innerHTML =
         '<div class="attr-docs-header">' +
