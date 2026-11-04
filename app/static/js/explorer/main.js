@@ -153,7 +153,12 @@ function initEventDelegation() {
 // Register callbacks for base.js (undo/commit button updates)
 registerExplorerCallbacks({ undoLastAction, getTotalStagedCount, getUndoCount, buildTree });
 registerLockChangeCallback(renderCenterAttributes);
-registerLockBreakCallback(() => afterServerSync());
+// Breaking the lock discards the other user's staged edits on the server, so
+// reload objects first (as undo/apply/discard do) or the tree keeps showing them
+registerLockBreakCallback(async () => {
+    await loadObjects();
+    afterServerSync();
+});
 
 /**
  * Initialize the explorer with config path.
