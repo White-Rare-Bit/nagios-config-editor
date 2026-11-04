@@ -546,3 +546,91 @@ def generate_stable_key_for_object_dict(obj_dict: dict) -> str:
     """Build a stable key from an API object dict."""
     name = obj_dict.get("display_name") or obj_dict.get("name") or ""
     return f"{obj_dict['source_file']}|{obj_dict['object_type']}|{name}"
+
+
+class TestEditorStaysCurrent:
+    """After every edit, undo and create, the objects API and the health check
+    must reflect the new state immediately: no stale parse, no stale cache."""
+
+    CFG = """\
+define host {
+    name                    base
+    register                0
+    check_command           check-ok
+}
+define host {
+    host_name               web-01
+    use                     base
+    contacts                alice
+}
+define service {
+    host_name               web-01
+    service_description     HTTP
+    check_command           check-ok
+}
+define service {
+    host_name               web-02
+    service_description     PING
+    check_command           check-ok
+}
+define contact {
+    contact_name                    alice
+    host_notification_commands      check-ok
+    service_notification_commands   check-ok
+    host_notification_period        24x7
+    service_notification_period     24x7
+}
+define command {
+    command_name            check-ok
+    command_line            /bin/true
+}
+define timeperiod {
+    timeperiod_name         24x7
+    monday                  00:00-24:00
+}
+"""
+
+    @staticmethod
+    def _issues(client):
+        return {(i["type"], i["object"]) for i in client.get("/api/health-check").json["issues"]}
+
+    @staticmethod
+    def _host(client, name):
+        return next(o for o in client.get("/api/objects").json if o["attributes"].get("host_name") == name)
+
+    def test_edits_undo_and_create_show_up_immediately(self, make_app):
+        app, client = make_app({"objects.cfg": self.CFG})
+        hdr = {"X-Session-Id": "s1"}
+
+        before = self._issues(client)
+        assert ("missing_template", "web-01") not in before
+        assert ("missing_contacts", "HTTP") not in before      # HTTP inherits alice from web-01
+        assert ("orphan_service", "PING") in before             # web-02 doesn't exist yet
+
+        # Edit web-01: point it at a missing template and drop its contacts
+        host = self._host(client, "web-01")
+        attrs = {k: v for k, v in host["attributes"].items() if k != "contacts"}
+        attrs["use"] = "no-such-template"
+        key = f"{host['source_file']}|host|{host['display_name']}"
+        assert client.post("/api/objects/update", json={"stable_key": key, "attributes": attrs},
+                           headers=hdr).status_code == 200
+
+        assert self._host(client, "web-01")["attributes"]["use"] == "no-such-template"
+        after_edit = self._issues(client)
+        assert ("missing_template", "web-01") in after_edit
+        assert ("missing_contacts", "HTTP") in after_edit       # implied parent re-resolved, not cached
+
+        # Undo: both issues go away again
+        assert client.post("/api/staging/undo", headers=hdr).json["success"] is True
+        assert self._host(client, "web-01")["attributes"]["use"] == "base"
+        after_undo = self._issues(client)
+        assert ("missing_template", "web-01") not in after_undo
+        assert ("missing_contacts", "HTTP") not in after_undo
+
+        # Create web-02: the orphaned PING service is resolved
+        assert client.post("/api/objects/create", json={
+            "target_file": host["source_file"], "object_type": "host",
+            "attributes": {"host_name": "web-02", "use": "base", "contacts": "alice"},
+        }, headers=hdr).status_code == 200
+        assert self._host(client, "web-02")
+        assert ("orphan_service", "PING") not in self._issues(client)
