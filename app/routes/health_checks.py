@@ -7,7 +7,12 @@ The run_all_checks() orchestrator calls them all.
 import os
 import re
 
-from ..inheritance import has_attr_in_chain, resolve_all_attrs, resolve_inherited_attrs
+from ..inheritance import (
+    build_implied_parent_index,
+    has_attr_in_chain,
+    resolve_all_attrs,
+    resolve_inherited_attrs,
+)
 from ..nagios_cfg import parse_nagios_cfg, parse_resource_cfg
 from ..nagios_model import NAME_FIELDS, REFERENCE_FIELDS, REQUIRED_FIELDS, is_template_object
 from ..stable_keys import generate_stable_key_for_object
@@ -73,6 +78,9 @@ def build_context(objects, obj_to_index, template_lookup, config_paths=None):
     ctx = {
         "objects": active_objects,
         "all_objects": objects,
+        # For resolve_all_attrs: avoids a linear scan per object (quadratic
+        # over the config). Built from exactly the list the checks resolve against.
+        "implied_parent_index": build_implied_parent_index(active_objects),
         "obj_to_index": obj_to_index,
         "template_lookup": template_lookup,
         "config_paths": config_paths or {},
@@ -599,7 +607,7 @@ def check_missing_check_command(ctx):
             continue
         if is_template_object(obj):
             continue
-        resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"])
+        resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"], ctx["implied_parent_index"])
         if "check_command" not in resolved:
             obj_name = obj.get_name() or "unnamed"
             host = resolved.get("host_name", resolved.get("hostgroup_name", ""))
@@ -631,7 +639,7 @@ def check_command_arg_mismatch(ctx):
             continue
         if is_template_object(obj):
             continue
-        resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"])
+        resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"], ctx["implied_parent_index"])
         check_cmd = resolved.get("check_command", "")
         if not check_cmd:
             continue
@@ -802,7 +810,7 @@ def check_service_host_notification_reachability(ctx):
         if is_template_object(obj):
             continue
 
-        resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"])
+        resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"], ctx["implied_parent_index"])
         contact_names = _expand_contacts(resolved, ctx)
 
         if not contact_names:
@@ -1261,7 +1269,7 @@ def check_missing_contacts_on_objects(ctx):
             continue
         if is_template_object(obj):
             continue
-        resolved = resolve_all_attrs(obj, template_lookup, objects)
+        resolved = resolve_all_attrs(obj, template_lookup, objects, ctx["implied_parent_index"])
         has_contacts = bool(resolved.get("contacts"))
         has_contact_groups = bool(resolved.get("contact_groups"))
         if not has_contacts and not has_contact_groups:
@@ -1408,7 +1416,7 @@ def check_required_fields(ctx):
         if is_template_object(obj):
             continue
 
-        resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"])
+        resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"], ctx["implied_parent_index"])
         obj_name = obj.get_name() or obj.get_display_name()
 
         for requirement in REQUIRED_FIELDS[obj.object_type]:
@@ -1459,7 +1467,7 @@ def check_redundant_escalation_contacts(ctx):
 
     # Build map of (host_name, service_description?) -> resolved contact set
     def get_contact_set(obj):
-        resolved = resolve_all_attrs(obj, template_lookup, objects)
+        resolved = resolve_all_attrs(obj, template_lookup, objects, ctx["implied_parent_index"])
         contacts = set()
         for c in resolved.get("contacts", "").split(","):
             c = c.strip()
@@ -1600,7 +1608,7 @@ def check_notification_period_criticality(ctx):
         if is_template_object(obj):
             continue
 
-        resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"])
+        resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"], ctx["implied_parent_index"])
 
         # Determine if this is a "critical" service
         host = resolved.get("host_name", "")
@@ -1720,7 +1728,7 @@ def check_dependency_period_mismatch(ctx):
         if not target:
             continue
 
-        resolved = resolve_all_attrs(target, template_lookup, ctx["objects"])
+        resolved = resolve_all_attrs(target, template_lookup, ctx["objects"], ctx["implied_parent_index"])
         check_period = resolved.get("check_period", "")
 
         if check_period and dep_period != check_period and dep_period != "24x7" and check_period != "24x7":
@@ -1888,7 +1896,7 @@ def check_retry_interval(ctx):
             continue
         if is_template_object(obj):
             continue
-        resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"])
+        resolved = resolve_all_attrs(obj, template_lookup, ctx["objects"], ctx["implied_parent_index"])
         retry = resolved.get("retry_interval")
         if retry is None:
             continue

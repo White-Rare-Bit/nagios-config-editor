@@ -237,7 +237,24 @@ def has_attr_in_chain(obj, attr_name, template_lookup, visited=None):
 # Implied inheritance (cross-object-type)
 # ─────────────────────────────────────────────────────────────────────
 
-def resolve_implied_attrs(resolved_attrs, obj_type, obj, objects, template_lookup):
+def build_implied_parent_index(objects):
+    """Index registered objects by (object_type, name-field value) for implied-parent lookup.
+
+    Equivalent to the linear scan in _find_implied_parent: the same register
+    filter, the same name field, and the first matching object wins
+    (setdefault). Build it once per set of objects and pass it to
+    resolve_all_attrs; it is only valid for the exact list it was built from.
+    """
+    index = {}
+    for o in objects:
+        if o.attributes.get("register", "1") == "0":
+            continue
+        name_field = NAME_FIELDS.get(o.object_type, "")
+        index.setdefault((o.object_type, o.attributes.get(name_field, "")), o)
+    return index
+
+
+def resolve_implied_attrs(resolved_attrs, obj_type, obj, objects, template_lookup, parent_index=None):
     """Fill in missing fields from implied inheritance (cross-object-type).
 
     Implied inheritance is lowest priority -- only fills in fields not already
@@ -249,6 +266,8 @@ def resolve_implied_attrs(resolved_attrs, obj_type, obj, objects, template_looku
         obj: the original NagiosObject (needed for additive+implied interaction)
         objects: full list of NagiosObject instances
         template_lookup: dict of (obj_type, tmpl_name) -> obj
+        parent_index: optional build_implied_parent_index(objects) result; avoids
+            a linear scan of objects per call (quadratic over a whole config)
 
     Returns:
         dict with implied fields filled in (new dict, doesn't mutate input)
@@ -260,7 +279,7 @@ def resolve_implied_attrs(resolved_attrs, obj_type, obj, objects, template_looku
             continue
 
         parent_obj = _find_implied_parent(
-            result, obj_type, parent_type, parent_key_field, objects,
+            result, obj_type, parent_type, parent_key_field, objects, parent_index,
         )
         if not parent_obj:
             continue
@@ -295,7 +314,8 @@ def resolve_implied_attrs(resolved_attrs, obj_type, obj, objects, template_looku
     return result
 
 
-def _find_implied_parent(resolved_attrs, obj_type, parent_type, parent_key_field, objects):
+def _find_implied_parent(resolved_attrs, obj_type, parent_type, parent_key_field, objects,
+                         parent_index=None):
     """Find the parent object for implied inheritance."""
     parent_key = resolved_attrs.get(parent_key_field, "")
     if not parent_key:
@@ -318,6 +338,8 @@ def _find_implied_parent(resolved_attrs, obj_type, parent_type, parent_key_field
     # For hosts, host escalations, services: match by name field
     name_field = NAME_FIELDS.get(parent_type, "")
     first_parent = parent_key.split(",")[0].strip()
+    if parent_index is not None:
+        return parent_index.get((parent_type, first_parent))
     for o in objects:
         if o.object_type != parent_type:
             continue
@@ -328,7 +350,7 @@ def _find_implied_parent(resolved_attrs, obj_type, parent_type, parent_key_field
     return None
 
 
-def resolve_all_attrs(obj, template_lookup, objects):
+def resolve_all_attrs(obj, template_lookup, objects, parent_index=None):
     """Resolve all attributes: template inheritance + implied inheritance.
 
     This is the recommended entry point for callers needing fully-resolved
@@ -338,12 +360,14 @@ def resolve_all_attrs(obj, template_lookup, objects):
         obj: NagiosObject to resolve
         template_lookup: dict of (obj_type, tmpl_name) -> obj
         objects: full list of NagiosObject instances
+        parent_index: optional build_implied_parent_index(objects) result, for
+            callers resolving many objects from the same list
 
     Returns:
         dict[attr_name, value] -- fully resolved attributes
     """
     resolved = resolve_inherited_attrs(obj, template_lookup)
-    return resolve_implied_attrs(resolved, obj.object_type, obj, objects, template_lookup)
+    return resolve_implied_attrs(resolved, obj.object_type, obj, objects, template_lookup, parent_index)
 
 
 # ─────────────────────────────────────────────────────────────────────

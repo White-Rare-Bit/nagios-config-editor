@@ -2,6 +2,8 @@
 
 import logging
 
+import pytest
+
 from app.nagios_parser import NagiosConfigParser
 
 
@@ -115,3 +117,41 @@ class TestLineContinuation:
         parser = NagiosConfigParser(str(tmp_path))
         objects = parser.parse_all()
         assert objects[0].attributes["host_name"] == "web-01"
+
+
+class TestLineNumbers:
+    """Edits locate objects by line number, so a wrong count edits the wrong object."""
+
+    @pytest.mark.parametrize("nl", ["\n", "\r\n"])
+    def test_line_numbers_across_many_blocks(self, tmp_path, nl):
+        text = nl.join([
+            "# header comment",                  # 1
+            "",                                  # 2
+            "define host {",                     # 3  <- h1
+            "    host_name h1",                  # 4
+            "}",                                 # 5
+            "# a comment between blocks",        # 6
+            "define host {",                     # 7  <- h2
+            "    host_name h2",                  # 8
+            "} define host {",                   # 9  <- h3 (same line as h2's close)
+            "    host_name h3",                  # 10
+            "}",                                 # 11
+            "",                                  # 12
+            "",                                  # 13
+            "define command{",                   # 14 <- c1
+            '    command_line /bin/echo "{ }"',  # 15
+            "    command_name c1",               # 16
+            "}",                                 # 17
+        ]) + nl
+        (tmp_path / "x.cfg").write_bytes(text.encode())
+        objects = NagiosConfigParser(str(tmp_path)).parse_all()
+        found = [(o.get_name(), o.line_number) for o in objects]
+        assert found == [("h1", 3), ("h2", 7), ("h3", 9), ("c1", 14)]
+
+    def test_line_numbers_after_unclosed_block(self, tmp_path):
+        (tmp_path / "x.cfg").write_text(
+            "define host {\n    host_name broken\n\n"   # 1-3, never closed
+            "define host {\n    host_name h2\n}\n"      # 4-6
+        )
+        objects = NagiosConfigParser(str(tmp_path)).parse_all()
+        assert [o.line_number for o in objects if o.get_name() == "h2"] == [4]

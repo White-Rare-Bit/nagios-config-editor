@@ -15,6 +15,9 @@ from .nagios_model import format_object_block as _model_format_object_block
 
 logger = logging.getLogger("nagios_bulk_editor.parser")
 
+# Start of an object definition: "define <type> {"
+_DEFINE_RE = re.compile(r"define\s+(\w+)\s*\{")
+
 
 # Minimum digit count to identify timestamp patterns in filenames (e.g. 20240115)
 _MIN_TIMESTAMP_DIGITS = 8
@@ -235,16 +238,23 @@ class NagiosConfigParser:
         blocks = []
         i = 0
         length = len(content)
+        # Line numbers are counted incrementally from the previous match rather
+        # than recounting from the start of the file each time, and the regex
+        # searches from position i rather than slicing content[i:]. Both
+        # previously made parsing quadratic in file size. Valid because each
+        # match starts after the previous one (i only moves forward).
+        counted_to, line_number = 0, 1
 
         while i < length:
-            define_match = re.search(r"define\s+(\w+)\s*\{", content[i:])
+            define_match = _DEFINE_RE.search(content, i)
             if not define_match:
                 break
 
-            start_pos = i + define_match.start()
+            start_pos = define_match.start()
             object_type = define_match.group(1)
-            brace_start = i + define_match.end() - 1
-            line_number = content[:start_pos].count("\n") + 1
+            brace_start = define_match.end() - 1
+            line_number += content.count("\n", counted_to, start_pos)
+            counted_to = start_pos
 
             j, brace_depth, nested_define_pos = self._scan_block_body(content, brace_start, length)
 

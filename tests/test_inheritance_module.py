@@ -840,3 +840,40 @@ class TestResolveAllAttrs:
         template_lookup = build_template_lookup(objects)
         resolved = resolve_all_attrs(svc, template_lookup, objects)
         assert resolved["contacts"] == "admin,svc-contact"
+
+
+class TestImpliedParentIndex:
+    """build_implied_parent_index is a performance shortcut for the linear scan in
+    _find_implied_parent; both must pick the same parent in every case."""
+
+    def _objects(self):
+        return [
+            _host(name="tmpl-with-name", host_name="web-01", register="0", contacts="from-template"),
+            _host(host_name="web-01", contacts="first-web-01"),          # first registered web-01 wins
+            _host(host_name="web-01", contacts="second-web-01"),
+            _host(contacts="no-name-host"),                               # matches an empty first entry
+            _host(host_name="web-02", contacts="web-02-contact"),
+            _Obj(object_type="service", attributes={"host_name": "web-01", "service_description": "A"}),
+            _Obj(object_type="service", attributes={"host_name": "web-02,web-01", "service_description": "B"}),
+            _Obj(object_type="service", attributes={"host_name": ",web-02", "service_description": "C"}),
+            _Obj(object_type="service", attributes={"host_name": "ghost", "service_description": "D"}),
+            _Obj(object_type="hostescalation", attributes={"host_name": "web-01", "first_notification": "2"}),
+            _Obj(object_type="serviceescalation", attributes={
+                "host_name": "web-01", "service_description": "A", "first_notification": "2"}),
+        ]
+
+    def test_index_and_scan_resolve_identically(self):
+        from app.inheritance import build_implied_parent_index
+        objects = self._objects()
+        lookup = build_template_lookup(objects)
+        index = build_implied_parent_index(objects)
+        for obj in objects:
+            assert resolve_all_attrs(obj, lookup, objects, index) == resolve_all_attrs(obj, lookup, objects), obj
+
+    def test_first_registered_match_wins(self):
+        from app.inheritance import build_implied_parent_index
+        objects = self._objects()
+        svc_a = objects[5]
+        resolved = resolve_all_attrs(svc_a, build_template_lookup(objects), objects,
+                                     build_implied_parent_index(objects))
+        assert resolved["contacts"] == "first-web-01"
