@@ -114,6 +114,7 @@ def api_update_object():
 
     result = service.update_object(
         obj.source_file, obj.line_number, new_attrs, obj.object_type,
+        inline_comments=obj.inline_comments,
     )
 
     if result.success:

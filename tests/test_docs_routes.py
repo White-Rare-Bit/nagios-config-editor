@@ -1,5 +1,7 @@
 """Tests for docs page API endpoint."""
 
+import pytest
+
 
 class TestDocsRoute:
     """Test GET /api/docs/<page> endpoint."""
@@ -15,11 +17,14 @@ class TestDocsRoute:
         resp = client.get("/api/docs/nonexistent-page")
         assert resp.status_code == 404
 
-    def test_path_traversal_blocked(self, client):
-        """Path traversal attempts are rejected."""
-        resp = client.get("/api/docs/../base")
-        # Flask normalizes this, but verify it doesn't serve base.html
-        assert resp.status_code == 404
+    @pytest.mark.parametrize("page", ["../base", "../docs", "..\\base", "overview.html", "Overview"])
+    def test_traversal_and_malformed_names_return_404(self, app, page):
+        """Called directly, because routing rejects '/' before the view would run:
+        GET /api/docs/../base never reaches docs_page at all."""
+        from werkzeug.exceptions import NotFound
+        from app.routes.pages import docs_page
+        with app.test_request_context(), pytest.raises(NotFound):
+            docs_page(page)
 
     def test_response_is_html_fragment(self, client):
         """Response is an HTML fragment, not a full page."""

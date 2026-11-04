@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 from app.nagios_parser import NagiosConfigParser
-from app.nagios_writer import NagiosConfigWriter
 
 
 @pytest.fixture
@@ -50,52 +49,6 @@ class TestInlineCommentPreservation:
         # Attributes without comments should not appear in inline_comments
         assert "notification_interval" not in host.inline_comments
 
-    def test_comments_restored_on_write(self, config_with_comments):
-        """Writer restores inline comments when formatting objects."""
-        config_path, test_dir = config_with_comments
-        parser = NagiosConfigParser(config_path)
-        parser.parse_all()
-
-        host = parser.objects[0]
-
-        # Write to a new file
-        out_dir = tempfile.mkdtemp()
-        try:
-            out_path = os.path.join(out_dir, "out.cfg")
-            writer = NagiosConfigWriter()
-            writer.write_file(out_path, [host])
-
-            content = Path(out_path).read_text()
-            assert "; primary interface" in content
-            assert "; increased from 3" in content
-            assert "; every 5 minutes" in content
-        finally:
-            shutil.rmtree(out_dir, ignore_errors=True)
-
-    def test_round_trip_preserves_comments(self, config_with_comments):
-        """Full round-trip: parse -> write -> re-parse preserves comments."""
-        config_path, test_dir = config_with_comments
-        parser = NagiosConfigParser(config_path)
-        parser.parse_all()
-
-        host = parser.objects[0]
-
-        out_dir = tempfile.mkdtemp()
-        try:
-            out_path = os.path.join(out_dir, "out.cfg")
-            writer = NagiosConfigWriter()
-            writer.write_file(out_path, [host])
-
-            # Re-parse
-            parser2 = NagiosConfigParser(out_dir)
-            parser2.parse_all()
-
-            host2 = parser2.objects[0]
-            assert host2.attributes["address"] == "10.0.0.1"
-            assert host2.inline_comments.get("address") == "primary interface"
-            assert host2.inline_comments.get("max_check_attempts") == "increased from 3"
-        finally:
-            shutil.rmtree(out_dir, ignore_errors=True)
 
     def test_edit_object_in_file_preserves_comments(self, config_with_comments):
         """edit_object_in_file preserves inline comments when passed."""
@@ -131,35 +84,92 @@ class TestInlineCommentPreservation:
         assert host2.attributes["check_interval"] == "10"
         assert host2.inline_comments.get("address") == "primary interface"
 
-    def test_edit_object_in_file_without_comments(self, config_with_comments):
-        """edit_object_in_file without inline_comments strips comments (old behavior)."""
-        from app.file_operations import edit_object_in_file
-        config_path, _ = config_with_comments
-        host_file = os.path.join(config_path, "hosts.cfg")
-
-        parser = NagiosConfigParser(config_path)
-        parser.parse_all()
-        host = parser.objects[0]
-
-        new_attrs = dict(host.attributes)
-        result = edit_object_in_file(host_file, host.line_number, new_attrs, "host")
-        assert result.success
-
-        content = Path(host_file).read_text()
-        # Without passing inline_comments, comments are stripped
-        assert "; primary interface" not in content
-
-    def test_new_object_without_comments_works(self, config_with_comments):
-        """Objects created without comments still format correctly."""
-        from app.nagios_model import NagiosObject
-        obj = NagiosObject(
-            object_type="host",
-            attributes={"host_name": "test", "address": "1.2.3.4"},
-            source_file="test.cfg",
-            line_number=1,
-        )
-        writer = NagiosConfigWriter()
-        output = writer.object_to_string(obj)
+    def test_new_object_without_comments_works(self):
+        """Objects created without comments format with no stray ';'."""
+        from app.nagios_model import format_object_block
+        output = format_object_block("host", {"host_name": "test", "address": "1.2.3.4"})
         assert "host_name" in output
         assert "address" in output
         assert ";" not in output
+
+
+# ---------------------------------------------------------------------------
+# Edits made through the API (the path the UI uses) must keep inline comments.
+# Breaks caught: a route calling service.update_object() without passing the
+# object's inline_comments, which silently deletes every comment on the object.
+# ---------------------------------------------------------------------------
+
+HOSTS_WITH_COMMENTS = """define host {
+    host_name               web-01
+    alias                   Web Server 01
+    address                 10.0.0.1 ; primary interface
+    max_check_attempts      5 ; increased from 3
+}
+"""
+
+
+@pytest.fixture
+def commented_app(tmp_path):
+    config_dir = tmp_path / "nagios"
+    config_dir.mkdir()
+    (config_dir / "hosts.cfg").write_text(HOSTS_WITH_COMMENTS)
+    from app import create_app
+    app = create_app(config_path=str(config_dir))
+    app.config["TESTING"] = True
+    return app, app.test_client(), config_dir / "hosts.cfg"
+
+
+def _web01(client):
+    obj = next(o for o in client.get("/api/objects").json
+               if o["attributes"].get("host_name") == "web-01")
+    key = f"{obj['source_file']}|{obj['object_type']}|{obj['display_name']}"
+    return obj, key
+
+
+class TestCommentsSurviveApiEdits:
+
+    def test_update_route_keeps_comments_on_untouched_fields(self, commented_app):
+        _, client, hosts_cfg = commented_app
+        obj, key = _web01(client)
+
+        resp = client.post("/api/objects/update", json={
+            "stable_key": key,
+            "attributes": {**obj["attributes"], "alias": "Renamed"},
+        }, headers={"X-Session-Id": "s1"})
+        assert resp.status_code == 200
+        assert client.post("/api/staging/apply").json["success"] is True
+
+        content = hosts_cfg.read_text()
+        assert "Renamed" in content
+        assert "10.0.0.1 ; primary interface" in content
+        assert "5 ; increased from 3" in content
+
+    def test_update_route_drops_comment_of_deleted_field(self, commented_app):
+        _, client, hosts_cfg = commented_app
+        obj, key = _web01(client)
+        attrs = {k: v for k, v in obj["attributes"].items() if k != "address"}
+
+        resp = client.post("/api/objects/update", json={"stable_key": key, "attributes": attrs},
+                           headers={"X-Session-Id": "s1"})
+        assert resp.status_code == 200
+        client.post("/api/staging/apply")
+
+        content = hosts_cfg.read_text()
+        assert "primary interface" not in content
+        assert "5 ; increased from 3" in content
+
+    def test_batch_update_keeps_comments(self, commented_app):
+        _, client, hosts_cfg = commented_app
+        obj, key = _web01(client)
+
+        resp = client.post("/api/batch-mutations", json={
+            "description": "batch",
+            "operations": [{"action": "update", "stable_key": key,
+                            "attributes": {**obj["attributes"], "alias": "Batch"}}],
+        }, headers={"X-Session-Id": "s1"})
+        assert resp.status_code == 200
+        client.post("/api/staging/apply")
+
+        content = hosts_cfg.read_text()
+        assert "Batch" in content
+        assert "10.0.0.1 ; primary interface" in content

@@ -27,12 +27,12 @@ def _check_shadow_lock(session_id, operation="git"):
         Error response tuple (jsonify, status_code) if locked, or None if OK.
 
     """
-    if not session_id:
-        return None
     sm = get_shadow_manager()
     if not sm.has_shadow():
         return None
-    if sm.can_modify(session_id):
+    # No session ID can't prove ownership of the lock, so it must not bypass it
+    # (otherwise omitting the header lets discard/restore wipe staged work)
+    if session_id and sm.can_modify(session_id):
         return None
     lock_status = sm.get_lock_status()
     logger.warning("Lock conflict on %s: session_id=%s, lock_owner=%s",

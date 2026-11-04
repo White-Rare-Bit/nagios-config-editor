@@ -225,6 +225,7 @@ def api_batch_mutations():
             _, obj = found
             result = service.update_object(
                 obj.source_file, obj.line_number, op["attributes"], obj.object_type,
+                inline_comments=obj.inline_comments,
             )
         elif op["action"] == "create":
             result = service.create_object(

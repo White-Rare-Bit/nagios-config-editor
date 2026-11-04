@@ -362,7 +362,10 @@ def walk_inheritance_chain(obj, templates, visited=None):
         list of obj.to_dict() entries in chain order
     """
     if visited is None:
-        visited = set()
+        # Seed with the start object's own template name, so a cycle back to it
+        # (A -> B -> A) stops instead of listing it twice
+        own_name = obj.attributes.get("name")
+        visited = {own_name} if own_name else set()
     chain = [obj.to_dict()]
     uses = obj.attributes.get("use", "")
     if uses:

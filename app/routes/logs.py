@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 
 # Regex for parsing key=value pairs (handles quoted and unquoted values)
 _KV_PATTERN = re.compile(r'(\w+)=(?:"((?:[^"\\]|\\.)*)"|(\S*))')
+_UNESCAPE_PATTERN = re.compile(r"\\(.)")
+_UNESCAPES = {"\\": "\\", '"': '"', "n": "\n", "r": "\r"}
 
 # Regex for parsing syslog-style app log lines
 _APP_PATTERN = re.compile(
@@ -44,10 +46,12 @@ def parse_audit_line(line):
     result = {"timestamp": timestamp}
     for m in _KV_PATTERN.finditer(kv_part):
         key = m.group(1)
-        value = m.group(2) if m.group(2) is not None else m.group(3)
-        # Unescape quotes
-        if value and '\\"' in value:
-            value = value.replace('\\"', '"')
+        if m.group(2) is not None:
+            # Quoted: undo audit_service's escapes. Unknown sequences are kept
+            # as-is so lines written before backslashes were escaped still read.
+            value = _UNESCAPE_PATTERN.sub(lambda e: _UNESCAPES.get(e.group(1), e.group(0)), m.group(2))
+        else:
+            value = m.group(3)
         result[key] = value
 
     return result

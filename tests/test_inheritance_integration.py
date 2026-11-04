@@ -346,27 +346,21 @@ class TestInheritanceIntegration:
     # Host escalation implied inheritance (via health check)
     # ------------------------------------------------------------------
 
-    def test_escalation_inherits_contact_groups_from_host(self, client):
-        """Host escalation for web-01 should not be flagged as missing contact_groups.
-
-        The escalation has no direct contact_groups, but should inherit from
-        web-01 via implied inheritance.
-        """
-        resp = client.get("/api/health-check")
+    def test_escalation_inherits_contacts_from_host(self, client):
+        """web-01's escalation defines no contacts or period, so per Nagios implied
+        inheritance it notifies web-01's contacts during web-01's notification_period."""
+        resp = client.get("/api/escalation-path/host/web-01")
         assert resp.status_code == 200  # noqa: PLR2004
-        data = resp.get_json()
-        issues = data.get("issues", [])
-        # The host escalation should not have missing_contacts issues
-        # because it inherits contact_groups from the host via implied inheritance
-        escalation_contact_issues = [
-            i for i in issues
-            if i.get("type") == "missing_contacts"
-            and i.get("object_type") == "hostescalation"
-            and "web-01" in str(i.get("object", ""))
-        ]
-        assert len(escalation_contact_issues) == 0, (
-            f"Escalation missing contacts false positive: {escalation_contact_issues}"
-        )
+        esc = resp.get_json()["escalations"]
+        assert len(esc) == 1
+        assert [c["name"] for c in esc[0]["contacts"]] == ["base-contact"]
+        assert esc[0]["escalation_period"] == "24x7"
+
+    def test_service_base_contacts_include_host_contacts(self, client):
+        """web-01's PING service has no contacts; it notifies web-01's (implied)."""
+        resp = client.get("/api/escalation-path/service/web-01/PING")
+        assert resp.status_code == 200  # noqa: PLR2004
+        assert [c["name"] for c in resp.get_json()["base_contacts"]] == ["base-contact"]
 
     # ------------------------------------------------------------------
     # Combinatorial: all features on same config

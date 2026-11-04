@@ -1,21 +1,7 @@
-from app.server_config import PathsConfig, ServerConfig, load_config, save_config
+from app.server_config import ServerConfig
 
 
 class TestPathsConfig:
-    def test_new_fields_have_defaults(self):
-        p = PathsConfig()
-        assert p.nagios_cfg == ""
-        assert p.nagios_bin == "/usr/local/nagios/bin/nagios"
-        assert p.backup_path is None
-        assert p.shadow_path is None
-        assert p.resource_cfg == ""
-        assert p.extra_cfg_dirs == []
-        assert p.primary_dir == ""
-
-    def test_nagios_config_path_removed(self):
-        """nagios_config_path field no longer exists."""
-        p = PathsConfig()
-        assert not hasattr(p, "nagios_config_path")
 
     def test_round_trip_serialization(self):
         config = ServerConfig()

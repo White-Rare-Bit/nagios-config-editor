@@ -424,9 +424,10 @@ class TestStagingInfoEndpoints:
 
         resp = client.get("/api/staging/info")
         data = resp.json["data"]
-        assert data["totalCount"] >= 1
-        assert data["undoCount"] >= 1
-        assert data["changedFiles"] >= 1
+        # One edit to one object in one file
+        assert data["totalCount"] == 1
+        assert data["undoCount"] == 1
+        assert data["changedFiles"] == 1
 
     def test_clear_staging_destroys_shadow(self, client, shadow_app):
         """DELETE /api/staging destroys the shadow copy."""

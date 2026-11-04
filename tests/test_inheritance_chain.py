@@ -87,14 +87,11 @@ class TestInheritanceChainMultiTemplate:
         resp = client.get("/api/inheritance/host/web-01")
         assert resp.status_code == 200  # noqa: PLR2004
         data = resp.get_json()
-        # Should have: web-01 + base-host + linux-host = depth 3
-        assert data["depth"] >= 3  # noqa: PLR2004
-        template_names = []
-        for item in data["chain"]:
-            attrs = item.get("attributes", {})
-            template_names.append(attrs.get("name") or attrs.get("host_name"))
-        assert "base-host" in template_names
-        assert "linux-host" in template_names
+        # web-01, then its templates in `use` order (order decides which value wins)
+        assert data["depth"] == 3  # noqa: PLR2004
+        names = [item["attributes"].get("name") or item["attributes"].get("host_name")
+                 for item in data["chain"]]
+        assert names == ["web-01", "base-host", "linux-host"]
 
     def test_multi_template_chain_via_template(self, client):
         """Template with multi-template use is also resolved."""

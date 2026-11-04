@@ -22,9 +22,11 @@ class TestMultiRootShadow:
         assert result.success
         assert sm.has_shadow()
 
-        # Both files should exist in shadow
+        # Each root is mapped, and each root's file was actually copied
         root_map = sm.get_root_map()
-        assert len(root_map) == 2
+        assert sorted(root_map.values()) == sorted([str(dir_a.resolve()), str(dir_b.resolve())])
+        assert os.path.isfile(sm.shadow_path_for(str(dir_a.resolve() / "hosts.cfg")))
+        assert os.path.isfile(sm.shadow_path_for(str(dir_b.resolve() / "services.cfg")))
 
     def test_root_map_json_created(self, tmp_path):
         dir_a = tmp_path / "a"
@@ -112,3 +114,5 @@ class TestMultiRootShadow:
         sm = ShadowCopyManager(config_path=str(tmp_path), shadow_base_path=str(shadow_base))
         result = sm.create_shadow("sess1", "user", "user@test.com")
         assert result.success
+        shadow_file = sm.shadow_path_for(str(tmp_path.resolve() / "hosts.cfg"))
+        assert open(shadow_file).read() == "define host {}\n"

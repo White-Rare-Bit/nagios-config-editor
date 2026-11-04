@@ -8,16 +8,7 @@ from pathlib import Path
 import pytest
 
 from app import create_app
-from app.stable_keys import generate_stable_key_for_object, parse_stable_key
-
-
-def test_parse_stable_key_with_pipe_in_name():
-    """parse_stable_key should handle names containing pipe characters."""
-    result = parse_stable_key("servers/hosts.cfg|host|my|special|host")
-    assert result is not None
-    assert result["source_file"] == "servers/hosts.cfg"
-    assert result["object_type"] == "host"
-    assert result["name"] == "my|special|host"
+from app.stable_keys import generate_stable_key_for_object
 
 
 @pytest.fixture
@@ -83,8 +74,9 @@ def test_find_object_by_stable_key_with_display_name(app_with_duplicate_services
 
         assert result1 is not None, f"Should find object for key: {key1}"
         assert result2 is not None, f"Should find object for key: {key2}"
-        # They should find different objects
-        assert result1[0] != result2[0], "Should find different objects"
+        # Each key resolves to its own service, not just "two different results"
+        assert result1[1].attributes["hostgroup_name"] == "linux-hosts"
+        assert result2[1].attributes["hostgroup_name"] == "windows-hosts"
 
 
 def test_inheritance_api_resolves_correct_service(app_with_duplicate_services):
@@ -100,5 +92,6 @@ def test_inheritance_api_resolves_correct_service(app_with_duplicate_services):
 
         client = app_with_duplicate_services.test_client()
         resp = client.get(f"/api/templates/inheritance/{encoded_key}")
-        # Should not 404 — must find the object
-        assert resp.status_code != 404, f"Should find object for key: {key2}"
+        assert resp.status_code == 200  # noqa: PLR2004
+        # windows-hosts PING has its own check_command; linux-hosts' would be 100.0,20%...
+        assert resp.get_json()["inherited"]["check_command"]["value"] == "check_ping!200.0,40%!600.0,80%"

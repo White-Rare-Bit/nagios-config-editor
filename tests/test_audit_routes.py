@@ -1,15 +1,29 @@
 """Tests for audit log calls in route handlers."""
 
-import logging
 import os
 import re
 import shutil
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 
 from app import create_app
+
+
+@contextmanager
+def _audit_capture(app):
+    """Collect the lines appended to the app's real audit.log while the block runs.
+
+    Reads the file operators actually see, rather than intercepting log records,
+    so it also catches a broken audit handler or formatter.
+    """
+    path = Path(app.extensions["log_dir"]) / "audit.log"
+    before = len(path.read_text().splitlines()) if path.exists() else 0
+    lines: list[str] = []
+    yield lines
+    lines.extend(path.read_text().splitlines()[before:] if path.exists() else [])
 
 
 @pytest.fixture
@@ -60,28 +74,20 @@ def _get_object(client, host_name):
 
 
 class TestObjectEditAudit:
-    def test_object_edit_logs_field_diffs(self, audit_client, caplog):
+    def test_object_edit_logs_field_diffs(self, audit_client, audit_app):
         obj = _get_object(audit_client, "test-host-1")
         new_attrs = dict(obj["attributes"])
         new_attrs["alias"] = "New Alias"
         new_attrs["address"] = "10.0.0.1"
 
-        # The audit logger has propagate=False so caplog (on root) won't see it.
-        # Temporarily enable propagation so caplog captures the audit lines.
-        audit_logger = logging.getLogger("audit")
-        audit_logger.propagate = True
-        try:
-            with caplog.at_level(logging.INFO, logger="audit"):
-                resp = audit_client.post("/api/objects/update", json={
-                    "stable_key": obj["stable_key"],
-                    "attributes": new_attrs,
-                }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
-        finally:
-            audit_logger.propagate = False
+        with _audit_capture(audit_app) as audit_lines:
+            resp = audit_client.post("/api/objects/update", json={
+                "stable_key": obj["stable_key"],
+                "attributes": new_attrs,
+            }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
 
         assert resp.status_code == 200
 
-        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
         # Should have one line per changed field (alias and address)
         alias_lines = [l for l in audit_lines if "field=alias" in l]
         address_lines = [l for l in audit_lines if "field=address" in l]
@@ -108,24 +114,18 @@ class TestObjectEditAudit:
 
 
 class TestObjectCreateAudit:
-    def test_object_create_logs_audit(self, audit_client, caplog):
+    def test_object_create_logs_audit(self, audit_client, audit_app):
         obj = _get_object(audit_client, "test-host-1")
         target_file = obj["source_file"]
 
-        audit_logger = logging.getLogger("audit")
-        audit_logger.propagate = True
-        try:
-            with caplog.at_level(logging.INFO, logger="audit"):
-                resp = audit_client.post("/api/objects/create", json={
-                    "target_file": target_file,
-                    "object_type": "host",
-                    "attributes": {"host_name": "new-host", "address": "1.2.3.4"},
-                }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
-        finally:
-            audit_logger.propagate = False
+        with _audit_capture(audit_app) as audit_lines:
+            resp = audit_client.post("/api/objects/create", json={
+                "target_file": target_file,
+                "object_type": "host",
+                "attributes": {"host_name": "new-host", "address": "1.2.3.4"},
+            }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
 
         assert resp.status_code == 200
-        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
         assert any("action=object_create" in l and "name=new-host" in l and "type=host" in l for l in audit_lines)
         # Verify file path doesn't leak shadow internals
         for l in audit_lines:
@@ -133,21 +133,15 @@ class TestObjectCreateAudit:
 
 
 class TestObjectDeleteAudit:
-    def test_object_delete_logs_audit(self, audit_client, caplog):
+    def test_object_delete_logs_audit(self, audit_client, audit_app):
         obj = _get_object(audit_client, "test-host-1")
 
-        audit_logger = logging.getLogger("audit")
-        audit_logger.propagate = True
-        try:
-            with caplog.at_level(logging.INFO, logger="audit"):
-                resp = audit_client.post("/api/objects/delete", json={
-                    "stable_key": obj["stable_key"],
-                }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
-        finally:
-            audit_logger.propagate = False
+        with _audit_capture(audit_app) as audit_lines:
+            resp = audit_client.post("/api/objects/delete", json={
+                "stable_key": obj["stable_key"],
+            }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
 
         assert resp.status_code == 200
-        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
         assert any("action=object_delete" in l and "name=test-host-1" in l and "type=host" in l for l in audit_lines)
         for l in audit_lines:
             assert "root_0" not in l
@@ -196,7 +190,7 @@ define host {
 
 
 class TestBulkDeleteAudit:
-    def test_delete_multiple_logs_per_object(self, audit_app_multi, caplog):
+    def test_delete_multiple_logs_per_object(self, audit_app_multi):
         client = audit_app_multi.test_client()
         resp = client.get("/api/objects")
         objects = resp.json
@@ -205,18 +199,12 @@ class TestBulkDeleteAudit:
             for o in objects if o["attributes"].get("host_name") in ("host-a", "host-b")
         ]
 
-        audit_logger = logging.getLogger("audit")
-        audit_logger.propagate = True
-        try:
-            with caplog.at_level(logging.INFO, logger="audit"):
-                resp = client.post("/api/objects/delete-multiple", json={
-                    "stable_keys": keys,
-                }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
-        finally:
-            audit_logger.propagate = False
+        with _audit_capture(audit_app_multi) as audit_lines:
+            resp = client.post("/api/objects/delete-multiple", json={
+                "stable_keys": keys,
+            }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
 
         assert resp.status_code == 200
-        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
         delete_lines = [l for l in audit_lines if "action=object_delete" in l]
         assert len(delete_lines) == 2
 
@@ -234,7 +222,7 @@ class TestBulkDeleteAudit:
 
 
 class TestBulkMoveAudit:
-    def test_move_objects_logs_per_object(self, audit_app_multi, caplog):
+    def test_move_objects_logs_per_object(self, audit_app_multi):
         client = audit_app_multi.test_client()
 
         # Get objects to move
@@ -250,19 +238,13 @@ class TestBulkMoveAudit:
             config_path = audit_app_multi.extensions["service"].config_path
         target = os.path.join(config_path, "moved.cfg")
 
-        audit_logger = logging.getLogger("audit")
-        audit_logger.propagate = True
-        try:
-            with caplog.at_level(logging.INFO, logger="audit"):
-                resp = client.post("/api/move-objects", json={
-                    "stable_keys": keys,
-                    "target_file": target,
-                }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
-        finally:
-            audit_logger.propagate = False
+        with _audit_capture(audit_app_multi) as audit_lines:
+            resp = client.post("/api/move-objects", json={
+                "stable_keys": keys,
+                "target_file": target,
+            }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
 
         assert resp.status_code == 200
-        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
         move_lines = [l for l in audit_lines if "action=object_move" in l]
         assert len(move_lines) == 2
         assert all("from_file=" in l and "to_file=" in l for l in move_lines)
@@ -281,126 +263,102 @@ class TestBulkMoveAudit:
 
 
 class TestBatchMutationsAudit:
-    def test_batch_update_logs_field_diffs(self, audit_client, caplog):
+    def test_batch_update_logs_field_diffs(self, audit_client, audit_app):
         obj = _get_object(audit_client, "test-host-1")
         new_attrs = dict(obj["attributes"])
         new_attrs["alias"] = "Batch Updated"
 
-        audit_logger = logging.getLogger("audit")
-        audit_logger.propagate = True
-        try:
-            with caplog.at_level(logging.INFO, logger="audit"):
-                resp = audit_client.post("/api/batch-mutations", json={
-                    "description": "test batch",
-                    "operations": [
-                        {"action": "update", "stable_key": obj["stable_key"], "attributes": new_attrs},
-                    ],
-                }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
-        finally:
-            audit_logger.propagate = False
+        with _audit_capture(audit_app) as audit_lines:
+            resp = audit_client.post("/api/batch-mutations", json={
+                "description": "test batch",
+                "operations": [
+                    {"action": "update", "stable_key": obj["stable_key"], "attributes": new_attrs},
+                ],
+            }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
 
         assert resp.status_code == 200
-        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
         assert any("action=object_edit" in l and "field=alias" in l for l in audit_lines)
         assert any('to="Batch Updated"' in l for l in audit_lines)
 
-    def test_batch_create_logs_audit(self, audit_client, caplog):
+    def test_batch_create_logs_audit(self, audit_client, audit_app):
         obj = _get_object(audit_client, "test-host-1")
         target_file = obj["source_file"]
 
-        audit_logger = logging.getLogger("audit")
-        audit_logger.propagate = True
-        try:
-            with caplog.at_level(logging.INFO, logger="audit"):
-                resp = audit_client.post("/api/batch-mutations", json={
-                    "description": "test batch create",
-                    "operations": [
-                        {"action": "create", "target_file": target_file, "object_type": "host",
-                         "attributes": {"host_name": "batch-host", "address": "5.5.5.5"}},
-                    ],
-                }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
-        finally:
-            audit_logger.propagate = False
+        with _audit_capture(audit_app) as audit_lines:
+            resp = audit_client.post("/api/batch-mutations", json={
+                "description": "test batch create",
+                "operations": [
+                    {"action": "create", "target_file": target_file, "object_type": "host",
+                     "attributes": {"host_name": "batch-host", "address": "5.5.5.5"}},
+                ],
+            }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
 
         assert resp.status_code == 200
-        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
         assert any("action=object_create" in l and "name=batch-host" in l for l in audit_lines)
 
 
 class TestFileMutationAudit:
-    def test_create_file_logs_audit(self, audit_app, caplog):
+    def test_create_file_logs_audit(self, audit_app):
         client = audit_app.test_client()
-        audit_logger = logging.getLogger("audit")
-        audit_logger.propagate = True
-        try:
-            with caplog.at_level(logging.INFO, logger="audit"):
-                resp = client.post("/api/files/create", json={
-                    "path": "newfile.cfg",
-                }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
-        finally:
-            audit_logger.propagate = False
+        with _audit_capture(audit_app) as audit_lines:
+            resp = client.post("/api/files/create", json={
+                "path": "newfile.cfg",
+            }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
 
         assert resp.status_code == 200
-        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
-        assert any("action=file_create" in l for l in audit_lines)
+        [line] = [l for l in audit_lines if "action=file_create" in l]  # exactly one
+        assert re.search(r"\bfile=\S*newfile.cfg", line)
+        assert "admin@example.com" in line
+        assert "root_0" not in line
 
-    def test_delete_file_logs_audit(self, audit_app, caplog):
+    def test_delete_file_logs_audit(self, audit_app):
         client = audit_app.test_client()
         # First create a file to delete
         client.post("/api/files/create", json={"path": "todelete.cfg"},
                      headers={"X-Session-Id": "test-session"})
 
-        audit_logger = logging.getLogger("audit")
-        audit_logger.propagate = True
-        try:
-            with caplog.at_level(logging.INFO, logger="audit"):
-                resp = client.delete("/api/files/todelete.cfg",
-                    headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
-        finally:
-            audit_logger.propagate = False
+        with _audit_capture(audit_app) as audit_lines:
+            resp = client.delete("/api/files/todelete.cfg",
+                headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
 
         assert resp.status_code == 200
-        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
-        assert any("action=file_delete" in l for l in audit_lines)
+        [line] = [l for l in audit_lines if "action=file_delete" in l]  # exactly one
+        assert re.search(r"\bfile=\S*todelete.cfg", line)
+        assert "admin@example.com" in line
+        assert "root_0" not in line
 
-    def test_create_folder_logs_audit(self, audit_app, caplog):
+    def test_create_folder_logs_audit(self, audit_app):
         client = audit_app.test_client()
-        audit_logger = logging.getLogger("audit")
-        audit_logger.propagate = True
-        try:
-            with caplog.at_level(logging.INFO, logger="audit"):
-                resp = client.post("/api/folders", json={
-                    "path": "newfolder",
-                }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
-        finally:
-            audit_logger.propagate = False
+        with _audit_capture(audit_app) as audit_lines:
+            resp = client.post("/api/folders", json={
+                "path": "newfolder",
+            }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
 
         assert resp.status_code == 200
-        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
-        assert any("action=folder_create" in l for l in audit_lines)
+        [line] = [l for l in audit_lines if "action=folder_create" in l]  # exactly one
+        assert re.search(r"\bfolder=\S*newfolder", line)
+        assert "admin@example.com" in line
+        assert "root_0" not in line
 
-    def test_delete_folder_logs_audit(self, audit_app, caplog):
+    def test_delete_folder_logs_audit(self, audit_app):
         client = audit_app.test_client()
         # Create a folder first
         client.post("/api/folders", json={"path": "rmfolder"},
                      headers={"X-Session-Id": "test-session"})
 
-        audit_logger = logging.getLogger("audit")
-        audit_logger.propagate = True
-        try:
-            with caplog.at_level(logging.INFO, logger="audit"):
-                resp = client.delete("/api/folders/rmfolder",
-                    headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
-        finally:
-            audit_logger.propagate = False
+        with _audit_capture(audit_app) as audit_lines:
+            resp = client.delete("/api/folders/rmfolder",
+                headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
 
         assert resp.status_code == 200
-        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
-        assert any("action=folder_delete" in l for l in audit_lines)
+        [line] = [l for l in audit_lines if "action=folder_delete" in l]  # exactly one
+        assert re.search(r"\bfolder=\S*rmfolder", line)
+        assert "admin@example.com" in line
+        assert "root_0" not in line
 
 
 class TestObjectMoveAudit:
-    def test_object_move_logs_audit(self, audit_app, caplog):
+    def test_object_move_logs_audit(self, audit_app):
         client = audit_app.test_client()
         obj = _get_object(client, "test-host-1")
 
@@ -410,19 +368,13 @@ class TestObjectMoveAudit:
         # Move to a new file (the service will create it)
         target_file = os.path.join(config_path, "other.cfg")
 
-        audit_logger = logging.getLogger("audit")
-        audit_logger.propagate = True
-        try:
-            with caplog.at_level(logging.INFO, logger="audit"):
-                resp = client.post("/api/objects/move", json={
-                    "stable_key": obj["stable_key"],
-                    "target_file": target_file,
-                }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
-        finally:
-            audit_logger.propagate = False
+        with _audit_capture(audit_app) as audit_lines:
+            resp = client.post("/api/objects/move", json={
+                "stable_key": obj["stable_key"],
+                "target_file": target_file,
+            }, headers={"X-Session-Id": "test-session", "X-User-Name": "admin", "X-User-Email": "admin@example.com"})
 
         assert resp.status_code == 200
-        audit_lines = [r.message for r in caplog.records if r.name == "audit"]
         assert any("action=object_move" in l and "name=test-host-1" in l for l in audit_lines)
         assert any("from_file=" in l and "to_file=" in l for l in audit_lines)
         for l in audit_lines:

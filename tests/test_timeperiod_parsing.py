@@ -1,5 +1,6 @@
 """Tests for timeperiod date-range parsing (BUG-1)."""
 
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -190,37 +191,19 @@ define timeperiod {
             shutil.rmtree(test_dir, ignore_errors=True)
 
     def test_round_trip_preserves_timeperiods(self, parser_with_timeperiods):
-        """Writing and re-reading a timeperiod preserves date-range keys."""
-        import os
+        """Editing a timeperiod through the real edit path (edit_object_in_file, as
+        the API does) and re-parsing keeps every date-range key and its value."""
+        from app.file_operations import edit_object_in_file
 
-        from app.nagios_writer import NagiosConfigWriter
+        tp = next(o for o in parser_with_timeperiods.objects
+                  if o.attributes.get("timeperiod_name") == "complex-schedule")
+        expected = {**tp.attributes, "alias": "Edited"}
 
-        tp = None
-        for obj in parser_with_timeperiods.objects:
-            if obj.attributes.get("timeperiod_name") == "complex-schedule":
-                tp = obj
-                break
-        assert tp is not None
+        result = edit_object_in_file(tp.source_file, tp.line_number, expected, "timeperiod")
+        assert result.success, result.error
 
-        # Write to temp file
-        test_dir = tempfile.mkdtemp()
-        try:
-            out_path = os.path.join(test_dir, "out.cfg")
-            writer = NagiosConfigWriter()
-            writer.write_file(out_path, [tp])
-
-            # Re-parse
-            parser2 = NagiosConfigParser(test_dir)
-            parser2.parse_all()
-
-            tp2 = None
-            for obj in parser2.objects:
-                if obj.attributes.get("timeperiod_name") == "complex-schedule":
-                    tp2 = obj
-                    break
-            assert tp2 is not None
-            assert "monday 1" in tp2.attributes
-            assert "day 1 - 15" in tp2.attributes
-            assert "2025-01-01" in tp2.attributes
-        finally:
-            shutil.rmtree(test_dir, ignore_errors=True)
+        reparsed = NagiosConfigParser(os.path.dirname(tp.source_file))
+        reparsed.parse_all()
+        tp2 = next(o for o in reparsed.objects
+                   if o.attributes.get("timeperiod_name") == "complex-schedule")
+        assert tp2.attributes == expected

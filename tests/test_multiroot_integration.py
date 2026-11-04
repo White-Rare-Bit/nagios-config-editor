@@ -1,29 +1,14 @@
 """Integration test: multi-root config discovery through full stack."""
 
-import os
-import shutil
-
-import pytest
-
 from app import create_app
-from app.server_config import CONFIG_FILE
 
-
-@pytest.fixture(autouse=True)
-def _preserve_settings():
-    """Save and restore config/settings.json around tests that modify it."""
-    backup = CONFIG_FILE.with_suffix(".json.bak")
-    if CONFIG_FILE.exists():
-        shutil.copy2(CONFIG_FILE, backup)
-    yield
-    if backup.exists():
-        shutil.copy2(backup, CONFIG_FILE)
-        backup.unlink()
+# These tests call save_config(); conftest's _isolate_environment fixture
+# redirects config/settings.json to a temp dir, so the real file is untouched.
 
 
 class TestMultiRootIntegration:
     def test_full_workflow(self, tmp_path):
-        """Test: nagios.cfg -> discovery -> parse -> shadow -> apply."""
+        """nagios.cfg with two cfg_dirs -> discovery -> both roots parsed and listed by the API."""
         # Setup: two config directories
         dir_a = tmp_path / "servers"
         dir_b = tmp_path / "switches"
@@ -80,8 +65,8 @@ class TestMultiRootIntegration:
             accessible = [d for d in discovered_dirs if d["accessible"]]
             assert len(accessible) == 2
 
-    def test_shadow_edit_across_roots(self, tmp_path):
-        """Edit objects from different roots via shadow, then apply."""
+    def test_shadow_edit_then_apply(self, tmp_path):
+        """Edit an object via the shadow copy, apply, and the original file changes."""
         dir_a = tmp_path / "servers"
         dir_a.mkdir()
         (dir_a / "hosts.cfg").write_text(

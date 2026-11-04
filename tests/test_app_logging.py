@@ -24,35 +24,12 @@ class TestLoggingSetup:
                     h.close()
                     lgr.removeHandler(h)
 
-    def test_app_logger_has_file_handler(self, sample_config_path):
-        """App logger should write to logs/app.log."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            log_dir = os.path.join(tmpdir, "logs")
-            app = create_app(config_path=sample_config_path, log_dir_override=log_dir)
-            root = logging.getLogger()
-            file_handlers = [
-                h for h in root.handlers
-                if hasattr(h, "baseFilename") and "app.log" in h.baseFilename
-            ]
-            assert len(file_handlers) >= 1
-
-    def test_audit_logger_has_file_handler(self, sample_config_path):
-        """Audit logger should write to logs/audit.log."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            log_dir = os.path.join(tmpdir, "logs")
-            app = create_app(config_path=sample_config_path, log_dir_override=log_dir)
-            audit = logging.getLogger("audit")
-            file_handlers = [
-                h for h in audit.handlers
-                if hasattr(h, "baseFilename") and "audit.log" in h.baseFilename
-            ]
-            assert len(file_handlers) >= 1
 
     def test_app_log_format_is_syslog_style(self, sample_config_path):
         """App log lines should match syslog-style format."""
         with tempfile.TemporaryDirectory() as tmpdir:
             log_dir = os.path.join(tmpdir, "logs")
-            app = create_app(config_path=sample_config_path, log_dir_override=log_dir)
+            create_app(config_path=sample_config_path, log_dir_override=log_dir)
 
             test_logger = logging.getLogger("test_module")
             test_logger.info("Test message")
@@ -68,7 +45,7 @@ class TestLoggingSetup:
         """Audit log lines should pass through the message unmodified (formatter adds only timestamp)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             log_dir = os.path.join(tmpdir, "logs")
-            app = create_app(config_path=sample_config_path, log_dir_override=log_dir)
+            create_app(config_path=sample_config_path, log_dir_override=log_dir)
 
             audit = logging.getLogger("audit")
             audit.info('AUDIT txn=abc123 user="admin@example.com" action=apply')

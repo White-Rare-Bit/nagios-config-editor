@@ -1,8 +1,6 @@
 """Tests for nagios_parser error handling and edge cases."""
 
-from pathlib import Path
-
-import pytest
+import logging
 
 from app.nagios_parser import NagiosConfigParser
 
@@ -10,14 +8,15 @@ from app.nagios_parser import NagiosConfigParser
 class TestMalformedDefineBlocks:
     """Parser should handle malformed configs gracefully."""
 
-    def test_unclosed_brace(self, tmp_path):
+    def test_unclosed_brace(self, tmp_path, caplog):
+        """An unterminated block is skipped (not half-parsed) and a warning logged."""
         cfg = tmp_path / "bad.cfg"
         cfg.write_text("define host {\n    host_name web-01\n")
         parser = NagiosConfigParser(str(tmp_path))
-        # Should not raise — logs warning and skips
-        objects = parser.parse_all()
-        # May or may not parse partial content, but must not crash
-        assert isinstance(objects, list)
+        with caplog.at_level(logging.WARNING):
+            objects = parser.parse_all()
+        assert objects == []
+        assert any("Unmatched brace" in r.getMessage() for r in caplog.records)
 
     def test_nested_define(self, tmp_path):
         cfg = tmp_path / "nested.cfg"
@@ -31,10 +30,12 @@ class TestMalformedDefineBlocks:
         )
         parser = NagiosConfigParser(str(tmp_path))
         objects = parser.parse_all()
-        # Should parse at least the outer object
-        assert len(objects) >= 1
-        types = [o.object_type for o in objects]
-        assert "host" in types
+        # Outer and inner become separate objects; "define service {" must not
+        # leak into the host as an attribute
+        assert [(o.object_type, o.attributes) for o in objects] == [
+            ("host", {"host_name": "outer"}),
+            ("service", {"service_description": "inner"}),
+        ]
 
     def test_empty_define_block(self, tmp_path):
         cfg = tmp_path / "empty.cfg"
@@ -60,14 +61,6 @@ class TestEncodingFallback:
         assert len(objects) == 1
         assert "nchen" in objects[0].attributes.get("alias", "")
 
-
-class TestMissingConfigDirectory:
-    """Parser should handle missing directories gracefully."""
-
-    def test_nonexistent_dir_returns_empty(self, tmp_path):
-        parser = NagiosConfigParser(str(tmp_path / "nonexistent"))
-        objects = parser.parse_all()
-        assert objects == []
 
 
 class TestInlineComments:

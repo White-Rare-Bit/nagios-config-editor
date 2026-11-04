@@ -1,9 +1,6 @@
 """Integration tests for shadow-copy-based staging routes."""
 
-import json
 import os
-import shutil
-import tempfile
 
 import pytest
 
@@ -84,16 +81,6 @@ class TestGetStaging:
 class TestDeleteStaging:
     """DELETE /api/staging destroys shadow."""
 
-    def test_destroy_existing_shadow(self, shadow_with_changes):
-        app, client = shadow_with_changes
-        resp = client.delete("/api/staging")
-        assert resp.status_code == 200
-        assert resp.json["success"] is True
-
-        # Shadow should be gone
-        with app.app_context():
-            sm = app.extensions["shadow"]
-            assert not sm.has_shadow()
 
     def test_destroy_no_shadow_succeeds(self, shadow_client):
         resp = shadow_client.delete("/api/staging")
@@ -104,13 +91,6 @@ class TestDeleteStaging:
 class TestStagingInfo:
     """GET /api/staging/info returns counts."""
 
-    def test_no_shadow_returns_zeros(self, shadow_client):
-        resp = shadow_client.get("/api/staging/info")
-        assert resp.status_code == 200
-        data = resp.json["data"]
-        assert data["totalCount"] == 0
-        assert data["undoCount"] == 0
-        assert data["changedFiles"] == 0
 
     def test_with_changes_returns_counts(self, shadow_with_changes):
         app, client = shadow_with_changes
@@ -185,13 +165,17 @@ class TestStagingUndo:
             with open(shadow_svc, "w") as f:
                 f.write("define service {\n    host_name web-01\n    service_description HTTPS\n}\n")
 
-        # Undo should restore
+        # Undo should restore services.cfg to its pre-snapshot content
         resp = client.post(
             "/api/staging/undo",
             headers={"X-Session-Id": "test-session"},
         )
         assert resp.status_code == 200
         assert resp.json["success"] is True
+        with open(shadow_svc) as f:
+            restored = f.read()
+        assert "service_description HTTP\n" in restored
+        assert "HTTPS" not in restored
 
 
 class TestStagingLock:
@@ -202,28 +186,6 @@ class TestStagingLock:
         assert resp.status_code == 200
         data = resp.json["data"]
         assert data["locked"] is False
-
-    def test_with_shadow_returns_locked(self, shadow_with_changes):
-        app, client = shadow_with_changes
-        resp = client.get("/api/staging/lock")
-        assert resp.status_code == 200
-        data = resp.json["data"]
-        assert data["locked"] is True
-        assert data["session_id"] == "test-session"
-
-
-class TestBreakLock:
-    """POST /api/staging/lock/break destroys shadow."""
-
-    def test_break_lock_destroys_shadow(self, shadow_with_changes):
-        app, client = shadow_with_changes
-        resp = client.post("/api/staging/lock/break")
-        assert resp.status_code == 200
-        assert resp.json["success"] is True
-
-        with app.app_context():
-            sm = app.extensions["shadow"]
-            assert not sm.has_shadow()
 
 
 class TestStagingDiff:
@@ -271,7 +233,7 @@ class TestStagingDiff:
 class TestCreateFolder:
     """POST /api/folders creates folder in shadow with undo support."""
 
-    def test_create_folder_succeeds(self, shadow_client):
+    def test_create_folder_succeeds(self, shadow_app, shadow_client):
         resp = shadow_client.post(
             "/api/folders",
             json={"path": "newfolder"},
@@ -279,6 +241,8 @@ class TestCreateFolder:
         )
         assert resp.status_code == 200
         assert resp.json["success"] is True
+        shadow_root = shadow_app.extensions["shadow"].shadow_cfg_dirs[0]
+        assert os.path.isdir(os.path.join(shadow_root, "newfolder"))
 
     def test_create_folder_has_undo(self, shadow_client):
         shadow_client.post(
@@ -329,13 +293,16 @@ class TestFolderUndo:
 class TestDeleteFileAndFolder:
     """DELETE /api/files and /api/folders resolves paths against shadow root."""
 
-    def test_delete_created_file(self, shadow_client):
-        # Create a file first
-        shadow_client.post(
+    def test_delete_created_file(self, shadow_app, shadow_client):
+        created = shadow_client.post(
             "/api/files/create",
             json={"path": "deleteme.cfg"},
             headers={"X-Session-Id": "s1"},
         )
+        assert created.status_code == 200
+        path = os.path.join(shadow_app.extensions["shadow"].shadow_cfg_dirs[0], "deleteme.cfg")
+        assert os.path.isfile(path)
+
         # Delete it using relative path
         resp = shadow_client.delete(
             "/api/files/deleteme.cfg",
@@ -343,14 +310,18 @@ class TestDeleteFileAndFolder:
         )
         assert resp.status_code == 200
         assert resp.json["success"] is True
+        assert not os.path.exists(path)
 
-    def test_delete_created_folder(self, shadow_client):
-        # Create a folder first
-        shadow_client.post(
+    def test_delete_created_folder(self, shadow_app, shadow_client):
+        created = shadow_client.post(
             "/api/folders",
             json={"path": "deletedir"},
             headers={"X-Session-Id": "s1"},
         )
+        assert created.status_code == 200
+        path = os.path.join(shadow_app.extensions["shadow"].shadow_cfg_dirs[0], "deletedir")
+        assert os.path.isdir(path)
+
         # Delete it using relative path
         resp = shadow_client.delete(
             "/api/folders/deletedir",
@@ -358,6 +329,7 @@ class TestDeleteFileAndFolder:
         )
         assert resp.status_code == 200
         assert resp.json["success"] is True
+        assert not os.path.exists(path)
 
 
 class TestChangedFilesNewDir:

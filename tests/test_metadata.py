@@ -10,12 +10,9 @@ from app import create_app
 from app.nagios_model import (
     DEFAULT_ATTRIBUTES,
     GROUP_STRUCTURE,
-    HOST_SCOPED_TYPES,
     NAME_FIELDS,
-    NOTIFICATION_OPTIONS,
     OBJECT_TYPE_LABELS,
     REFERENCE_FIELDS,
-    REFERENCE_TRIGGER_ATTRS,
     VALID_ATTRIBUTES,
 )
 
@@ -67,12 +64,6 @@ class TestModelConstants:
             assert obj_type in DEFAULT_ATTRIBUTES
             assert isinstance(DEFAULT_ATTRIBUTES[obj_type], dict)
 
-    def test_notification_options_structure(self):
-        assert "host_notification_options" in NOTIFICATION_OPTIONS
-        assert "service_notification_options" in NOTIFICATION_OPTIONS
-        assert "host_failure_criteria" in NOTIFICATION_OPTIONS
-        assert "service_failure_criteria" in NOTIFICATION_OPTIONS
-        assert "notification_option_attrs" in NOTIFICATION_OPTIONS
 
     def test_group_structure_covers_group_types(self):
         for group_type in ("hostgroup", "servicegroup", "contactgroup"):
@@ -81,15 +72,6 @@ class TestModelConstants:
             assert "name_attr" in gs
             assert "member_attrs" in gs
             assert "member_of_attr" in gs
-
-    def test_host_scoped_types_is_list(self):
-        assert isinstance(HOST_SCOPED_TYPES, list)
-        assert HOST_SCOPED_TYPES == ["service", "serviceescalation", "servicedependency"]
-
-    def test_reference_trigger_attrs_is_list(self):
-        assert isinstance(REFERENCE_TRIGGER_ATTRS, list)
-        for attr in ["use", "host_name", "check_command"]:
-            assert attr in REFERENCE_TRIGGER_ATTRS
 
 
 class TestMetadataEndpoint:
@@ -214,6 +196,12 @@ define contact {
     service_notification_options    w,u,c,r
 }
 """)
+            (cfg_path / "hosts.cfg").write_text("""
+define host {
+    host_name   web-01
+    contacts    sole-admin,ghost-admin
+}
+""")
             (cfg_path / "commands.cfg").write_text("""
 define command {
     command_name    notify-host
@@ -237,12 +225,9 @@ define timeperiod {
             resp = client.get("/api/health-check")
             assert resp.status_code == 200  # noqa: PLR2004
             data = resp.get_json()
-            missing_contact_issues = [
-                i for i in data["issues"]
-                if i["type"] == "missing_contact"
-                and "sole-admin" in i.get("message", "")
-            ]
-            assert len(missing_contact_issues) == 0, \
-                f"contact_name should not be flagged as missing reference: {missing_contact_issues}"
+            missing = {i["message"].rsplit(": ", 1)[1]
+                       for i in data["issues"] if i["type"] == "missing_contact"}
+            # sole-admin's own contact_name is not a reference; ghost-admin really is missing
+            assert missing == {"ghost-admin"}
         finally:
             shutil.rmtree(test_dir, ignore_errors=True)

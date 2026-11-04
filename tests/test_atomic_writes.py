@@ -1,44 +1,74 @@
-"""Tests for atomic write patterns across the codebase (Issue #13)."""
+"""Writes must be atomic: a crash part-way through leaves the old file intact.
+
+Break caught: replacing the temp-file + os.replace pattern with a direct
+open(path, "w").write(), which truncates the real file before the new content
+is safely on disk. Simulated here by making os.fsync fail mid-write.
+"""
 
 import os
-import tempfile
-from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 
-class TestServerConfigSaveAtomic:
-    """Verify server_config.save_config() uses atomic write pattern."""
+from app import server_config
+from app.file_operations import edit_object_in_file
+from app.server_config import ServerConfig, save_config
 
-    def test_server_config_save_uses_atomic_pattern(self, app):
-        """save_config() must use temp file + fsync + os.replace."""
-        from app.server_config import CONFIG_DIR, CONFIG_FILE, ServerConfig, save_config
+ORIGINAL_HOST = """define host {
+    host_name       test-host
+    alias           Original
+    address         1.2.3.4
+}
+"""
 
-        fsync_calls = []
-        replace_calls = []
-        original_fsync = os.fsync
-        original_replace = os.replace
 
-        def tracking_fsync(fd):
-            fsync_calls.append(fd)
-            return original_fsync(fd)
+def _crash_during_fsync(_fd):
+    raise OSError("simulated crash during write")
 
-        def tracking_replace(src, dst):
-            replace_calls.append((src, dst))
-            return original_replace(src, dst)
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmp_config_dir = Path(tmpdir) / "config"
-            tmp_config_dir.mkdir()
-            tmp_config_file = tmp_config_dir / "settings.json"
+def test_edit_object_crash_leaves_original_file_intact(tmp_path):
+    cfg = tmp_path / "hosts.cfg"
+    cfg.write_text(ORIGINAL_HOST)
 
-            config = ServerConfig()
+    with patch("os.fsync", side_effect=_crash_during_fsync):
+        try:
+            result = edit_object_in_file(
+                str(cfg), 1,
+                {"host_name": "test-host", "alias": "Updated", "address": "1.2.3.4"},
+                "host",
+            )
+            assert result.success is False
+        except OSError:
+            pass  # propagating the error is also acceptable
 
-            with patch("app.server_config.CONFIG_DIR", tmp_config_dir), \
-                 patch("app.server_config.CONFIG_FILE", tmp_config_file), \
-                 patch("os.fsync", side_effect=tracking_fsync), \
-                 patch("os.replace", side_effect=tracking_replace):
-                save_config(config)
+    assert cfg.read_text() == ORIGINAL_HOST
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["hosts.cfg"], "temp file left behind"
 
-            assert len(fsync_calls) > 0, "os.fsync was not called"
-            assert len(replace_calls) > 0, "os.replace was not called"
-            assert tmp_config_file.exists(), "Config file was not written"
+
+def test_edit_object_writes_new_content(tmp_path):
+    cfg = tmp_path / "hosts.cfg"
+    cfg.write_text(ORIGINAL_HOST)
+
+    result = edit_object_in_file(
+        str(cfg), 1, {"host_name": "test-host", "alias": "Updated", "address": "1.2.3.4"}, "host",
+    )
+
+    assert result.success, result.error
+    assert "Updated" in cfg.read_text()
+    assert "Original" not in cfg.read_text()
+
+
+def test_save_config_crash_leaves_original_settings_intact():
+    # conftest redirects CONFIG_FILE to a per-test temp dir
+    original = ServerConfig()
+    original.paths.nagios_cfg = "/etc/nagios/nagios.cfg"
+    save_config(original)
+    before = server_config.CONFIG_FILE.read_bytes()
+
+    changed = ServerConfig()
+    changed.paths.nagios_cfg = "/somewhere/else.cfg"
+    with patch("os.fsync", side_effect=_crash_during_fsync), pytest.raises(OSError):
+        save_config(changed)
+
+    assert server_config.CONFIG_FILE.read_bytes() == before
+    assert sorted(os.listdir(server_config.CONFIG_DIR)) == ["settings.json"], "temp file left behind"

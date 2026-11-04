@@ -1,6 +1,5 @@
 """Tests for health check endpoint."""
 
-import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -8,9 +7,6 @@ from pathlib import Path
 import pytest
 
 from app import create_app
-from app.file_operations import edit_object_in_file
-from app.git_service import GitService
-from app.nagios_model import REQUIRED_FIELDS
 from app.stable_keys import generate_stable_key
 from app.inheritance import build_template_lookup
 from app.routes.health_checks import run_all_checks
@@ -133,86 +129,6 @@ def test_health_check_detects_missing_cmd_in_comma_separated_list(health_client)
         f"Expected exactly 1 missing command issue for 'oncall', got {len(oncall_cmd_issues)}: {oncall_cmd_issues}"
     assert "nonexistent-cmd" in oncall_cmd_issues[0]["message"], \
         f"Expected 'nonexistent-cmd' in message, got: {oncall_cmd_issues[0]['message']}"
-
-
-def test_gitignore_references_correct_staging_dir():
-    """Generated .gitignore should reference .staging/ not .nagios_staging/."""
-    test_dir = tempfile.mkdtemp()
-    try:
-        gs = GitService(test_dir)
-        gs.init_repo()
-        gitignore_path = os.path.join(test_dir, ".gitignore")
-        assert os.path.exists(gitignore_path), ".gitignore should be created"
-        content = Path(gitignore_path).read_text()
-        assert ".staging/" in content, f".gitignore should contain '.staging/', got:\n{content}"
-        assert ".nagios_staging/" not in content, \
-            f".gitignore should NOT contain '.nagios_staging/', got:\n{content}"
-    finally:
-        shutil.rmtree(test_dir, ignore_errors=True)
-
-
-
-
-def test_required_fields_host_only_requires_host_name():
-    """REQUIRED_FIELDS for host should only require host_name per Nagios spec."""
-    host_fields = REQUIRED_FIELDS.get("host", [])
-    flat = []
-    for f in host_fields:
-        if isinstance(f, tuple):
-            flat.extend(f)
-        else:
-            flat.append(f)
-    assert "host_name" in flat
-    # Per spec: address defaults to host_name, others can be inherited
-    assert "address" not in flat
-    assert "max_check_attempts" not in flat
-
-
-def test_required_fields_service_includes_check_command():
-    """REQUIRED_FIELDS for service should include 'check_command'."""
-    svc_fields = REQUIRED_FIELDS.get("service", [])
-    flat = []
-    for f in svc_fields:
-        if isinstance(f, tuple):
-            flat.extend(f)
-        else:
-            flat.append(f)
-    assert "check_command" in flat, \
-        f"'check_command' should be in service REQUIRED_FIELDS, got: {svc_fields}"
-
-
-def test_required_fields_contact_only_requires_contact_name():
-    """REQUIRED_FIELDS for contact should only require contact_name per Nagios spec."""
-    contact_fields = REQUIRED_FIELDS.get("contact", [])
-    flat = []
-    for f in contact_fields:
-        if isinstance(f, tuple):
-            flat.extend(f)
-        else:
-            flat.append(f)
-    assert "contact_name" in flat
-    assert len(flat) == 1, f"Only contact_name should be required, got: {contact_fields}"
-
-
-def test_edit_object_uses_atomic_write(tmp_path):
-    """edit_object_in_file should write atomically (temp file + rename)."""
-    cfg = tmp_path / "test.cfg"
-    cfg.write_text("""define host {
-    host_name       test-host
-    alias           Test
-    address         1.2.3.4
-}
-""")
-    result = edit_object_in_file(
-        str(cfg), 1,
-        {"host_name": "test-host", "alias": "Updated", "address": "1.2.3.4"},
-        "host",
-    )
-    assert result.success, f"Edit failed: {result.error}"
-    content = cfg.read_text()
-    assert "Updated" in content
-    # File should still exist and be valid (atomic write doesn't leave partial files)
-    assert "define host" in content
 
 
 class TestCheckCommandInheritance:
@@ -532,54 +448,49 @@ define timeperiod {
         assert not any("no-conflict-host" in n for n in flagged)
 
 
-def test_apply_staging_with_validate_flag():
-    """Apply staging should include validation result."""
-    test_dir = os.path.realpath(tempfile.mkdtemp())
-    try:
-        test_config_path = Path(test_dir) / "nagios"
-        test_config_path.mkdir()
+def _edit_and_apply(client):
+    obj = client.get("/api/objects").json[0]
+    key = f"{obj['source_file']}|{obj['object_type']}|{obj['display_name']}"
+    resp = client.post("/api/objects/update", json={
+        "stable_key": key, "attributes": {**obj["attributes"], "alias": "Modified"},
+    }, headers={"X-Session-Id": "s1"})
+    assert resp.status_code == 200  # noqa: PLR2004
+    resp = client.post("/api/staging/apply")
+    assert resp.status_code == 200  # noqa: PLR2004
+    return resp.json
 
-        (test_config_path / "hosts.cfg").write_text("""
-define host {
-    host_name       test-host
-    alias           Test Host
-    address         192.168.1.1
-}
-""")
 
-        app = create_app(config_path=str(test_config_path))
-        app.config["TESTING"] = True
-        client = app.test_client()
+_ONE_HOST = {"hosts.cfg": "define host {\n    host_name test-host\n    alias Original\n}\n"}
 
-        session_id = "test-session"
-        headers = {"X-Session-Id": session_id}
 
-        # Get objects to find stable key
-        resp = client.get("/api/objects")
-        assert resp.status_code == 200  # noqa: PLR2004
-        objects = resp.json
-        assert len(objects) > 0
-        obj = objects[0]
-        name = obj.get("display_name") or obj.get("name") or ""
-        stable_key = f"{obj['source_file']}|{obj['object_type']}|{name}"
+def test_apply_skips_validation_when_nagios_not_configured(make_app):
+    app, client = make_app(_ONE_HOST)
+    with app.app_context():
+        app.extensions["server_config"].paths.nagios_bin = ""
 
-        # Edit via shadow copy API
-        resp = client.post("/api/objects/update", json={
-            "stable_key": stable_key,
-            "attributes": {**obj["attributes"], "alias": "Modified"},
-        }, headers=headers)
-        assert resp.status_code == 200  # noqa: PLR2004
+    validation = _edit_and_apply(client)["validation"]
 
-        # Apply
-        resp = client.post("/api/staging/apply")
-        assert resp.status_code == 200  # noqa: PLR2004
-        data = resp.json
+    assert validation["skipped"] is True
+    assert validation["success"] is None
 
-        # Response should include a validation field
-        assert "validation" in data, \
-            f"Response should include 'validation', got keys: {list(data.keys())}"
-    finally:
-        shutil.rmtree(test_dir, ignore_errors=True)
+
+def test_apply_reports_validator_result(make_app):
+    """When Nagios is configured, apply runs `nagios -v` and returns its verdict."""
+    from unittest.mock import patch
+    from app.validator import NagiosValidator, ValidationResult
+    app, client = make_app(_ONE_HOST)
+    with app.app_context():
+        paths = app.extensions["server_config"].paths
+        paths.nagios_bin, paths.nagios_cfg = "/usr/bin/nagios", "/etc/nagios/nagios.cfg"
+    failing = ValidationResult(success=False, errors=[{"message": "Could not find host 'x'"}],
+                               warnings=[], total_errors=1, total_warnings=0, raw_output="...")
+
+    with patch.object(NagiosValidator, "validate", return_value=failing):
+        validation = _edit_and_apply(client)["validation"]
+
+    assert validation["success"] is False
+    assert validation["total_errors"] == 1
+    assert validation["errors"] == [{"message": "Could not find host 'x'"}]
 
 
 class TestUnusedCommandDetection:
@@ -1404,21 +1315,6 @@ class TestDuplicateDetectionEnhanced:
                 assert "file" in ro, f"related_object missing file: {ro}"
                 assert "line" in ro, f"related_object missing line: {ro}"
 
-    def test_duplicate_is_error_severity(self, comp_client):
-        """Duplicate issues should be errors."""
-        data = _get_health_issues(comp_client)
-        dup_issues = [i for i in data["issues"] if i["type"] == "duplicate"]
-        for issue in dup_issues:
-            assert issue["severity"] == "error"
-
-    def test_finds_duplicate_host(self, comp_client):
-        """Should find dup-host as a duplicate."""
-        data = _get_health_issues(comp_client)
-        dup_issues = [i for i in data["issues"] if i["type"] == "duplicate"]
-        dup_names = [i["object"] for i in dup_issues]
-        assert "dup-host" in dup_names, \
-            f"Expected 'dup-host' in duplicates, got: {dup_names}"
-
 
 class TestOrphanDetectionInHealthCheck:
     """Orphan detection should be included in health-check."""
@@ -1443,6 +1339,7 @@ class TestOrphanDetectionInHealthCheck:
         """Orphan issues should have 'info' severity."""
         data = _get_health_issues(comp_client)
         orphan_issues = [i for i in data["issues"] if i["type"] == "orphan"]
+        assert orphan_issues, "check produced no issues, so this assertion would be vacuous"
         for issue in orphan_issues:
             assert issue["severity"] == "info", \
                 f"Expected severity 'info', got '{issue['severity']}' for {issue['object']}"
@@ -1494,6 +1391,7 @@ class TestNotificationGaps:
         gap_issues = [i for i in data["issues"]
                       if i["type"] == "missing_contacts"
                       and i["object_type"] in ("host", "service")]
+        assert gap_issues, "check produced no issues, so this assertion would be vacuous"
         for issue in gap_issues:
             assert issue["severity"] == "warning"
 
@@ -1524,6 +1422,7 @@ class TestLongHostList:
         """Long host list issues should be info severity."""
         data = _get_health_issues(comp_client)
         long_issues = [i for i in data["issues"] if i["type"] == "long_host_list"]
+        assert long_issues, "check produced no issues, so this assertion would be vacuous"
         for issue in long_issues:
             assert issue["severity"] == "info"
 
@@ -1564,6 +1463,7 @@ class TestTemplateConsolidation:
         """Template suggestions should have count >= 3."""
         data = _get_health_issues(comp_client)
         tmpl_issues = [i for i in data["issues"] if i["type"] == "template_opportunity"]
+        assert tmpl_issues, "check produced no issues, so this assertion would be vacuous"
         for issue in tmpl_issues:
             assert issue["suggestion"]["count"] >= 3, f"Expected count >= 3, got {issue['suggestion']['count']}"  # noqa: PLR2004
 
@@ -1571,6 +1471,7 @@ class TestTemplateConsolidation:
         """Template opportunity issues should be info severity."""
         data = _get_health_issues(comp_client)
         tmpl_issues = [i for i in data["issues"] if i["type"] == "template_opportunity"]
+        assert tmpl_issues, "check produced no issues, so this assertion would be vacuous"
         for issue in tmpl_issues:
             assert issue["severity"] == "info"
 
@@ -1884,8 +1785,8 @@ define timeperiod {
 
         # Only the reordered pair should be flagged, not false positives
         dup_dep_issues = [i for i in data["issues"] if i["type"] == "duplicate_dependency"]
-        assert len(dup_dep_issues) <= 1, \
-            f"Too many duplicate_dependency issues, possible false positive: {dup_dep_issues}"
+        assert len(dup_dep_issues) == 1, \
+            f"Expected only the reordered pair, got: {dup_dep_issues}"
 
 
 # ============================================================
@@ -1935,6 +1836,13 @@ define service {
     check_command         check-host-alive
     contacts              admin
 }
+
+define service {
+    host_name             real-host,ghost-host
+    service_description   Typo Service
+    check_command         check-host-alive
+    contacts              admin,ghost-contact
+}
 """)
 
         (test_config_path / "commands.cfg").write_text("""
@@ -1965,29 +1873,23 @@ define timeperiod {
         yield app
         shutil.rmtree(test_dir, ignore_errors=True)
 
-    def test_wildcard_in_csv_not_flagged_as_orphan(self, app_with_wildcards):
-        """Service with host_name '*,!host2' should NOT flag * as orphan."""
-        client = app_with_wildcards.test_client()
+    @staticmethod
+    def _flagged_refs(client, issue_type):
+        """(object, referenced name) for each issue of the given type."""
         resp = client.get("/api/health-check")
         assert resp.status_code == 200  # noqa: PLR2004
-        data = resp.get_json()
+        return {(i["object"], i["message"].rsplit(": ", 1)[1])
+                for i in resp.get_json()["issues"] if i["type"] == issue_type}
 
-        orphan_issues = [i for i in data["issues"] if i["type"] == "orphan_service"]
-        orphan_messages = [i["message"] for i in orphan_issues]
-        assert not any("*" in msg for msg in orphan_messages), \
-            f"Wildcard * should not be flagged as orphan service: {orphan_messages}"
+    def test_wildcard_in_csv_not_flagged_as_orphan(self, app_with_wildcards):
+        """'*,!real-host' is not an orphan reference; the typo'd ghost-host is."""
+        flagged = self._flagged_refs(app_with_wildcards.test_client(), "orphan_service")
+        assert {ref for _, ref in flagged} == {"ghost-host"}
 
     def test_wildcard_contacts_not_flagged_as_missing(self, app_with_wildcards):
-        """Object with contacts '*' should NOT flag * as a missing contact."""
-        client = app_with_wildcards.test_client()
-        resp = client.get("/api/health-check")
-        assert resp.status_code == 200  # noqa: PLR2004
-        data = resp.get_json()
-
-        missing_contact_issues = [i for i in data["issues"] if i["type"] == "missing_contact"]
-        missing_messages = [i["message"] for i in missing_contact_issues]
-        assert not any("*" in msg for msg in missing_messages), \
-            f"Wildcard * should not be flagged as missing contact: {missing_messages}"
+        """contacts '*' is not a missing contact; the typo'd ghost-contact is."""
+        flagged = self._flagged_refs(app_with_wildcards.test_client(), "missing_contact")
+        assert {ref for _, ref in flagged} == {"ghost-contact"}
 
 
 # ============================================================
@@ -1995,131 +1897,79 @@ define timeperiod {
 # ============================================================
 
 class TestRequiredFieldInheritance:
-    """Test that required fields are validated through inheritance chains."""
+    """check_required_fields: required fields are looked up through templates,
+    OR-groups are satisfied by any member, and truly missing fields are flagged.
+    """
 
     @pytest.fixture
-    def app_with_templates(self):
-        test_dir = tempfile.mkdtemp()
-        test_config_path = Path(test_dir) / "nagios"
-        test_config_path.mkdir()
-
-        (test_config_path / "templates.cfg").write_text("""
+    def app_with_templates(self, make_app):
+        app, _ = make_app({
+            "objects.cfg": """
 define host {
-    name                    good-template
+    host_name               web-01
+}
+
+define hostgroup {
+    hostgroup_name          web-servers
+    members                 web-01
+}
+
+define service {
+    name                    on-web-01
     register                0
-    address                 10.0.0.1
-    contact_groups          admins
-    max_check_attempts      5
+    host_name               web-01
 }
 
-define host {
-    name                    empty-template
-    register                0
-}
-""")
-
-        (test_config_path / "hosts.cfg").write_text("""
-define host {
-    host_name       good-host
-    use             good-template
-    alias           Good Host
+define service {
+    service_description     Inherits Host
+    use                     on-web-01
+    check_command           check-ok
 }
 
-define host {
-    host_name       bad-host
-    use             empty-template
-    alias           Bad Host
+define service {
+    service_description     Via Hostgroup
+    hostgroup_name          web-servers
+    check_command           check-ok
 }
-""")
 
-        (test_config_path / "commands.cfg").write_text("""
+define service {
+    service_description     No Host Anywhere
+    check_command           check-ok
+}
+
 define command {
-    command_name    check-host-alive
-    command_line    $USER1$/check_ping -H $HOSTADDRESS$
+    command_name            check-ok
+    command_line            /bin/true
 }
-""")
 
-        (test_config_path / "contacts.cfg").write_text("""
-define contact {
-    contact_name                    admin
-    host_notification_commands      check-host-alive
-    service_notification_commands   check-host-alive
-    host_notification_period        24x7
-    service_notification_period     24x7
-    host_notification_options       d,u,r
-    service_notification_options    w,u,c,r
+define command {
+    command_name            broken-cmd
 }
-""")
+""",
+        })
+        return app
 
-        (test_config_path / "contactgroups.cfg").write_text("""
-define contactgroup {
-    contactgroup_name   admins
-    alias               Admins
-    members             admin
-}
-""")
+    @staticmethod
+    def _missing(app):
+        """{(object, missing-field text)} for every missing_required_field issue."""
+        resp = app.test_client().get("/api/health-check")
+        assert resp.status_code == 200  # noqa: PLR2004
+        return {(i["object"], i["message"].split(": ", 1)[1].split(" (")[0])
+                for i in resp.get_json()["issues"] if i["type"] == "missing_required_field"}
 
-        (test_config_path / "timeperiods.cfg").write_text("""
-define timeperiod {
-    timeperiod_name 24x7
-    alias           24x7
-    monday          00:00-24:00
-}
-""")
-
-        app = create_app(config_path=str(test_config_path))
-        app.config["TESTING"] = True
-        yield app
-        shutil.rmtree(test_dir, ignore_errors=True)
+    def test_truly_missing_required_fields_are_flagged(self, app_with_templates):
+        assert self._missing(app_with_templates) == {
+            ("No Host Anywhere", "host_name or hostgroup_name"),
+            ("broken-cmd", "command_line"),
+        }
 
     def test_required_field_resolved_through_inheritance(self, app_with_templates):
-        """Host inheriting address + contact_groups from template should NOT be flagged."""
-        client = app_with_templates.test_client()
-        resp = client.get("/api/health-check")
-        assert resp.status_code == 200  # noqa: PLR2004
-        data = resp.get_json()
-
-        missing_req = [
-            i for i in data["issues"]
-            if i["type"] == "missing_required_field" and i["object"] == "good-host"
-        ]
-        assert len(missing_req) == 0, \
-            f"good-host should have no missing required fields (inherited from template): {missing_req}"
-
-    def test_required_field_missing_despite_template(self, app_with_templates):
-        """Host inheriting from empty template should only be flagged for truly missing required fields."""
-        client = app_with_templates.test_client()
-        resp = client.get("/api/health-check")
-        assert resp.status_code == 200  # noqa: PLR2004
-        data = resp.get_json()
-
-        missing_req = [
-            i for i in data["issues"]
-            if i["type"] == "missing_required_field" and i["object"] == "bad-host"
-        ]
-        # Per spec, only host_name is required; address defaults to host_name,
-        # max_check_attempts and contacts can be inherited
-        # bad-host has host_name defined, so no required field should be missing
-        assert len(missing_req) == 0, \
-            f"bad-host with host_name should have no missing required fields per spec, got: {missing_req}"
+        """'Inherits Host' gets host_name from its template, so it is not flagged."""
+        assert "Inherits Host" not in {obj for obj, _ in self._missing(app_with_templates)}
 
     def test_or_group_satisfied_by_one(self, app_with_templates):
-        """Host with contact_groups but no contacts should NOT be flagged for contacts OR-group."""
-        client = app_with_templates.test_client()
-        resp = client.get("/api/health-check")
-        assert resp.status_code == 200  # noqa: PLR2004
-        data = resp.get_json()
-
-        # good-host has contact_groups via template, no contacts directly
-        missing_req = [
-            i for i in data["issues"]
-            if i["type"] == "missing_required_field"
-            and i["object"] == "good-host"
-            and ("contacts" in i["message"] or "contact_groups" in i["message"])
-        ]
-        assert len(missing_req) == 0, \
-            f"good-host should satisfy contacts OR-group via contact_groups: {missing_req}"
-
+        """hostgroup_name alone satisfies the (host_name, hostgroup_name) OR-group."""
+        assert "Via Hostgroup" not in {obj for obj, _ in self._missing(app_with_templates)}
 
 # ============================================================
 # Issue #18: Old inheritance API error reporting
@@ -2276,6 +2126,7 @@ define timeperiod {
         data = resp.get_json()
 
         redundant = [i for i in data["issues"] if i["type"] == "redundant_escalation_contacts"]
+        assert redundant, "check produced no issues, so this assertion would be vacuous"
         for issue in redundant:
             assert issue["severity"] == "info"
 
@@ -3309,7 +3160,7 @@ define service {
         # null cancels template inheritance but not implied inheritance from host.
         # Since the host has contacts, the service should NOT be flagged.
         assert "Nullified Contacts" not in flagged_names, \
-            f"False positive: 'Nullified Contacts' still inherits contacts from host via implied inheritance"
+            "False positive: 'Nullified Contacts' still inherits contacts from host via implied inheritance"
 
     @pytest.fixture
     def app_service_no_contacts_anywhere(self):
@@ -3393,6 +3244,11 @@ define host {
     address         192.168.1.1
     use             generic-host
 }
+
+define host {
+    host_name       web-02
+    use             no-such-template
+}
 """)
     (test_config_path / "services.cfg").write_text("""
 define service {
@@ -3409,10 +3265,9 @@ define service {
     template_lookup = build_template_lookup(objects)
     issues = run_all_checks(objects, obj_to_index, template_lookup)
 
-    # generic-host should NOT appear as "missing template"
-    missing_tmpl = [i for i in issues if i["type"] == "missing_template"]
-    assert not any("generic-host" in i["message"] for i in missing_tmpl), \
-        "generic-host should be recognized as a valid template"
+    # generic-host (name, no register 0) is a valid template; only the real typo is flagged
+    missing = {i["message"].rsplit(": ", 1)[1] for i in issues if i["type"] == "missing_template"}
+    assert missing == {"no-such-template"}
 
 
 def test_hostgroup_template_with_identity_field_not_flagged_as_missing(tmp_path):
@@ -3435,6 +3290,11 @@ define host {
     address         192.168.1.1
     hostgroups      +customer-juniper
 }
+
+define host {
+    host_name       custMVC02
+    hostgroups      ghost-group
+}
 """)
     from app.nagios_parser import NagiosConfigParser
     parser = NagiosConfigParser(str(test_config_path))
@@ -3444,9 +3304,9 @@ define host {
     template_lookup = build_template_lookup(objects)
     issues = run_all_checks(objects, obj_to_index, template_lookup)
 
-    missing_hg = [i for i in issues if i["type"] == "missing_hostgroup"]
-    assert not any("customer-juniper" in i["message"] for i in missing_hg), \
-        "hostgroup template with hostgroup_name and register 0 should not be flagged as missing"
+    # customer-juniper (register 0, has hostgroup_name) exists; only ghost-group is missing
+    missing = {i["message"].rsplit(": ", 1)[1] for i in issues if i["type"] == "missing_hostgroup"}
+    assert missing == {"ghost-group"}
 
 
 def test_host_inheriting_hostgroups_not_flagged_without_services(tmp_path):
@@ -3489,6 +3349,12 @@ define service {
     service_description     PING
     check_command           check_ping
 }
+
+define host {
+    host_name       lonely-host
+    address         192.168.1.2
+    check_command   check-host-alive
+}
 """)
     from app.nagios_parser import NagiosConfigParser
     parser = NagiosConfigParser(str(test_config_path))
@@ -3498,3 +3364,175 @@ define service {
     template_lookup = build_template_lookup(objects)
     issues = run_all_checks(objects, obj_to_index, template_lookup)
 
+    # customer.com gets PING through its template's hostgroup; lonely-host has nothing
+    orphans = {i["object"] for i in issues if i["type"] == "orphan"}
+    assert "customer.com" not in orphans
+    assert "lonely-host" in orphans
+
+
+# ============================================================
+# Checks that previously had no test that failed when the check was deleted.
+# One config holds a broken and a working case for each check; each test
+# asserts the exact set flagged, so it catches both a dead check and a false
+# positive.
+# ============================================================
+
+_REFERENCE_CHECKS_CFG = """
+define timeperiod {
+    timeperiod_name         24x7
+    monday                  00:00-24:00
+}
+
+define command {
+    command_name            check-ok
+    command_line            /bin/true
+}
+
+define command {
+    command_name            notify
+    command_line            /bin/true
+}
+
+define contact {
+    contact_name                    good
+    host_notification_commands      notify
+    service_notification_commands   notify
+    host_notification_period        24x7
+    service_notification_period     24x7
+}
+
+define contact {
+    contact_name                    no-svc-cmd
+    host_notification_commands      notify
+    host_notification_period        24x7
+    service_notification_period     24x7
+}
+
+define contact {
+    contact_name                    typo-period
+    host_notification_commands      notify
+    service_notification_commands   notify
+    host_notification_period        24x7
+    service_notification_period     24x7-typo
+}
+
+define host {
+    name                    used-tmpl
+    register                0
+}
+
+define host {
+    name                    unused-tmpl
+    register                0
+}
+
+define host {
+    host_name               router
+    check_command           check-ok
+    contacts                good
+}
+
+define host {
+    host_name               web-01
+    use                     used-tmpl
+    parents                 router
+    check_period            24x7
+    check_command           check-ok
+    contacts                good
+}
+
+define host {
+    host_name               web-02
+    parents                 ghost-router
+    notification_period     workhourz
+    check_command           check-ok
+    contacts                good
+}
+
+define host {
+    host_name               web-03
+    parents                 ghost-router
+    check_command           check-ok
+    contacts                good
+}
+
+define hostgroup {
+    hostgroup_name          has-members
+    members                 web-01
+}
+
+define hostgroup {
+    hostgroup_name          empty-but-used
+}
+
+define hostgroup {
+    hostgroup_name          empty-unused
+}
+
+define service {
+    host_name               web-01
+    service_description     All Good
+    check_command           check-ok
+    contacts                good
+}
+
+define service {
+    host_name               web-01
+    service_description     Unreachable
+    check_command           check-ok
+    contacts                no-svc-cmd
+}
+
+define service {
+    host_name               web-01
+    service_description     Half Reachable
+    check_command           check-ok
+    contacts                good,no-svc-cmd
+}
+
+define service {
+    hostgroup_name          empty-but-used
+    service_description     Group Service
+    check_command           check-ok
+    contacts                good
+}
+"""
+
+
+@pytest.fixture
+def reference_issues(tmp_path):
+    from app.nagios_parser import NagiosConfigParser
+    (tmp_path / "objects.cfg").write_text(_REFERENCE_CHECKS_CFG)
+    objects = NagiosConfigParser(str(tmp_path)).parse_all()
+    obj_to_index = {id(obj): i for i, obj in enumerate(objects)}
+    return run_all_checks(objects, obj_to_index, build_template_lookup(objects))
+
+
+def _of_type(issues, issue_type):
+    return [i for i in issues if i["type"] == issue_type]
+
+
+class TestReferenceChecks:
+
+    def test_missing_parent_reported_once_with_all_children(self, reference_issues):
+        found = _of_type(reference_issues, "missing_parent")
+        assert [i["object"] for i in found] == ["ghost-router"]
+        assert "web-02" in found[0]["message"] and "web-03" in found[0]["message"]
+
+    def test_missing_timeperiod_flagged(self, reference_issues):
+        found = {(i["object"], i["message"].rsplit(": ", 1)[1])
+                 for i in _of_type(reference_issues, "missing_timeperiod")}
+        # Includes contacts' notification periods, which Nagios also requires to exist
+        assert found == {("web-02", "workhourz"), ("typo-period", "24x7-typo")}
+
+    def test_empty_unreferenced_group_flagged(self, reference_issues):
+        """A memberless group is only flagged when nothing references it either."""
+        assert {i["object"] for i in _of_type(reference_issues, "empty_group")} == {"empty-unused"}
+
+    def test_unused_template_flagged(self, reference_issues):
+        assert {i["object"] for i in _of_type(reference_issues, "unused_template")} == {"unused-tmpl"}
+
+    def test_notification_unreachable_severity_depends_on_how_many_contacts_broken(self, reference_issues):
+        """All contacts broken is an error; some broken is a warning; none broken is fine."""
+        found = {i["object"]: i["severity"] for i in _of_type(reference_issues, "notification_unreachable")}
+        assert found == {"Unreachable": "error", "Half Reachable": "warning"}

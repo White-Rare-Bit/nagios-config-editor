@@ -1,15 +1,8 @@
 """Tests for commented-out object detection and handling."""
 
-from app.nagios_model import NagiosObject, NAME_FIELDS
+from app.nagios_model import NagiosObject
 from app.nagios_parser import NagiosConfigParser
 
-
-def test_nagios_object_has_commented_out_fields():
-    """NagiosObject should have is_commented_out, commented_attributes, raw_block fields."""
-    obj = NagiosObject(object_type="host")
-    assert obj.is_commented_out is False
-    assert obj.commented_attributes == {}
-    assert obj.raw_block == ""
 
 
 def test_to_dict_includes_is_commented_out():
@@ -218,47 +211,44 @@ def test_stable_keys_unique_for_malformed_commented_out():
     assert key1 != key2
 
 
-# --- Writer tests ---
-
-from app.nagios_writer import NagiosConfigWriter
+# --- Write path: moving a commented-out object copies its raw block ---
 
 
-def test_writer_preserves_commented_out_object():
-    """Writer should output raw_block verbatim for commented-out objects."""
-    raw = "    #host_name       old-server\n    #address         10.0.0.1"
-    obj = NagiosObject(
-        object_type="host",
-        is_commented_out=True,
-        raw_block=raw,
-        commented_attributes={"host_name": "old-server"},
-    )
-    writer = NagiosConfigWriter()
-    output = writer.object_to_string(obj)
-    assert "#host_name" in output
-    assert "#address" in output
-    assert "define host {" in output
-    assert "}" in output
-
-
-def test_writer_round_trips_commented_out_object(tmp_path):
-    """Parse -> write -> parse should preserve commented-out object."""
-    cfg = tmp_path / "hosts.cfg"
-    original = """define host {
+def test_moving_commented_out_object_keeps_it_commented(tmp_path):
+    """Moving uses the raw block text, so the object must arrive still commented
+    out, with its commented attributes intact, after apply and a fresh parse."""
+    from app import create_app
+    config_dir = tmp_path / "nagios"
+    config_dir.mkdir()
+    (config_dir / "hosts.cfg").write_text("""define host {
     #host_name       old-server
-    #alias           Old Server
     #address         10.0.0.1
 }
-"""
-    cfg.write_text(original)
-    parser = NagiosConfigParser(str(tmp_path))
-    objects = parser.parse_all()
-    assert len(objects) == 1
-    assert objects[0].is_commented_out is True
 
-    writer = NagiosConfigWriter()
-    output = writer.object_to_string(objects[0])
-    assert "#host_name       old-server" in output
-    assert "#address         10.0.0.1" in output
+define host {
+    host_name       live-server
+}
+""")
+    app = create_app(config_path=str(config_dir))
+    app.config["TESTING"] = True
+    client = app.test_client()
+    obj = next(o for o in client.get("/api/objects").json if o.get("is_commented_out"))
+    key = f"{obj['source_file']}|{obj['object_type']}|{obj['display_name']}"
+
+    resp = client.post("/api/objects/move", json={
+        "stable_key": key, "target_file": str(config_dir / "retired.cfg"),
+    }, headers={"X-Session-Id": "s1"})
+    assert resp.status_code == 200, resp.json
+    assert client.post("/api/staging/apply").json["success"] is True
+
+    moved = NagiosConfigParser(str(config_dir)).parse_all()
+    retired = [o for o in moved if o.source_file.endswith("retired.cfg")]
+    assert len(retired) == 1
+    assert retired[0].is_commented_out is True
+    assert retired[0].commented_attributes == {"host_name": "old-server", "address": "10.0.0.1"}
+    assert "old-server" not in (config_dir / "hosts.cfg").read_text()
+
+
 
 
 # --- Health check tests ---

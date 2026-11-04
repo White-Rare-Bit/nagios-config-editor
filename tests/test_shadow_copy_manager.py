@@ -189,8 +189,17 @@ class TestUndoSnapshots:
         config_dir, shadow_base = setup_dirs
         scm = ShadowCopyManager(config_dir, shadow_base)
         scm.create_shadow("s1", "user", "u@t.com")
+        hosts, services = scm.shadow_path("hosts.cfg"), scm.shadow_path("subdir/services.cfg")
+        originals = {p: open(p).read() for p in (hosts, services)}
+
         scm.snapshot_files(["hosts.cfg", "subdir/services.cfg"], "bulk edit")
-        assert scm.get_undo_count() == 1
+        for p in (hosts, services):
+            with open(p, "w") as f:
+                f.write("changed\n")
+        assert scm.get_undo_count() == 1  # one snapshot covers both files
+
+        assert scm.undo().success
+        assert {p: open(p).read() for p in (hosts, services)} == originals
 
     def test_snapshot_nonexistent_file_for_creation_undo(self, setup_dirs):
         config_dir, shadow_base = setup_dirs
@@ -385,14 +394,27 @@ class TestDiffComputation:
         diff = scm.get_file_diff("hosts.cfg")
         diff_text = diff["diff_text"]
 
-        # Every line containing "alpha" should have the same prefix (all + or all -)
-        # i.e., the alpha block was not split
-        alpha_prefixes = set()
-        for line in diff_text.split("\n"):
-            if "alpha" in line.lower() and (line.startswith("+") or line.startswith("-")):
-                alpha_prefixes.add(line[0])
-        # If the block is atomic, all alpha lines have the same prefix
-        assert len(alpha_prefixes) <= 1, f"Alpha block was split across +/-: {alpha_prefixes}"
+        # Atomic: every run of consecutive +/- lines is made of whole blocks, i.e.
+        # starts at a 'define' line and ends at '}'. A line-level diff would
+        # interleave lines from both hosts and break this.
+        import itertools
+        changed = [l for l in diff_text.split("\n")
+                   if l.startswith(("+", "-")) and not l.startswith(("+++", "---"))]
+        runs = [[l[1:] for l in run if l[1:].strip()]
+                for _, run in itertools.groupby(changed, key=lambda l: l[0])]
+        assert runs, f"diff shows no movement at all:\n{diff_text}"
+        for run in runs:
+            assert run[0].startswith("define host") and run[-1].strip() == "}", \
+                f"block split across +/-:\n{diff_text}"
+
+    def test_no_object_changes_reported_before_any_edit(self, setup_dirs):
+        """Untouched files in subdirectories must not count as changed. The
+        config dir here is a mkdtemp() path, which on macOS goes through the
+        /var -> /private/var symlink, as a symlinked /usr/local/nagios/etc would."""
+        config_dir, shadow_base = setup_dirs
+        scm = ShadowCopyManager(config_dir, shadow_base)
+        scm.create_shadow("s1", "user", "u@t.com")
+        assert scm.get_changed_object_keys() == []
 
     def test_get_changed_object_count(self, setup_dirs):
         config_dir, shadow_base = setup_dirs
@@ -403,7 +425,7 @@ class TestDiffComputation:
         with open(shadow_file, "w") as f:
             f.write("define host {\n    host_name webserver1\n    alias Modified\n}\n")
         count = scm.get_changed_object_count()
-        assert count >= 1
+        assert count == 1
 
 
 class TestConflictDetection:

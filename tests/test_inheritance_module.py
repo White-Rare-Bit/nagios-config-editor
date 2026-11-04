@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 
 from app.nagios_model import is_template_object
 from app.inheritance import (
-    INHERITANCE_META,
     build_template_index,
     build_template_lookup,
     build_template_names_set,
@@ -92,13 +91,6 @@ class TestIsTemplateObject:
 # ─────────────────────────────────────────────────────────────────────
 # Constants
 # ─────────────────────────────────────────────────────────────────────
-
-class TestInheritanceMeta:
-    def test_contains_expected_keys(self):
-        assert INHERITANCE_META == {"use", "name", "register"}
-
-    def test_is_frozenset(self):
-        assert isinstance(INHERITANCE_META, frozenset)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -221,9 +213,10 @@ class TestResolveInheritedAttrs:
         a = _tmpl("host", "A", use="B")
         b = _tmpl("host", "B", use="A")
         lookup = build_template_lookup([a, b])
-        # Should not raise — cycle is silently broken
+        # Should not raise or loop: the cycle is broken and A's own attributes kept
         resolved = resolve_inherited_attrs(a, lookup)
-        assert isinstance(resolved, dict)
+        assert resolved["name"] == "A"
+        assert resolved["use"] == "B"
 
     def test_sibling_branch_reuse(self):
         """A uses B,C; both B and C use D. D should resolve in both branches."""
@@ -253,7 +246,8 @@ class TestResolveInheritedAttrs:
         # 'name' and 'register' from template should not be in resolved
         # (they ARE in the template's own attrs, but filtered during inheritance)
         # Object's own 'use' IS in resolved since we copy all obj attrs at the end
-        assert "name" not in resolved or resolved.get("name") != "base"
+        assert "name" not in resolved
+        assert "register" not in resolved
 
     def test_first_template_wins_in_deep_chain(self):
         """When first template's parent and second template both set same attr,
@@ -290,8 +284,7 @@ class TestResolveInheritedAttrs:
         obj = _host(host_name="web-01", use="base", hostgroups="+linux-servers")
         lookup = build_template_lookup([tmpl, obj])
         resolved = resolve_inherited_attrs(obj, lookup)
-        assert "base-group" in resolved["hostgroups"]
-        assert "linux-servers" in resolved["hostgroups"]
+        assert resolved["hostgroups"] == "base-group,linux-servers"
 
     def test_additive_prefix_no_inherited_value(self):
         """+ prefix with no inherited value just uses the local value (stripped)."""
@@ -315,9 +308,8 @@ class TestResolveInheritedAttrs:
         obj = _host(host_name="web-01", use="first,second", contact_groups="+devs")
         lookup = build_template_lookup([t1, t2, obj])
         resolved = resolve_inherited_attrs(obj, lookup)
-        # First template wins for base, then +devs appended
-        assert "admins" in resolved["contact_groups"]
-        assert "devs" in resolved["contact_groups"]
+        # First template wins for the base value (second's "ops" is NOT merged), then +devs
+        assert resolved["contact_groups"] == "admins,devs"
 
     def test_important_prefix_overrides_child(self):
         """! prefix in template forces value, child cannot override."""
@@ -386,6 +378,22 @@ class TestResolveInheritedAttrs:
         assert resolved["notification_period"] == "workhours"
 
 
+    def test_additive_in_middle_template(self):
+        """+ on an intermediate template merges with its parent's value."""
+        a = _tmpl("host", "A", contact_groups="admins")
+        b = _tmpl("host", "B", use="A", contact_groups="+ops")
+        obj = _host(host_name="web-01", use="B")
+        resolved = resolve_inherited_attrs(obj, build_template_lookup([a, b, obj]))
+        assert resolved["contact_groups"] == "admins,ops"
+
+    def test_plus_on_non_additive_field_in_middle_template_is_literal(self):
+        a = _tmpl("host", "A", notes="base")
+        b = _tmpl("host", "B", use="A", notes="+extra")
+        obj = _host(host_name="web-01", use="B")
+        resolved = resolve_inherited_attrs(obj, build_template_lookup([a, b, obj]))
+        assert resolved["notes"] == "+extra"
+
+
 class TestHasAttrInChain:
     def test_direct_attr(self):
         obj = _host(host_name="web-01", check_command="check-alive")
@@ -450,8 +458,8 @@ class TestWalkInheritanceChain:
         b = _tmpl("host", "B", use="A")
         templates = {"A": a, "B": b}
         chain = walk_inheritance_chain(a, templates)
-        # Should not infinite loop
-        assert len(chain) >= 1
+        # Should not infinite loop: A, then B, then stop when A repeats
+        assert [c["attributes"]["name"] for c in chain] == ["A", "B"]
 
 
 class TestResolveChain:
@@ -526,8 +534,19 @@ class TestResolveChain:
         obj = _host(host_name="web-01", use="base", contact_groups="+devs")
         type_lookup = {"base": tmpl}
         chain, inherited, errors = resolve_chain(obj, "host", type_lookup)
-        assert "admins" in inherited["contact_groups"]["value"]
-        assert "devs" in inherited["contact_groups"]["value"]
+        assert inherited["contact_groups"]["value"] == "admins,devs"
+        # The inheritance panel shows where each part came from
+        assert inherited["contact_groups"]["source"] == "base,web-01"
+
+    def test_additive_in_middle_template_in_chain(self):
+        """+ on an intermediate template: merged value, and both templates credited."""
+        a = _tmpl("host", "A", contact_groups="admins")
+        b = _tmpl("host", "B", use="A", contact_groups="+ops")
+        obj = _host(host_name="web-01", use="B")
+        _chain, inherited, errors = resolve_chain(obj, "host", {"A": a, "B": b})
+        assert errors == []
+        assert inherited["contact_groups"]["value"] == "admins,ops"
+        assert inherited["contact_groups"]["source"] == "A,B"
 
     def test_important_in_chain(self):
         """! prefix in template forces value in chain, child's value is ignored."""
@@ -594,7 +613,8 @@ class TestDetectTemplateCycles:
         by_type = {"host": {"A": a, "B": b}}
         all_tmpls = {("host", "A"), ("host", "B")}
         cycles = detect_template_cycles(by_type, all_tmpls)
-        assert len(cycles) > 0
+        assert cycles, "cycle not detected"
+        assert all({name for _, name in c} == {"A", "B"} for c in cycles)
 
     def test_self_cycle(self):
         a = _tmpl("host", "A", use="A")
@@ -749,6 +769,17 @@ class TestResolveImpliedAttrs:
         assert result["contact_groups"] == "svc-admins"
         assert result["escalation_period"] == "workhours"
 
+    def test_service_on_several_hosts_still_gets_implied_contacts(self):
+        """host_name 'web-01,web-02' must resolve to a host, not be looked up as one name."""
+        h1 = _host(host_name="web-01", contacts="admin")
+        h2 = _host(host_name="web-02", contacts="admin")
+        svc = _Obj(object_type="service", attributes={
+            "host_name": "web-01,web-02", "service_description": "PING",
+        })
+        objects = [h1, h2, svc]
+        resolved = resolve_all_attrs(svc, build_template_lookup(objects), objects)
+        assert resolved["contacts"] == "admin"
+
     def test_implied_does_not_apply_to_unrelated_types(self):
         """Implied inheritance only applies to specific type combinations."""
         host = _host(host_name="web-01", contacts="admin")
@@ -796,8 +827,7 @@ class TestResolveAllAttrs:
         objects = [host, esc]
         template_lookup = build_template_lookup(objects)
         resolved = resolve_all_attrs(esc, template_lookup, objects)
-        assert "admins" in resolved["contact_groups"]
-        assert "managers" in resolved["contact_groups"]
+        assert resolved["contact_groups"] == "admins,managers"
 
     def test_service_additive_with_implied_base(self):
         """Service + prefix uses host's contacts as base when no template provides them."""
@@ -809,5 +839,4 @@ class TestResolveAllAttrs:
         objects = [host, svc]
         template_lookup = build_template_lookup(objects)
         resolved = resolve_all_attrs(svc, template_lookup, objects)
-        assert "admin" in resolved["contacts"]
-        assert "svc-contact" in resolved["contacts"]
+        assert resolved["contacts"] == "admin,svc-contact"

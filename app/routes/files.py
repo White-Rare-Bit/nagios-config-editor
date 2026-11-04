@@ -16,6 +16,7 @@ from ..config_discovery import PROTECTED_FILENAMES
 from ..file_operations import is_safe_path as file_ops_is_safe_path
 
 from .helpers import (
+    audit_file_path,
     format_audit_user,
     get_audit_user_identity,
     get_backup_manager,
@@ -242,7 +243,7 @@ def api_create_file():
 
     identity = get_audit_user_identity()
     user = format_audit_user(identity)
-    log_audit(action="file_create", user=user, file=rel_path)
+    log_audit(action="file_create", user=user, file=audit_file_path(file_path))
 
     return jsonify({
         "success": True,
@@ -301,7 +302,7 @@ def api_create_folder():
 
     identity = get_audit_user_identity()
     user = format_audit_user(identity)
-    log_audit(action="folder_create", user=user, folder=rel_path)
+    log_audit(action="folder_create", user=user, folder=audit_file_path(abs_folder_path))
 
     return jsonify({
         "success": True,
@@ -433,7 +434,7 @@ def api_delete_file(file_path):
 
     identity = get_audit_user_identity()
     user = format_audit_user(identity)
-    log_audit(action="file_delete", user=user, file=rel_path)
+    log_audit(action="file_delete", user=user, file=audit_file_path(abs_path))
 
     return jsonify({
         "success": True,
@@ -482,7 +483,7 @@ def api_delete_folder(folder_path):
 
     identity = get_audit_user_identity()
     user = format_audit_user(identity)
-    log_audit(action="folder_delete", user=user, folder=rel_path)
+    log_audit(action="folder_delete", user=user, folder=audit_file_path(abs_path))
 
     return jsonify({
         "success": True,

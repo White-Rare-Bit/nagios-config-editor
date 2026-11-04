@@ -210,8 +210,8 @@ define timeperiod {
             assert resp.status_code == 200  # noqa: PLR2004
             data = resp.get_json()
 
-            # Should have members (cycle-B is a direct inheritor, cycle-host inherits)
-            # The key assertion is that this doesn't hang
-            assert "members" in data
+            # Completes without hanging, and still reports cycle-A's direct users
+            member_names = {m["name"] for m in data["members"]}
+            assert member_names == {"cycle-B", "cycle-host"}
         finally:
             shutil.rmtree(test_dir, ignore_errors=True)

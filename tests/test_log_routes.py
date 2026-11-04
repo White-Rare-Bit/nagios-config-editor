@@ -1,8 +1,6 @@
 """Tests for log API endpoints and log file parsing."""
 
-import os
 
-import pytest
 
 from app.routes.logs import parse_audit_line, parse_app_line
 

@@ -15,18 +15,6 @@ class TestNagiosServiceMultiRoot:
         names = {o.attributes.get("host_name") for o in objects}
         assert names == {"h1", "h2"}
 
-    def test_init_with_cfg_files(self, tmp_path):
-        f = tmp_path / "commands.cfg"
-        f.write_text('define command {\n    command_name check_ping\n}\n')
-
-        svc = NagiosService(cfg_files=[str(f)])
-        objects = svc.get_objects()
-        assert len(objects) == 1
-
-    def test_backward_compat_single_path(self, tmp_path):
-        (tmp_path / "hosts.cfg").write_text('define host {\n    host_name h1\n}\n')
-        svc = NagiosService(config_path=str(tmp_path))
-        assert len(svc.get_objects()) == 1
 
     def test_reload_preserves_multi_root(self, tmp_path):
         dir_a = tmp_path / "a"

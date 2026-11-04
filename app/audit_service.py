@@ -12,6 +12,24 @@ import uuid
 
 audit_logger = logging.getLogger("audit")
 
+# Characters that force a value into quotes. Backslash, quote, CR and LF are
+# also escaped inside the quotes, so a value can never end the line early (a
+# newline would otherwise let a field value forge a second audit entry).
+_NEEDS_QUOTES = (" ", '"', "\\", "\n", "\r", "=")
+_ESCAPES = {"\\": "\\\\", '"': '\\"', "\n": "\\n", "\r": "\\r"}
+
+
+def _escape(v_str: str) -> str:
+    return "".join(_ESCAPES.get(c, c) for c in v_str)
+
+
+def _format_value(value) -> str:
+    """Render one value: bare if safe, otherwise quoted with escapes."""
+    v_str = str(value) if value is not None else ""
+    if v_str and not any(c in v_str for c in _NEEDS_QUOTES):
+        return v_str
+    return f'"{_escape(v_str)}"'
+
 
 def format_audit_line(action, txn=None, user=None, **kwargs):
     """Format an audit event as a key=value log line.
@@ -30,7 +48,7 @@ def format_audit_line(action, txn=None, user=None, **kwargs):
     if txn is None:
         txn = uuid.uuid4().hex[:8]
 
-    parts = [f"AUDIT txn={txn} user=\"{user or ''}\" action={action}"]
+    parts = [f'AUDIT txn={txn} user="{_escape(user or "")}" action={action}']
 
     # Rename from_val/to_val to from/to in output
     renamed = {}
@@ -43,14 +61,7 @@ def format_audit_line(action, txn=None, user=None, **kwargs):
             renamed[k] = v
 
     for k, v in renamed.items():
-        v_str = str(v) if v is not None else ""
-        if '"' in v_str:
-            v_str = v_str.replace('"', '\\"')
-            parts.append(f'{k}="{v_str}"')
-        elif not v_str or " " in v_str:
-            parts.append(f'{k}="{v_str}"')
-        else:
-            parts.append(f"{k}={v_str}")
+        parts.append(f"{k}={_format_value(v)}")
 
     return " ".join(parts)
 

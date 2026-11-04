@@ -318,7 +318,8 @@ def check_missing_timeperiods(ctx):
 
     for obj in ctx["objects"]:
         obj_name = obj.get_name() or obj.get_display_name()
-        for tp_field in ["check_period", "notification_period"]:
+        for tp_field in ["check_period", "notification_period",
+                         "host_notification_period", "service_notification_period"]:
             if tp_field in obj.attributes:
                 tp_ref = obj.attributes[tp_field]
                 if tp_ref and tp_ref not in timeperiods:

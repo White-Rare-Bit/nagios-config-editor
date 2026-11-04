@@ -10,6 +10,8 @@ python3 -m app
 
 Dependencies: `flask>=2.0.0,<4.0.0`, `gunicorn>=21.2.0,<24.0.0`
 
+Tests: `pip install -r requirements-dev.txt`, then `python3 -m pytest tests/`. `tests/conftest.py` isolates every test from `config/settings.json`, `logs/` and `sample-config/`; keep it that way.
+
 ## Documentation Index
 
 **Reference docs** (`.claude/`): ROUTES_REFERENCE.md, API_REFERENCE.md, STAGING_REFERENCE.md, GIT_REFERENCE.md, FILE_OPS_REFERENCE.md, TYPOGRAPHY_REFERENCE.md, DECISION_LOG.md
@@ -52,8 +54,7 @@ All service methods return `OperationResult(success: bool, error: str = None, da
 | `app/stable_keys.py` | Stable key generation and lookup helpers |
 | `app/backup_manager.py` | Zip backups, restore |
 | `app/nagios_parser.py` | Parse .cfg files |
-| `app/nagios_writer.py` | Write .cfg files |
-| `app/nagios_model.py` | NagiosObject, NAME_FIELDS, REFERENCE_FIELDS, domain constants |
+| `app/nagios_model.py` | NagiosObject, NAME_FIELDS, REFERENCE_FIELDS, domain constants, `format_object_block` (renders a define block) |
 | `app/file_operations.py` | Atomic file ops, path safety |
 | `app/git_service.py` | Git wrapper, retry logic |
 | `app/validator.py` | nagios -v validation |

@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass, field
 
+import pytest
+
 from app.inheritance import build_template_lookup, resolve_inherited_attrs
 
 
@@ -43,3 +45,30 @@ def test_plus_on_check_command_is_literal():
     lookup = build_template_lookup([tmpl, child])
     resolved = resolve_inherited_attrs(child, lookup)
     assert resolved["check_command"] == "+check_http"
+
+
+# Fields Nagios documents as supporting additive (+) inheritance, written out by
+# hand rather than read from ADDITIVE_FIELDS, so a field dropped from (or never
+# wired into) the resolver's whitelist makes this fail.
+_ADDITIVE_BY_TYPE = {
+    "host": ["parents", "hostgroups", "contact_groups", "contacts"],
+    "service": ["host_name", "hostgroup_name", "servicegroups", "contact_groups", "contacts"],
+    "hostgroup": ["members", "hostgroup_members"],
+    "servicegroup": ["members", "servicegroup_members"],
+    "contactgroup": ["members", "contactgroup_members"],
+    "contact": ["contactgroups", "host_notification_commands", "service_notification_commands"],
+    "hostescalation": ["contacts", "contact_groups"],
+    "serviceescalation": ["contacts", "contact_groups"],
+    "hostdependency": ["host_name", "hostgroup_name"],
+    "servicedependency": ["host_name", "hostgroup_name"],
+}
+
+
+@pytest.mark.parametrize("obj_type,field", [
+    (t, f) for t, fields in _ADDITIVE_BY_TYPE.items() for f in fields
+])
+def test_plus_merges_with_template_value(obj_type, field):
+    tmpl = _Obj(obj_type, {"name": "base", "register": "0", field: "from-template"})
+    child = _Obj(obj_type, {"use": "base", field: "+from-child"})
+    resolved = resolve_inherited_attrs(child, build_template_lookup([tmpl, child]))
+    assert resolved[field] == "from-template,from-child"

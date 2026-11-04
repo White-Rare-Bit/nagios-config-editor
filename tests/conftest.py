@@ -1,48 +1,79 @@
 """Shared test fixtures for Nagios Bulk Editor tests."""
 
-import glob
-import os
+import logging
 import shutil
+from pathlib import Path
 
 import pytest
 
 from app import create_app
+from app import server_config
 
+# Importing `app` runs create_app() at module level (app/__init__.py, for
+# wsgi.py), before any fixture can isolate it. That attaches file handlers
+# writing to the repo's real logs/app.log and logs/audit.log. Detach them so no
+# test can write there; per-test handlers are cleaned up in _isolate_environment.
+for _logger in (logging.getLogger(), logging.getLogger("audit")):
+    for _handler in [h for h in _logger.handlers if isinstance(h, logging.FileHandler)]:
+        _logger.removeHandler(_handler)
+        _handler.close()
 
-@pytest.fixture
-def sample_config_path():
-    """Path to the sample-config directory shipped with the repo."""
-    path = os.path.join(os.path.dirname(__file__), "..", "sample-config")
-    path = os.path.abspath(path)
-    assert os.path.isdir(path), f"sample-config not found at {path}"
-    return path
+_REPO_SAMPLE_CONFIG = Path(__file__).resolve().parent.parent / "sample-config"
 
-
-def _cleanup_test_artifacts():
-    """Remove shadow copies, backups, and log files created during tests."""
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    shadow_dir = os.path.join(project_root, ".shadow")
-    if os.path.isdir(shadow_dir):
-        shutil.rmtree(shadow_dir, ignore_errors=True)
-    sample_config = os.path.join(project_root, "sample-config")
-    backup_dir = os.path.join(sample_config, "backups")
-    if os.path.isdir(backup_dir):
-        shutil.rmtree(backup_dir, ignore_errors=True)
-    # Note: do NOT remove files from logs/ — those are production log files
-    # that may be in use by a running app instance. Tests should use
-    # log_dir_override to isolate their log output.
+# Environment variables that override config/settings.json (see
+# server_config._apply_env_overrides). Cleared so a developer's shell
+# environment can't change test behaviour.
+_SERVER_CONFIG_ENV_VARS = ("NAGIOS_CFG", "NAGIOS_BIN", "BACKUP_PATH", "NBE_SHADOW_PATH")
 
 
 @pytest.fixture(autouse=True)
-def _cleanup_after_test():
-    """Auto-cleanup test artifacts after every test."""
+def _isolate_environment(tmp_path_factory, monkeypatch):
+    """Keep every test away from the developer's real files.
+
+    - config/settings.json: redirected to an empty per-test directory, so
+      tests start from default settings and any save (e.g. POST /api/settings)
+      can't overwrite the real file.
+    - Working directory: changed to a per-test temp dir, so relative defaults
+      (the "logs" log_dir, "./sample-config") never resolve inside the repo.
+      Without this, tests appended to and rotated the real logs/audit.log.
+    - Log handlers: create_app() adds file handlers to the global root and
+      "audit" loggers and never removes them. Removed after each test so
+      handlers don't pile up and later tests don't write into earlier tests'
+      log files.
+    """
+    config_dir = tmp_path_factory.mktemp("server_config")
+    monkeypatch.setattr(server_config, "CONFIG_DIR", config_dir)
+    monkeypatch.setattr(server_config, "CONFIG_FILE", config_dir / "settings.json")
+    for var in _SERVER_CONFIG_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.chdir(tmp_path_factory.mktemp("cwd"))
+
+    loggers = [logging.getLogger(), logging.getLogger("audit")]
+    handlers_before = [list(lg.handlers) for lg in loggers]
     yield
-    _cleanup_test_artifacts()
+    for lg, before in zip(loggers, handlers_before):
+        for handler in [h for h in lg.handlers if h not in before]:
+            lg.removeHandler(handler)
+            handler.close()
+
+
+@pytest.fixture
+def sample_config_path(tmp_path):
+    """Path to a per-test copy of the repo's sample-config directory.
+
+    A copy, not the original: the app writes shadow copies next to the config
+    dir and backups inside it, which for the real sample-config are the dev
+    app's live .shadow/ and sample-config/backups/.
+    """
+    assert _REPO_SAMPLE_CONFIG.is_dir(), f"sample-config not found at {_REPO_SAMPLE_CONFIG}"
+    dest = tmp_path / "sample-config"
+    shutil.copytree(_REPO_SAMPLE_CONFIG, dest, ignore=shutil.ignore_patterns("backups", ".git"))
+    return str(dest)
 
 
 @pytest.fixture
 def app(sample_config_path):
-    """Create Flask app pointed at the sample-config directory."""
+    """Create Flask app pointed at a copy of the sample-config directory."""
     application = create_app(config_path=sample_config_path)
     application.config["TESTING"] = True
     return application

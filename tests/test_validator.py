@@ -1,11 +1,9 @@
 """Tests for validator module — output parsing and binary verification."""
 
-import os
 import stat
 import subprocess
 from unittest.mock import patch
 
-import pytest
 
 from app.validator import NagiosValidator
 

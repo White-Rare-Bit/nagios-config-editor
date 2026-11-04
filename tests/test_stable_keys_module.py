@@ -1,4 +1,3 @@
-import pytest
 from app.stable_keys import generate_stable_key, parse_stable_key, generate_stable_key_for_object
 
 

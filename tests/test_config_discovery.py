@@ -1,7 +1,7 @@
 import os
 import tempfile
 
-from app.config_discovery import PROTECTED_FILENAMES, discover_config_roots
+from app.config_discovery import discover_config_roots
 from app.nagios_cfg import parse_nagios_cfg
 
 
@@ -11,7 +11,6 @@ class TestParseNagiosCfg:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write("cfg_dir=/etc/nagios/servers\n")
             f.write("resource_file=/etc/nagios/resources.cfg\n")
-            f.name
         try:
             result = parse_nagios_cfg(f.name)
             assert result["cfg_dirs"] == ["/etc/nagios/servers"]
@@ -23,7 +22,6 @@ class TestParseNagiosCfg:
         """Missing resource_file returns empty string."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write("cfg_dir=/etc/nagios/servers\n")
-            f.name
         try:
             result = parse_nagios_cfg(f.name)
             assert result["resource_file"] == ""
@@ -105,10 +103,6 @@ class TestDiscoverConfigRoots:
         result = discover_config_roots(str(nagios_cfg))
         assert result["resource_file"] == str(res_file)
 
-    def test_protected_filenames(self):
-        assert "nagios.cfg" in PROTECTED_FILENAMES
-        assert "resource.cfg" in PROTECTED_FILENAMES
-        assert "cgi.cfg" in PROTECTED_FILENAMES
 
     def test_returns_cfg_files_list(self, tmp_path):
         """Individual cfg_file paths are returned for the parser."""

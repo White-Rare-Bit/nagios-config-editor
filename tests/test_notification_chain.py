@@ -165,11 +165,10 @@ class TestNotificationChainValidation:
         chain_issues = [i for i in data["issues"]
                         if i["type"] == "notification_gap"]
 
-        # working-contact should not appear in any gap messages
-        working_messages = [i for i in chain_issues
-                            if "working-contact" in i["message"]
-                            and "Working Service" in i.get("object", "")]
-        assert len(working_messages) == 0
+        # working-contact is fully configured, so no gap issue may blame it, on any object.
+        # (broken-contact is flagged in this same config, so the check is live.)
+        assert chain_issues, "check produced no issues, so this assertion would be vacuous"
+        assert not [i for i in chain_issues if "working-contact" in i["message"]]
 
     def test_detects_missing_service_notification_commands(self, client):
         """Contact with host commands but no service commands flagged for services."""

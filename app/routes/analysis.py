@@ -14,12 +14,12 @@ from ..inheritance import (
     find_invalid_use_refs,
     find_unused_templates,
     format_cycle_issues,
+    resolve_all_attrs,
     resolve_chain,
     resolve_inherited_attrs,
     walk_inheritance_chain,
 )
 from ..nagios_model import ADDITIVE_FIELDS, NagiosObject, is_template_object
-from ..nagios_writer import NagiosConfigWriter
 
 from .helpers import (
     get_backup_manager,
@@ -618,16 +618,16 @@ def _escalation_matches_target(obj, object_type, name, service_desc):
     return False
 
 
-def _collect_escalation_contacts(obj, cg_objects):
-    """Collect all contact names from an escalation object."""
+def _collect_escalation_contacts(resolved_attrs, cg_objects):
+    """Collect all contact names from an escalation's resolved attributes."""
     esc_contact_names = set()
-    if "contact_groups" in obj.attributes:
-        for cg in obj.attributes["contact_groups"].split(","):
-            for m in _resolve_cg_members(cg.strip(), cg_objects):
+    if "contact_groups" in resolved_attrs:
+        for cg in resolved_attrs["contact_groups"].split(","):
+            for m in _resolve_cg_members(cg.strip().lstrip("+!"), cg_objects):
                 esc_contact_names.add(m)
-    if "contacts" in obj.attributes:
-        for c in obj.attributes["contacts"].split(","):
-            c = c.strip()
+    if "contacts" in resolved_attrs:
+        for c in resolved_attrs["contacts"].split(","):
+            c = c.strip().lstrip("+!")
             if c:
                 esc_contact_names.add(c)
     return esc_contact_names
@@ -649,12 +649,15 @@ def _find_matching_escalations(objects, object_type, name, service_desc, lookups
             continue
         if not _escalation_matches_target(obj, object_type, name, service_desc):
             continue
-        esc_contact_names = _collect_escalation_contacts(obj, cg_objects)
+        # Templates plus implied inheritance: an escalation without its own
+        # contacts/period uses those of the host or service it escalates.
+        resolved = resolve_all_attrs(obj, template_lookup, objects)
+        esc_contact_names = _collect_escalation_contacts(resolved, cg_objects)
         escalations.append({
-            "first_notification": int(obj.attributes.get("first_notification", 0)),
-            "last_notification": int(obj.attributes.get("last_notification", 0)),
-            "notification_interval": int(obj.attributes.get("notification_interval", 0)),
-            "escalation_period": obj.attributes.get("escalation_period", ""),
+            "first_notification": int(resolved.get("first_notification", 0)),
+            "last_notification": int(resolved.get("last_notification", 0)),
+            "notification_interval": int(resolved.get("notification_interval", 0)),
+            "escalation_period": resolved.get("escalation_period", ""),
             "contacts": [_get_contact_info(c, contact_objects, template_lookup) for c in sorted(esc_contact_names)],
             "source_file": obj.source_file,
         })
@@ -1335,7 +1338,8 @@ def api_escalation_path(object_type, name, service_desc=None):
         return jsonify({"error": "Object not found"}), 404
 
     template_lookup, contact_objects, cg_objects = _build_escalation_lookups(objects)
-    resolved_target = resolve_inherited_attrs(target, template_lookup)
+    # Includes implied inheritance, e.g. a service with no contacts uses its host's
+    resolved_target = resolve_all_attrs(target, template_lookup, objects)
     base_contacts = _resolve_base_contacts(resolved_target, cg_objects, contact_objects, template_lookup)
     lookups = {
         "cg_objects": cg_objects,

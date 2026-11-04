@@ -742,13 +742,18 @@ class ShadowCopyManager:
         def _build_object_map(cfg_dirs: list[str]) -> dict[str, dict]:
             parser = NagiosConfigParser(cfg_dirs=cfg_dirs)
             objects = parser.parse_all()
+            # The parser reports symlink-resolved paths, so resolve the roots too;
+            # otherwise a root reached through a symlink never matches, the key
+            # falls back to the bare filename, and unchanged objects in
+            # subdirectories look changed.
+            real_roots = [os.path.realpath(d) for d in cfg_dirs]
             obj_map = {}
             for obj in objects:
                 # Find which root this file belongs to for relative path
-                for d in cfg_dirs:
-                    abs_d = os.path.abspath(d)
-                    if obj.source_file.startswith(abs_d):
-                        rel_path = os.path.relpath(obj.source_file, abs_d)
+                source = os.path.realpath(obj.source_file)
+                for root in real_roots:
+                    if os.path.commonpath([root, source]) == root:
+                        rel_path = os.path.relpath(source, root)
                         break
                 else:
                     rel_path = os.path.basename(obj.source_file)

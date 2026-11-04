@@ -3,6 +3,8 @@
 import logging
 import logging.handlers
 
+import pytest
+
 from app.audit_service import format_audit_line, log_audit
 
 
@@ -94,8 +96,8 @@ class TestLogAudit:
                 type="host", name="web01", op="modify",
             )
             assert len(handler.buffer) == 1
-            assert "AUDIT" in handler.buffer[0].message
-            assert "txn=abc123" in handler.buffer[0].message
+            assert "AUDIT" in handler.buffer[0].getMessage()
+            assert "txn=abc123" in handler.buffer[0].getMessage()
         finally:
             audit.removeHandler(handler)
 
@@ -107,7 +109,7 @@ class TestLogAudit:
         try:
             log_audit(action="backup_created", user="admin@example.com")
             assert len(handler.buffer) == 1
-            msg = handler.buffer[0].message
+            msg = handler.buffer[0].getMessage()
             assert "txn=" in msg
             txn_start = msg.index("txn=") + 4
             txn_end = msg.index(" ", txn_start)
@@ -133,3 +135,38 @@ class TestMakeRelativePath:
         from app.routes.helpers import make_relative_path
         result = make_relative_path(None, "/etc/nagios/objects")
         assert result is None
+
+
+class TestAuditLineRoundTrip:
+    """The log viewer (routes/logs.parse_audit_line) must read back exactly what
+    format_audit_line wrote. Breaks caught: values that split a log line or
+    confuse the quoting, including forged entries via an embedded newline."""
+
+    @pytest.mark.parametrize("value", [
+        "plain",
+        "with spaces",
+        'say "hi"',
+        "",
+        "x=y; z",
+        r"C:\path\x",
+        "ends with backslash\\",
+        'backslash then quote \\"',
+    ])
+    def test_value_round_trips(self, value):
+        from app.routes.logs import parse_audit_line
+        line = format_audit_line(action="apply", txn="t1", user="u@x", from_val=value)
+        parsed = parse_audit_line("Nov 04 10:00:00 " + line)
+        assert parsed["from"] == value
+        assert parsed["action"] == "apply"
+
+    def test_newline_cannot_forge_a_second_entry(self):
+        from app.routes.logs import parse_audit_line
+        forged = 'x\nNov 04 10:00:00 AUDIT txn=evil user="admin" action=git_commit'
+        line = format_audit_line(action="object_edit", txn="t1", user="mallory", to_val=forged)
+        assert "\n" not in line and "\r" not in line
+        assert parse_audit_line("Nov 04 10:00:00 " + line)["to"] == forged
+
+    def test_user_with_quote_round_trips(self):
+        from app.routes.logs import parse_audit_line
+        line = format_audit_line(action="apply", txn="t1", user='Bob "the admin"')
+        assert parse_audit_line("Nov 04 10:00:00 " + line)["user"] == 'Bob "the admin"'
