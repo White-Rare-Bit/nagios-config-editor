@@ -12,11 +12,9 @@ from pathlib import Path
 
 from .nagios_model import REFERENCE_FIELDS, NagiosObject, normalize_attribute_name
 from .nagios_model import format_object_block as _model_format_object_block
+from .nagios_syntax import DEFINE_RE, IN_COMMENT, LIVE, classify_define, scan_block
 
 logger = logging.getLogger("nagios_bulk_editor.parser")
-
-# Start of an object definition: "define <type> {"
-_DEFINE_RE = re.compile(r"define\s+(\w+)\s*\{")
 
 
 # Minimum digit count to identify timestamp patterns in filenames (e.g. 20240115)
@@ -180,56 +178,6 @@ class NagiosConfigParser:
 
         return objects
 
-    def _scan_block_body(self, content: str, brace_start: int, length: int) -> tuple:
-        """Scan from opening brace to find closing brace and nested defines.
-
-        Respects quoted strings and escape sequences. Detects nested 'define'
-        keywords that indicate malformed config.
-
-        Args:
-            content: Full file content
-            brace_start: Position of the opening brace
-            length: Total content length
-
-        Returns:
-            Tuple of (end_pos, brace_depth, nested_define_pos).
-            end_pos is position after closing brace (or last scanned position).
-            brace_depth is 0 on balanced match, >0 if unmatched.
-            nested_define_pos is position of first nested define, or None.
-
-        """
-        j = brace_start + 1
-        brace_depth = 1
-        in_double_quote = False
-        in_single_quote = False
-        nested_define_pos = None
-
-        while j < length and brace_depth > 0:
-            char = content[j]
-            prev_char = content[j - 1] if j > 0 else ""
-
-            if prev_char == "\\":
-                j += 1
-                continue
-
-            if char == '"' and not in_single_quote:
-                in_double_quote = not in_double_quote
-            elif char == "'" and not in_double_quote:
-                in_single_quote = not in_single_quote
-            elif not in_double_quote and not in_single_quote:
-                if char == "{":
-                    brace_depth += 1
-                elif char == "}":
-                    brace_depth -= 1
-                elif char == "d" and content[j:j + 6] == "define" and brace_depth == 1:
-                    define_check = re.match(r"define\s+\w+\s*\{", content[j:])
-                    if define_check and nested_define_pos is None:
-                        nested_define_pos = j
-
-            j += 1
-
-        return (j, brace_depth, nested_define_pos)
-
     def _find_define_blocks(self, content: str) -> list[tuple]:
         """Find all define blocks handling braces in quoted strings.
 
@@ -246,7 +194,7 @@ class NagiosConfigParser:
         counted_to, line_number = 0, 1
 
         while i < length:
-            define_match = _DEFINE_RE.search(content, i)
+            define_match = DEFINE_RE.search(content, i)
             if not define_match:
                 break
 
@@ -256,7 +204,17 @@ class NagiosConfigParser:
             line_number += content.count("\n", counted_to, start_pos)
             counted_to = start_pos
 
-            j, brace_depth, nested_define_pos = self._scan_block_body(content, brace_start, length)
+            # A define inside comment prose is just text; skip the rest of that line.
+            # A "#define host {" header starts a block commented out line by line,
+            # whose closing "#}" is itself a comment, so it is scanned literally.
+            kind = classify_define(content, start_pos, brace_start)
+            if kind == IN_COMMENT:
+                line_end = content.find("\n", brace_start)
+                i = length if line_end < 0 else line_end + 1
+                continue
+            j, brace_depth, nested_define_pos = scan_block(
+                content, brace_start, comment_aware=(kind == LIVE),
+            )
 
             if nested_define_pos is not None and (brace_depth > 0 or nested_define_pos < j - 1):
                 block_content = content[brace_start + 1:nested_define_pos]

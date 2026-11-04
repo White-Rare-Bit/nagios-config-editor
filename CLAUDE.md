@@ -54,6 +54,7 @@ All service methods return `OperationResult(success: bool, error: str = None, da
 | `app/stable_keys.py` | Stable key generation and lookup helpers |
 | `app/backup_manager.py` | Zip backups, restore |
 | `app/nagios_parser.py` | Parse .cfg files |
+| `app/nagios_syntax.py` | Shared define-block scanner (comment/quote rules) used by both the parser and `file_operations`, so they always agree where a block ends |
 | `app/nagios_model.py` | NagiosObject, NAME_FIELDS, REFERENCE_FIELDS, domain constants, `format_object_block` (renders a define block) |
 | `app/file_operations.py` | Atomic file ops, path safety |
 | `app/git_service.py` | Git wrapper, retry logic |

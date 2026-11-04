@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 
 from .nagios_model import OperationResult, format_object_block
+from .nagios_syntax import LIVE, classify_define, scan_block
 
 logger = logging.getLogger(__name__)
 
@@ -89,41 +90,24 @@ def _normalize_block_spacing(before: str, middle: str, after: str) -> str:
     return result
 
 
-def _find_matching_brace(content: str, brace_open: int) -> int | None:
-    """Find the position after the matching closing brace, respecting quotes.
+def _find_matching_brace(content: str, brace_open: int, comment_aware: bool = True) -> int | None:
+    """Find the position after the matching closing brace.
+
+    Uses the same scanner as the parser (nagios_syntax.scan_block), so an edit
+    or delete always ends where the parser thinks the object ends: quotes and
+    comment text (including apostrophes in comments) are handled identically.
 
     Args:
         content: Full file content
         brace_open: Position of the opening brace
+        comment_aware: False only for blocks commented out line by line
 
     Returns:
         Position after closing brace, or None if unmatched
 
     """
-    brace_count = 1
-    pos = brace_open + 1
-    in_double_quote = False
-    in_single_quote = False
-    while pos < len(content) and brace_count > 0:
-        char = content[pos]
-        prev_char = content[pos - 1] if pos > 0 else ""
-
-        if prev_char == "\\":
-            pos += 1
-            continue
-
-        if char == '"' and not in_single_quote:
-            in_double_quote = not in_double_quote
-        elif char == "'" and not in_double_quote:
-            in_single_quote = not in_single_quote
-        elif not in_double_quote and not in_single_quote:
-            if char == "{":
-                brace_count += 1
-            elif char == "}":
-                brace_count -= 1
-        pos += 1
-
-    return pos if brace_count == 0 else None
+    end_pos, brace_depth, _nested = scan_block(content, brace_open, comment_aware=comment_aware)
+    return end_pos if brace_depth == 0 else None
 
 
 def _locate_define_pos(content: str, char_pos: int, target_line: int, lines: list) -> int:
@@ -191,7 +175,8 @@ def find_block_range(content: str, target_line: int) -> tuple[int, int] | None:
         return None
 
     brace_open = define_pos + remaining.index("{")
-    end_pos = _find_matching_brace(content, brace_open)
+    kind = classify_define(content, define_pos, brace_open)
+    end_pos = _find_matching_brace(content, brace_open, comment_aware=(kind == LIVE))
     if end_pos is None:
         return None
 
