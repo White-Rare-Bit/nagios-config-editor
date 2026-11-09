@@ -2,10 +2,14 @@
 
 Provides business logic and unified CRUD operations with automatic parser reload.
 Eliminates temporal coupling: callers no longer need to remember to call reload_config().
+
+Which files the service reads and writes is decided per call from what is on
+disk, never from a flag in memory: while a shadow copy exists the service
+works on it, otherwise on the original config. Callers always pass and
+receive *logical* paths (original config locations); see shadow_copy_manager.
 """
 
 import logging
-import multiprocessing
 import os
 import re
 from contextlib import contextmanager
@@ -19,9 +23,15 @@ from .file_operations import (
 )
 from .nagios_model import NAME_FIELDS, NagiosObject, OperationResult
 from .nagios_parser import NagiosConfigParser
+from .process_lock import ProcessLock
 from .stable_keys import parse_stable_key
 
 logger = logging.getLogger(__name__)
+
+_NOT_STAGED_ERROR = (
+    "No staging session is active. Changes must go through the shadow copy, "
+    "never directly to the live configuration."
+)
 
 
 class NagiosService:
@@ -29,77 +39,159 @@ class NagiosService:
 
     Wraps the parser and file operations, providing a unified interface
     with automatic state synchronization (reload after write).
+
+    Args:
+        config_path: Single config directory (shorthand for cfg_dirs=[...]).
+        cfg_dirs: Config root directories.
+        cfg_files: Individual config files outside the roots (read-only:
+            they are not part of the shadow copy and are not listed while
+            staging is active).
+        shadow_manager: When given, the service is staging-aware: it reads
+            the shadow copy whenever one exists, refuses to write outside
+            one, and notices changes made by other worker processes. Without
+            it the service reads and writes the given directories directly
+            (unit tests, scripts).
     """
 
-    def __init__(self, config_path=None, *, cfg_dirs=None, cfg_files=None):
+    def __init__(self, config_path=None, *, cfg_dirs=None, cfg_files=None, shadow_manager=None):
         if config_path is not None:
             self._cfg_dirs = [config_path]
             self._cfg_files = []
         else:
             self._cfg_dirs = list(cfg_dirs or [])
             self._cfg_files = list(cfg_files or [])
+        self._shadow = shadow_manager
         self._parser: NagiosConfigParser | None = None
-        self._lock = multiprocessing.Lock()
+        # Generation the cached parser was built at (see _current_token).
+        self._parser_token: str | None = None
+        # A file lock when workers share a shadow manager, so writes and
+        # parses exclude other worker processes too.
+        self._lock = ProcessLock(shadow_manager.lock_file("service") if shadow_manager else None)
         # Flag to indicate parser state is inconsistent with disk state.
         # When True, all CRUD operations are blocked until explicit reload succeeds.
         self._parser_corrupted = False
 
     @property
     def config_path(self) -> str:
-        """First cfg_dir for backward compat. Returns empty string if none."""
+        """First config root (logical). Returns empty string if none."""
         if self._cfg_dirs:
             return str(Path(self._cfg_dirs[0]).resolve())
         return ""
 
-    @config_path.setter
-    def config_path(self, path: str) -> None:
-        """Set single config path (backward compat, replaces all dirs)."""
-        with self._lock:
-            self._cfg_dirs = [path]
-            self._cfg_files = []
-            self._parser = None
-
     @property
     def cfg_dirs(self) -> list[str]:
+        """Config roots as logical paths (the original directories)."""
         return list(self._cfg_dirs)
 
     @property
     def cfg_files(self) -> list[str]:
         return list(self._cfg_files)
 
-    def set_roots(self, cfg_dirs, cfg_files):
-        """Update config roots and clear parser cache."""
-        with self._lock:
-            self._cfg_dirs = list(cfg_dirs)
-            self._cfg_files = list(cfg_files)
-            self._parser = None
+    # =========================================================================
+    # Staging awareness
+    # =========================================================================
+
+    def staging_active(self) -> bool:
+        """True while a shadow copy exists (checked on disk every time)."""
+        return self._shadow is not None and self._shadow.has_shadow()
+
+    @property
+    def active_dirs(self) -> list[tuple[str, str]]:
+        """(physical_dir, logical_dir) for each root: where to read it now, and its name."""
+        shadow = self._shadow
+        if shadow is not None and shadow.has_shadow():
+            return [(physical, logical) for _name, physical, logical
+                    in shadow.ordered_root_pairs()]
+        return [(d, d) for d in self._cfg_dirs]
+
+    def physical_path(self, path: str) -> str | None:
+        """Where a logical path must be read or written right now.
+
+        Returns None when the path may not be written: staging is required
+        but not active, or the path is outside every config root.
+        """
+        if self._shadow is None:
+            return path
+        if not self._shadow.has_shadow():
+            return None
+        return self._shadow.physical_path(path)
+
+    def _unwritable(self, path: str) -> OperationResult:
+        """Explain why physical_path() returned None for a path."""
+        if self._shadow is not None and not self._shadow.has_shadow():
+            return OperationResult(False, _NOT_STAGED_ERROR)
+        return OperationResult(
+            False, f"Path is outside the configuration directories: {path}",
+        )
+
+    def _current_token(self) -> str:
+        return self._shadow.generation() if self._shadow is not None else ""
+
+    def _mark_changed(self) -> None:
+        """Tell every worker (including this one) that the config changed."""
+        if self._shadow is not None:
+            self._shadow.bump_generation()
+
+    def _build_parser(self) -> NagiosConfigParser:
+        """Parse whatever is current on disk; objects get logical source_file paths."""
+        shadow = self._shadow
+        if shadow is not None and shadow.has_shadow():
+            pairs = shadow.ordered_root_pairs()
+            parser = NagiosConfigParser(
+                cfg_dirs=[physical for _name, physical, _logical in pairs],
+            )
+            parser.parse_all()
+            self._relabel_logical(parser, pairs)
+            return parser
+        parser = NagiosConfigParser(cfg_dirs=self._cfg_dirs, cfg_files=self._cfg_files)
+        parser.parse_all()
+        return parser
+
+    @staticmethod
+    def _relabel_logical(parser: NagiosConfigParser, pairs) -> None:
+        """Rewrite shadow paths on parsed objects to their logical paths."""
+        prefixes = [(physical + os.sep, logical + os.sep) for _name, physical, logical in pairs]
+
+        def to_logical(path: str) -> str:
+            for physical_prefix, logical_prefix in prefixes:
+                if path.startswith(physical_prefix):
+                    return logical_prefix + path[len(physical_prefix):]
+            return path
+
+        for obj in parser.objects:
+            obj.source_file = to_logical(obj.source_file)
+        parser.files_parsed = [to_logical(f) for f in parser.files_parsed]
+
+    def _ensure_parser(self) -> NagiosConfigParser:
+        """Return an up-to-date parser. Caller holds self._lock."""
+        # Read the token before parsing: if another worker changes things
+        # mid-parse the stored token is already old and the next call reparses.
+        token = self._current_token()
+        if self._parser is None or token != self._parser_token:
+            self._parser = self._build_parser()
+            self._parser_token = token
+        return self._parser
 
     @property
     def parser(self) -> NagiosConfigParser:
-        """Get or create the parser (thread-safe)."""
+        """Get the parser, rebuilding it if the config changed on disk (thread-safe)."""
         with self._lock:
-            if self._parser is None:
-                self._parser = NagiosConfigParser(
-                    cfg_dirs=self._cfg_dirs,
-                    cfg_files=self._cfg_files,
-                )
-                self._parser.parse_all()
-            return self._parser
+            return self._ensure_parser()
 
     def reload(self) -> NagiosConfigParser:
         """Force reload of configuration (thread-safe).
 
         Also clears the _parser_corrupted flag on success, allowing
-        CRUD operations to resume after a reload.
+        CRUD operations to resume after a reload, and invalidates the
+        cached parser of every other worker.
         """
         with self._lock:
-            self._parser = NagiosConfigParser(
-                cfg_dirs=self._cfg_dirs,
-                cfg_files=self._cfg_files,
-            )
-            self._parser.parse_all()
+            self._mark_changed()
+            token = self._current_token()
+            self._parser = self._build_parser()
+            self._parser_token = token
             self._parser_corrupted = False
-            logger.debug("Parser reload: cfg_dirs=%s", self._cfg_dirs)
+            logger.debug("Parser reload: cfg_dirs=%s staging=%s", self._cfg_dirs, self.staging_active())
             return self._parser
 
     def _validate_path_safety(
@@ -161,13 +253,7 @@ class NagiosService:
                 # write changes
         """
         with self._lock:
-            if self._parser is None:
-                self._parser = NagiosConfigParser(
-                    cfg_dirs=self._cfg_dirs,
-                    cfg_files=self._cfg_files,
-                )
-                self._parser.parse_all()
-            yield self._parser
+            yield self._ensure_parser()
 
     # =========================================================================
     # Query Methods
@@ -297,13 +383,13 @@ class NagiosService:
             to block subsequent operations until explicit reload succeeds.
 
         """
+        # The file is already written, so other workers must reparse even if
+        # our own reparse below fails.
+        self._mark_changed()
         try:
-            new_parser = NagiosConfigParser(
-                cfg_dirs=self._cfg_dirs,
-                cfg_files=self._cfg_files,
-            )
-            new_parser.parse_all()
-            self._parser = new_parser
+            token = self._current_token()
+            self._parser = self._build_parser()
+            self._parser_token = token
             self._parser_corrupted = False
             return OperationResult(True)
         except Exception as e:  # noqa: BLE001
@@ -354,7 +440,7 @@ class NagiosService:
         """Create a new object in a file.
 
         Args:
-            target_file: Path to the target config file
+            target_file: Logical path of the target config file
             obj_type: Object type (host, service, etc.)
             attrs: Attribute key-value pairs
             after_block_line: Line number to insert after (None = end)
@@ -370,9 +456,13 @@ class NagiosService:
             if corrupted_error:
                 return corrupted_error
 
+            physical_file = self.physical_path(target_file)
+            if physical_file is None:
+                return self._unwritable(target_file)
+
             try:
                 result = add_object_to_file(
-                    target_file,
+                    physical_file,
                     obj_type,
                     attrs,
                     after_block_line,
@@ -418,7 +508,7 @@ class NagiosService:
         """Update an object's attributes in place.
 
         Args:
-            source_file: Path to the config file
+            source_file: Logical path of the config file
             line_number: Line number where object starts
             new_attrs: New attributes dictionary
             obj_type: Object type (for formatting)
@@ -434,9 +524,13 @@ class NagiosService:
             if corrupted_error:
                 return corrupted_error
 
+            physical_file = self.physical_path(source_file)
+            if physical_file is None:
+                return self._unwritable(source_file)
+
             try:
                 result = edit_object_in_file(
-                    source_file,
+                    physical_file,
                     line_number,
                     new_attrs,
                     obj_type,
@@ -478,7 +572,7 @@ class NagiosService:
         """Delete an object from its file.
 
         Args:
-            source_file: Path to the config file
+            source_file: Logical path of the config file
             line_number: Line number where object starts
 
         Returns:
@@ -491,8 +585,12 @@ class NagiosService:
             if corrupted_error:
                 return corrupted_error
 
+            physical_file = self.physical_path(source_file)
+            if physical_file is None:
+                return self._unwritable(source_file)
+
             try:
-                result = delete_object_from_file(source_file, line_number)
+                result = delete_object_from_file(physical_file, line_number)
                 if not result.success:
                     logger.error(
                         "delete_object failed: source_file=%s line_number=%s error=%s",
@@ -550,9 +648,16 @@ class NagiosService:
             if corrupted_error:
                 return corrupted_error
 
+            physical_source = self.physical_path(source_file)
+            if physical_source is None:
+                return self._unwritable(source_file)
+            physical_target = self.physical_path(target_file)
+            if physical_target is None:
+                return self._unwritable(target_file)
+
             try:
                 result = move_object_between_files(
-                    source_file, source_line, target_file,
+                    physical_source, source_line, physical_target,
                     obj_type, attrs, insert_line,
                 )
                 if not result.success:

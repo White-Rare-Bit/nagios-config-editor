@@ -42,6 +42,18 @@ sudo -u nagios venv/bin/gunicorn -w 2 -b 127.0.0.1:8080 wsgi:app
 
 **5. Open `http://<host>:8080` in a browser to confirm it works.**
 
+### Workers
+
+Running several Gunicorn workers (`-w 2` or more) is supported. Workers share
+nothing in memory: the staging session, its lock, undo history and the saved
+settings all live on disk, and file locks keep workers from interleaving
+writes. Two things follow from that:
+
+- All workers must run on the same host and see the same filesystem (the
+  `.shadow` directory in particular). Do not put workers on different machines.
+- Restarting or recycling a worker does not discard staged changes. A staging
+  session ends only on Apply/Commit, Discard, or a lock break.
+
 ## Configuration
 
 ### config/settings.json

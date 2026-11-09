@@ -152,8 +152,10 @@
 
     <p>
         The primary service for interacting with Nagios configuration objects. Handles all
-        CRUD operations. All mutation methods acquire a <code>multiprocessing.Lock</code>
-        to ensure thread safety. Writes go to the shadow copy when active.
+        CRUD operations. All mutation methods acquire a file lock (<code>ProcessLock</code>)
+        that excludes other threads and other worker processes. Writes always go to the shadow
+        copy; with no staging session the service refuses to write. Callers pass and receive
+        <em>logical</em> paths (the original config locations) whether or not a shadow exists.
     </p>
 
     <details class="docs-details">
@@ -318,7 +320,9 @@
             <tr>
                 <td><code>get_lock_status()</code></td>
                 <td><code>Dict</code></td>
-                <td>Detailed lock info (locked, session_id, user_name, user_email)</td>
+                <td>Detailed lock info (locked, session_id, user_name, user_email). Server-side only:
+                    routes send clients <code>public_lock_status()</code>, which replaces the session id
+                    with <code>is_owner</code>.</td>
             </tr>
             <tr>
                 <td><code>break_lock()</code></td>
@@ -401,7 +405,7 @@
     <p>
         Wraps all Git operations in subprocess calls with timeout management, retry logic for
         transient errors, and per-operation identity injection. Multi-step mutations are
-        serialized via a <code>multiprocessing.Lock</code>.
+        serialized via a file lock (<code>ProcessLock</code>), across worker processes.
     </p>
 
     <details class="docs-details">

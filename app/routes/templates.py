@@ -8,7 +8,6 @@ from ..inheritance import build_type_template_lookup, resolve_chain
 from ..nagios_model import is_template_object
 
 from .helpers import get_service
-from .objects import _resolve_stable_key
 
 bp = Blueprint("templates", __name__)
 
@@ -64,7 +63,6 @@ def _decode_and_find_object(service, stable_key):
     except (ValueError, UnicodeDecodeError):
         return None, None, (jsonify({"error": "Invalid stable key encoding"}), 400)
 
-    decoded_key = _resolve_stable_key(decoded_key)
     result = service.find_object_by_stable_key(decoded_key)
     if result is None:
         return None, None, (jsonify({"error": "Object not found"}), 404)

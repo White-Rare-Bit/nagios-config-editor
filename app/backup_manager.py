@@ -1,6 +1,11 @@
 """Backup Manager for Nagios Configuration
 
 Creates timestamped zip backups before any changes and provides restore functionality.
+
+A backup covers every config root. With a single root the zip holds the files
+at their relative paths (the original layout). With several roots each root's
+files sit under ``root_N/`` and ``_backup_info.txt`` records which directory
+each ``root_N`` is, so a restore puts every file back where it came from.
 """
 
 import contextlib
@@ -19,9 +24,20 @@ logger = logging.getLogger(__name__)
 class BackupManager:
     """Manages backups of Nagios configuration files as zip archives."""
 
-    def __init__(self, config_path: str, backup_path: str | None = None):
+    def __init__(self, config_path: str, backup_path: str | None = None, *,
+                 cfg_dirs: list[str] | None = None):
+        """Create a backup manager.
+
+        Args:
+            config_path: Primary config directory. Backups go to its
+                ``backups/`` subdirectory unless backup_path is given.
+            backup_path: Directory to store backup zips in.
+            cfg_dirs: Every config root. Each one is backed up and restored
+                along with config_path. Defaults to just config_path.
+        """
         self.config_path = Path(config_path)
         self.backup_path = Path(backup_path) if backup_path else self.config_path / "backups"
+        self.roots = self._covering_roots([config_path, *(cfg_dirs or [])])
 
         # C-03: Validate backup_path != config_path to prevent empty backups
         if self.backup_path.resolve() == self.config_path.resolve():
@@ -30,8 +46,47 @@ class BackupManager:
                 "This would cause empty backups since all .cfg files would be skipped.",
             )
 
+    @staticmethod
+    def _covering_roots(dirs: list[str]) -> list[Path]:
+        """Smallest list of directories that contains every given directory.
+
+        Duplicates and directories nested inside another one are dropped, so
+        no file is backed up (or restored) twice. Order is kept.
+        """
+        resolved = []
+        for d in dirs:
+            path = Path(d).resolve()
+            if path not in resolved:
+                resolved.append(path)
+        return [
+            d for d in resolved
+            if not any(other != d and other in d.parents for other in resolved)
+        ]
+
+    @property
+    def _multi_root(self) -> bool:
+        """Whether archives use the ``root_N/`` layout with a root table.
+
+        The plain layout (paths relative to config_path, as in backups made
+        before multi-root support) is only used when config_path is the one
+        and only root, so a plain archive always means "relative to
+        config_path".
+        """
+        return len(self.roots) > 1 or self.roots[0] != self.config_path.resolve()
+
     def _collect_config_files(self):
-        """Walk config dir, yield (cfg_file_path, rel_path) for each .cfg file.
+        """Yield every .cfg file of every root as (path, archive_name, was_symlink).
+
+        archive_name is the path inside the zip: relative to the root, with a
+        ``root_N/`` prefix when there are several roots.
+        """
+        for index, root in enumerate(self.roots):
+            prefix = Path(f"root_{index}") if self._multi_root else Path()
+            for cfg_file, rel_path, is_symlink in self._collect_root_files(root):
+                yield cfg_file, (prefix / rel_path if rel_path is not None else None), is_symlink
+
+    def _collect_root_files(self, config_root: Path):
+        """Walk one config root, yield (cfg_file_path, rel_path) for each .cfg file.
 
         Skips the backup directory, non-.cfg files, and symlinks.
         Returns tuples of (Path, Path, was_symlink) where was_symlink indicates
@@ -39,11 +94,12 @@ class BackupManager:
 
         S-02: Uses os.walk with followlinks=False to avoid following symlinks.
         """
-        for root, dirs, files in os.walk(self.config_path, followlinks=False):
+        backup_dir = self.backup_path.resolve()
+        for root, dirs, files in os.walk(config_root, followlinks=False):
             root_path = Path(root)
             # Skip the backup directory
             try:
-                root_path.relative_to(self.backup_path)
+                root_path.relative_to(backup_dir)
                 dirs[:] = []  # Don't descend into backup directory
                 continue
             except ValueError:
@@ -59,7 +115,7 @@ class BackupManager:
                     yield cfg_file, None, True
                     continue
 
-                rel_path = cfg_file.relative_to(self.config_path)
+                rel_path = cfg_file.relative_to(config_root)
                 yield cfg_file, rel_path, False
 
     def create_backup(self, description: str = "", user_name: str = "", user_email: str = "") -> str:
@@ -107,6 +163,8 @@ class BackupManager:
             f"Description: {description}",
             f"Source: {self.config_path}",
         ]
+        if self._multi_root:
+            lines.extend(f"Root root_{i}: {root}" for i, root in enumerate(self.roots))
         if user_name:
             lines.append(f"User name: {user_name}")
         if user_email:
@@ -239,25 +297,72 @@ class BackupManager:
 
         return restored_count, skipped_count
 
-    def _replace_config_files(self, temp_path: Path) -> None:
-        """Remove current .cfg files and move extracted ones into config dir.
+    @staticmethod
+    def _recorded_roots(zip_path: Path) -> dict[str, Path]:
+        """Read the ``root_N -> directory`` table of a multi-root backup.
+
+        Empty for single-root backups (and for backups made before multi-root
+        support), whose files are stored relative to the primary directory.
+        """
+        roots = {}
+        try:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                if "_backup_info.txt" not in zf.namelist():
+                    return roots
+                for line in zf.read("_backup_info.txt").decode("utf-8").splitlines():
+                    if line.startswith("Root root_"):
+                        name, _, path = line[len("Root "):].partition(": ")
+                        if path:
+                            roots[name] = Path(path)
+        except (zipfile.BadZipFile, OSError):
+            pass
+        return roots
+
+    def _restore_plan(self, zip_path: Path, temp_path: Path) -> list[tuple[Path, Path]]:
+        """Decide where the extracted files go: [(extracted_dir, config_root)].
+
+        A backup may only be restored into directories that are config roots
+        now. What a zip claims about its origin is never trusted as a place
+        to write to.
+        """
+        recorded = self._recorded_roots(zip_path)
+        if not recorded:
+            return [(temp_path, self.config_path.resolve())]
+        plan = []
+        for name, original in recorded.items():
+            original = original.resolve()
+            if original in self.roots:
+                plan.append((temp_path / name, original))
+            else:
+                logger.warning("restore: %s (%s) is not a config root any more; skipped", name, original)
+        return plan
+
+    def _replace_config_files(self, temp_path: Path, config_root: Path | None = None) -> int:
+        """Remove current .cfg files and move extracted ones into a config root.
 
         Phase 3: Remove current config files (skipping backup directory).
         Phase 4: Move extracted files from temp to config directory.
+
+        Returns the number of files put in place.
         """
-        for cfg_file in self.config_path.rglob("*.cfg"):
+        config_root = config_root or self.config_path.resolve()
+        backup_dir = self.backup_path.resolve()
+        for cfg_file in config_root.rglob("*.cfg"):
             try:
-                cfg_file.relative_to(self.backup_path)
+                cfg_file.resolve().relative_to(backup_dir)
                 continue  # Skip files in backups directory
             except ValueError:
                 pass
             cfg_file.unlink()
 
+        moved = 0
         for cfg_file in temp_path.rglob("*.cfg"):
             rel_path = cfg_file.relative_to(temp_path)
-            dest_path = self.config_path / rel_path
+            dest_path = config_root / rel_path
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(cfg_file), str(dest_path))
+            moved += 1
+        return moved
 
     def restore_backup(self, backup_name: str, user_name: str = "", user_email: str = "") -> dict:
         """Restore configuration from a zip backup.
@@ -292,8 +397,13 @@ class BackupManager:
             if restored_count == 0:
                 raise ValueError("Backup contains no valid .cfg files to restore")
 
-            # Phase 3 & 4: Remove old configs and move new ones
-            self._replace_config_files(temp_path)
+            # Phase 3 & 4: Remove old configs and move new ones, root by root
+            plan = self._restore_plan(backup_path, temp_path)
+            if not plan:
+                raise ValueError("Backup was made for directories that are not config roots now")
+            placed = sum(self._replace_config_files(src, root) for src, root in plan)
+            skipped_count += restored_count - placed
+            restored_count = placed
 
             return {
                 "restored_from": backup_name,

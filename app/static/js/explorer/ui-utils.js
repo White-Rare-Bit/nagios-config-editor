@@ -121,6 +121,19 @@ export function toRelativePath(absPath) {
 }
 
 /**
+ * Encode a file or folder path for use as the last part of an API URL
+ * (DELETE /api/files/<path>, DELETE /api/folders/<path>).
+ * A URL path cannot carry the leading "/" of an absolute path, so it is
+ * dropped; the server recognises the path by the config root it is in,
+ * which works for every root, not just the primary one.
+ * @param {string} absPath - Absolute path
+ * @returns {string} URL-encoded path segment
+ */
+export function toApiPathSegment(absPath) {
+    return encodeURIComponent(absPath.replace(/^\/+/, ''));
+}
+
+/**
  * Convert absolute path to display path with config folder prefix
  * @param {string} path - Absolute path
  * @returns {string} Display path with config root name

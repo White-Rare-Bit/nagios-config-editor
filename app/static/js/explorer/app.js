@@ -21,7 +21,8 @@ import { initTargetPane, renderTargetPane, navigateToObjectByIndex } from './fil
 import { loadImpactAndRelationships } from './impact-section.js'; // circular — safe (function-level)
 import { cleanupDragState } from './drag-drop.js';
 import { refreshPanelTiers } from './panel-resizer.js';
-import { switchTabs, getIcon, toRelativePath } from './ui-utils.js';
+import { switchTabs, getIcon } from './ui-utils.js';
+import { StableKey } from '../stable-key.js';
 import { escapeHtml } from '../app.js';
 import { escapeJs } from '../base.js';
 import { showToast } from '../ui-notifications.js';
@@ -100,7 +101,7 @@ const mySessionId = getSessionId();
 // resetStagingState is now defined in state-management.js
 
 // Update UI to show/hide editing lock state (banner is handled by base.html)
-// Lock check is now server-side (ensure_shadow_lock). These are kept for API compatibility.
+// Lock check is now server-side (staged_mutation in routes/mutation.py). These are kept for API compatibility.
 export function updateEditingLockedUI() {}
 export function canEdit() { return true; }
 
@@ -452,21 +453,16 @@ export function buildTypeTree(container, objects) {
  */
 function isObjectCreated(obj) {
     if (state.createdObjectKeys.size === 0) { return false; }
-    const relPath = toRelativePath(obj.source_file);
-    const name = obj.display_name ?? obj.name ?? ('idx:' + obj.global_index);
-    const relKey = relPath + '|' + obj.object_type + '|' + name;
-    return state.createdObjectKeys.has(relKey);
+    return state.createdObjectKeys.has(StableKey.build(obj));
 }
 
 /**
- * Check if an object has changed vs the original config (using relative-path stable keys).
+ * Check if an object has changed vs the original config. The server reports
+ * changed objects by the same stable key the client builds for an object.
  */
 function isObjectChanged(obj) {
     if (state.changedObjectKeys.size === 0) { return false; }
-    const relPath = toRelativePath(obj.source_file);
-    const name = obj.display_name ?? obj.name ?? ('idx:' + obj.global_index);
-    const relKey = relPath + '|' + obj.object_type + '|' + name;
-    return state.changedObjectKeys.has(relKey);
+    return state.changedObjectKeys.has(StableKey.build(obj));
 }
 
 export function renderTreeItem(obj, showType = false) {

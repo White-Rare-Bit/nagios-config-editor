@@ -5,6 +5,20 @@ Replaces JSON-diff staging with a shadow copy architecture:
 - Direct mutations on shadow copy
 - File-level undo snapshots
 - All-or-nothing apply back to originals
+
+Everything about a staging session lives on disk under ``shadow_base_path``:
+whether one exists, who owns it, and a generation marker that changes with
+every mutation. Worker processes share nothing else, so nothing about staging
+may be kept only in memory.
+
+Two path namespaces exist, and this class is the only place that converts
+between them:
+
+- *logical* paths are the original config locations
+  (``/etc/nagios/objects/hosts.cfg``). The API, object ``source_file`` values
+  and stable keys always use them, whether or not a shadow exists.
+- *physical* paths are where the bytes are while staging is active
+  (``<shadow_base>/config/root_0/hosts.cfg``).
 """
 
 import difflib
@@ -12,14 +26,15 @@ import filecmp
 import hashlib
 import json
 import logging
-import multiprocessing
 import os
 import shutil
+import tempfile
 import time
 import uuid
 
 from .config_discovery import PROTECTED_FILENAMES
 from .nagios_model import OperationResult
+from .process_lock import ProcessLock
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +49,8 @@ class ShadowCopyManager:
         <shadow_base>/lock.json         - Session lock info
         <shadow_base>/snapshots/        - Undo snapshots
         <shadow_base>/checksums.json    - Original file hashes for conflict detection
+        <shadow_base>/generation        - Changes on every mutation (outlives the shadow)
+        <shadow_base>/*.lock            - Cross-process lock files (outlive the shadow)
     """
 
     def __init__(self, config_path=None, shadow_base_path=None, *, cfg_dirs=None):
@@ -44,7 +61,8 @@ class ShadowCopyManager:
         else:
             self._cfg_dirs = []
         self.shadow_base_path = shadow_base_path or ""
-        self._lock = multiprocessing.Lock()
+        # A file lock, so it also excludes other worker processes.
+        self._lock = ProcessLock(self.lock_file("shadow"))
 
     @property
     def config_path(self) -> str:
@@ -60,6 +78,11 @@ class ShadowCopyManager:
     def _config_dir(self) -> str:
         """Path to the shadow config directory (top level)."""
         return os.path.realpath(os.path.join(self.shadow_base_path, "config"))
+
+    @property
+    def shadow_config_dir(self) -> str:
+        """Directory holding the shadow copies of all roots (physical paths live here)."""
+        return self._config_dir
 
     @property
     def _lock_file(self) -> str:
@@ -81,14 +104,68 @@ class ShadowCopyManager:
         """Path to the root map file."""
         return os.path.join(self.shadow_base_path, "root_map.json")
 
+    def lock_file(self, name: str) -> str | None:
+        """Path of a cross-process lock file kept next to the shadow.
+
+        Returns None when there is no shadow base (a manager built without
+        one cannot be shared between processes anyway).
+        """
+        if not self.shadow_base_path:
+            return None
+        return os.path.join(self.shadow_base_path, f"{name}.lock")
+
+    # =========================================================================
+    # Generation marker
+    # =========================================================================
+
+    @property
+    def _generation_file(self) -> str:
+        return os.path.join(self.shadow_base_path, "generation")
+
+    def generation(self) -> str:
+        """Token that changes whenever the config a reader should see changes.
+
+        Every worker caches its parsed objects. Comparing this token against
+        the one it parsed at tells a worker that another worker (or itself)
+        has since mutated the shadow, created or destroyed it, or changed the
+        live config, so the cache must be rebuilt.
+        """
+        if not self.shadow_base_path:
+            return ""
+        try:
+            with open(self._generation_file, encoding="utf-8") as f:
+                return f.read()
+        except OSError:
+            return ""
+
+    def bump_generation(self) -> None:
+        """Record that the visible config changed. Atomic; safe from any worker."""
+        if not self.shadow_base_path:
+            return
+        os.makedirs(self.shadow_base_path, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(dir=self.shadow_base_path, prefix="generation.")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(uuid.uuid4().hex)
+            os.replace(tmp_path, self._generation_file)
+        except BaseException:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise
+
     # =========================================================================
     # Root map
     # =========================================================================
 
     def _build_root_map(self) -> dict[str, str]:
-        """Build root map: shadow_name -> original_abs_path."""
+        """Build root map: shadow_name -> original path.
+
+        Originals are symlink-resolved because the parser reports resolved
+        paths; logical paths must be the same string whether they come from
+        parsing the originals or from mapping a shadow file back.
+        """
         return {
-            f"root_{i}": os.path.abspath(d) for i, d in enumerate(self._cfg_dirs)
+            f"root_{i}": os.path.realpath(d) for i, d in enumerate(self._cfg_dirs)
         }
 
     def _save_root_map(self, root_map: dict[str, str]) -> None:
@@ -102,61 +179,98 @@ class ShadowCopyManager:
         with open(self._root_map_file, encoding="utf-8") as f:
             return json.load(f)
 
-    def _find_root_for_path(self, abs_path: str) -> tuple[str, str] | None:
-        """Find which root an absolute path belongs to.
-
-        Returns (shadow_name, original_root) or None.
-        """
-        root_map = self.get_root_map()
-        for shadow_name, original_root in root_map.items():
-            if abs_path.startswith(original_root + os.sep) or abs_path == original_root:
-                return shadow_name, original_root
-        return None
-
-    def _find_shadow_root_for_path(self, abs_shadow_path: str) -> tuple[str, str] | None:
-        """Find which root a shadow path belongs to.
-
-        Returns (shadow_name, original_root) or None.
-        """
-        root_map = self.get_root_map()
-        for shadow_name, original_root in root_map.items():
-            shadow_root = os.path.join(self._config_dir, shadow_name)
-            if abs_shadow_path.startswith(shadow_root + os.sep) or abs_shadow_path == shadow_root:
-                return shadow_name, original_root
-        return None
-
     @property
     def shadow_cfg_dirs(self) -> list[str]:
         """Return shadow directory paths for each config root."""
         root_map = self.get_root_map()
-        return [os.path.join(self._config_dir, name) for name in sorted(root_map.keys())]
+        return [os.path.join(self._config_dir, name) for name in self._ordered(root_map)]
 
     # =========================================================================
     # Path helpers
     # =========================================================================
 
-    def shadow_path_for(self, original_abs_path: str) -> str:
-        """Map an original absolute path to its shadow equivalent."""
-        result = self._find_root_for_path(original_abs_path)
-        if result is None:
-            # Fallback: use first root
-            if self._cfg_dirs:
-                rel = os.path.relpath(original_abs_path, self._cfg_dirs[0])
-                return os.path.join(self._config_dir, "root_0", rel)
-            return os.path.join(self._config_dir, original_abs_path)
-        shadow_name, original_root = result
-        rel = os.path.relpath(original_abs_path, original_root)
-        return os.path.join(self._config_dir, shadow_name, rel)
+    @staticmethod
+    def _ordered(names) -> list[str]:
+        """Root names in config order (root_2 before root_10)."""
+        return sorted(names, key=lambda name: int(name.rsplit("_", 1)[1]))
 
-    def original_path_for(self, shadow_abs_path: str) -> str:
-        """Map a shadow absolute path back to the original."""
-        result = self._find_shadow_root_for_path(shadow_abs_path)
-        if result is None:
-            return shadow_abs_path
-        shadow_name, original_root = result
-        shadow_root = os.path.join(self._config_dir, shadow_name)
-        rel = os.path.relpath(shadow_abs_path, shadow_root)
-        return os.path.join(original_root, rel)
+    def ordered_root_pairs(self) -> list[tuple[str, str, str]]:
+        """root_pairs() in config order: the primary root first."""
+        return sorted(self.root_pairs(), key=lambda p: int(p[0].rsplit("_", 1)[1]))
+
+    def root_pairs(self) -> list[tuple[str, str, str]]:
+        """Return (shadow_name, physical_root, logical_root) for each root.
+
+        Longest logical root first, so a root nested inside another one wins.
+        """
+        root_map = self.get_root_map() if self.has_shadow() else self._build_root_map()
+        pairs = [
+            (name, os.path.join(self._config_dir, name), original)
+            for name, original in root_map.items()
+        ]
+        pairs.sort(key=lambda p: len(p[2]), reverse=True)
+        return pairs
+
+    @staticmethod
+    def _rel_inside(path: str, root: str) -> str | None:
+        """Path of ``path`` relative to ``root``, or None if it is not inside."""
+        if path == root:
+            return ""
+        if path.startswith(root + os.sep):
+            return path[len(root) + 1:]
+        return None
+
+    def _locate(self, path: str) -> tuple[str, str, str, str] | None:
+        """Find the root a logical or physical path belongs to.
+
+        Returns (shadow_name, physical_root, logical_root, rel) or None when
+        the path is outside every config root.
+        """
+        norm = os.path.normpath(path)
+        candidates = [norm]
+        resolved = os.path.realpath(norm)
+        if resolved != norm:
+            candidates.append(resolved)
+        pairs = self.root_pairs()
+        # Try every shadow root before any original root: the shadow base may
+        # itself be inside a config root, and a shadow path must then not be
+        # taken for a file of that root.
+        for use_physical in (True, False):
+            for candidate in candidates:
+                for name, physical_root, logical_root in pairs:
+                    rel = self._rel_inside(candidate, physical_root if use_physical else logical_root)
+                    if rel is not None:
+                        return name, physical_root, logical_root, rel
+        return None
+
+    def physical_path(self, path: str) -> str | None:
+        """Where a logical path lives in the shadow. None if outside every root.
+
+        Unlike ``shadow_path_for`` this never guesses a root: a path that is
+        not inside a config root has no shadow location, and callers must
+        refuse to write it rather than fall through to the live file.
+        """
+        located = self._locate(path)
+        if located is None:
+            return None
+        _name, physical_root, _logical_root, rel = located
+        return os.path.join(physical_root, rel) if rel else physical_root
+
+    def logical_path(self, path: str) -> str:
+        """The original-config path for a shadow path (others pass through)."""
+        located = self._locate(path)
+        if located is None:
+            return path
+        _name, _physical_root, logical_root, rel = located
+        return os.path.join(logical_root, rel) if rel else logical_root
+
+    def composite_path(self, path: str) -> str | None:
+        """``root_N/rel`` form used by snapshots and diffs. None if outside every root."""
+        located = self._locate(path)
+        if located is None:
+            return None
+        name, _physical_root, _logical_root, rel = located
+        return f"{name}/{rel}" if rel else name
 
     def shadow_path(self, relative_path: str) -> str:
         """Return absolute path to a file in the shadow config directory.
@@ -243,18 +357,24 @@ class ShadowCopyManager:
                     error="Shadow copy already exists. Another session owns the lock.",
                 )
 
+            # Build the copy under a temporary name and rename it into place
+            # last. has_shadow() looks for the final name, so another worker
+            # either sees no shadow or a complete one, never a half-copied one.
+            building = os.path.join(
+                os.path.abspath(self.shadow_base_path), f"config.building-{uuid.uuid4().hex[:8]}",
+            )
             try:
                 os.makedirs(self.shadow_base_path, exist_ok=True)
-                os.makedirs(self._config_dir, exist_ok=True)
+                self._remove_leftovers()
+                os.makedirs(building)
 
                 # Build and save root map
                 root_map = self._build_root_map()
-                self._save_root_map(root_map)
 
                 # Copy each root into its shadow subdir
                 shadow_base_abs = os.path.abspath(self.shadow_base_path)
                 for shadow_name, original_root in root_map.items():
-                    shadow_subdir = os.path.join(self._config_dir, shadow_name)
+                    shadow_subdir = os.path.join(building, shadow_name)
                     if os.path.isdir(original_root):
                         def _ignore(directory, contents, _base=shadow_base_abs, _prot=PROTECTED_FILENAMES):
                             ignored = set()
@@ -276,6 +396,8 @@ class ShadowCopyManager:
                     else:
                         os.makedirs(shadow_subdir, exist_ok=True)
 
+                self._save_root_map(root_map)
+
                 # Hash original files for conflict detection
                 checksums = self._hash_all_roots()
                 with open(self._checksums_file, "w", encoding="utf-8") as f:
@@ -294,11 +416,16 @@ class ShadowCopyManager:
                 # Create snapshots directory
                 os.makedirs(self._snapshots_dir, exist_ok=True)
 
+                # Publish: from here on every worker sees the shadow.
+                os.rename(building, self._config_dir)
+                self.bump_generation()
+
                 logger.info("Shadow copy created for session %s by %s (%d roots)",
                             session_id, user_name, len(root_map))
                 return OperationResult(success=True)
 
             except Exception as e:
+                shutil.rmtree(building, ignore_errors=True)
                 self._cleanup_shadow_dirs()
                 logger.error("Failed to create shadow copy: %s", e)
                 return OperationResult(success=False, error=str(e))
@@ -319,14 +446,55 @@ class ShadowCopyManager:
                 return OperationResult(success=False, error=str(e))
 
     def _cleanup_shadow_dirs(self) -> None:
-        """Remove shadow config, lock, root_map, checksums, and snapshots."""
+        """Remove shadow config, lock, root_map, checksums, and snapshots.
+
+        The config directory is renamed away first so the shadow disappears
+        for every worker in one step; the slow recursive delete happens after.
+        """
         if os.path.isdir(self._config_dir):
-            shutil.rmtree(self._config_dir)
+            trash = os.path.join(
+                os.path.abspath(self.shadow_base_path), f"config.trash-{uuid.uuid4().hex[:8]}",
+            )
+            os.rename(self._config_dir, trash)
+            shutil.rmtree(trash, ignore_errors=True)
         for f in (self._lock_file, self._root_map_file, self._checksums_file):
             if os.path.isfile(f):
                 os.remove(f)
         if os.path.isdir(self._snapshots_dir):
             shutil.rmtree(self._snapshots_dir)
+        self.bump_generation()
+
+    def _remove_leftovers(self) -> None:
+        """Delete half-built or half-deleted copies left by a crashed worker."""
+        base = os.path.abspath(self.shadow_base_path)
+        if not os.path.isdir(base):
+            return
+        for name in os.listdir(base):
+            if name.startswith(("config.building-", "config.trash-")):
+                shutil.rmtree(os.path.join(base, name), ignore_errors=True)
+
+    def discard_if_stale(self) -> bool:
+        """Destroy a shadow that was made for different config roots.
+
+        Called at startup. A shadow that matches the current roots is a live
+        staging session (the server restarted, or this is one worker of
+        several booting) and is kept. One made for other roots cannot be
+        applied to this configuration, so it is removed.
+
+        Returns True if a shadow was removed.
+        """
+        with self._lock:
+            if not self.has_shadow():
+                return False
+            try:
+                matches = self.get_root_map() == self._build_root_map()
+            except (OSError, json.JSONDecodeError):
+                matches = False
+            if matches:
+                return False
+            logger.warning("Removing shadow copy made for different config roots")
+            self._cleanup_shadow_dirs()
+            return True
 
     # =========================================================================
     # Lock management
@@ -339,7 +507,9 @@ class ShadowCopyManager:
             Dict with locked, session_id, user_name, user_email, created_at
 
         """
-        if not os.path.isfile(self._lock_file):
+        # A lock only means something while its shadow exists (a crash can
+        # leave lock.json behind without one).
+        if not self.has_shadow() or not os.path.isfile(self._lock_file):
             return {"locked": False}
 
         try:
@@ -374,6 +544,24 @@ class ShadowCopyManager:
         if not status.get("locked"):
             return True
         return status.get("session_id") == session_id
+
+    def is_owner(self, session_id: str | None) -> bool:
+        """True only if a shadow exists and this session holds its lock."""
+        if not session_id or not self.has_shadow():
+            return False
+        return self.get_lock_status().get("session_id") == session_id
+
+    def update_identity(self, user_name: str, user_email: str) -> None:
+        """Change the name/email recorded for the lock owner."""
+        with self._lock:
+            if not os.path.isfile(self._lock_file):
+                return
+            with open(self._lock_file, encoding="utf-8") as f:
+                lock_data = json.load(f)
+            lock_data["user_name"] = user_name
+            lock_data["user_email"] = user_email
+            with open(self._lock_file, "w", encoding="utf-8") as f:
+                json.dump(lock_data, f)
 
     def break_lock(self) -> OperationResult:
         """Force-break the lock by destroying the shadow copy.
@@ -496,6 +684,7 @@ class ShadowCopyManager:
                             pass  # Dir not empty — leave it
 
                 shutil.rmtree(snapshot_dir)
+                self.bump_generation()
 
                 logger.info("Undo applied: %s", meta.get("description", ""))
                 return OperationResult(success=True)
@@ -568,21 +757,31 @@ class ShadowCopyManager:
             original_files = self._collect_files_for_root(original_root)
             shadow_files = self._collect_files_for_root(shadow_subdir)
 
+            def _entry(rel, status, _name=shadow_name, _display=display_root, _root=original_root):
+                return {
+                    "path": f"{_name}/{rel}",
+                    "display_path": f"{_display}/{rel}",
+                    # Logical path: the same string /api/files and object
+                    # source_file use, so clients can match without guessing.
+                    "abs_path": os.path.join(_root, rel),
+                    "status": status,
+                }
+
             # Filter out protected files from original (they weren't copied)
             original_files = {f for f in original_files
                               if os.path.basename(f) not in PROTECTED_FILENAMES}
 
             for f in sorted(shadow_files - original_files):
-                changes.append({"path": f"{shadow_name}/{f}", "display_path": f"{display_root}/{f}", "status": "added"})
+                changes.append(_entry(f, "added"))
 
             for f in sorted(original_files - shadow_files):
-                changes.append({"path": f"{shadow_name}/{f}", "display_path": f"{display_root}/{f}", "status": "deleted"})
+                changes.append(_entry(f, "deleted"))
 
             for f in sorted(original_files & shadow_files):
                 orig = os.path.join(original_root, f)
                 shad = os.path.join(shadow_subdir, f)
                 if not filecmp.cmp(orig, shad, shallow=False):
-                    changes.append({"path": f"{shadow_name}/{f}", "display_path": f"{display_root}/{f}", "status": "modified"})
+                    changes.append(_entry(f, "modified"))
 
             # Detect new empty directories
             original_dirs = self._collect_dirs_for_root(original_root)
@@ -594,6 +793,7 @@ class ShadowCopyManager:
                     changes.append({
                         "path": f"{shadow_name}/{d}",
                         "display_path": f"{display_root}/{d}",
+                        "abs_path": os.path.join(original_root, d),
                         "status": "added",
                         "is_dir": True,
                     })
@@ -725,7 +925,8 @@ class ShadowCopyManager:
         """Return stable keys of all changed Nagios objects between shadow and originals.
 
         Parses both original and shadow directories and compares objects by stable key.
-        Also includes moved keys recorded in snapshot metadata.
+        Also includes moved keys recorded in snapshot metadata. Keys use logical
+        paths, i.e. they equal the stable key of the object as served by the API.
 
         Returns:
             List of stable keys for added, modified, deleted, or moved objects
@@ -739,33 +940,34 @@ class ShadowCopyManager:
 
         root_map = self.get_root_map()
 
-        def _build_object_map(cfg_dirs: list[str]) -> dict[str, dict]:
+        def _build_object_map(cfg_dirs: list[str], logical_roots: list[str]) -> dict[str, dict]:
             parser = NagiosConfigParser(cfg_dirs=cfg_dirs)
             objects = parser.parse_all()
             # The parser reports symlink-resolved paths, so resolve the roots too;
-            # otherwise a root reached through a symlink never matches, the key
-            # falls back to the bare filename, and unchanged objects in
-            # subdirectories look changed.
+            # otherwise a root reached through a symlink never matches and
+            # unchanged objects look changed.
             real_roots = [os.path.realpath(d) for d in cfg_dirs]
             obj_map = {}
             for obj in objects:
-                # Find which root this file belongs to for relative path
+                # Key by logical path, so a key is the same string the API
+                # gives clients for that object (see stable_keys.py).
                 source = os.path.realpath(obj.source_file)
-                for root in real_roots:
+                for root, logical_root in zip(real_roots, logical_roots):
                     if os.path.commonpath([root, source]) == root:
-                        rel_path = os.path.relpath(source, root)
+                        logical = os.path.join(logical_root, os.path.relpath(source, root))
                         break
                 else:
-                    rel_path = os.path.basename(obj.source_file)
-                key = generate_stable_key(rel_path, obj.object_type, obj.get_display_name())
+                    logical = source
+                key = generate_stable_key(logical, obj.object_type, obj.get_display_name())
                 obj_map[key] = dict(obj.attributes)
             return obj_map
 
-        original_dirs = list(root_map.values())
-        shadow_dirs = [os.path.join(self._config_dir, name) for name in sorted(root_map.keys())]
+        names = self._ordered(root_map)
+        original_dirs = [root_map[name] for name in names]
+        shadow_dirs = [os.path.join(self._config_dir, name) for name in names]
 
-        orig_map = _build_object_map(original_dirs)
-        shadow_map = _build_object_map(shadow_dirs)
+        orig_map = _build_object_map(original_dirs, original_dirs)
+        shadow_map = _build_object_map(shadow_dirs, original_dirs)
 
         changed = []
         changed.extend(sorted(shadow_map.keys() - orig_map.keys()))
@@ -894,8 +1096,7 @@ class ShadowCopyManager:
 
                     elif change["status"] in ("added", "modified"):
                         os.makedirs(os.path.dirname(orig), exist_ok=True)
-                        import tempfile as _tempfile
-                        fd, tmp_path = _tempfile.mkstemp(
+                        fd, tmp_path = tempfile.mkstemp(
                             dir=os.path.dirname(orig),
                             suffix=".tmp",
                         )

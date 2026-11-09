@@ -1,56 +1,38 @@
 """Object CRUD routes — shadow copy architecture.
 
-All mutations operate on the shadow copy (or original if no shadow).
+All mutations go through staged_mutation() and operate on the shadow copy.
+Paths and stable keys in requests and responses are logical (the original
+config locations) and do not change when staging starts or ends.
 """
 
-import os
 import uuid
 
 from flask import Blueprint, jsonify, request
 
-from ..audit_service import log_audit
-from .helpers import (
-    get_service, get_shadow_manager, operation_response,
-    get_audit_user_identity, format_audit_user, audit_file_path,
-)
-from .files import ensure_shadow_lock
-
-
-def _resolve_stable_key(stable_key: str) -> str:
-    """Remap the source_file in a stable key to the active config directory."""
-    parts = stable_key.split("|")
-    if len(parts) >= 3:
-        parts[0] = _resolve_target_file(parts[0])
-        return "|".join(parts)
-    return stable_key
-
-
-def _resolve_target_file(target_file: str) -> str:
-    """Resolve target_file to be within the active config directory.
-
-    On the first mutation, ensure_shadow_lock() creates the shadow and switches
-    the service to it. But the frontend's request was built with the old path.
-    This translates that path to the shadow directory.
-    """
-    from .helpers import get_server_config
-
-    service = get_service()
-    active_dir = os.path.abspath(service.config_path)
-
-    abs_target = os.path.abspath(target_file)
-    # Already within the active config dir — return as-is (preserve relative/absolute form)
-    if abs_target.startswith(active_dir + os.sep) or abs_target == active_dir:
-        return target_file
-
-    # Remap: strip old config root prefix, join with active dir
-    original_dir = os.path.abspath(get_server_config().paths.primary_dir or "")
-    if abs_target.startswith(original_dir + os.sep):
-        rel = abs_target[len(original_dir) + 1:]
-        return os.path.join(service.config_path, rel)
-
-    return target_file
+from ..stable_keys import generate_stable_key
+from .helpers import get_service, operation_response
+from .mutation import ApiError, staged_mutation
 
 bp = Blueprint("objects", __name__)
+
+
+def _name_from_attrs(attrs: dict) -> str:
+    """Best-effort object name for audit lines (first attribute with 'name' in it)."""
+    return attrs.get(next((k for k in attrs if "name" in k.lower()), ""), "")
+
+
+def audit_attribute_changes(mutation, obj_type, obj_name, file_path, old_attrs, new_attrs, txn):
+    """Write one object_edit audit line per changed attribute."""
+    for field_name in old_attrs.keys() | new_attrs.keys():
+        old_val = old_attrs.get(field_name, "")
+        new_val = new_attrs.get(field_name, "")
+        if old_val != new_val:
+            mutation.audit(
+                "object_edit", txn=txn,
+                type=obj_type, name=obj_name,
+                file=mutation.display(file_path), field=field_name,
+                from_val=old_val, to_val=new_val,
+            )
 
 
 @bp.route("/api/objects")
@@ -87,51 +69,27 @@ def api_update_object():
     new_attrs = data.get("attributes")
 
     if not stable_key:
-        return jsonify({"error": "stable_key required"}), 400
+        raise ApiError("stable_key required")
     if not new_attrs:
-        return jsonify({"error": "attributes required"}), 400
+        raise ApiError("attributes required")
 
-    session_id = request.headers.get("X-Session-Id")
-    success, error = ensure_shadow_lock(session_id)
-    if not success:
-        return error
+    with staged_mutation() as m:
+        obj = m.require(stable_key)
+        m.snapshot([obj.source_file], f"edit {obj.object_type} {obj.get_display_name()}")
 
-    service = get_service()
-    sm = get_shadow_manager()
-    stable_key = _resolve_stable_key(stable_key)
+        # Capture old attributes before mutation for audit diffing
+        old_attrs = dict(obj.attributes)
 
-    # Snapshot the file before modifying
-    found = service.find_object_by_stable_key(stable_key)
-    if not found:
-        return jsonify({"error": f"Object not found: {stable_key}"}), 404
+        result = m.service.update_object(
+            obj.source_file, obj.line_number, new_attrs, obj.object_type,
+            inline_comments=obj.inline_comments,
+        )
 
-    _, obj = found
-    rel_path = os.path.relpath(obj.source_file, sm._config_dir)
-    sm.snapshot_files([rel_path], f"edit {obj.object_type} {obj.get_display_name()}")
-
-    # Capture old attributes before mutation for audit diffing
-    old_attrs = dict(obj.attributes)
-
-    result = service.update_object(
-        obj.source_file, obj.line_number, new_attrs, obj.object_type,
-        inline_comments=obj.inline_comments,
-    )
-
-    if result.success:
-        identity = get_audit_user_identity()
-        user = format_audit_user(identity)
-        file_display = audit_file_path(obj.source_file)
-        txn = uuid.uuid4().hex[:8]
-        for field_name in old_attrs.keys() | new_attrs.keys():
-            old_val = old_attrs.get(field_name, "")
-            new_val = new_attrs.get(field_name, "")
-            if old_val != new_val:
-                log_audit(
-                    action="object_edit", user=user, txn=txn,
-                    type=obj.object_type, name=obj.get_display_name(),
-                    file=file_display, field=field_name,
-                    from_val=old_val, to_val=new_val,
-                )
+        if result.success:
+            audit_attribute_changes(
+                m, obj.object_type, obj.get_display_name(), obj.source_file,
+                old_attrs, new_attrs, uuid.uuid4().hex[:8],
+            )
 
     return operation_response(result)
 
@@ -153,37 +111,23 @@ def api_create_object():
     after_line = data.get("after_line")
 
     if not target_file:
-        return jsonify({"error": "target_file required"}), 400
+        raise ApiError("target_file required")
     if not obj_type:
-        return jsonify({"error": "object_type required"}), 400
+        raise ApiError("object_type required")
     if not attrs:
-        return jsonify({"error": "attributes required"}), 400
+        raise ApiError("attributes required")
 
-    session_id = request.headers.get("X-Session-Id")
-    success, error = ensure_shadow_lock(session_id)
-    if not success:
-        return error
+    with staged_mutation() as m:
+        target_file = m.logical(m.resolve(target_file))
+        m.snapshot([target_file], f"create {obj_type}")
 
-    sm = get_shadow_manager()
-    service = get_service()
+        result = m.service.create_object(target_file, obj_type, attrs, after_block_line=after_line)
 
-    # Remap target_file into shadow directory if needed
-    target_file = _resolve_target_file(target_file)
-
-    rel_path = os.path.relpath(target_file, sm._config_dir)
-    sm.snapshot_files([rel_path], f"create {obj_type}")
-
-    result = service.create_object(target_file, obj_type, attrs, after_block_line=after_line)
-
-    if result.success:
-        identity = get_audit_user_identity()
-        user = format_audit_user(identity)
-        name = attrs.get(next((k for k in attrs if "name" in k.lower()), ""), "")
-        file_display = audit_file_path(target_file)
-        log_audit(
-            action="object_create", user=user,
-            type=obj_type, name=name, file=file_display,
-        )
+        if result.success:
+            m.audit(
+                "object_create",
+                type=obj_type, name=_name_from_attrs(attrs), file=m.display(target_file),
+            )
 
     return operation_response(result)
 
@@ -199,35 +143,20 @@ def api_delete_object():
     stable_key = data.get("stable_key")
 
     if not stable_key:
-        return jsonify({"error": "stable_key required"}), 400
+        raise ApiError("stable_key required")
 
-    session_id = request.headers.get("X-Session-Id")
-    success, error = ensure_shadow_lock(session_id)
-    if not success:
-        return error
+    with staged_mutation() as m:
+        obj = m.require(stable_key)
+        m.snapshot([obj.source_file], f"delete {obj.object_type} {obj.get_display_name()}")
 
-    service = get_service()
-    sm = get_shadow_manager()
-    stable_key = _resolve_stable_key(stable_key)
+        result = m.service.delete_object(obj.source_file, obj.line_number)
 
-    found = service.find_object_by_stable_key(stable_key)
-    if not found:
-        return jsonify({"error": f"Object not found: {stable_key}"}), 404
-
-    _, obj = found
-    rel_path = os.path.relpath(obj.source_file, sm._config_dir)
-    sm.snapshot_files([rel_path], f"delete {obj.object_type} {obj.get_display_name()}")
-
-    result = service.delete_object(obj.source_file, obj.line_number)
-
-    if result.success:
-        identity = get_audit_user_identity()
-        user = format_audit_user(identity)
-        file_display = audit_file_path(obj.source_file)
-        log_audit(
-            action="object_delete", user=user,
-            type=obj.object_type, name=obj.get_display_name(), file=file_display,
-        )
+        if result.success:
+            m.audit(
+                "object_delete",
+                type=obj.object_type, name=obj.get_display_name(),
+                file=m.display(obj.source_file),
+            )
 
     return operation_response(result)
 
@@ -247,54 +176,35 @@ def api_move_object():
     after_line = data.get("after_line")
 
     if not stable_key:
-        return jsonify({"error": "stable_key required"}), 400
+        raise ApiError("stable_key required")
     if not target_file:
-        return jsonify({"error": "target_file required"}), 400
+        raise ApiError("target_file required")
 
-    session_id = request.headers.get("X-Session-Id")
-    success, error = ensure_shadow_lock(session_id)
-    if not success:
-        return error
+    with staged_mutation() as m:
+        target_file = m.logical(m.resolve(target_file))
+        obj = m.require(stable_key)
 
-    service = get_service()
-    sm = get_shadow_manager()
-
-    stable_key = _resolve_stable_key(stable_key)
-    target_file = _resolve_target_file(target_file)
-
-    found = service.find_object_by_stable_key(stable_key)
-    if not found:
-        return jsonify({"error": f"Object not found: {stable_key}"}), 404
-
-    _, obj = found
-
-    # Snapshot all affected files (source and target)
-    files_to_snapshot = set()
-    files_to_snapshot.add(os.path.relpath(obj.source_file, sm._config_dir))
-    rel_target = os.path.relpath(target_file, sm._config_dir)
-    files_to_snapshot.add(rel_target)
-    moved_key = f"{rel_target}|{obj.object_type}|{obj.get_display_name()}"
-    sm.snapshot_files(
-        list(files_to_snapshot),
-        f"move {obj.object_type} {obj.get_display_name()}",
-        moved_keys=[moved_key],
-    )
-
-    result = service.move_object(
-        obj.source_file, obj.line_number, target_file,
-        obj.object_type, dict(obj.attributes),
-        insert_line=after_line,
-    )
-
-    if result.success:
-        identity = get_audit_user_identity()
-        user = format_audit_user(identity)
-        log_audit(
-            action="object_move", user=user,
-            type=obj.object_type, name=obj.get_display_name(),
-            from_file=audit_file_path(obj.source_file),
-            to_file=audit_file_path(target_file),
+        # Snapshot all affected files (source and target)
+        moved_key = generate_stable_key(target_file, obj.object_type, obj.get_display_name())
+        m.snapshot(
+            [obj.source_file, target_file],
+            f"move {obj.object_type} {obj.get_display_name()}",
+            moved_keys=[moved_key],
         )
+
+        result = m.service.move_object(
+            obj.source_file, obj.line_number, target_file,
+            obj.object_type, dict(obj.attributes),
+            insert_line=after_line,
+        )
+
+        if result.success:
+            m.audit(
+                "object_move",
+                type=obj.object_type, name=obj.get_display_name(),
+                from_file=m.display(obj.source_file),
+                to_file=m.display(target_file),
+            )
 
     return operation_response(result)
 
@@ -310,64 +220,40 @@ def api_delete_multiple_objects():
     stable_keys = data.get("stable_keys", [])
 
     if not stable_keys:
-        return jsonify({"error": "stable_keys required"}), 400
+        raise ApiError("stable_keys required")
 
-    session_id = request.headers.get("X-Session-Id")
-    success, error = ensure_shadow_lock(session_id)
-    if not success:
-        return error
+    with staged_mutation() as m:
+        # Resolve all objects first, snapshot all affected files
+        to_delete = [obj for obj in (m.find(key) for key in stable_keys) if obj is not None]
+        if not to_delete:
+            raise ApiError("No objects found for given keys", 404)
 
-    service = get_service()
-    sm = get_shadow_manager()
+        m.snapshot({obj.source_file for obj in to_delete}, f"delete {len(to_delete)} objects")
 
-    # Resolve all objects first, snapshot all affected files
-    stable_keys = [_resolve_stable_key(k) for k in stable_keys]
-    to_delete = []
-    files_to_snapshot = set()
-    for key in stable_keys:
-        found = service.find_object_by_stable_key(key)
-        if found:
-            _, obj = found
-            to_delete.append(obj)
-            rel_path = os.path.relpath(obj.source_file, sm._config_dir)
-            files_to_snapshot.add(rel_path)
+        # Delete in reverse line order within each file to maintain line numbers
+        to_delete.sort(key=lambda o: (o.source_file, -o.line_number))
 
-    if not to_delete:
-        return jsonify({"error": "No objects found for given keys"}), 404
+        errors = []
+        deleted = []
+        for obj in to_delete:
+            result = m.service.delete_object(obj.source_file, obj.line_number)
+            if result.success:
+                deleted.append(obj)
+            else:
+                errors.append(result.error)
 
-    sm.snapshot_files(list(files_to_snapshot), f"delete {len(to_delete)} objects")
-
-    # Capture metadata before deletion for audit
-    obj_metadata = [(obj.object_type, obj.get_display_name(), obj.source_file) for obj in to_delete]
-
-    # Delete in reverse line order within each file to maintain line numbers
-    to_delete.sort(key=lambda o: (o.source_file, -o.line_number))
-
-    errors = []
-    deleted = 0
-    for obj in to_delete:
-        result = service.delete_object(obj.source_file, obj.line_number)
-        if result.success:
-            deleted += 1
-        else:
-            errors.append(result.error)
-
-    if errors:
-        return jsonify({
-            "success": False,
-            "error": f"Deleted {deleted}/{len(to_delete)} objects. Errors: {'; '.join(errors)}",
-            "deleted": deleted,
-        }), 500
-
-    if deleted > 0:
-        identity = get_audit_user_identity()
-        user = format_audit_user(identity)
-        txn = uuid.uuid4().hex[:8]
-        for obj_type, obj_name, source_file in obj_metadata[:deleted]:
-            log_audit(
-                action="object_delete", user=user, txn=txn,
-                type=obj_type, name=obj_name,
-                file=audit_file_path(source_file),
+        if errors:
+            raise ApiError(
+                f"Deleted {len(deleted)}/{len(to_delete)} objects. Errors: {'; '.join(errors)}",
+                500, deleted=len(deleted),
             )
 
-    return jsonify({"success": True, "deleted": deleted})
+        txn = uuid.uuid4().hex[:8]
+        for obj in deleted:
+            m.audit(
+                "object_delete", txn=txn,
+                type=obj.object_type, name=obj.get_display_name(),
+                file=m.display(obj.source_file),
+            )
+
+    return jsonify({"success": True, "deleted": len(deleted)})

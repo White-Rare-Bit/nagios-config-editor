@@ -9,7 +9,6 @@ import { baseState } from './base-state.js';
 import { ApiClient } from './api-client.js';
 import { escapeHtml } from './app.js';
 import { showToast, showConfirmDialog } from './ui-notifications.js';
-import { getSessionId } from './session-manager.js';
 
 let explorerRenderCallback = null;
 let explorerReloadCallback = null;
@@ -40,11 +39,12 @@ export async function checkLockStatus() {
         return null;
     }
 
-    const data = result.data.data;
+    const data = result.payload;
     const wasLocked = baseState.isEditingLocked;
-    const isOwner = data.session_id === getSessionId();
-    baseState.isEditingLocked = data.locked && !isOwner;
-    baseState.lockOwner = data.session_id;
+    // The server compares our session id (sent as a header) with the lock
+    // owner's; it never sends anyone's session id back.
+    baseState.isEditingLocked = Boolean(data.locked && !data.is_owner);
+    baseState.lockOwner = data.locked ? (data.user_name || 'Another user') : null;
     baseState.lockUserName = data.user_name;
     baseState.lockUserEmail = data.user_email;
 

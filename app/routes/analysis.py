@@ -24,10 +24,8 @@ from ..nagios_model import ADDITIVE_FIELDS, NagiosObject, is_template_object
 from .helpers import (
     get_backup_manager,
     get_config_path,
-    get_parser_for_modification,
     get_service,
 )
-from .objects import _resolve_stable_key
 
 bp = Blueprint("analysis", __name__)
 logger = logging.getLogger("nagios_bulk_editor.analysis")
@@ -1366,7 +1364,6 @@ def api_object_references():
     if not stable_key:
         return jsonify({"error": "Missing 'key' parameter"}), 400
 
-    stable_key = _resolve_stable_key(stable_key)
     service = get_service()
     result = service.find_object_by_stable_key(stable_key)
     if result is None:

@@ -19,7 +19,9 @@ Flask blueprints registered in `__init__.py`. Service access via `helpers.py`.
 | `validation.py` | POST /api/reload, /validate, GET /api/summary, /health-check |
 | `settings.py` | GET/POST /api/settings, /api/settings/logging, POST /api/settings/browse, /api/logs/frontend, GET /api/logs/operations, /api/logs/operations/download |
 | `logs.py` | GET /api/logs/audit, /api/logs/audit/download, /api/logs/app, /api/logs/app/download, POST /api/logs/audit/clear, /api/logs/app/clear |
-| `health_checks.py` | Utility module (no routes) — health check functions imported by validation.py |
+| `mutation.py` | No routes — `staged_mutation()`, `staging_owner()`, `ApiError`, `public_lock_status()`; the only way a route may change configuration |
+
+Health-check logic lives in `app/health_checks.py` (not a routes module).
 
 ## Key Helpers (helpers.py)
 
@@ -35,25 +37,39 @@ get_server_config()      # ServerConfig from app.extensions
 get_config()             # Flask current_app.config
 get_config_roots()       # Config root directories
 get_config_path()        # Main config path
-make_relative_path(path) # Relative to config root
-get_parser_for_modification() # Parser operating on shadow copy
+make_relative_path(path, config_path) # Relative to the config root's parent
+audit_file_path(path)    # Display path for audit lines, any config root
 get_audit_user_identity()     # User identity from request headers
 format_audit_user(name, email) # Format for audit log
 ```
 
 ## Patterns
 
-**Shadow lock** (required before all mutations):
+**Mutations** (edits, creates, moves, deletes): always inside `staged_mutation()`.
+It holds the cross-worker lock, returns 423 if another session owns the staging
+lock, creates the shadow on first use, and removes it again if the request
+changed nothing.
+
 ```python
-session_id = request.headers.get("X-Session-Id")
-success, error = ensure_shadow_lock(session_id)
-if not success:
-    return error  # 423 if locked by another session
+from .mutation import ApiError, staged_mutation
+
+if not stable_key:
+    raise ApiError("stable_key required")          # 400, standard error body
+
+with staged_mutation() as m:
+    obj = m.require(stable_key)                     # 404 if missing
+    m.snapshot([obj.source_file], "edit host x")    # before changing anything (enables undo)
+    result = m.service.update_object(...)           # service writes to the shadow
+    m.audit("object_edit", type=..., file=m.display(obj.source_file))
+return operation_response(result)
 ```
 
-**Snapshot before mutation** (enables undo):
-```python
-sm = get_shadow_manager()
-rel_path = os.path.relpath(obj.source_file, sm._config_dir)
-sm.snapshot_files([rel_path], "description of change")
-```
+Direct file operations: `physical = m.physical(logical)` (400 outside the config
+roots), change the file, then `m.files_changed()` so every worker reparses.
+
+**Owner-only operations** on an existing session or the live config (apply,
+discard, undo, restore): `with staging_owner() as sm:`. Never creates a shadow.
+
+**Paths**: requests and responses carry logical paths (original config
+locations). `m.resolve(client_path)` → absolute logical path; never build shadow
+paths by hand and never read `sm._config_dir`.

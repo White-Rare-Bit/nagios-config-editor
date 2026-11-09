@@ -31,7 +31,7 @@ def operation_response(result: OperationResult, success_data: dict = None, error
         if result.data is not None and "data" not in response:
             response["data"] = result.data
         return jsonify(response)
-    return jsonify({"error": result.error or "Operation failed"}), error_code
+    return jsonify({"success": False, "error": result.error or "Operation failed"}), error_code
 
 
 def get_config_roots() -> list[str]:
@@ -59,25 +59,26 @@ def make_relative_path(path, config_path):
     """
     if not path:
         return path
-    if config_path and path.startswith(config_path):
+    if config_path and (path == config_path or path.startswith(config_path + os.sep)):
         return os.path.relpath(path, os.path.dirname(config_path))
     return path
 
 
 def audit_file_path(source_file):
-    """Convert a source file path (possibly in shadow) to a display path for audit logs.
+    """Convert a config file path to a display path for audit logs.
 
-    Resolves shadow paths back to original paths, then makes them relative
-    to the config directory's parent (e.g. "objects/hosts.cfg").
+    Makes the path relative to the parent of the config root it is in
+    (e.g. "objects/hosts.cfg"), whichever root that is. Shadow paths are
+    accepted too and reported as the original file they stand for.
     """
-    sm = get_shadow_manager()
-    if sm.has_shadow():
-        original = sm.original_path_for(source_file)
-    else:
-        original = source_file
-    server_config = get_server_config()
-    config_path = server_config.paths.primary_dir if server_config else ""
-    return make_relative_path(original, config_path)
+    if not source_file:
+        return source_file
+    logical = get_shadow_manager().logical_path(source_file)
+    for root in sorted(get_config_roots(), key=len, reverse=True):
+        relative = make_relative_path(logical, root)
+        if relative != logical:
+            return relative
+    return logical
 
 
 def get_server_config() -> ServerConfig:
@@ -103,11 +104,6 @@ def get_config() -> dict:
 def get_service():
     """Get the NagiosService instance."""
     return current_app.extensions["service"]
-
-
-def get_parser_for_modification():
-    """Get parser with lock held for modification operations."""
-    return get_service().modification_context()
 
 
 def get_shadow_manager():

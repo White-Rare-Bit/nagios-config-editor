@@ -7,7 +7,6 @@ Provides a clean interface for all git interactions with:
 """
 
 import logging
-import multiprocessing
 import os
 import random
 import shutil
@@ -16,6 +15,7 @@ import time
 from dataclasses import dataclass, field
 
 from .nagios_model import OperationResult
+from .process_lock import ProcessLock
 
 logger = logging.getLogger("nagios_bulk_editor.git")
 
@@ -125,12 +125,14 @@ class GitService:
     """Centralized git operations service.
 
     All public methods return OperationResult. Multi-step mutations
-    are serialized via an internal multiprocessing.Lock.
+    are serialized via an internal lock. Given a lock_path it is a file
+    lock, so it also excludes other worker processes; without one it only
+    excludes threads of this process.
     """
 
-    def __init__(self, config_path: str):
+    def __init__(self, config_path: str, lock_path: str | None = None):
         self._config_path = config_path
-        self._lock = multiprocessing.Lock()
+        self._lock = ProcessLock(lock_path)
 
     @property
     def config_path(self) -> str:

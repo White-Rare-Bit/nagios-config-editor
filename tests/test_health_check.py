@@ -9,7 +9,7 @@ import pytest
 from app import create_app
 from app.stable_keys import generate_stable_key
 from app.inheritance import build_template_lookup
-from app.routes.health_checks import run_all_checks
+from app.health_checks import run_all_checks
 
 
 @pytest.fixture
@@ -455,7 +455,7 @@ def _edit_and_apply(client):
         "stable_key": key, "attributes": {**obj["attributes"], "alias": "Modified"},
     }, headers={"X-Session-Id": "s1"})
     assert resp.status_code == 200  # noqa: PLR2004
-    resp = client.post("/api/staging/apply")
+    resp = client.post("/api/staging/apply", headers={"X-Session-Id": "s1"})
     assert resp.status_code == 200  # noqa: PLR2004
     return resp.json
 

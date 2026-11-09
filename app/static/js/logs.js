@@ -137,7 +137,7 @@ async function loadEntries() {
         return;
     }
 
-    const data = result.data.data || result.data;
+    const data = result.payload;
     entries = data.entries || [];
     logCurrentPage = 1;
     renderTable();

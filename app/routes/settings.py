@@ -104,6 +104,10 @@ def api_update_settings():
     if updated and not errors:
         try:
             save_server_config(server_config)
+            # This worker already runs the new settings; other workers see
+            # the file change and reinitialise themselves.
+            from .. import mark_settings_current
+            mark_settings_current(current_app)
         except (OSError, ValueError) as e:
             errors.append(f"Failed to save config: {e}")
 
@@ -134,45 +138,15 @@ def api_update_settings():
 def _rediscover_and_reinit(server_config, errors):
     """Re-run config discovery and reinitialize services.
 
-    Called when nagios_cfg or extra_cfg_dirs changes. Creates all services
-    BEFORE updating app.extensions to prevent inconsistent state.
+    Called when nagios_cfg or extra_cfg_dirs changes. init_services creates
+    all services BEFORE updating app.extensions to prevent inconsistent state.
+    Other workers do the same when they see the saved settings file change.
     """
-    from ..backup_manager import BackupManager
-    from ..config_discovery import discover_config_roots
-    from ..git_service import GitService
-    from ..nagios_service import NagiosService
-    from ..shadow_copy_manager import ShadowCopyManager
+    from .. import init_services
 
     try:
-        discovery = discover_config_roots(
-            server_config.paths.nagios_cfg,
-            extra_cfg_dirs=server_config.paths.extra_cfg_dirs,
-        )
-        accessible_dirs = [d["path"] for d in discovery["directories"] if d["accessible"]]
-        cfg_files = discovery["cfg_files"]
-
-        if discovery["resource_file"]:
-            server_config.paths.resource_cfg = discovery["resource_file"]
-        if not server_config.paths.primary_dir and accessible_dirs:
-            server_config.paths.primary_dir = accessible_dirs[0]
-
-        primary_dir = server_config.paths.primary_dir or "./sample-config"
-
-        new_service = NagiosService(cfg_dirs=accessible_dirs, cfg_files=cfg_files)
-        _ = new_service.parser  # Force init to catch config errors early
-        new_backup = BackupManager(primary_dir, server_config.backup_path)
-        new_git = GitService(primary_dir)
-
-        shadow_path = server_config.shadow_path
-        if not shadow_path:
-            shadow_path = os.path.join(os.path.dirname(os.path.abspath(primary_dir)), ".shadow")
-        new_shadow = ShadowCopyManager(cfg_dirs=accessible_dirs, shadow_base_path=shadow_path)
-
-        current_app.extensions["service"] = new_service
-        current_app.extensions["shadow"] = new_shadow
-        current_app.extensions["backup"] = new_backup
-        current_app.extensions["git"] = new_git
-        current_app.extensions["discovery"] = discovery
+        init_services(current_app, server_config)
+        _ = current_app.extensions["service"].parser  # Force init to catch config errors early
     except Exception as e:  # noqa: BLE001
         errors.append(f"Failed to reinitialize services: {e}")
 
@@ -190,7 +164,10 @@ def _update_backup_path(server_config, path, updated, errors):
 
     from ..backup_manager import BackupManager
     primary_dir = server_config.paths.primary_dir or "./sample-config"
-    backup_manager = BackupManager(primary_dir, server_config.backup_path)
+    backup_manager = BackupManager(
+        primary_dir, server_config.backup_path,
+        cfg_dirs=current_app.extensions["service"].cfg_dirs or None,
+    )
     current_app.extensions["backup"] = backup_manager
     updated.append("backup_path")
 
@@ -302,6 +279,8 @@ def api_update_logging_settings():
 
     # Persist to config/settings.json
     save_server_config(server_config)
+    from .. import mark_settings_current
+    mark_settings_current(current_app)
 
     return jsonify({"success": True, "config": {
         "enabled": log_cfg.enabled,

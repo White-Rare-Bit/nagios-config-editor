@@ -135,7 +135,7 @@ class TestShadowEditApplyWorkflow:
         }, headers={"X-Session-Id": "session-1"})
 
         # Apply
-        resp = client.post("/api/staging/apply")
+        resp = client.post("/api/staging/apply", headers={"X-Session-Id": "session-1"})
         assert resp.status_code == 200
         assert resp.json["success"] is True
 
@@ -161,7 +161,7 @@ class TestShadowEditApplyWorkflow:
             "attributes": {**obj["attributes"], "alias": "API Visible"},
         }, headers={"X-Session-Id": "session-1"})
 
-        client.post("/api/staging/apply")
+        client.post("/api/staging/apply", headers={"X-Session-Id": "session-1"})
 
         # Re-fetch from API
         updated = _get_host_object(client, "test-host-1")
@@ -189,7 +189,7 @@ class TestShadowEditApplyWorkflow:
         assert resp.status_code == 200
 
         # Apply
-        resp = client.post("/api/staging/apply")
+        resp = client.post("/api/staging/apply", headers={"X-Session-Id": "session-1"})
         assert resp.status_code == 200
 
         # Verify written to original
@@ -208,7 +208,7 @@ class TestShadowEditApplyWorkflow:
         assert resp.status_code == 200
 
         # Apply
-        resp = client.post("/api/staging/apply")
+        resp = client.post("/api/staging/apply", headers={"X-Session-Id": "session-1"})
         assert resp.status_code == 200
 
         # Verify removed from API
@@ -323,11 +323,13 @@ class TestSessionLocking:
             "attributes": {**obj["attributes"], "alias": "Lock Test"},
         }, headers={"X-Session-Id": "session-owner"})
 
-        resp = client.get("/api/staging/lock")
+        resp = client.get("/api/staging/lock", headers={"X-Session-Id": "session-owner"})
         assert resp.status_code == 200
         data = resp.json["data"]
         assert data["locked"] is True
-        assert data["session_id"] == "session-owner"
+        assert data["is_owner"] is True
+        # The session id is the proof of ownership, so it is never sent out.
+        assert "session_id" not in data
 
 
 class TestBreakLock:
@@ -439,7 +441,7 @@ class TestStagingInfoEndpoints:
             "attributes": {**obj["attributes"], "alias": "Will Be Cleared"},
         }, headers={"X-Session-Id": "session-1"})
 
-        resp = client.delete("/api/staging")
+        resp = client.delete("/api/staging", headers={"X-Session-Id": "session-1"})
         assert resp.status_code == 200
         assert resp.json["success"] is True
 

@@ -30,7 +30,7 @@ export async function showGlobalCommitDialog() {
         return;
     }
 
-    const shadowData = shadowResult.data?.data || shadowResult.data;
+    const shadowData = shadowResult.payload;
     const shadowFiles = (shadowData && shadowData.files) || [];
     const gitFiles = (gitResult.success && gitResult.data && gitResult.data.files) || [];
     const hasShadowChanges = shadowFiles.length > 0;
@@ -47,6 +47,22 @@ export async function showGlobalCommitDialog() {
     baseState.diffData = { shadowFiles, gitFiles };
 
     content.innerHTML = await buildCommitDialogHtml({ shadowFiles, gitFiles, isGitConfigured });
+
+    // Git covers the primary config directory only; warn when this commit
+    // will apply changes Git cannot record.
+    const untrackedRoots = (gitResult.success && gitResult.data && gitResult.data.untracked_roots) || [];
+    const outsideGit = shadowFiles.filter(f => untrackedRoots.some(root => (f.abs_path || '').startsWith(root + '/')));
+    if (outsideGit.length > 0) {
+        const notice = document.createElement('div');
+        notice.className = 'git-config-warning';
+        notice.innerHTML = `
+            <span class="git-config-warning-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
+            <div>
+                <strong>${outsideGit.length} changed file${outsideGit.length !== 1 ? 's are' : ' is'} outside the Git repository</strong><br>
+                <span class="git-config-warning-text">They will be applied and backed up, but not committed: ${untrackedRoots.map(escapeHtml).join(', ')}</span>
+            </div>`;
+        content.prepend(notice);
+    }
 
     document.querySelectorAll('#globalCommitContent .commit-item-header').forEach(header => {
         header.addEventListener('click', () => {
@@ -430,7 +446,7 @@ export async function updateContextLines(value) {
         const shadowResult = await ApiClient.get(`/api/staging/diff?context_lines=${contextParam}`, { silent: true });
         if (!shadowResult.success) {return;}
 
-        const shadowData = shadowResult.data?.data || shadowResult.data;
+        const shadowData = shadowResult.payload;
         const shadowFiles = (shadowData && shadowData.files) || [];
         baseState.diffData.shadowFiles = shadowFiles;
 

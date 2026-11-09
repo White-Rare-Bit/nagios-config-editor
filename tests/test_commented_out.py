@@ -239,7 +239,7 @@ define host {
         "stable_key": key, "target_file": str(config_dir / "retired.cfg"),
     }, headers={"X-Session-Id": "s1"})
     assert resp.status_code == 200, resp.json
-    assert client.post("/api/staging/apply").json["success"] is True
+    assert client.post("/api/staging/apply", headers={"X-Session-Id": "s1"}).json["success"] is True
 
     moved = NagiosConfigParser(str(config_dir)).parse_all()
     retired = [o for o in moved if o.source_file.endswith("retired.cfg")]
@@ -254,7 +254,7 @@ define host {
 # --- Health check tests ---
 
 from app.inheritance import build_template_lookup
-from app.routes.health_checks import run_all_checks
+from app.health_checks import run_all_checks
 
 
 def test_health_check_skips_commented_out_objects(tmp_path):

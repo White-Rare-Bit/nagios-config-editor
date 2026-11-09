@@ -14,7 +14,7 @@ export function apiUrl(path) {
  * Internal helper to handle response and errors consistently.
  * @param {Response} response - Fetch response
  * @param {object} options - Request options
- * @returns {Promise<{success: boolean, data?: object, error?: string, status?: number}>}
+ * @returns {Promise<{success: boolean, data?: object, payload?: object, error?: string, status?: number}>}
  */
 async function handleResponse(response, options = {}) {
     let result;
@@ -34,7 +34,23 @@ async function handleResponse(response, options = {}) {
         }
         return { success: false, error: errorMsg, data: result, status: response.status };
     }
-    return { success: true, data: result, status: response.status };
+    return { success: true, data: result, payload: unwrapEnvelope(result), status: response.status };
+}
+
+/**
+ * Some endpoints answer {success: true, data: {...}}, others answer the
+ * payload directly. This is the one place that knows the difference:
+ * callers that only want the payload read `result.payload`; `result.data`
+ * stays the raw response body.
+ * @param {*} body - Parsed JSON response body
+ * @returns {*} The payload
+ */
+function unwrapEnvelope(body) {
+    if (body && typeof body === 'object' && !Array.isArray(body)
+        && body.success === true && 'data' in body) {
+        return body.data;
+    }
+    return body;
 }
 
 /**

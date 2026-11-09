@@ -5,7 +5,6 @@ Apply copies changed files back to the original.
 """
 
 import logging
-import os
 import uuid
 
 from flask import Blueprint, jsonify, request
@@ -14,14 +13,12 @@ from ..audit_service import log_audit
 
 from .helpers import (
     format_audit_user,
+    get_audit_user_identity,
     get_backup_manager,
     get_config,
-    get_config_path,
-    get_server_config,
-    get_service,
     get_shadow_manager,
-    make_relative_path,
 )
+from .mutation import public_lock_status, staging_owner
 
 bp = Blueprint("staging", __name__)
 logger = logging.getLogger("nagios_bulk_editor.staging")
@@ -30,38 +27,6 @@ logger = logging.getLogger("nagios_bulk_editor.staging")
 # =========================================================================
 # Internal helpers
 # =========================================================================
-
-
-def _restore_service_to_original_roots():
-    """Reset the service to point at original config roots after apply/destroy.
-
-    Reads original roots from the shadow manager's root_map (before destroy)
-    or from the discovery stored in app.extensions.
-    """
-    from flask import current_app
-
-    service = get_service()
-    sm = get_shadow_manager()
-
-    # Try root_map first (available before shadow is destroyed)
-    root_map = sm.get_root_map()
-    if root_map:
-        original_dirs = list(root_map.values())
-        service.set_roots(cfg_dirs=original_dirs, cfg_files=[])
-    else:
-        # Fall back to discovery stored at app init
-        discovery = current_app.extensions.get("discovery", {})
-        accessible_dirs = [d["path"] for d in discovery.get("directories", []) if d["accessible"]]
-        cfg_files = discovery.get("cfg_files", [])
-        if accessible_dirs or cfg_files:
-            service.set_roots(cfg_dirs=accessible_dirs, cfg_files=cfg_files)
-        else:
-            # Last resort: use primary_dir from server config
-            server_config = get_server_config()
-            if server_config and server_config.paths.primary_dir:
-                service.set_roots(cfg_dirs=[server_config.paths.primary_dir], cfg_files=[])
-
-    service.reload()
 
 
 def _run_post_apply_validation():
@@ -94,29 +59,6 @@ def _run_post_apply_validation():
         }
 
 
-def _get_existing_folders(config_path):
-    """Get list of existing non-hidden subdirectories under config_path.
-
-    Args:
-        config_path: Base configuration directory path
-
-    Returns:
-        List of absolute folder paths
-
-    """
-    existing_folders = []
-    try:
-        for root, dirs, _files in os.walk(config_path):
-            # Skip hidden directories
-            dirs[:] = [d for d in dirs if not d.startswith(".")]
-            rel_path = os.path.relpath(root, config_path)
-            if rel_path != ".":
-                existing_folders.append(os.path.join(config_path, rel_path))
-    except OSError:
-        pass
-    return existing_folders
-
-
 # =========================================================================
 # Routes
 # =========================================================================
@@ -140,14 +82,20 @@ def api_get_staging():
 
 @bp.route("/api/staging", methods=["DELETE"])
 def api_delete_staging():
-    """Clear staging — destroy shadow copy."""
-    sm = get_shadow_manager()
-    if not sm.has_shadow():
-        return jsonify({"success": True})
+    """Clear staging — destroy shadow copy. Only the lock owner may do this."""
+    with staging_owner() as sm:
+        if not sm.has_shadow():
+            return jsonify({"success": True})
 
-    # Restore service to original roots before destroying shadow
-    _restore_service_to_original_roots()
-    result = sm.destroy_shadow()
+        lock_status = sm.get_lock_status()
+        result = sm.destroy_shadow()
+        if result.success:
+            log_audit(
+                action="discard",
+                user=format_audit_user(
+                    name=lock_status.get("user_name"), email=lock_status.get("user_email"),
+                ),
+            )
     return jsonify({"success": result.success, "error": result.error})
 
 
@@ -174,41 +122,38 @@ def api_get_staging_info():
 
 @bp.route("/api/staging/apply", methods=["POST"])
 def api_apply_staging():
-    """Apply all staged changes to disk."""
-    sm = get_shadow_manager()
+    """Apply all staged changes to disk. Only the lock owner may do this."""
     bm = get_backup_manager()
     force = request.args.get("force", "").lower() == "true"
 
-    # Get lock info for audit before apply destroys it
-    lock_status = sm.get_lock_status() if sm.has_shadow() else {}
-    user_name = lock_status.get("user_name", "")
-    user_email = lock_status.get("user_email", "")
+    with staging_owner() as sm:
+        # Get lock info for audit before apply destroys it
+        lock_status = sm.get_lock_status() if sm.has_shadow() else {}
+        user_name = lock_status.get("user_name", "")
+        user_email = lock_status.get("user_email", "")
 
-    result = sm.apply(backup_manager=bm, force=force)
+        result = sm.apply(backup_manager=bm, force=force)
 
-    if not result.success:
-        if result.error == "conflicts":
-            return jsonify({
-                "success": False,
-                "error": "conflicts",
-                "conflicts": result.data["conflicts"],
-            }), 409
-        return jsonify({"success": False, "error": result.error}), 500
+        if not result.success:
+            if result.error == "conflicts":
+                return jsonify({
+                    "success": False,
+                    "error": "conflicts",
+                    "conflicts": result.data["conflicts"],
+                }), 409
+            return jsonify({"success": False, "error": result.error}), 500
 
-    # Reload service to pick up applied changes (now on original config)
-    _restore_service_to_original_roots()
-
-    # Audit log
-    changed = result.data.get("changed_files", []) if result.data else []
-    if changed:
-        txn = uuid.uuid4().hex[:8]
-        user = format_audit_user(name=user_name, email=user_email)
-        log_audit(
-            action="apply",
-            user=user,
-            txn=txn,
-            files_changed=len(changed),
-        )
+        # Audit log
+        changed = result.data.get("changed_files", []) if result.data else []
+        if changed:
+            txn = uuid.uuid4().hex[:8]
+            user = format_audit_user(name=user_name, email=user_email)
+            log_audit(
+                action="apply",
+                user=user,
+                txn=txn,
+                files_changed=len(changed),
+            )
 
     # Post-apply validation
     validation = _run_post_apply_validation()
@@ -222,35 +167,40 @@ def api_apply_staging():
 
 @bp.route("/api/staging/undo", methods=["POST"])
 def api_staging_undo():
-    """Undo the last snapshot."""
-    sm = get_shadow_manager()
-    session_id = request.headers.get("X-Session-Id")
-    if sm.has_shadow() and not sm.can_modify(session_id):
-        return jsonify({"success": False, "error": "Not lock owner"}), 423
-
-    result = sm.undo()
-    if result.success:
-        # Reload service parser to reflect undo
-        service = get_service()
-        service.reload()
+    """Undo the last snapshot. Only the lock owner may do this."""
+    with staging_owner() as sm:
+        result = sm.undo()
     return jsonify({"success": result.success, "error": result.error})
 
 
 @bp.route("/api/staging/lock", methods=["GET"])
 def api_get_lock_status():
-    """Get lock status."""
-    sm = get_shadow_manager()
-    return jsonify({"success": True, "data": sm.get_lock_status()})
+    """Get lock status: who holds it, and whether the caller does.
+
+    The owner's session id is never returned; see public_lock_status().
+    """
+    return jsonify({"success": True, "data": public_lock_status()})
 
 
 @bp.route("/api/staging/lock/break", methods=["POST"])
 def api_break_lock():
-    """Force break the lock — destroys shadow copy."""
+    """Force break the lock — destroys shadow copy.
+
+    Deliberately open to non-owners: it is the way out when the owner is
+    gone. It discards their staged work, so it is always written to the
+    audit log with both parties named.
+    """
     sm = get_shadow_manager()
-    # Restore service to original roots before breaking lock
-    if sm.has_shadow():
-        _restore_service_to_original_roots()
+    lock_status = sm.get_lock_status()
     result = sm.break_lock()
+    if result.success and lock_status.get("locked"):
+        log_audit(
+            action="lock_break",
+            user=format_audit_user(get_audit_user_identity()),
+            owner=format_audit_user(
+                name=lock_status.get("user_name"), email=lock_status.get("user_email"),
+            ),
+        )
     return jsonify({"success": result.success, "error": result.error})
 
 

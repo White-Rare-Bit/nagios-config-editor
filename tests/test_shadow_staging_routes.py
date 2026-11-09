@@ -106,7 +106,7 @@ class TestApplyStaging:
 
     def test_apply_copies_changes(self, shadow_with_changes):
         app, client = shadow_with_changes
-        resp = client.post("/api/staging/apply")
+        resp = client.post("/api/staging/apply", headers={"X-Session-Id": "test-session"})
         assert resp.status_code == 200
         assert resp.json["success"] is True
 
@@ -129,7 +129,7 @@ class TestApplyStaging:
             os.makedirs(new_dir)
             original_root = list(sm.get_root_map().values())[0]
 
-        resp = client.post("/api/staging/apply")
+        resp = client.post("/api/staging/apply", headers={"X-Session-Id": "test-session"})
         assert resp.status_code == 200
         assert resp.json["success"] is True
 

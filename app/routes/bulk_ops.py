@@ -6,9 +6,9 @@ import uuid
 
 from flask import Blueprint, jsonify, request
 
-from ..audit_service import log_audit
-from .files import ensure_shadow_lock
-from .helpers import get_audit_user_identity, format_audit_user, audit_file_path, get_service, get_shadow_manager
+from ..stable_keys import generate_stable_key, generate_stable_key_for_object
+from .mutation import ApiError, staged_mutation
+from .objects import _name_from_attrs, audit_attribute_changes
 
 bp = Blueprint("bulk_ops", __name__)
 logger = logging.getLogger("nagios_bulk_editor.bulk_ops")
@@ -29,114 +29,94 @@ def api_move_objects():
     after_line = data.get("after_line")
 
     if not stable_keys:
-        return jsonify({"error": "stable_keys required"}), 400
+        raise ApiError("stable_keys required")
     if not target_file:
-        return jsonify({"error": "target_file required"}), 400
+        raise ApiError("target_file required")
 
-    session_id = request.headers.get("X-Session-Id")
-    success, error = ensure_shadow_lock(session_id)
-    if not success:
-        return error
+    with staged_mutation() as m:
+        service = m.service
+        target_file = m.logical(m.resolve(target_file))
 
-    service = get_service()
-    sm = get_shadow_manager()
+        # Find all objects to move
+        to_move = []
+        not_found = []
+        skipped = 0
+        for key in stable_keys:
+            obj = m.find(key)
+            if obj is None:
+                not_found.append(key)
+                continue
+            # Skip same-file objects only when no position specified (no reorder)
+            if not after_line and os.path.normpath(obj.source_file) == target_file:
+                skipped += 1
+                continue
+            to_move.append(obj)
 
-    # Resolve target file path into shadow directory
-    from .objects import _resolve_target_file, _resolve_stable_key
-    target_file = _resolve_target_file(target_file)
+        if not to_move:
+            return jsonify({
+                "success": True,
+                "moved": 0,
+                "skipped": skipped,
+                "not_found": len(not_found),
+            })
 
-    # Find all objects to move
-    to_move = []
-    not_found = []
-    skipped = 0
-    for key in stable_keys:
-        key = _resolve_stable_key(key)
-        found = service.find_object_by_stable_key(key)
-        if not found:
-            not_found.append(key)
-            continue
-        _, obj = found
-        # Skip same-file objects only when no position specified (no reorder)
-        if not after_line and os.path.realpath(obj.source_file) == os.path.realpath(target_file):
-            skipped += 1
-            continue
-        to_move.append(obj)
-
-    if not to_move:
-        return jsonify({
-            "success": True,
-            "moved": 0,
-            "skipped": skipped,
-            "not_found": len(not_found),
-        })
-
-    # Snapshot all affected files
-    affected_files = set()
-    rel_target = os.path.relpath(target_file, sm._config_dir)
-    affected_files.add(rel_target)
-    for obj in to_move:
-        affected_files.add(os.path.relpath(obj.source_file, sm._config_dir))
-    moved_keys = [
-        f"{rel_target}|{obj.object_type}|{obj.get_display_name()}"
-        for obj in to_move
-    ]
-    sm.snapshot_files(
-        list(affected_files),
-        f"bulk move {len(to_move)} objects",
-        moved_keys=moved_keys,
-    )
-
-    # Capture source files before moves for audit (obj.source_file changes after move)
-    obj_metadata = [(obj.object_type, obj.get_display_name(), obj.source_file) for obj in to_move]
-
-    # Move each object using service.move_object (reloads after each)
-    moved = 0
-    errors = []
-    insert_pos = after_line
-    for obj in to_move:
-        # Re-find by stable key since reloads may shift state
-        from ..stable_keys import generate_stable_key_for_object
-        key = generate_stable_key_for_object(obj)
-        refound = service.find_object_by_stable_key(key)
-        if not refound:
-            errors.append(f"Lost object after reload: {key}")
-            continue
-        _, current_obj = refound
-        result = service.move_object(
-            current_obj.source_file, current_obj.line_number,
-            target_file, current_obj.object_type,
-            dict(current_obj.attributes),
-            insert_line=insert_pos,
+        # Snapshot all affected files
+        moved_keys = [
+            generate_stable_key(target_file, obj.object_type, obj.get_display_name())
+            for obj in to_move
+        ]
+        m.snapshot(
+            {target_file, *(obj.source_file for obj in to_move)},
+            f"bulk move {len(to_move)} objects",
+            moved_keys=moved_keys,
         )
-        if result.success:
-            moved += 1
-            # Find the just-moved object so the next insert goes after it
-            if insert_pos is not None:
-                new_key = f"{target_file}|{current_obj.object_type}|{current_obj.get_display_name()}"
-                placed = service.find_object_by_stable_key(new_key)
-                insert_pos = placed[1].line_number if placed else None
-        else:
-            errors.append(result.error)
 
-    if moved > 0:
-        identity = get_audit_user_identity()
-        user = format_audit_user(identity)
-        txn = uuid.uuid4().hex[:8]
-        for obj_type, obj_name, source_file in obj_metadata[:moved]:
-            log_audit(
-                action="object_move", user=user, txn=txn,
-                type=obj_type, name=obj_name,
-                from_file=audit_file_path(source_file),
-                to_file=audit_file_path(target_file),
+        # Capture source files before moves for audit (obj.source_file changes after move)
+        obj_metadata = [(obj.object_type, obj.get_display_name(), obj.source_file) for obj in to_move]
+
+        # Move each object using service.move_object (reloads after each)
+        moved = 0
+        errors = []
+        insert_pos = after_line
+        for obj in to_move:
+            # Re-find by stable key since reloads may shift state
+            key = generate_stable_key_for_object(obj)
+            current_obj = m.find(key)
+            if current_obj is None:
+                errors.append(f"Lost object after reload: {key}")
+                continue
+            result = service.move_object(
+                current_obj.source_file, current_obj.line_number,
+                target_file, current_obj.object_type,
+                dict(current_obj.attributes),
+                insert_line=insert_pos,
             )
+            if result.success:
+                moved += 1
+                # Find the just-moved object so the next insert goes after it
+                if insert_pos is not None:
+                    placed = m.find(generate_stable_key(
+                        target_file, current_obj.object_type, current_obj.get_display_name(),
+                    ))
+                    insert_pos = placed.line_number if placed else None
+            else:
+                errors.append(result.error)
 
-    if errors:
-        return jsonify({
-            "success": False,
-            "error": f"Moved {moved}/{len(to_move)}. Errors: {'; '.join(errors)}",
-            "moved": moved,
-            "skipped": skipped,
-        }), 500
+        if moved > 0:
+            txn = uuid.uuid4().hex[:8]
+            for obj_type, obj_name, source_file in obj_metadata[:moved]:
+                m.audit(
+                    "object_move", txn=txn,
+                    type=obj_type, name=obj_name,
+                    from_file=m.display(source_file),
+                    to_file=m.display(target_file),
+                )
+
+        if errors:
+            raise ApiError(
+                f"Moved {moved}/{len(to_move)}. Errors: {'; '.join(errors)}",
+                500, moved=moved, skipped=skipped,
+            )
 
     return jsonify({
         "success": True,
@@ -162,106 +142,84 @@ def api_batch_mutations():
     operations = data.get("operations", [])
 
     if not operations:
-        return jsonify({"error": "operations required"}), 400
+        raise ApiError("operations required")
 
-    session_id = request.headers.get("X-Session-Id")
-    success, error = ensure_shadow_lock(session_id)
-    if not success:
-        return error
+    with staged_mutation() as m:
+        service = m.service
 
-    service = get_service()
-    sm = get_shadow_manager()
+        # Pre-resolve all operations and collect files to snapshot
+        files_to_snapshot = set()
+        resolved_ops = []
+        for op in operations:
+            action = op.get("action")
+            if action == "update":
+                stable_key = op.get("stable_key", "")
+                obj = m.find(stable_key)
+                if obj is None:
+                    continue
+                files_to_snapshot.add(obj.source_file)
+                resolved_ops.append({
+                    "action": "update", "stable_key": stable_key, "attributes": op["attributes"],
+                    "old_attrs": dict(obj.attributes),
+                    "obj_type": obj.object_type,
+                    "obj_name": obj.get_display_name(),
+                    "obj_file": obj.source_file,
+                })
+            elif action == "create" and op.get("target_file"):
+                target_file = m.logical(m.resolve(op.get("target_file", "")))
+                files_to_snapshot.add(target_file)
+                resolved_ops.append({
+                    "action": "create",
+                    "target_file": target_file,
+                    "object_type": op["object_type"],
+                    "attributes": op["attributes"],
+                    "name": _name_from_attrs(op["attributes"]),
+                })
 
-    from .objects import _resolve_stable_key, _resolve_target_file
+        if not resolved_ops:
+            return jsonify({"success": True, "completed": 0, "errors": []})
 
-    # Pre-resolve all operations and collect files to snapshot
-    files_to_snapshot = set()
-    resolved_ops = []
-    for op in operations:
-        action = op.get("action")
-        if action == "update":
-            stable_key = _resolve_stable_key(op.get("stable_key", ""))
-            found = service.find_object_by_stable_key(stable_key)
-            if not found:
-                continue
-            _, obj = found
-            files_to_snapshot.add(os.path.relpath(obj.source_file, sm._config_dir))
-            resolved_ops.append({
-                "action": "update", "stable_key": stable_key, "attributes": op["attributes"],
-                "old_attrs": dict(obj.attributes),
-                "obj_type": obj.object_type,
-                "obj_name": obj.get_display_name(),
-                "obj_file": obj.source_file,
-            })
-        elif action == "create":
-            target_file = _resolve_target_file(op.get("target_file", ""))
-            files_to_snapshot.add(os.path.relpath(target_file, sm._config_dir))
-            resolved_ops.append({
-                "action": "create",
-                "target_file": target_file,
-                "object_type": op["object_type"],
-                "attributes": op["attributes"],
-                "name": op["attributes"].get(
-                    next((k for k in op["attributes"] if "name" in k.lower()), ""), ""
-                ),
-            })
+        # Single snapshot for all operations
+        m.snapshot(files_to_snapshot, description)
 
-    if not resolved_ops:
-        return jsonify({"success": True, "completed": 0, "errors": []})
+        # Execute each operation sequentially
+        completed = 0
+        errors = []
+        succeeded = []
+        for op in resolved_ops:
+            if op["action"] == "update":
+                obj = m.find(op["stable_key"])
+                if obj is None:
+                    errors.append(f"Object not found: {op['stable_key']}")
+                    continue
+                result = service.update_object(
+                    obj.source_file, obj.line_number, op["attributes"], obj.object_type,
+                    inline_comments=obj.inline_comments,
+                )
+            else:
+                result = service.create_object(
+                    op["target_file"], op["object_type"], op["attributes"],
+                )
 
-    # Single snapshot for all operations
-    sm.snapshot_files(list(files_to_snapshot), description)
+            if result.success:
+                completed += 1
+                succeeded.append(op)
+            else:
+                errors.append(result.error)
 
-    # Execute each operation sequentially
-    completed = 0
-    errors = []
-    succeeded = []
-    for op in resolved_ops:
-        if op["action"] == "update":
-            found = service.find_object_by_stable_key(op["stable_key"])
-            if not found:
-                errors.append(f"Object not found: {op['stable_key']}")
-                continue
-            _, obj = found
-            result = service.update_object(
-                obj.source_file, obj.line_number, op["attributes"], obj.object_type,
-                inline_comments=obj.inline_comments,
-            )
-        elif op["action"] == "create":
-            result = service.create_object(
-                op["target_file"], op["object_type"], op["attributes"],
-            )
-        else:
-            continue
-
-        if result.success:
-            completed += 1
-            succeeded.append(op)
-        else:
-            errors.append(result.error)
-
-    # Audit all succeeded operations
-    if succeeded:
-        identity = get_audit_user_identity()
-        user = format_audit_user(identity)
+        # Audit all succeeded operations
         txn = uuid.uuid4().hex[:8]
         for op in succeeded:
-            if op["action"] == "update" and "old_attrs" in op:
-                for field_name in op["old_attrs"].keys() | op["attributes"].keys():
-                    old_val = op["old_attrs"].get(field_name, "")
-                    new_val = op["attributes"].get(field_name, "")
-                    if old_val != new_val:
-                        log_audit(
-                            action="object_edit", user=user, txn=txn,
-                            type=op["obj_type"], name=op["obj_name"],
-                            file=audit_file_path(op["obj_file"]),
-                            field=field_name, from_val=old_val, to_val=new_val,
-                        )
-            elif op["action"] == "create":
-                log_audit(
-                    action="object_create", user=user, txn=txn,
+            if op["action"] == "update":
+                audit_attribute_changes(
+                    m, op["obj_type"], op["obj_name"], op["obj_file"],
+                    op["old_attrs"], op["attributes"], txn,
+                )
+            else:
+                m.audit(
+                    "object_create", txn=txn,
                     type=op["object_type"], name=op.get("name", ""),
-                    file=audit_file_path(op["target_file"]),
+                    file=m.display(op["target_file"]),
                 )
 
     return jsonify({

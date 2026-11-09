@@ -9,15 +9,6 @@ import pytest
 from app import create_app
 from app import server_config
 
-# Importing `app` runs create_app() at module level (app/__init__.py, for
-# wsgi.py), before any fixture can isolate it. That attaches file handlers
-# writing to the repo's real logs/app.log and logs/audit.log. Detach them so no
-# test can write there; per-test handlers are cleaned up in _isolate_environment.
-for _logger in (logging.getLogger(), logging.getLogger("audit")):
-    for _handler in [h for h in _logger.handlers if isinstance(h, logging.FileHandler)]:
-        _logger.removeHandler(_handler)
-        _handler.close()
-
 _REPO_SAMPLE_CONFIG = Path(__file__).resolve().parent.parent / "sample-config"
 
 # Environment variables that override config/settings.json (see
@@ -37,15 +28,17 @@ def _isolate_environment(tmp_path_factory, monkeypatch):
       (the "logs" log_dir, "./sample-config") never resolve inside the repo.
       Without this, tests appended to and rotated the real logs/audit.log.
     - Log handlers: create_app() adds file handlers to the global root and
-      "audit" loggers and never removes them. Removed after each test so
-      handlers don't pile up and later tests don't write into earlier tests'
-      log files.
+      "audit" loggers (loggers are process-global, apps are not) and never
+      removes them. Removed after each test so handlers don't pile up and
+      later tests don't write into earlier tests' log files.
     """
     config_dir = tmp_path_factory.mktemp("server_config")
     monkeypatch.setattr(server_config, "CONFIG_DIR", config_dir)
     monkeypatch.setattr(server_config, "CONFIG_FILE", config_dir / "settings.json")
     for var in _SERVER_CONFIG_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
+    # create_app() warns on every call when no secret key is configured.
+    monkeypatch.setenv("FLASK_SECRET_KEY", "test-secret-key")
     monkeypatch.chdir(tmp_path_factory.mktemp("cwd"))
 
     loggers = [logging.getLogger(), logging.getLogger("audit")]

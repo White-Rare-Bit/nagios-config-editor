@@ -162,7 +162,7 @@
             <tr>
                 <td><code>/api/staging/lock</code></td>
                 <td>GET</td>
-                <td>Get lock status (locked, session_id, user_name, user_email)</td>
+                <td>Get lock status (locked, is_owner, user_name, user_email, created_at). The owner's session id is never returned.</td>
             </tr>
             <tr>
                 <td><code>/api/staging/lock/break</code></td>

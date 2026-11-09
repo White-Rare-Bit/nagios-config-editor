@@ -13,6 +13,7 @@ from .helpers import (
     get_backup_manager,
     get_service,
 )
+from .mutation import staging_owner
 
 bp = Blueprint("backups", __name__)
 logger = logging.getLogger(__name__)
@@ -59,23 +60,26 @@ def api_restore_backup(backup_name):
     data = request.get_json() or {}
 
     bm = get_backup_manager()
-    try:
-        user_name = data.get("userName", "")
-        user_email = data.get("userEmail", "")
+    # Restoring rewrites the live config under any staged work, so while a
+    # staging session exists only its owner may do it.
+    with staging_owner():
+        try:
+            user_name = data.get("userName", "")
+            user_email = data.get("userEmail", "")
 
-        result = bm.restore_backup(backup_name, user_name=user_name, user_email=user_email)
-        get_service().reload()
+            result = bm.restore_backup(backup_name, user_name=user_name, user_email=user_email)
+            get_service().reload()
 
-        identity = get_audit_user_identity()
-        log_audit(
-            action="backup_restored",
-            user=format_audit_user(identity),
-            backup_name=backup_name,
-        )
+            identity = get_audit_user_identity()
+            log_audit(
+                action="backup_restored",
+                user=format_audit_user(identity),
+                backup_name=backup_name,
+            )
 
-        return jsonify({"success": True, **result})
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 404
+            return jsonify({"success": True, **result})
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 404
 
 
 @bp.route("/api/backups/all", methods=["DELETE"])

@@ -137,7 +137,7 @@ class TestCommentsSurviveApiEdits:
             "attributes": {**obj["attributes"], "alias": "Renamed"},
         }, headers={"X-Session-Id": "s1"})
         assert resp.status_code == 200
-        assert client.post("/api/staging/apply").json["success"] is True
+        assert client.post("/api/staging/apply", headers={"X-Session-Id": "s1"}).json["success"] is True
 
         content = hosts_cfg.read_text()
         assert "Renamed" in content
@@ -152,7 +152,7 @@ class TestCommentsSurviveApiEdits:
         resp = client.post("/api/objects/update", json={"stable_key": key, "attributes": attrs},
                            headers={"X-Session-Id": "s1"})
         assert resp.status_code == 200
-        client.post("/api/staging/apply")
+        client.post("/api/staging/apply", headers={"X-Session-Id": "s1"})
 
         content = hosts_cfg.read_text()
         assert "primary interface" not in content
@@ -168,7 +168,7 @@ class TestCommentsSurviveApiEdits:
                             "attributes": {**obj["attributes"], "alias": "Batch"}}],
         }, headers={"X-Session-Id": "s1"})
         assert resp.status_code == 200
-        client.post("/api/staging/apply")
+        client.post("/api/staging/apply", headers={"X-Session-Id": "s1"})
 
         content = hosts_cfg.read_text()
         assert "Batch" in content

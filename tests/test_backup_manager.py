@@ -168,3 +168,117 @@ class TestBackupCreationTriggersCleanup:
             resp = client.post("/api/backups", json={"description": "trigger cleanup"})
             assert resp.status_code == 200
             mock_cleanup.assert_called_once_with(keep_count=20)
+
+
+class TestMultiRootBackup:
+    """A backup covers every config root and restores each file where it came from."""
+
+    def _roots(self, tmp_path):
+        a = tmp_path / "servers"
+        b = tmp_path / "switches"
+        a.mkdir()
+        b.mkdir()
+        (a / "hosts.cfg").write_text("A-ORIGINAL")
+        (b / "hosts.cfg").write_text("B-ORIGINAL")
+        (b / "sub").mkdir()
+        (b / "sub" / "more.cfg").write_text("B-SUB")
+        return a, b
+
+    def test_round_trip_two_roots(self, tmp_path):
+        a, b = self._roots(tmp_path)
+        bm = BackupManager(str(a), str(tmp_path / "backups"), cfg_dirs=[str(a), str(b)])
+        name = os.path.basename(bm.create_backup("both"))
+        assert bm.list_backups()[0]["file_count"] == 3
+
+        (a / "hosts.cfg").write_text("A-CHANGED")
+        (b / "hosts.cfg").write_text("B-CHANGED")
+        (b / "sub" / "more.cfg").unlink()
+        (b / "new.cfg").write_text("B-NEW")
+
+        result = bm.restore_backup(name)
+
+        assert result["files_restored"] == 3
+        assert (a / "hosts.cfg").read_text() == "A-ORIGINAL"
+        assert (b / "hosts.cfg").read_text() == "B-ORIGINAL"
+        assert (b / "sub" / "more.cfg").read_text() == "B-SUB"
+        assert not (b / "new.cfg").exists()
+
+    def test_same_file_name_in_two_roots_does_not_collide(self, tmp_path):
+        a, b = self._roots(tmp_path)
+        bm = BackupManager(str(a), str(tmp_path / "backups"), cfg_dirs=[str(a), str(b)])
+        with zipfile.ZipFile(bm.create_backup("both")) as zf:
+            names = sorted(n for n in zf.namelist() if n.endswith(".cfg"))
+        assert names == ["root_0/hosts.cfg", "root_1/hosts.cfg", "root_1/sub/more.cfg"]
+
+    def test_nested_root_is_backed_up_once(self, tmp_path):
+        a, _b = self._roots(tmp_path)
+        (a / "inner").mkdir()
+        (a / "inner" / "x.cfg").write_text("X")
+        bm = BackupManager(str(a), str(tmp_path / "backups"), cfg_dirs=[str(a), str(a / "inner")])
+        bm.create_backup("nested")
+        assert bm.list_backups()[0]["file_count"] == 2
+
+    def test_restore_never_writes_to_a_directory_that_is_not_a_root(self, tmp_path):
+        a, b = self._roots(tmp_path)
+        both = BackupManager(str(a), str(tmp_path / "backups"), cfg_dirs=[str(a), str(b)])
+        name = os.path.basename(both.create_backup("both"))
+        (b / "hosts.cfg").write_text("B-CHANGED")
+
+        only_a = BackupManager(str(a), str(tmp_path / "backups"))
+        result = only_a.restore_backup(name)
+
+        assert (b / "hosts.cfg").read_text() == "B-CHANGED"
+        assert result["files_restored"] == 1
+        assert result["files_skipped"] == 2
+
+    def test_single_root_backup_made_before_multi_root_still_restores(self, tmp_path):
+        """Old backups hold files relative to the primary directory, no root table."""
+        a, b = self._roots(tmp_path)
+        old = BackupManager(str(a), str(tmp_path / "backups"))
+        name = os.path.basename(old.create_backup("old"))
+        with zipfile.ZipFile(tmp_path / "backups" / name) as zf:
+            assert "hosts.cfg" in zf.namelist()
+        (a / "hosts.cfg").write_text("A-CHANGED")
+        (b / "hosts.cfg").write_text("B-CHANGED")
+
+        now = BackupManager(str(a), str(tmp_path / "backups"), cfg_dirs=[str(a), str(b)])
+        now.restore_backup(name)
+
+        assert (a / "hosts.cfg").read_text() == "A-ORIGINAL"
+        assert (b / "hosts.cfg").read_text() == "B-CHANGED", "an old backup knows nothing about other roots"
+
+    def test_primary_dir_inside_a_larger_root(self, tmp_path):
+        """primary_dir may be a subdirectory of a config root; files must go back
+        to where they were, not one level off."""
+        outer = tmp_path / "etc"
+        primary = outer / "objects"
+        primary.mkdir(parents=True)
+        (outer / "top.cfg").write_text("TOP")
+        (primary / "hosts.cfg").write_text("HOSTS")
+        bm = BackupManager(str(primary), str(tmp_path / "backups"), cfg_dirs=[str(outer)])
+        name = os.path.basename(bm.create_backup("nested-primary"))
+        (outer / "top.cfg").write_text("CHANGED")
+        (primary / "hosts.cfg").write_text("CHANGED")
+
+        bm.restore_backup(name)
+
+        assert (outer / "top.cfg").read_text() == "TOP"
+        assert (primary / "hosts.cfg").read_text() == "HOSTS"
+        assert not (outer / "hosts.cfg").exists()
+
+    def test_old_backup_restores_into_primary_dir_even_inside_a_larger_root(self, tmp_path):
+        outer = tmp_path / "etc"
+        primary = outer / "objects"
+        primary.mkdir(parents=True)
+        (outer / "top.cfg").write_text("TOP")
+        (primary / "hosts.cfg").write_text("HOSTS")
+        old = BackupManager(str(primary), str(tmp_path / "backups"))
+        name = os.path.basename(old.create_backup("old"))
+        (primary / "hosts.cfg").write_text("CHANGED")
+
+        now = BackupManager(str(primary), str(tmp_path / "backups"), cfg_dirs=[str(outer)])
+        now.restore_backup(name)
+
+        assert (primary / "hosts.cfg").read_text() == "HOSTS"
+        assert (outer / "top.cfg").read_text() == "TOP", "files outside the old backup's directory are left alone"
+        assert not (outer / "hosts.cfg").exists()

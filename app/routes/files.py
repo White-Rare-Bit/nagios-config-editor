@@ -1,7 +1,9 @@
 """File and folder management routes — shadow copy architecture.
 
-All mutations operate directly on the shadow copy directory.
-Read routes serve from shadow when active, otherwise from original.
+All mutations go through staged_mutation() and operate on the shadow copy.
+Read routes list the shadow when one exists, otherwise the original config.
+Either way every path in a request or response is a logical path (the
+original config location), so paths do not change when staging starts.
 """
 
 import logging
@@ -11,119 +13,64 @@ import shutil
 
 from flask import Blueprint, jsonify, request
 
-from ..audit_service import log_audit
 from ..config_discovery import PROTECTED_FILENAMES
-from ..file_operations import is_safe_path as file_ops_is_safe_path
-
-from .helpers import (
-    audit_file_path,
-    format_audit_user,
-    get_audit_user_identity,
-    get_backup_manager,
-    get_config_path,
-    get_service,
-    get_shadow_manager,
-    operation_response,
-)
+from .helpers import get_service
+from .mutation import ApiError, staged_mutation
 
 bp = Blueprint("files", __name__)
 logger = logging.getLogger("nagios_bulk_editor.files")
 
+_SKIPPED_DIRS = ("backups", "backup")
 
-def is_safe_path(path: str, base_dir: str = None):
-    """Check if path is within any config root (or a specific base_dir).
 
-    For multi-root, accepts paths within any of the service's cfg_dirs.
+def _walk_roots(skip_hidden_dirs=False):
+    """Walk every config root where it currently lives.
 
-    Returns:
-        OperationResult with success=True if safe, success=False with error if unsafe.
-
+    Yields (logical_dir, dirnames, filenames): the directory's logical path
+    with the names found in its physical location.
     """
-    if base_dir is not None:
-        return file_ops_is_safe_path(path, base_dir)
-
-    # Multi-root: check against all config roots
-    service = get_service()
-    for root in service.cfg_dirs:
-        result = file_ops_is_safe_path(path, root)
-        if result.success:
-            return result
-
-    # None matched — return error from primary dir
-    return file_ops_is_safe_path(path, get_config_path())
-
-
-def _get_active_config_path():
-    """Return shadow config path if shadow is active, else original config path."""
-    sm = get_shadow_manager()
-    if sm.has_shadow():
-        return sm._config_dir
-    return get_config_path()
+    for physical_root, logical_root in get_service().active_dirs:
+        if not os.path.exists(physical_root):
+            continue
+        for current, dirs, filenames in os.walk(physical_root):
+            dirs[:] = [
+                d for d in dirs
+                if d not in _SKIPPED_DIRS and not (skip_hidden_dirs and d.startswith("."))
+            ]
+            rel = os.path.relpath(current, physical_root)
+            logical_dir = logical_root if rel == "." else os.path.join(logical_root, rel)
+            yield logical_dir, dirs, filenames
 
 
-def ensure_shadow_lock(session_id: str) -> tuple:
-    """Ensure session has shadow lock. Auto-creates shadow on first mutation.
-
-    Returns (success, error_response). error_response is None on success.
-    """
-    if not session_id:
-        return False, (jsonify({"error": "X-Session-Id header required"}), 400)
-
-    sm = get_shadow_manager()
-
-    if not sm.has_shadow():
-        # First mutation — create shadow copy
-        identity = get_audit_user_identity()
-        result = sm.create_shadow(
-            session_id,
-            identity.get("userName", ""),
-            identity.get("userEmail", ""),
-        )
-        if not result.success:
-            return False, (jsonify({"error": result.error or "Failed to create shadow"}), 500)
-        # Point service at shadow directory roots
-        service = get_service()
-        service.set_roots(cfg_dirs=sm.shadow_cfg_dirs, cfg_files=[])
-        service.reload()
-        return True, None
-
-    if sm.can_modify(session_id):
-        return True, None
-
-    return False, (jsonify({
-        "error": "Staging is locked by another user",
-        "locked": True,
-    }), 423)
+def _cfg_files_under(physical_dir):
+    """Physical paths of all .cfg files below a directory."""
+    return [
+        os.path.join(current, name)
+        for current, _dirs, filenames in os.walk(physical_dir)
+        for name in filenames if name.endswith(".cfg")
+    ]
 
 
-def _validate_move_paths(data):
-    """Validate sourcePath and targetFolder from request data.
-
-    Returns (abs_source, abs_target_folder, error_response).
-    error_response is None on success, or a (jsonify, status) tuple on failure.
-    """
+def _move_paths(m, data):
+    """Validate sourcePath and targetFolder. Returns their logical paths."""
     source_path = data.get("sourcePath")
     target_folder = data.get("targetFolder")
 
     if not source_path:
-        return None, None, (jsonify({"error": "sourcePath required"}), 400)
+        raise ApiError("sourcePath required")
     if not target_folder:
-        return None, None, (jsonify({"error": "targetFolder required"}), 400)
+        raise ApiError("targetFolder required")
 
-    config_path = _get_active_config_path()
-    abs_source = os.path.abspath(source_path)
-    abs_target_folder = os.path.abspath(target_folder)
+    if m.sm.composite_path(m.resolve(source_path)) is None:
+        raise ApiError("Source path must be within config directory")
+    if m.sm.composite_path(m.resolve(target_folder)) is None:
+        raise ApiError("Target folder must be within config directory")
 
-    if not abs_source.startswith(os.path.abspath(config_path)):
-        return None, None, (jsonify({"error": "Source path must be within config directory"}), 400)
-    if not abs_target_folder.startswith(os.path.abspath(config_path)):
-        return None, None, (jsonify({"error": "Target folder must be within config directory"}), 400)
-
-    return abs_source, abs_target_folder, None
+    return m.logical(m.resolve(source_path)), m.logical(m.resolve(target_folder))
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Read routes — serve from shadow when active
+# Read routes — list the shadow when active, report logical paths
 # ═══════════════════════════════════════════════════════════════════════
 
 
@@ -131,57 +78,34 @@ def _validate_move_paths(data):
 def api_files():
     """Get list of all .cfg files across all config roots.
 
-    Returns files from the active config directories (shadow when active,
-    original otherwise), along with the list of config roots.
+    Lists the active config (shadow when staging, original otherwise) and
+    reports logical paths, along with the list of config roots.
     """
-    service = get_service()
-    config_roots = service.cfg_dirs
-    files = []
-
-    for root_dir in config_roots:
-        if not os.path.exists(root_dir):
-            continue
-        for root, dirs, filenames in os.walk(root_dir):
-            dirs[:] = [d for d in dirs if d not in ("backups", "backup")]
-            for filename in filenames:
-                if filename.endswith(".cfg") and filename not in PROTECTED_FILENAMES:
-                    files.append(os.path.join(root, filename))
-
-    # Map shadow root paths to original directory names for display
-    sm = get_shadow_manager()
-    root_display_names = {}
-    if sm.has_shadow():
-        root_map = sm.get_root_map()
-        for shadow_name, original_root in root_map.items():
-            shadow_root = os.path.join(sm._config_dir, shadow_name)
-            root_display_names[shadow_root] = os.path.basename(original_root)
+    files = [
+        os.path.join(logical_dir, filename)
+        for logical_dir, _dirs, filenames in _walk_roots()
+        for filename in filenames
+        if filename.endswith(".cfg") and filename not in PROTECTED_FILENAMES
+    ]
 
     return jsonify({
         "files": sorted(files),
-        "roots": config_roots,
-        "root_display_names": root_display_names,
+        "roots": get_service().cfg_dirs,
     })
 
 
 @bp.route("/api/folders", methods=["GET"])
 def api_list_folders():
     """List all folders across all config roots."""
-    service = get_service()
-    config_roots = service.cfg_dirs
-    folders = []
-
-    for root_dir in config_roots:
-        if not os.path.exists(root_dir):
-            continue
-        for root, dirs, _files in os.walk(root_dir):
-            dirs[:] = [d for d in dirs if d not in ["backups", "backup"] and not d.startswith(".")]
-            for d in dirs:
-                folder_path = os.path.join(root, d)
-                folders.append(folder_path)
+    folders = [
+        os.path.join(logical_dir, d)
+        for logical_dir, dirs, _filenames in _walk_roots(skip_hidden_dirs=True)
+        for d in dirs
+    ]
 
     return jsonify({
         "folders": sorted(folders),
-        "roots": config_roots,
+        "roots": get_service().cfg_dirs,
     })
 
 
@@ -192,121 +116,82 @@ def api_list_folders():
 
 @bp.route("/api/files/create", methods=["POST"])
 def api_create_file():
-    """Create a file in the shadow copy directory."""
+    """Create a file in the shadow copy directory.
+
+    ``path`` is absolute, or relative to the primary config root.
+    """
     data = request.get_json() or {}
     file_path = data.get("path")
 
     if not file_path:
-        return jsonify({"error": "path is required"}), 400
+        raise ApiError("path is required")
 
     if not file_path.endswith(".cfg"):
         file_path += ".cfg"
 
     filename = os.path.basename(file_path)
     if re.search(r'[/\\:*?"<>|]', filename):
-        return jsonify({"error": 'Filename cannot contain / \\ : * ? " < > |'}), 400
+        raise ApiError('Filename cannot contain / \\ : * ? " < > |')
 
-    safe_result = is_safe_path(file_path)
-    if not safe_result.success:
-        return jsonify({"error": safe_result.error}), 400
+    with staged_mutation() as m:
+        logical = m.logical(m.resolve(file_path))
+        physical = m.physical(logical)
 
-    # Acquire shadow lock
-    session_id = request.headers.get("X-Session-Id")
-    success, error = ensure_shadow_lock(session_id)
-    if not success:
-        return error
+        if os.path.exists(physical):
+            raise ApiError("File already exists")
 
-    sm = get_shadow_manager()
+        # Snapshot, then create the file directly
+        m.snapshot([logical], f"create file {m.display(logical)}")
 
-    # Normalize path into shadow dir
-    if not os.path.isabs(file_path):
-        # Relative path — resolve against primary shadow root
-        file_path = os.path.normpath(os.path.join(sm._config_dir, "root_0", file_path))
-    else:
-        # Absolute path — remap from original root to shadow equivalent
-        shadow_path = sm.shadow_path_for(file_path)
-        file_path = os.path.normpath(shadow_path)
+        os.makedirs(os.path.dirname(physical), exist_ok=True)
+        with open(physical, "w") as f:
+            f.write("")
 
-    if os.path.exists(file_path):
-        return jsonify({"error": "File already exists"}), 400
-
-    # Snapshot, then create the file directly
-    rel_path = os.path.relpath(file_path, sm._config_dir)
-    sm.snapshot_files([rel_path], f"create file {rel_path}")
-
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    with open(file_path, "w") as f:
-        f.write("")
-
-    # Reload parser to pick up new file
-    get_service().reload()
-
-    identity = get_audit_user_identity()
-    user = format_audit_user(identity)
-    log_audit(action="file_create", user=user, file=audit_file_path(file_path))
+        # Reload parser to pick up new file
+        m.files_changed()
+        m.audit("file_create", file=m.display(logical))
 
     return jsonify({
         "success": True,
-        "path": file_path,
+        "path": logical,
         "message": "File created in shadow copy.",
     })
 
 
 @bp.route("/api/folders", methods=["POST"])
 def api_create_folder():
-    """Create a folder in the shadow copy directory."""
+    """Create a folder in the shadow copy directory.
+
+    ``path`` is absolute, or relative to the primary config root.
+    """
     data = request.get_json() or {}
     folder_path = data.get("path")
 
     if not folder_path:
-        return jsonify({"error": "path required"}), 400
+        raise ApiError("path required")
 
     folder_name = os.path.basename(folder_path.rstrip("/"))
     if re.search(r'[\\:*?"<>|]', folder_name):
-        return jsonify({"error": 'Folder name cannot contain \\ : * ? " < > |'}), 400
+        raise ApiError('Folder name cannot contain \\ : * ? " < > |')
 
-    # Acquire shadow lock
-    session_id = request.headers.get("X-Session-Id")
-    success, error = ensure_shadow_lock(session_id)
-    if not success:
-        return error
+    with staged_mutation() as m:
+        logical = m.logical(m.resolve(folder_path))
+        physical = m.physical(logical)
 
-    sm = get_shadow_manager()
-    config_path = sm._config_dir
-    shadow_config = os.path.abspath(config_path)
+        if os.path.isdir(physical):
+            raise ApiError("Folder already exists")
 
-    # Normalize path into shadow dir
-    if not os.path.isabs(folder_path):
-        # Relative path — resolve against primary shadow root
-        abs_folder_path = os.path.normpath(os.path.join(config_path, "root_0", folder_path))
-    else:
-        abs_folder_path = os.path.abspath(folder_path)
-        if abs_folder_path.startswith(shadow_config + os.sep):
-            # Already a shadow path — use as-is
-            pass
-        else:
-            # Remap from original root to shadow equivalent
-            abs_folder_path = os.path.abspath(sm.shadow_path_for(abs_folder_path))
+        # Snapshot before creation so undo can remove it
+        m.snapshot([], f"create folder {m.display(logical)}", dirs=[logical])
 
-    if not abs_folder_path.startswith(shadow_config):
-        return jsonify({"error": "Path must be within config directory"}), 400
+        os.makedirs(physical, exist_ok=True)
 
-    if os.path.isdir(abs_folder_path):
-        return jsonify({"error": "Folder already exists"}), 400
-
-    # Snapshot before creation so undo can remove it
-    rel_path = os.path.relpath(abs_folder_path, config_path)
-    sm.snapshot_files([], f"create folder {rel_path}", dir_paths=[rel_path])
-
-    os.makedirs(abs_folder_path, exist_ok=True)
-
-    identity = get_audit_user_identity()
-    user = format_audit_user(identity)
-    log_audit(action="folder_create", user=user, folder=audit_file_path(abs_folder_path))
+        m.files_changed()
+        m.audit("folder_create", folder=m.display(logical))
 
     return jsonify({
         "success": True,
-        "path": abs_folder_path,
+        "path": logical,
         "message": "Folder created in shadow copy.",
     })
 
@@ -314,42 +199,30 @@ def api_create_folder():
 @bp.route("/api/files/move", methods=["POST"])
 def api_move_file():
     """Move a file within the shadow copy directory."""
-    session_id = request.headers.get("X-Session-Id")
-    success, error = ensure_shadow_lock(session_id)
-    if not success:
-        return error
-
     data = request.get_json() or {}
-    abs_source, abs_target_folder, err = _validate_move_paths(data)
-    if err:
-        return err
 
-    if not os.path.isfile(abs_source):
-        return jsonify({"error": "Source file does not exist"}), 404
+    with staged_mutation() as m:
+        source, target_folder = _move_paths(m, data)
+        physical_source = m.physical(source)
 
-    file_name = os.path.basename(abs_source)
-    target_path = os.path.join(abs_target_folder, file_name)
+        if not os.path.isfile(physical_source):
+            raise ApiError("Source file does not exist", 404)
 
-    sm = get_shadow_manager()
-    config_path = sm._config_dir
+        target = os.path.join(target_folder, os.path.basename(source))
+        physical_target = m.physical(target)
 
-    # Snapshot affected files before move
-    rel_source = os.path.relpath(abs_source, config_path)
-    rel_target = os.path.relpath(target_path, config_path)
-    sm.snapshot_files([rel_source, rel_target], f"move file {rel_source}")
+        # Snapshot affected files before move
+        m.snapshot([source, target], f"move file {m.display(source)}")
 
-    os.makedirs(abs_target_folder, exist_ok=True)
-    shutil.move(abs_source, target_path)
+        os.makedirs(os.path.dirname(physical_target), exist_ok=True)
+        shutil.move(physical_source, physical_target)
 
-    get_service().reload()
-
-    identity = get_audit_user_identity()
-    user = format_audit_user(identity)
-    log_audit(action="file_move", user=user, from_file=rel_source, to_file=rel_target)
+        m.files_changed()
+        m.audit("file_move", from_file=m.display(source), to_file=m.display(target))
 
     return jsonify({
         "success": True,
-        "newPath": target_path,
+        "newPath": target,
         "message": "File moved in shadow copy.",
     })
 
@@ -357,84 +230,72 @@ def api_move_file():
 @bp.route("/api/folders/move", methods=["POST"])
 def api_move_folder():
     """Move a folder within the shadow copy directory."""
-    session_id = request.headers.get("X-Session-Id")
-    success, error = ensure_shadow_lock(session_id)
-    if not success:
-        return error
-
     data = request.get_json() or {}
-    abs_source, abs_target_folder, err = _validate_move_paths(data)
-    if err:
-        return err
 
-    if not os.path.isdir(abs_source):
-        return jsonify({"error": "Source folder does not exist"}), 404
+    with staged_mutation() as m:
+        source, target_folder = _move_paths(m, data)
+        physical_source = m.physical(source)
 
-    if abs_target_folder == abs_source or abs_target_folder.startswith(abs_source + os.sep):
-        return jsonify({"error": "Cannot move folder into itself or a descendant"}), 400
+        if not os.path.isdir(physical_source):
+            raise ApiError("Source folder does not exist", 404)
 
-    folder_name = os.path.basename(abs_source)
-    target_path = os.path.join(abs_target_folder, folder_name)
+        if target_folder == source or target_folder.startswith(source + os.sep):
+            raise ApiError("Cannot move folder into itself or a descendant")
 
-    sm = get_shadow_manager()
-    config_path = sm._config_dir
+        target = os.path.join(target_folder, os.path.basename(source))
+        physical_target = m.physical(target)
 
-    # Snapshot all .cfg files in the source folder
-    files_to_snapshot = []
-    for root, _dirs, filenames in os.walk(abs_source):
-        for fn in filenames:
-            if fn.endswith(".cfg"):
-                abs_f = os.path.join(root, fn)
-                files_to_snapshot.append(os.path.relpath(abs_f, config_path))
-    rel_source = os.path.relpath(abs_source, config_path)
-    sm.snapshot_files(files_to_snapshot, f"move folder {rel_source}")
+        # Snapshot every .cfg file at both its old and its new location, and
+        # every directory the move will create, so undo puts the files back
+        # AND removes the moved copies.
+        files_to_snapshot = []
+        for physical_file in _cfg_files_under(physical_source):
+            rel = os.path.relpath(physical_file, physical_source)
+            files_to_snapshot.append(os.path.join(source, rel))
+            files_to_snapshot.append(os.path.join(target, rel))
+        new_dirs = [
+            os.path.join(target, os.path.relpath(os.path.join(current, d), physical_source))
+            for current, dirs, _filenames in os.walk(physical_source)
+            for d in dirs
+        ]
+        # Deepest first: undo removes directories in this order, and can only
+        # remove empty ones.
+        new_dirs.sort(key=lambda d: d.count(os.sep), reverse=True)
+        m.snapshot(files_to_snapshot, f"move folder {m.display(source)}", dirs=[*new_dirs, target])
 
-    os.makedirs(abs_target_folder, exist_ok=True)
-    shutil.move(abs_source, target_path)
+        os.makedirs(os.path.dirname(physical_target), exist_ok=True)
+        shutil.move(physical_source, physical_target)
 
-    get_service().reload()
-
-    identity = get_audit_user_identity()
-    user = format_audit_user(identity)
-    rel_target = os.path.relpath(target_path, config_path)
-    log_audit(action="folder_move", user=user, from_folder=rel_source, to_folder=rel_target)
+        m.files_changed()
+        m.audit("folder_move", from_folder=m.display(source), to_folder=m.display(target))
 
     return jsonify({
         "success": True,
-        "newPath": target_path,
+        "newPath": target,
         "message": "Folder moved in shadow copy.",
     })
 
 
 @bp.route("/api/files/<path:file_path>", methods=["DELETE"])
 def api_delete_file(file_path):
-    """Delete a file from the shadow copy directory."""
-    session_id = request.headers.get("X-Session-Id")
-    success, error = ensure_shadow_lock(session_id)
-    if not success:
-        return error
+    """Delete a file from the shadow copy directory.
 
-    sm = get_shadow_manager()
-    config_path = sm._config_dir
-    shadow_root = sm.shadow_cfg_dirs[0] if sm.shadow_cfg_dirs else config_path
-    abs_path = os.path.abspath(os.path.join(shadow_root, file_path))
+    The path is relative to the primary config root, or an absolute path
+    (whose leading slash the URL cannot carry) inside any config root.
+    """
+    with staged_mutation() as m:
+        logical = m.logical(m.resolve(file_path))
+        physical = m.physical(logical)
 
-    if not abs_path.startswith(os.path.abspath(config_path)):
-        return jsonify({"error": "Path must be within config directory"}), 400
+        if not os.path.isfile(physical):
+            raise ApiError("File does not exist", 404)
 
-    if not os.path.isfile(abs_path):
-        return jsonify({"error": "File does not exist"}), 404
+        m.snapshot([logical], f"delete file {m.display(logical)}")
 
-    rel_path = os.path.relpath(abs_path, config_path)
-    sm.snapshot_files([rel_path], f"delete file {rel_path}")
+        os.remove(physical)
 
-    os.remove(abs_path)
-
-    get_service().reload()
-
-    identity = get_audit_user_identity()
-    user = format_audit_user(identity)
-    log_audit(action="file_delete", user=user, file=audit_file_path(abs_path))
+        m.files_changed()
+        m.audit("file_delete", file=m.display(logical))
 
     return jsonify({
         "success": True,
@@ -444,46 +305,32 @@ def api_delete_file(file_path):
 
 @bp.route("/api/folders/<path:folder_path>", methods=["DELETE"])
 def api_delete_folder(folder_path):
-    """Delete a folder from the shadow copy directory."""
-    session_id = request.headers.get("X-Session-Id")
-    success, error = ensure_shadow_lock(session_id)
-    if not success:
-        return error
+    """Delete a folder from the shadow copy directory.
 
-    sm = get_shadow_manager()
-    config_path = sm._config_dir
-    shadow_root = sm.shadow_cfg_dirs[0] if sm.shadow_cfg_dirs else config_path
-    abs_path = os.path.abspath(os.path.join(shadow_root, folder_path))
+    The path is relative to the primary config root, or an absolute path
+    (whose leading slash the URL cannot carry) inside any config root.
+    """
+    with staged_mutation() as m:
+        logical = m.logical(m.resolve(folder_path))
+        physical = m.physical(logical)
 
-    if not abs_path.startswith(os.path.abspath(config_path)):
-        return jsonify({"error": "Path must be within config directory"}), 400
+        if logical in m.service.cfg_dirs:
+            raise ApiError("Cannot delete config root directory")
 
-    if abs_path == os.path.abspath(config_path):
-        return jsonify({"error": "Cannot delete config root directory"}), 400
+        if not os.path.isdir(physical):
+            raise ApiError("Folder does not exist", 404)
 
-    if abs_path in [os.path.abspath(d) for d in sm.shadow_cfg_dirs]:
-        return jsonify({"error": "Cannot delete config root directory"}), 400
+        # Snapshot all .cfg files in the folder
+        files_to_snapshot = [
+            os.path.join(logical, os.path.relpath(physical_file, physical))
+            for physical_file in _cfg_files_under(physical)
+        ]
+        m.snapshot(files_to_snapshot, f"delete folder {m.display(logical)}")
 
-    if not os.path.isdir(abs_path):
-        return jsonify({"error": "Folder does not exist"}), 404
+        shutil.rmtree(physical)
 
-    # Snapshot all .cfg files in the folder
-    files_to_snapshot = []
-    for root, _dirs, filenames in os.walk(abs_path):
-        for fn in filenames:
-            if fn.endswith(".cfg"):
-                abs_f = os.path.join(root, fn)
-                files_to_snapshot.append(os.path.relpath(abs_f, config_path))
-    rel_path = os.path.relpath(abs_path, config_path)
-    sm.snapshot_files(files_to_snapshot, f"delete folder {rel_path}")
-
-    shutil.rmtree(abs_path)
-
-    get_service().reload()
-
-    identity = get_audit_user_identity()
-    user = format_audit_user(identity)
-    log_audit(action="folder_delete", user=user, folder=audit_file_path(abs_path))
+        m.files_changed()
+        m.audit("folder_delete", folder=m.display(logical))
 
     return jsonify({
         "success": True,

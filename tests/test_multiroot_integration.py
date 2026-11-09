@@ -97,7 +97,7 @@ class TestMultiRootIntegration:
             assert resp.json["data"]["totalCount"] >= 1
 
             # Apply changes
-            resp = client.post("/api/staging/apply?force=true")
+            resp = client.post("/api/staging/apply?force=true", headers={"X-Session-Id": "test-session"})
             assert resp.status_code == 200
             assert resp.json["success"]
 

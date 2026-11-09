@@ -61,77 +61,18 @@ export async function loadObjects() {
         state.configRoots = filesResult.data.roots;
     }
 
-    // Use display name from API (preserves original dir name when shadow is active)
-    const displayNames = filesResult.data?.root_display_names || {};
-    const primaryRoot = state.configRoots[0] || filesResult.data?.config_path || '';
-    if (displayNames[primaryRoot]) {
-        state.configDisplayName = displayNames[primaryRoot];
-    } else if (!state.configDisplayName) {
-        // First load or no shadow — use basename of actual path
+    // Paths from the API are the original config locations whether or not a
+    // staging session is active, so nothing here needs migrating when one
+    // starts or ends.
+    const primaryRoot = state.configRoots[0] || '';
+    if (primaryRoot) {
+        state.configPath = primaryRoot;
         state.configDisplayName = primaryRoot.split('/').pop() || '';
-    }
-
-    // Sync configPath with server (may change when shadow copy is created/destroyed).
-    // Expansion state (leftTreeExpansion, rightTreeExpansion) is stored as
-    // relative paths in localStorage, so it doesn't need migration here — the
-    // TreeExpansionState save/restore methods handle the conversion.
-    const newConfigPath = state.configRoots[0] || filesResult.data?.config_path;
-    if (newConfigPath && newConfigPath !== state.configPath) {
-        const oldPath = state.configPath;
-        state.configPath = newConfigPath;
-
-        // Migrate selectedFolder (in-memory absolute path)
-        if (state.selectedFolder === oldPath) {
-            state.selectedFolder = newConfigPath;
-        } else if (state.selectedFolder?.startsWith(oldPath + '/')) {
-            state.selectedFolder = newConfigPath + state.selectedFolder.substring(oldPath.length);
-        }
-
-        // Migrate stable keys (source_file|type|name) in selections and tabs
-        const migrateSet = (set) => {
-            const migrated = new Set();
-            for (const p of set) {
-                if (p === oldPath) {
-                    migrated.add(newConfigPath);
-                } else if (p.startsWith(oldPath + '/')) {
-                    migrated.add(newConfigPath + p.substring(oldPath.length));
-                } else {
-                    migrated.add(p);
-                }
-            }
-            return migrated;
-        };
-        state.selectedKeys = migrateSet(state.selectedKeys);
-
-        if (state.activeTabKey) {
-            const migrated = migrateSet(new Set([state.activeTabKey]));
-            state.activeTabKey = migrated.values().next().value;
-        }
-        if (state.openTabs) {
-            for (const tab of state.openTabs) {
-                const migrated = migrateSet(new Set([tab.key]));
-                tab.key = migrated.values().next().value;
-            }
-        }
-
-        // Migrate expansion state (in-memory absolute paths)
-        state.leftTreeExpansion.migratePaths(oldPath, newConfigPath);
-        state.rightTreeExpansion.migratePaths(oldPath, newConfigPath);
-
-        // Migrate editedObject.source_file so center pane key matches reloaded data
-        if (state.editedObject) {
-            const sf = state.editedObject.source_file;
-            if (sf === oldPath) {
-                state.editedObject.source_file = newConfigPath;
-            } else if (sf && sf.startsWith(oldPath + '/')) {
-                state.editedObject.source_file = newConfigPath + sf.substring(oldPath.length);
-            }
-        }
     }
 
     // Populate constants from backend metadata (once)
     if (metadataResult && metadataResult.success) {
-        applyMetadata(metadataResult.data.data || metadataResult.data);
+        applyMetadata(metadataResult.payload);
         state.metadataLoaded = true;
     }
 
@@ -164,7 +105,7 @@ export async function updateBadges() {
     const infoResult = await ApiClient.get('/api/staging/info', { silent: true });
 
     if (infoResult.success) {
-        const info = infoResult.data.data || infoResult.data;
+        const info = infoResult.payload;
         let count = Math.max(info.totalCount || 0, info.changedFiles || 0);
 
         // Update object-level change tracking
@@ -199,13 +140,12 @@ export async function updateBadges() {
 export async function loadChangedFiles() {
     const result = await ApiClient.get('/api/staging/diff', { silent: true });
     state.changedFilesMap.clear();
-    const diffData = result.data?.data || result.data;
+    const diffData = result.payload;
     if (result.success && diffData?.files) {
         for (const f of diffData.files) {
-            // Strip shadow root prefix (e.g. "root_0/") to get path relative
-            // to the config root, matching what toRelativePath() produces.
-            const key = f.path.includes('/') ? f.path.substring(f.path.indexOf('/') + 1) : f.path;
-            state.changedFilesMap.set(key, f.status);
+            // abs_path is the same path /api/files and obj.source_file use,
+            // so it identifies the file in any config root.
+            state.changedFilesMap.set(f.abs_path, f.status);
         }
     }
 }
@@ -325,7 +265,7 @@ export async function undoLastAction() {
 export async function getUndoCount() {
     const result = await ApiClient.get('/api/staging/info', { silent: true });
     if (result.success) {
-        const info = result.data.data || result.data;
+        const info = result.payload;
         return info.undoCount || 0;
     }
     return 0;
@@ -338,7 +278,7 @@ export async function getUndoCount() {
 export async function getTotalStagedCount() {
     const result = await ApiClient.get('/api/staging/info', { silent: true });
     if (result.success) {
-        const info = result.data.data || result.data;
+        const info = result.payload;
         return info.totalCount || 0;
     }
     return 0;

@@ -46,7 +46,7 @@ def api_validate():
 def api_health_check():
     """Analyze configuration for potential issues."""
     from ..inheritance import build_template_lookup
-    from .health_checks import run_all_checks
+    from ..health_checks import run_all_checks
     from .helpers import get_server_config
 
     service = get_service()

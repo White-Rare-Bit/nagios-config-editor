@@ -84,8 +84,8 @@
 
     <div class="docs-note">
         For production use, run the app behind a WSGI server such as Gunicorn or uWSGI
-        instead of the built-in Flask development server. The application uses
-        <code>multiprocessing.Lock</code> for thread safety, so it is compatible with
-        multi-process WSGI deployments.
+        instead of the built-in Flask development server. Staging state, locks and settings
+        live on disk and are shared by all workers, so multi-process WSGI deployments are
+        supported. All workers must run on the same host and see the same filesystem.
     </div>
 </div>

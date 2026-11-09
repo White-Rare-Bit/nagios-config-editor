@@ -85,11 +85,16 @@
     <h4>Parser Modification</h4>
 
     <p>
-        When performing mutations that need a parser pointed at the shadow copy, use:
+        Every route that changes configuration runs inside <code>staged_mutation()</code>
+        (<code>app/routes/mutation.py</code>). It takes the cross-worker lock, checks lock ownership,
+        creates the shadow copy on first use, and gives you helpers for snapshots, paths and audit lines:
     </p>
 
-    <pre><code>parser = get_parser_for_modification()
-# parser is configured to read from shadow copy paths</code></pre>
+    <pre><code>with staged_mutation() as m:
+    obj = m.require(stable_key)                 # 404 if missing
+    m.snapshot([obj.source_file], "edit host")  # before changing anything
+    result = m.service.update_object(...)       # writes to the shadow copy
+    m.audit("object_edit", ...)</code></pre>
 
     <h3>Frontend Patterns</h3>
 

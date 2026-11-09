@@ -13,7 +13,7 @@ import { afterFrontendMutation, loadObjects, getStagingHeaders } from './data-lo
 import { showCenterPaneObject, hideCenterPaneObject, checkForChanges } from './object-editor.js'; // circular — safe (function-level)
 import { getEffectiveAttributes, getEffectiveName } from './app.js'; // circular — safe (function-level)
 import { openTab } from './tab-manager.js'; // circular — safe (function-level)
-import { getIcon, handleApiError, toRelativePath, toDisplayPath, extractFileName, updateBadge } from './ui-utils.js';
+import { getIcon, handleApiError, toRelativePath, toDisplayPath, toApiPathSegment, extractFileName, updateBadge } from './ui-utils.js';
 import { refreshPanelTiers } from './panel-resizer.js';
 import { cleanupDragState } from './drag-drop.js';
 import { buildTree, updateSelection, selectObjectByIndex } from './app.js'; // circular — safe (function-level)
@@ -250,13 +250,11 @@ function buildDeleteButton(path, isFolder) {
 
 /**
  * Get change status for a file from server diff data.
- * The changedFilesMap uses relative paths, so we convert absolute paths.
+ * The changedFilesMap is keyed by the same absolute paths the tree uses.
  * @returns {string|null} 'added', 'modified', 'deleted', or null
  */
 function getFileChangeStatus(absPath) {
-    const rel = toRelativePath(absPath);
-    if (!rel) {return null;}
-    return state.changedFilesMap.get(rel) || null;
+    return state.changedFilesMap.get(absPath) || null;
 }
 
 /**
@@ -264,11 +262,9 @@ function getFileChangeStatus(absPath) {
  * @returns {string|null} 'modified' if any file inside changed, null otherwise
  */
 function getFolderChangeStatus(folderPath) {
-    const rel = toRelativePath(folderPath);
-    if (!rel && folderPath !== state.configPath) {return null;}
-    const prefix = rel ? rel + '/' : '';
+    const prefix = folderPath + '/';
     for (const [path] of state.changedFilesMap) {
-        if (path.startsWith(prefix) || (!prefix && state.changedFilesMap.size > 0)) {
+        if (path.startsWith(prefix)) {
             return 'modified';
         }
     }
@@ -514,16 +510,12 @@ export function selectFolder(folderPath) {
 
 function isObjectCreated(obj) {
     if (state.createdObjectKeys.size === 0) { return false; }
-    const relPath = toRelativePath(obj.source_file);
-    const name = obj.display_name ?? obj.name ?? ('idx:' + obj.global_index);
-    return state.createdObjectKeys.has(relPath + '|' + obj.object_type + '|' + name);
+    return state.createdObjectKeys.has(StableKey.build(obj));
 }
 
 function isObjectChanged(obj) {
     if (state.changedObjectKeys.size === 0) { return false; }
-    const relPath = toRelativePath(obj.source_file);
-    const name = obj.display_name ?? obj.name ?? ('idx:' + obj.global_index);
-    return state.changedObjectKeys.has(relPath + '|' + obj.object_type + '|' + name);
+    return state.changedObjectKeys.has(StableKey.build(obj));
 }
 
 function buildExistingObjectRow(obj, gripIcon, filePath) {
@@ -905,14 +897,7 @@ export async function deleteFile(filePath, event) {
         return;
     }
 
-    let relativePath = filePath;
-    if (filePath.startsWith(state.configPath + '/')) {
-        relativePath = filePath.substring(state.configPath.length + 1);
-    } else if (filePath.startsWith(state.configPath)) {
-        relativePath = filePath.substring(state.configPath.length);
-    }
-    const encodedPath = encodeURIComponent(relativePath);
-    const result = await ApiClient.del(`/api/files/${encodedPath}`, { silent: true });
+    const result = await ApiClient.del(`/api/files/${toApiPathSegment(filePath)}`, { silent: true });
 
     if (!result.success) {
         showToast(result.data?.error || result.error || 'Failed to delete file', 'error');
@@ -947,14 +932,7 @@ export async function deleteFolder(folderPath, event) {
         return;
     }
 
-    let relativePath = folderPath;
-    if (folderPath.startsWith(state.configPath + '/')) {
-        relativePath = folderPath.substring(state.configPath.length + 1);
-    } else if (folderPath.startsWith(state.configPath)) {
-        relativePath = folderPath.substring(state.configPath.length);
-    }
-    const encodedPath = encodeURIComponent(relativePath);
-    const result = await ApiClient.del(`/api/folders/${encodedPath}`, { silent: true });
+    const result = await ApiClient.del(`/api/folders/${toApiPathSegment(folderPath)}`, { silent: true });
 
     if (!result.success) {
         showToast(result.data?.error || result.error || 'Failed to delete folder', 'error');

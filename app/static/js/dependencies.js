@@ -152,7 +152,7 @@ const {
     document.addEventListener('DOMContentLoaded', async () => {
         // Fetch metadata to derive object types dynamically
         const metaResult = await ApiClient.get('/api/metadata', { silent: true });
-        const meta = metaResult.success ? (metaResult.data.data || metaResult.data) : {};
+        const meta = metaResult.success ? (metaResult.payload) : {};
         // Intersect metadata types with checkbox types in the HTML template
         const checkboxTypes = new Set(
             [...document.querySelectorAll('#objectTypeFilters input[type="checkbox"]')]

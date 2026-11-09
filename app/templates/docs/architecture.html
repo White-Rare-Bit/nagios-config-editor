@@ -6,7 +6,7 @@
         <ul>
             <li>App factory pattern and service layer</li>
             <li>OperationResult pattern for uniform error handling</li>
-            <li>Thread safety with multiprocessing locks</li>
+            <li>Thread and process safety with file locks</li>
             <li>Request lifecycle and route organization</li>
         </ul>
     </div>
@@ -178,9 +178,12 @@ return jsonify({'success': True, 'data': result.data})</code></pre>
     <h3>Thread Safety</h3>
 
     <p>
-        Because WSGI servers may use multiple processes (not just threads), the application uses
-        <code>multiprocessing.Lock</code> instead of <code>threading.Lock</code> for
-        synchronization:
+        Because WSGI servers may use multiple processes (not just threads), and each worker
+        process builds its own app, an in-memory lock in one worker does not exist in the
+        others. The application therefore uses <code>ProcessLock</code>, a file lock
+        (<code>flock</code>) kept next to the shadow copy, for synchronization. For the same
+        reason nothing about staging is kept only in memory: whether a shadow exists, who
+        owns it and a generation marker that tells workers to reparse are all read from disk:
     </p>
 
     <ul>

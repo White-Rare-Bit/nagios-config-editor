@@ -1,6 +1,7 @@
 """Git integration routes — shadow copy architecture."""
 
 import logging
+import os
 
 from flask import Blueprint, jsonify, request
 
@@ -15,6 +16,7 @@ from .helpers import (
     get_service,
     get_shadow_manager,
 )
+from .mutation import public_lock_status
 
 bp = Blueprint("git", __name__)
 logger = logging.getLogger(__name__)
@@ -32,16 +34,31 @@ def _check_shadow_lock(session_id, operation="git"):
         return None
     # No session ID can't prove ownership of the lock, so it must not bypass it
     # (otherwise omitting the header lets discard/restore wipe staged work)
-    if session_id and sm.can_modify(session_id):
+    if sm.is_owner(session_id):
         return None
-    lock_status = sm.get_lock_status()
-    logger.warning("Lock conflict on %s: session_id=%s, lock_owner=%s",
-                   operation, session_id, lock_status.get("session_id"))
+    lock_status = public_lock_status(sm)
+    logger.warning("Lock conflict on %s: lock held by %s",
+                   operation, lock_status.get("user_name") or "unknown user")
     return jsonify({
         "error": "Another user has pending changes. Wait for them to commit or discard.",
         "locked": True,
         "lockOwner": lock_status,
     }), 423
+
+
+def _untracked_roots():
+    """Config roots that are outside the Git repository directory.
+
+    Git integration works on one repository, in the primary config directory.
+    Other roots are still edited, staged and backed up, but their changes
+    are not committed; the UI needs to be able to say so.
+    """
+    repo_dir = os.path.realpath(get_git_service().config_path)
+    return [
+        root for root in get_service().cfg_dirs
+        if os.path.realpath(root) != repo_dir
+        and not os.path.realpath(root).startswith(repo_dir + os.sep)
+    ]
 
 
 def _resolve_user_identity(data):
@@ -150,22 +167,9 @@ def api_git_identity_set():
             result = sm.create_shadow(session_id, user_name, user_email)
             if not result.success:
                 return jsonify({"error": result.error or "Failed to create shadow"}), 500
-            # Point service at shadow
-            service = get_service()
-            service.config_path = sm._config_dir
-            service.reload()
         else:
             # Update lock file with new identity
-            import json
-            import os
-            lock_file = sm._lock_file
-            if os.path.isfile(lock_file):
-                with open(lock_file) as f:
-                    lock_data = json.load(f)
-                lock_data["user_name"] = user_name
-                lock_data["user_email"] = user_email
-                with open(lock_file, "w") as f:
-                    json.dump(lock_data, f, indent=2)
+            sm.update_identity(user_name, user_email)
 
         return jsonify({"success": True, "user_name": user_name, "user_email": user_email})
 
@@ -207,6 +211,7 @@ def api_git_status():
                         "staged": f.staged, "unstaged": f.unstaged}
                        for f in status.files],
             "has_changes": status.has_changes,
+            "untracked_roots": _untracked_roots(),
             **({"error": status.error} if status.error else {}),
         })
     except Exception as e:  # noqa: BLE001
@@ -319,11 +324,8 @@ def _execute_commit(data, message, session_id):
     # Destroy shadow on successful commit
     sm = get_shadow_manager()
     if sm.has_shadow():
+        # Destroying the shadow makes every worker read the original config again
         sm.destroy_shadow()
-        # Point service back at original config
-        service = get_service()
-        service.config_path = sm.config_path
-        service.reload()
 
     return jsonify({
         "success": True, "commit_hash": commit_hash, "message": message,
@@ -411,9 +413,7 @@ def api_git_discard_all():
             sm.destroy_shadow()
 
         # Reload config to reflect discarded changes
-        service = get_service()
-        service.config_path = sm.config_path
-        service.reload()
+        get_service().reload()
 
         # Write audit log entry for discard
         identity = get_audit_user_identity()
@@ -550,9 +550,6 @@ def api_git_restore():
         sm = get_shadow_manager()
         if sm.has_shadow():
             sm.destroy_shadow()
-            service = get_service()
-            service.config_path = sm.config_path
-            service.reload()
 
         return jsonify({
             "success": True,

@@ -26,7 +26,7 @@ All modules use ES module `import`/`export` syntax. Shared state in `state.js`.
 | `impact-section.js` | Impact analysis and resolved attributes in center pane |
 | `panel-resizer.js` | Resizable panel dividers |
 | `tab-manager.js` | Tab switching for center/right panes |
-| `ui-utils.js` | Icons (`icons`, `getIcon()`), `switchTabs()`, `updateBadge()`, `explorerShowToast()`, path utilities (`extractFileName`, `toRelativePath`, `toDisplayPath`), `handleApiError()` |
+| `ui-utils.js` | Icons (`icons`, `getIcon()`), `switchTabs()`, `updateBadge()`, `explorerShowToast()`, path utilities (`extractFileName`, `toRelativePath`, `toDisplayPath`, `toApiPathSegment`), `handleApiError()` |
 
 ## Constants: Metadata vs Hardcoded
 

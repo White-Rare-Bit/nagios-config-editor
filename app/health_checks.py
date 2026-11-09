@@ -7,15 +7,15 @@ The run_all_checks() orchestrator calls them all.
 import os
 import re
 
-from ..inheritance import (
+from .inheritance import (
     build_implied_parent_index,
     has_attr_in_chain,
     resolve_all_attrs,
     resolve_inherited_attrs,
 )
-from ..nagios_cfg import parse_nagios_cfg, parse_resource_cfg
-from ..nagios_model import NAME_FIELDS, REFERENCE_FIELDS, REQUIRED_FIELDS, is_template_object
-from ..stable_keys import generate_stable_key_for_object
+from .nagios_cfg import parse_nagios_cfg, parse_resource_cfg
+from .nagios_model import NAME_FIELDS, REFERENCE_FIELDS, REQUIRED_FIELDS, is_template_object
+from .stable_keys import generate_stable_key_for_object
 
 # Minimum common prefix length for auto-generating template names
 _MIN_PREFIX_LENGTH = 3

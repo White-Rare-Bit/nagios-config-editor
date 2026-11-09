@@ -90,6 +90,13 @@ async function loadGitStatus(forceRefresh = false) {
         repoStatus.innerHTML = `<p class="sidebar-info-text" style="color: var(--nbe-success, #4caf50);">Working directory clean</p>`;
     }
 
+    // Git works on one repository (the primary config directory). Say so
+    // when other config directories exist, so nobody assumes they are versioned.
+    if (data.untracked_roots && data.untracked_roots.length > 0) {
+        const dirs = data.untracked_roots.map(d => `<code>${escapeHtml(d)}</code>`).join(', ');
+        repoStatus.innerHTML += `<p class="sidebar-info-text" style="color: var(--nbe-warning, #e65100);">Not tracked by Git: ${dirs}. Changes there are applied and backed up, but not committed.</p>`;
+    }
+
     updateChangesBadge(data.files.length);
 
     renderGitStatus();
