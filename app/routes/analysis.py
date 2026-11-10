@@ -28,7 +28,7 @@ from .helpers import (
 )
 
 bp = Blueprint("analysis", __name__)
-logger = logging.getLogger("nagios_bulk_editor.analysis")
+logger = logging.getLogger(__name__)
 
 # --- Shared constants ---
 

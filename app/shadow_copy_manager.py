@@ -522,7 +522,11 @@ class ShadowCopyManager:
                 "user_email": data.get("user_email"),
                 "created_at": data.get("created_at"),
             }
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError) as e:
+            # Treated as unlocked: nobody is the owner, so every mutation is
+            # refused until the lock is broken.
+            logger.warning("Cannot read shadow lock file %s, treating as unlocked: %s",
+                           self._lock_file, e)
             return {"locked": False}
 
     def can_modify(self, session_id: str) -> bool:
@@ -687,7 +691,7 @@ class ShadowCopyManager:
                 self.bump_generation()
 
                 logger.info("Undo applied: %s", meta.get("description", ""))
-                return OperationResult(success=True)
+                return OperationResult(success=True, data={"description": meta.get("description", "")})
 
             except Exception as e:
                 logger.error("Failed to undo: %s", e)
@@ -990,7 +994,8 @@ class ShadowCopyManager:
                         if key not in changed_set:
                             changed.append(key)
                             changed_set.add(key)
-                except (OSError, json.JSONDecodeError):
+                except (OSError, json.JSONDecodeError) as e:
+                    logger.warning("Skipping unreadable undo snapshot %s: %s", meta_path, e)
                     continue
 
         return changed

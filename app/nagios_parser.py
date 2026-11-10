@@ -14,7 +14,7 @@ from .nagios_model import REFERENCE_FIELDS, NagiosObject, normalize_attribute_na
 from .nagios_model import format_object_block as _model_format_object_block
 from .nagios_syntax import DEFINE_RE, IN_COMMENT, LIVE, classify_define, scan_block
 
-logger = logging.getLogger("nagios_bulk_editor.parser")
+logger = logging.getLogger(__name__)
 
 
 # Minimum digit count to identify timestamp patterns in filenames (e.g. 20240115)

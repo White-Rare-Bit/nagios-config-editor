@@ -17,8 +17,8 @@ Flask blueprints registered in `__init__.py`. Service access via `helpers.py`.
 | `templates.py` | GET /api/templates, /inheritance/\<stable_key\> |
 | `metadata.py` | GET /api/metadata |
 | `validation.py` | POST /api/reload, /validate, GET /api/summary, /health-check |
-| `settings.py` | GET/POST /api/settings, /api/settings/logging, POST /api/settings/browse, /api/logs/frontend, GET /api/logs/operations, /api/logs/operations/download |
-| `logs.py` | GET /api/logs/audit, /api/logs/audit/download, /api/logs/app, /api/logs/app/download, POST /api/logs/audit/clear, /api/logs/app/clear |
+| `settings.py` | GET/POST /api/settings, /api/settings/logging, POST /api/settings/browse, /api/logs/frontend |
+| `logs.py` | GET /api/logs/audit, /api/logs/audit/download, /api/logs/app, /api/logs/app/download, POST /api/logs/app/clear (no audit clear, by design) |
 | `mutation.py` | No routes — `staged_mutation()`, `staging_owner()`, `ApiError`, `public_lock_status()`; the only way a route may change configuration |
 
 Health-check logic lives in `app/health_checks.py` (not a routes module).
@@ -39,8 +39,8 @@ get_config_roots()       # Config root directories
 get_config_path()        # Main config path
 make_relative_path(path, config_path) # Relative to the config root's parent
 audit_file_path(path)    # Display path for audit lines, any config root
-get_audit_user_identity()     # User identity from request headers
-format_audit_user(name, email) # Format for audit log
+get_audit_user_identity()     # User identity from request headers (+ verifiedUser when NBE_TRUSTED_USER_HEADER is set)
+format_audit_user(name, email) # Format for audit log; prefers the verified user
 ```
 
 ## Patterns

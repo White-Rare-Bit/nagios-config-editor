@@ -14,7 +14,8 @@ _REPO_SAMPLE_CONFIG = Path(__file__).resolve().parent.parent / "sample-config"
 # Environment variables that override config/settings.json (see
 # server_config._apply_env_overrides). Cleared so a developer's shell
 # environment can't change test behaviour.
-_SERVER_CONFIG_ENV_VARS = ("NAGIOS_CFG", "NAGIOS_BIN", "BACKUP_PATH", "NBE_SHADOW_PATH")
+_SERVER_CONFIG_ENV_VARS = ("NAGIOS_CFG", "NAGIOS_BIN", "BACKUP_PATH", "NBE_SHADOW_PATH",
+                           "NBE_TRUSTED_USER_HEADER")
 
 
 @pytest.fixture(autouse=True)

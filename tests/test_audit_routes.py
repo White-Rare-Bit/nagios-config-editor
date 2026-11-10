@@ -379,3 +379,195 @@ class TestObjectMoveAudit:
         assert any("from_file=" in l and "to_file=" in l for l in audit_lines)
         for l in audit_lines:
             assert "root_0" not in l
+
+
+# ---------------------------------------------------------------------------
+# Staging lifecycle: the audit log must show what happened to staged edits,
+# not only that they were made.
+# ---------------------------------------------------------------------------
+
+ALICE = {"X-Session-Id": "alice-session-secret", "X-User-Name": "Alice", "X-User-Email": "alice@x"}
+BOB = {"X-Session-Id": "bob-session-secret", "X-User-Name": "Bob", "X-User-Email": "bob@x"}
+
+
+def _session_ref(session_id):
+    import hashlib
+    return hashlib.sha256(session_id.encode()).hexdigest()[:8]
+
+
+def _stage_alias_edit(client, headers, alias="Staged Alias"):
+    obj = _get_object(client, "test-host-1")
+    resp = client.post("/api/objects/update", json={
+        "stable_key": obj["stable_key"],
+        "attributes": {**obj["attributes"], "alias": alias},
+    }, headers=headers)
+    assert resp.status_code == 200, resp.json
+
+
+def _line(lines, action):
+    found = [l for l in lines if f"action={action}" in l]
+    assert len(found) == 1, f"expected one {action} line in {lines}"
+    return found[0]
+
+
+class TestAuditSessionRef:
+    def test_audit_lines_carry_hashed_session_not_the_session_id(self, audit_client, audit_app):
+        with _audit_capture(audit_app) as lines:
+            _stage_alias_edit(audit_client, ALICE)
+
+        edit = _line(lines, "object_edit")
+        assert f"session={_session_ref(ALICE['X-Session-Id'])}" in edit
+        # The raw id would let anyone reading the log act as the lock owner.
+        assert ALICE["X-Session-Id"] not in edit
+
+
+class TestStagingLifecycleAudit:
+    def test_apply_lists_files_and_links_to_the_staging_session(self, audit_client, audit_app):
+        _stage_alias_edit(audit_client, ALICE)
+
+        with _audit_capture(audit_app) as lines:
+            resp = audit_client.post("/api/staging/apply", headers=ALICE)
+
+        assert resp.status_code == 200, resp.json
+        apply = _line(lines, "apply")
+        assert re.search(r"files=\S*hosts\.cfg", apply)
+        assert "files_changed=1" in apply
+        assert f"session={_session_ref(ALICE['X-Session-Id'])}" in apply
+
+    def test_discarding_staged_changes_is_audited(self, audit_client, audit_app):
+        _stage_alias_edit(audit_client, ALICE)
+
+        with _audit_capture(audit_app) as lines:
+            resp = audit_client.delete("/api/staging", headers=ALICE)
+
+        assert resp.status_code == 200
+        discard = _line(lines, "staging_discard")
+        assert 'user="Alice <alice@x>"' in discard
+        assert re.search(r"files=\S*hosts\.cfg", discard)
+        assert f"session={_session_ref(ALICE['X-Session-Id'])}" in discard
+
+    def test_undo_is_audited_with_what_was_undone(self, audit_client, audit_app):
+        _stage_alias_edit(audit_client, ALICE)
+
+        with _audit_capture(audit_app) as lines:
+            resp = audit_client.post("/api/staging/undo", headers=ALICE)
+
+        assert resp.status_code == 200, resp.json
+        undo = _line(lines, "undo")
+        assert 'user="Alice <alice@x>"' in undo
+        assert 'undone="edit host test-host-1"' in undo  # the undone snapshot's description
+
+    def test_lock_break_records_breaker_and_previous_owner(self, audit_client, audit_app):
+        _stage_alias_edit(audit_client, ALICE)
+
+        with _audit_capture(audit_app) as lines:
+            resp = audit_client.post("/api/staging/lock/break", headers=BOB)
+
+        assert resp.status_code == 200
+        broke = _line(lines, "lock_break")
+        assert 'user="Bob <bob@x>"' in broke
+        assert 'owner="Alice <alice@x>"' in broke
+        assert f"owner_session={_session_ref(ALICE['X-Session-Id'])}" in broke
+        assert re.search(r"files=\S*hosts\.cfg", broke)
+
+
+class TestSettingsAudit:
+    def test_settings_update_is_audited(self, audit_client, audit_app):
+        with _audit_capture(audit_app) as lines:
+            resp = audit_client.post("/api/settings", json={"paths": {"primary_dir": "/tmp/x"}},
+                                     headers=ALICE)
+
+        assert resp.status_code == 200
+        line = _line(lines, "settings_update")
+        assert 'user="Alice <alice@x>"' in line
+        assert "changed=primary_dir" in line
+
+    def test_logging_settings_update_is_audited(self, audit_client, audit_app):
+        with _audit_capture(audit_app) as lines:
+            resp = audit_client.post("/api/settings/logging", json={"log_level": "DEBUG"},
+                                     headers=ALICE)
+
+        assert resp.status_code == 200
+        line = _line(lines, "settings_update")
+        assert "section=logging" in line
+        assert "log_level=DEBUG" in line
+
+
+class TestGitAudit:
+    def test_git_discard_of_a_file_is_audited(self, tmp_path):
+        import subprocess
+
+        cfg = tmp_path / "nagios"
+        cfg.mkdir()
+        (cfg / "hosts.cfg").write_text("define host {\n    host_name h1\n}\n")
+        for args in (["init", "-q"], ["config", "user.name", "T"], ["config", "user.email", "t@t"],
+                     ["add", "-A"], ["commit", "-q", "-m", "init"]):
+            subprocess.run(["git", "-C", str(cfg), *args], check=True, capture_output=True)
+        app = create_app(config_path=str(cfg), log_dir_override=str(tmp_path / "logs"))
+        app.config["TESTING"] = True
+        client = app.test_client()
+        (cfg / "hosts.cfg").write_text("define host {\n    host_name h2\n}\n")
+
+        with _audit_capture(app) as lines:
+            resp = client.post("/api/git/discard", json={"file": "hosts.cfg"}, headers=ALICE)
+
+        assert resp.status_code == 200, resp.json
+        line = _line(lines, "git_discard")
+        assert 'user="Alice <alice@x>"' in line
+        assert "file=hosts.cfg" in line
+
+    def test_git_identity_change_is_audited(self, audit_client, audit_app):
+        with _audit_capture(audit_app) as lines:
+            resp = audit_client.post("/api/git/identity",
+                                     json={"user_name": "Alice A", "user_email": "alice@new.example"},
+                                     headers=ALICE)
+
+        assert resp.status_code == 200, resp.json
+        line = _line(lines, "identity_change")
+        assert 'to="Alice A <alice@new.example>"' in line
+
+
+class TestTrustedUserHeader:
+    """With NBE_TRUSTED_USER_HEADER set, the proxy-authenticated user is audited,
+    not the name/email the browser claims."""
+
+    def _create_file(self, client, app, headers):
+        target = os.path.join(app.extensions["server_config"].paths.primary_dir, "new.cfg")
+        with _audit_capture(app) as lines:
+            resp = client.post("/api/files/create", json={"path": target}, headers=headers)
+        assert resp.status_code == 200, resp.json
+        return _line(lines, "file_create")
+
+    def test_trusted_header_overrides_claimed_identity(self, audit_client, audit_app, monkeypatch):
+        monkeypatch.setenv("NBE_TRUSTED_USER_HEADER", "X-Remote-User")
+
+        line = self._create_file(audit_client, audit_app, {
+            **ALICE, "X-User-Name": "Someone Else", "X-User-Email": "ceo@corp.example",
+            "X-Remote-User": "alice",
+        })
+
+        assert 'user="alice"' in line or "user=alice" in line
+        assert "ceo@corp.example" not in line
+
+    def test_missing_trusted_header_marks_identity_unverified(self, audit_client, audit_app, monkeypatch):
+        monkeypatch.setenv("NBE_TRUSTED_USER_HEADER", "X-Remote-User")
+
+        line = self._create_file(audit_client, audit_app, ALICE)
+
+        assert 'user="unverified: Alice <alice@x>"' in line
+
+    def test_without_setting_claimed_identity_is_used(self, audit_client, audit_app):
+        line = self._create_file(audit_client, audit_app, {**ALICE, "X-Remote-User": "mallory"})
+
+        assert 'user="Alice <alice@x>"' in line
+
+    def test_apply_credits_the_verified_requester(self, audit_client, audit_app, monkeypatch):
+        monkeypatch.setenv("NBE_TRUSTED_USER_HEADER", "X-Remote-User")
+        headers = {**ALICE, "X-Remote-User": "alice"}
+        _stage_alias_edit(audit_client, headers)
+
+        with _audit_capture(audit_app) as lines:
+            resp = audit_client.post("/api/staging/apply", headers=headers)
+
+        assert resp.status_code == 200, resp.json
+        assert 'user="alice"' in _line(lines, "apply")

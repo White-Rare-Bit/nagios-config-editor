@@ -6,6 +6,7 @@ automatic persistence and environment variable overrides.
 
 import contextlib
 import json
+import logging
 import os
 import tempfile
 from dataclasses import asdict, dataclass, field
@@ -18,15 +19,15 @@ CONFIG_FILE = CONFIG_DIR / "settings.json"
 # Current schema version for future migrations
 CONFIG_VERSION = 1
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class LoggingConfig:
     """Logging configuration settings."""
 
-    enabled: bool = True
     log_level: str = "INFO"
     log_dir: str = "logs"
-    log_filename: str = "operations.jsonl"
     max_file_size_mb: int = 10
     max_backup_files: int = 5
 
@@ -77,11 +78,11 @@ class ServerConfig:
                 extra_cfg_dirs=paths_data.get("extra_cfg_dirs", []),
                 primary_dir=paths_data.get("primary_dir", ""),
             ),
+            # Older files may still have "enabled" and "log_filename" (from the
+            # pre-stdlib JSONL operation log); they did nothing and are dropped.
             logging=LoggingConfig(
-                enabled=logging_data.get("enabled", True),
                 log_level=logging_data.get("log_level", "INFO"),
                 log_dir=logging_data.get("log_dir", "logs"),
-                log_filename=logging_data.get("log_filename", "operations.jsonl"),
                 max_file_size_mb=logging_data.get("max_file_size_mb", 10),
                 max_backup_files=logging_data.get("max_backup_files", 5),
             ),
@@ -165,8 +166,9 @@ def load_config() -> ServerConfig:
         try:
             data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
             config = ServerConfig.from_dict(data)
-        except (json.JSONDecodeError, OSError):
-            pass  # Use defaults
+        except (json.JSONDecodeError, OSError) as e:
+            # Use defaults - but say so: every path setting silently reverts.
+            logger.warning("Cannot read %s, using defaults: %s", CONFIG_FILE, e)
 
     # Apply environment variable overrides
     config = _apply_env_overrides(config)
@@ -226,7 +228,7 @@ def _apply_logging_updates(config: ServerConfig, logging_dict: dict) -> None:
         logging_dict: Dictionary of logging field updates
 
     """
-    for key in ("enabled", "log_level", "log_dir", "log_filename",
+    for key in ("log_level", "log_dir",
                 "max_file_size_mb", "max_backup_files"):
         if key in logging_dict:
             setattr(config.logging, key, logging_dict[key])

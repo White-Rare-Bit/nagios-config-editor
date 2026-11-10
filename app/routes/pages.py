@@ -1,6 +1,7 @@
 """Page rendering routes (HTML templates)."""
 
 from flask import Blueprint, abort, redirect, render_template, url_for
+from jinja2 import TemplateNotFound
 
 from .helpers import get_backup_manager, get_config, get_config_path, get_service
 
@@ -35,8 +36,10 @@ def docs_page(page):
         abort(404)
     try:
         return render_template(f"docs/{page}.html")
-    except Exception:
+    except TemplateNotFound:
         abort(404)
+    # Any other template error propagates: a 500 with a logged traceback,
+    # rather than a 404 that hides the bug.
 
 
 @bp.route("/backups")

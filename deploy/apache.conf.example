@@ -20,6 +20,13 @@ ProxyPassReverse /editor/ http://127.0.0.1:8080/editor/
     # AuthName "Nagios Bulk Editor"
     # AuthUserFile /usr/local/nagios/etc/htpasswd.users
     # Require valid-user
+    #
+    # With auth on, pass the logged-in user to the editor so the audit log
+    # records who really made each change (instead of the name and email the
+    # browser claims). `set` overwrites any X-Remote-User the client sends.
+    # Also uncomment NBE_TRUSTED_USER_HEADER in the systemd unit.
+    #
+    # RequestHeader set X-Remote-User expr=%{REMOTE_USER}
 
     RequestHeader set X-Forwarded-Proto expr=%{REQUEST_SCHEME}
     RequestHeader set X-Forwarded-For expr=%{REMOTE_ADDR}

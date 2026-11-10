@@ -36,6 +36,8 @@ WSGI servers run several worker processes, and each worker builds its own app. *
 
 - **Locks are file locks**: `ProcessLock` (`app/process_lock.py`, `flock` on a file under the shadow base). Never `threading.Lock` or `multiprocessing.Lock` for anything two workers must agree on: created per worker, they guard nothing between workers.
 - **No staging state in memory**: whether a shadow exists, who owns it, and what roots are active is read from disk on every use. Never cache it on a service or re-point a service at a directory.
+- **Settings**: `config/settings.json` is the shared copy. The before_request sync in `app/__init__.py` rebuilds services and re-applies logging level/rotation when another worker saved it; a route that saves must call `mark_settings_current()`.
+- **Logging**: module loggers are `logging.getLogger(__name__)` (one `app.*` hierarchy). Don't swallow a failure that changes behaviour without logging it. Every outcome of staged work (apply, discard, undo, lock break) is audited; the audit log is never clearable and not subject to `log_level`.
 - **Parser cache invalidation**: `ShadowCopyManager.generation()` changes on every mutation (`bump_generation()`); `NagiosService.parser` reparses when it differs. `service.reload()` bumps it; call that after changing files directly.
 - **NagiosService**: lock for all mutations and parses · **GitService**: lock for multi-step mutations · **Routes**: `mutation_lock` held for a whole mutating request (see `routes/mutation.py`)
 
@@ -65,7 +67,9 @@ All service methods return `OperationResult(success: bool, error: str = None, da
 | `app/file_operations.py` | Atomic file ops, path safety |
 | `app/git_service.py` | Git wrapper, retry logic |
 | `app/validator.py` | nagios -v validation |
-| `app/audit_service.py` | Key=value audit log (append-only, stdlib logging) |
+| `app/audit_service.py` | Key=value audit log (append-only, stdlib logging); `session=` hashed staging-session ref (never the raw id) |
+| `app/logging_setup.py` | Installs app.log/audit.log handlers; applies level/rotation changes live; logs 5xx responses |
+| `app/log_handlers.py` | `MultiProcessRotatingFileHandler` (flock-coordinated rotation for gunicorn workers), ISO 8601 formatter |
 | `app/config_discovery.py` | Resolve config roots from nagios.cfg (cfg_dir/cfg_file directives) |
 | `app/nagios_cfg.py` | Lightweight parser for nagios.cfg and resource.cfg ($USERn$ macros) |
 | `app/inheritance.py` | Unified template inheritance resolution, chain walking, analysis |

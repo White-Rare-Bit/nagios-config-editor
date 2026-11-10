@@ -162,6 +162,7 @@ def api_git_identity_set():
 
     try:
         sm = get_shadow_manager()
+        previous = ""
         if not sm.has_shadow():
             # Create shadow to store identity
             result = sm.create_shadow(session_id, user_name, user_email)
@@ -169,7 +170,14 @@ def api_git_identity_set():
                 return jsonify({"error": result.error or "Failed to create shadow"}), 500
         else:
             # Update lock file with new identity
+            lock_status = sm.get_lock_status()
+            previous = format_audit_user(name=lock_status.get("user_name"),
+                                         email=lock_status.get("user_email"))
             sm.update_identity(user_name, user_email)
+
+        log_audit(action="identity_change", user=format_audit_user(get_audit_user_identity()),
+                  from_val=previous,
+                  to_val=format_audit_user(name=user_name, email=user_email))
 
         return jsonify({"success": True, "user_name": user_name, "user_email": user_email})
 
@@ -380,6 +388,8 @@ def api_git_discard():
         if result.data["action"] == "restored":
             get_service().reload()
 
+        log_audit(action="git_discard", user=format_audit_user(get_audit_user_identity()),
+                  file=filepath, result=result.data["action"])
         return jsonify({"success": True, "action": result.data["action"]})
 
     except Exception as e:  # noqa: BLE001

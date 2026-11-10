@@ -509,57 +509,42 @@
             <tr>
                 <td><code>/api/settings/logging</code></td>
                 <td>GET</td>
-                <td>Get logging configuration</td>
+                <td>Get logging configuration and the live app.log path and size</td>
             </tr>
             <tr>
                 <td><code>/api/settings/logging</code></td>
                 <td>POST</td>
-                <td>Update logging configuration</td>
-            </tr>
-            <tr>
-                <td><code>/api/logs/operations</code></td>
-                <td>GET</td>
-                <td>Fetch operation logs (JSON Lines format)</td>
-            </tr>
-            <tr>
-                <td><code>/api/logs/operations/download</code></td>
-                <td>GET</td>
-                <td>Download operation logs as file</td>
+                <td>Update log level and rotation (applied immediately in all workers; audited)</td>
             </tr>
             <tr>
                 <td><code>/api/logs/frontend</code></td>
                 <td>POST</td>
-                <td>Write frontend error logs to server</td>
+                <td>Write frontend log entries to app.log (line breaks escaped, at most 100 per batch)</td>
             </tr>
             <tr>
                 <td><code>/api/logs/audit</code></td>
                 <td>GET</td>
-                <td>Get parsed audit log entries</td>
+                <td>Parsed audit entries newest first, including rotated files (<code>?limit=</code>, default 10000; <code>truncated</code> flags older entries left out)</td>
             </tr>
             <tr>
                 <td><code>/api/logs/audit/download</code></td>
                 <td>GET</td>
-                <td>Download raw audit.log file</td>
-            </tr>
-            <tr>
-                <td><code>/api/logs/audit/clear</code></td>
-                <td>POST</td>
-                <td>Truncate audit log</td>
+                <td>Download the audit log including rotated files, oldest line first</td>
             </tr>
             <tr>
                 <td><code>/api/logs/app</code></td>
                 <td>GET</td>
-                <td>Get parsed application log entries</td>
+                <td>Parsed application log entries newest first, including rotated files (<code>?limit=</code>)</td>
             </tr>
             <tr>
                 <td><code>/api/logs/app/download</code></td>
                 <td>GET</td>
-                <td>Download raw app.log file</td>
+                <td>Download the application log including rotated files</td>
             </tr>
             <tr>
                 <td><code>/api/logs/app/clear</code></td>
                 <td>POST</td>
-                <td>Truncate application log</td>
+                <td>Truncate the live application log (audited). The audit log cannot be cleared.</td>
             </tr>
         </tbody>
     </table>

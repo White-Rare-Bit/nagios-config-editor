@@ -122,12 +122,22 @@ def get_git_service():
 
 
 
+# Env var naming a request header that a trusted reverse proxy sets to the
+# authenticated user (e.g. Apache: RequestHeader set X-Remote-User %{REMOTE_USER}s).
+# Read from the environment only, so it can't be switched on or off from the
+# settings page by the users it is meant to identify.
+TRUSTED_USER_HEADER_ENV = "NBE_TRUSTED_USER_HEADER"
+
+
 def get_audit_user_identity():
     """Get user identity for audit log entries.
 
     Checks request headers first (X-User-Name, X-User-Email),
     then falls back to JSON body for backward compatibility.
-    Returns dict with userName and userEmail keys.
+    Returns dict with userName and userEmail keys. Those are whatever the
+    browser claims; when NBE_TRUSTED_USER_HEADER is set, the dict also has
+    verifiedUser (the proxy's header value, "" if absent), which
+    format_audit_user prefers.
     """
     # Prefer headers (sent automatically by getStagingHeaders)
     user_name = request.headers.get("X-User-Name")
@@ -139,10 +149,14 @@ def get_audit_user_identity():
         user_name = user_name or data.get("user_name") or data.get("userName")
         user_email = user_email or data.get("user_email") or data.get("userEmail")
 
-    return {
+    identity = {
         "userName": user_name,
         "userEmail": user_email,
     }
+    trusted_header = os.environ.get(TRUSTED_USER_HEADER_ENV, "").strip()
+    if trusted_header:
+        identity["verifiedUser"] = request.headers.get(trusted_header, "").strip()
+    return identity
 
 
 def format_audit_user(identity=None, *, name=None, email=None):
@@ -152,8 +166,13 @@ def format_audit_user(identity=None, *, name=None, email=None):
     explicit name/email kwargs.
     """
     if identity:
+        if identity.get("verifiedUser"):
+            return identity["verifiedUser"]
         name = name or identity.get("userName")
         email = email or identity.get("userEmail")
-    if name and email:
-        return f"{name} <{email}>"
-    return email or name or ""
+    claimed = f"{name} <{email}>" if name and email else (email or name or "")
+    if identity and "verifiedUser" in identity:
+        # Trusted header configured but missing: the request didn't come
+        # through the authenticating proxy, so the claim can't be relied on.
+        return f"unverified: {claimed}"
+    return claimed

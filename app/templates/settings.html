@@ -122,16 +122,8 @@
             </div>
 
             <div class="settings-section" id="loggingSection">
-                <div class="settings-section-title">Operation Logging</div>
+                <div class="settings-section-title">Logging</div>
                 <div class="settings-section-content">
-                    <div class="settings-field">
-                        <label class="settings-label">Enabled</label>
-                        <div class="form-input-group">
-                            <input type="checkbox" id="loggingEnabled" checked>
-                            <span class="form-hint form-hint-inline">Enable operation logging to file</span>
-                        </div>
-                    </div>
-
                     <div class="settings-field">
                         <label class="settings-label">Log Level</label>
                         <select class="form-input form-select-narrow" id="loggingLevel">
@@ -140,13 +132,13 @@
                             <option value="WARNING">WARNING</option>
                             <option value="ERROR">ERROR</option>
                         </select>
-                        <span class="form-hint">Minimum level for log entries</span>
+                        <span class="form-hint">Minimum level for application log entries (the audit log always records every change). Applies on save, no restart needed.</span>
                     </div>
 
                     <div class="settings-field">
                         <label class="settings-label">Max File Size (MB)</label>
                         <input type="number" class="form-input form-input-narrow" id="loggingMaxSize" value="10" min="1" max="100">
-                        <span class="form-hint">Log file rotates when it reaches this size</span>
+                        <span class="form-hint">Application and audit logs rotate when they reach this size</span>
                     </div>
 
                     <div class="settings-field">

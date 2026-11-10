@@ -27,7 +27,7 @@ const TAB_CONFIG = {
         title: 'Audit Log',
         endpoint: '/api/logs/audit',
         downloadUrl: '/api/logs/audit/download',
-        clearUrl: '/api/logs/audit/clear',
+        // No clearUrl: the audit log cannot be cleared from the app.
         columns: ['Timestamp', 'User', 'Action', 'Object', 'Details'],
         filters: [
             { key: 'create', label: 'Creates', field: 'op', suffix: true },
@@ -129,6 +129,9 @@ function renderFilters() {
 // ── Data loading ───────────────────────────────────────────────────────────
 async function loadEntries() {
     const config = TAB_CONFIG[activeTab];
+    document.querySelectorAll('[data-action="clearLog"]').forEach(btn => {
+        btn.style.display = config.clearUrl ? '' : 'none';
+    });
     const params = new URLSearchParams({ limit: '10000' });
 
     const result = await ApiClient.get(`${config.endpoint}?${params}`, { silent: true });
@@ -139,6 +142,9 @@ async function loadEntries() {
 
     const data = result.payload;
     entries = data.entries || [];
+    if (data.truncated) {
+        showToast(`Showing the newest ${entries.length} entries. Download the log for older ones.`, 'info');
+    }
     logCurrentPage = 1;
     renderTable();
 }
@@ -395,6 +401,7 @@ function downloadLog() {
 
 async function clearLog() {
     const config = TAB_CONFIG[activeTab];
+    if (!config.clearUrl) {return;}
     const confirmed = await showConfirmDialog({
         title: `Clear ${config.title}`,
         message: `Are you sure you want to clear the ${config.title.toLowerCase()}? This cannot be undone.`,

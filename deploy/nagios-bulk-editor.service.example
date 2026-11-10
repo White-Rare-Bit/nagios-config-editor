@@ -23,6 +23,9 @@ RestartSec=5
 Environment="NAGIOS_CFG=/usr/local/nagios/etc/nagios.cfg"
 Environment="NAGIOS_BIN=/usr/local/nagios/bin/nagios"
 Environment="FLASK_SECRET_KEY=CHANGE_ME_TO_A_RANDOM_STRING"
+# Audit the user Apache authenticated (see apache.conf.example). Only set this
+# when every request comes through that proxy: the header is trusted as-is.
+#Environment="NBE_TRUSTED_USER_HEADER=X-Remote-User"
 
 # Hardening
 NoNewPrivileges=true

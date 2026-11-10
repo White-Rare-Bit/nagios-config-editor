@@ -9,7 +9,7 @@ import uuid
 
 from flask import Blueprint, jsonify, request
 
-from ..audit_service import log_audit
+from ..audit_service import log_audit, session_ref
 
 from .helpers import (
     format_audit_user,
@@ -21,12 +21,22 @@ from .helpers import (
 from .mutation import public_lock_status, staging_owner
 
 bp = Blueprint("staging", __name__)
-logger = logging.getLogger("nagios_bulk_editor.staging")
+logger = logging.getLogger(__name__)
 
 
 # =========================================================================
 # Internal helpers
 # =========================================================================
+
+
+def _requester() -> str:
+    """The user sending this request, as written to the audit log."""
+    return format_audit_user(get_audit_user_identity())
+
+
+def _staged_files_display(sm) -> str:
+    """Comma-separated display paths of the files the shadow copy changes."""
+    return ",".join(c["display_path"] for c in sm.get_changed_files())
 
 
 def _run_post_apply_validation():
@@ -52,6 +62,7 @@ def _run_post_apply_validation():
             "message": "Nagios binary or config path not configured",
         }
     except Exception as e:  # noqa: BLE001
+        logger.exception("Post-apply validation failed to run")
         return {
             "success": None,
             "skipped": True,
@@ -87,15 +98,10 @@ def api_delete_staging():
         if not sm.has_shadow():
             return jsonify({"success": True})
 
-        lock_status = sm.get_lock_status()
+        files = _staged_files_display(sm)
         result = sm.destroy_shadow()
         if result.success:
-            log_audit(
-                action="discard",
-                user=format_audit_user(
-                    name=lock_status.get("user_name"), email=lock_status.get("user_email"),
-                ),
-            )
+            log_audit(action="staging_discard", user=_requester(), files=files)
     return jsonify({"success": result.success, "error": result.error})
 
 
@@ -129,6 +135,7 @@ def api_apply_staging():
     with staging_owner() as sm:
         # Get lock info for audit before apply destroys it
         lock_status = sm.get_lock_status() if sm.has_shadow() else {}
+        files = _staged_files_display(sm) if sm.has_shadow() else ""
         user_name = lock_status.get("user_name", "")
         user_email = lock_status.get("user_email", "")
 
@@ -147,12 +154,18 @@ def api_apply_staging():
         changed = result.data.get("changed_files", []) if result.data else []
         if changed:
             txn = uuid.uuid4().hex[:8]
-            user = format_audit_user(name=user_name, email=user_email)
+            # Whoever sent the apply (verified when a trusted proxy header is set);
+            # the lock owner's stored identity if the request carries none.
+            user = _requester() or format_audit_user(name=user_name, email=user_email)
             log_audit(
                 action="apply",
                 user=user,
                 txn=txn,
+                # The staging session whose earlier object_edit/create/... lines
+                # this apply made live.
+                session=session_ref(lock_status.get("session_id")),
                 files_changed=len(changed),
+                files=files,
             )
 
     # Post-apply validation
@@ -170,6 +183,9 @@ def api_staging_undo():
     """Undo the last snapshot. Only the lock owner may do this."""
     with staging_owner() as sm:
         result = sm.undo()
+        if result.success:
+            log_audit(action="undo", user=_requester(),
+                      undone=(result.data or {}).get("description", ""))
     return jsonify({"success": result.success, "error": result.error})
 
 
@@ -191,15 +207,19 @@ def api_break_lock():
     audit log with both parties named.
     """
     sm = get_shadow_manager()
+    # Record whose staged work is being destroyed before it is gone
     lock_status = sm.get_lock_status()
+    files = _staged_files_display(sm) if sm.has_shadow() else ""
     result = sm.break_lock()
     if result.success and lock_status.get("locked"):
         log_audit(
             action="lock_break",
-            user=format_audit_user(get_audit_user_identity()),
+            user=_requester(),
             owner=format_audit_user(
                 name=lock_status.get("user_name"), email=lock_status.get("user_email"),
             ),
+            owner_session=session_ref(lock_status.get("session_id")),
+            files=files,
         )
     return jsonify({"success": result.success, "error": result.error})
 

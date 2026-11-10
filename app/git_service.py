@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from .nagios_model import OperationResult
 from .process_lock import ProcessLock
 
-logger = logging.getLogger("nagios_bulk_editor.git")
+logger = logging.getLogger(__name__)
 
 # Timeout presets (seconds)
 TIMEOUT_QUERY = 5     # rev-parse, config lookups
@@ -977,8 +977,9 @@ class GitService:
                            and parent_dir.startswith(self._config_path)):
                         directories_to_check.add(parent_dir)
                         parent_dir = os.path.dirname(parent_dir)
-                except OSError:
-                    pass
+                except OSError as e:
+                    # Discard-all still reports success; the file stays behind.
+                    logger.warning("Discard all: could not delete untracked %s: %s", full_path, e)
 
         # Clean up empty directories (deepest first)
         for dir_path in sorted(directories_to_check, key=lambda x: x.count("/"), reverse=True):

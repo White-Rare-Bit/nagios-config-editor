@@ -10,10 +10,8 @@
     "primary_dir": "/usr/local/nagios/etc"
   },
   "logging": {
-    "enabled": true,
     "log_level": "INFO",
     "log_dir": "logs",
-    "log_filename": "operations.jsonl",
     "max_file_size_mb": 10,
     "max_backup_files": 5
   }

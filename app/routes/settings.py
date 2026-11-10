@@ -4,12 +4,16 @@ import json
 import logging
 import os
 
-from flask import Blueprint, current_app, jsonify, request, send_file
+from flask import Blueprint, current_app, jsonify, request
 
+from ..audit_service import log_audit
+from ..logging_setup import LOG_LEVELS, apply_runtime_settings
 from ..server_config import save_config as save_server_config
 from ..validator import verify_nagios_binary
 
 from .helpers import (
+    format_audit_user,
+    get_audit_user_identity,
     get_server_config,
 )
 
@@ -109,7 +113,13 @@ def api_update_settings():
             from .. import mark_settings_current
             mark_settings_current(current_app)
         except (OSError, ValueError) as e:
+            logger.error("Failed to save settings: %s", e)
             errors.append(f"Failed to save config: {e}")
+        else:
+            log_audit(action="settings_update", user=format_audit_user(get_audit_user_identity()),
+                      section="paths", changed=",".join(updated),
+                      **{k: getattr(server_config.paths, k) for k in updated
+                         if hasattr(server_config.paths, k)})
 
     discovery = current_app.extensions.get("discovery", {})
 
@@ -148,6 +158,7 @@ def _rediscover_and_reinit(server_config, errors):
         init_services(current_app, server_config)
         _ = current_app.extensions["service"].parser  # Force init to catch config errors early
     except Exception as e:  # noqa: BLE001
+        logger.exception("Failed to reinitialize services after settings change")
         errors.append(f"Failed to reinitialize services: {e}")
 
 
@@ -157,6 +168,7 @@ def _update_backup_path(server_config, path, updated, errors):
         try:
             os.makedirs(path, exist_ok=True)
         except OSError as e:
+            logger.warning("Cannot create backup directory %s: %s", path, e)
             errors.append(f"Cannot create backup directory: {e}")
             return
 
@@ -235,155 +247,125 @@ def api_browse_directory():
         return jsonify({"error": "Permission denied"}), 403
 
 
+def _logging_settings_response(log_cfg):
+    app_log = os.path.join(current_app.extensions.get("log_dir", log_cfg.log_dir), "app.log")
+    try:
+        size = os.path.getsize(app_log)
+    except OSError:
+        size = 0
+    return {
+        "log_level": log_cfg.log_level,
+        "log_dir": log_cfg.log_dir,
+        "max_file_size_mb": log_cfg.max_file_size_mb,
+        "max_backup_files": log_cfg.max_backup_files,
+        "log_file_path": app_log,
+        "log_file_size": size,
+    }
+
+
+def _positive_int(value):
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
 @bp.route("/api/settings/logging", methods=["GET"])
 def api_get_logging_settings():
-    """Get logging configuration and file info.
-
-    TODO: Reimplement using stdlib logging configuration after logging overhaul.
-    """
+    """Get logging configuration and the live app.log path and size."""
     server_config = get_server_config()
     if not server_config:
         return jsonify({"error": "Server config not initialized"}), 500
-
-    log_cfg = server_config.logging
-    return jsonify({
-        "enabled": log_cfg.enabled,
-        "log_level": log_cfg.log_level,
-        "log_dir": log_cfg.log_dir,
-        "log_filename": log_cfg.log_filename,
-        "max_file_size_mb": log_cfg.max_file_size_mb,
-        "max_backup_files": log_cfg.max_backup_files,
-    })
+    return jsonify(_logging_settings_response(server_config.logging))
 
 
 @bp.route("/api/settings/logging", methods=["POST"])
 def api_update_logging_settings():
-    """Update logging configuration, persist, and reconfigure.
+    """Update log level and rotation; persisted and applied without a restart.
 
-    TODO: Reimplement runtime log level changes using stdlib logging after logging overhaul.
+    Other gunicorn workers pick the change up on their next request (the
+    settings sync in app/__init__.py). log_dir is deliberately not settable
+    here: where the app writes files belongs in config/settings.json.
     """
     server_config = get_server_config()
     if not server_config:
         return jsonify({"error": "Server config not initialized"}), 500
 
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
+    if "log_dir" in data:
+        return jsonify({"error": "log_dir can only be changed in config/settings.json "
+                                 "(takes effect after a restart)"}), 400
+    if "log_level" in data and str(data["log_level"]).upper() not in LOG_LEVELS:
+        return jsonify({"error": f"log_level must be one of {', '.join(LOG_LEVELS)}"}), 400
+    for key in ("max_file_size_mb", "max_backup_files"):
+        if key in data and not _positive_int(data[key]):
+            return jsonify({"error": f"{key} must be a positive integer"}), 400
+
     log_cfg = server_config.logging
+    changed = {}
+    if "log_level" in data:
+        changed["log_level"] = str(data["log_level"]).upper()
+    for key in ("max_file_size_mb", "max_backup_files"):
+        if key in data:
+            changed[key] = data[key]
+    for key, value in changed.items():
+        setattr(log_cfg, key, value)
 
-    # Update in-memory server config with provided values (or keep existing)
-    log_cfg.enabled = data.get("enabled", log_cfg.enabled)
-    log_cfg.log_level = data.get("log_level", log_cfg.log_level)
-    log_cfg.log_dir = data.get("log_dir", log_cfg.log_dir)
-    log_cfg.log_filename = data.get("log_filename", log_cfg.log_filename)
-    log_cfg.max_file_size_mb = data.get("max_file_size_mb", log_cfg.max_file_size_mb)
-    log_cfg.max_backup_files = data.get("max_backup_files", log_cfg.max_backup_files)
-
-    # Persist to config/settings.json
     save_server_config(server_config)
     from .. import mark_settings_current
     mark_settings_current(current_app)
+    apply_runtime_settings(log_cfg)
+    if changed:
+        log_audit(action="settings_update", user=format_audit_user(get_audit_user_identity()),
+                  section="logging", changed=",".join(changed), **changed)
 
-    return jsonify({"success": True, "config": {
-        "enabled": log_cfg.enabled,
-        "log_level": log_cfg.log_level,
-        "log_dir": log_cfg.log_dir,
-        "log_filename": log_cfg.log_filename,
-        "max_file_size_mb": log_cfg.max_file_size_mb,
-        "max_backup_files": log_cfg.max_backup_files,
-    }})
+    return jsonify({"success": True, "config": _logging_settings_response(log_cfg)})
 
 
-@bp.route("/api/logs/operations", methods=["GET"])
-def api_get_operation_logs():
-    """Read recent log entries with optional filtering.
+# Limits on browser-supplied log text. Anyone who can reach the app can post
+# here, so it must not be able to flood app.log (rotating real entries away)
+# or forge entries with embedded line breaks.
+MAX_FRONTEND_BATCH = 100
+MAX_FRONTEND_MESSAGE = 2000
+MAX_FRONTEND_CONTEXT = 2000
 
-    TODO: Reimplement to read from stdlib logging file after logging overhaul.
-    """
-    server_config = get_server_config()
-    if not server_config:
-        return jsonify({"error": "Server config not initialized"}), 500
-
-    limit = request.args.get("limit", 100, type=int)
-    level_filter = request.args.get("level", "").upper()
-
-    log_dir = server_config.logging.log_dir
-    log_filename = server_config.logging.log_filename
-    if not log_dir or not log_filename:
-        return jsonify({"entries": [], "total": 0})
-
-    log_path = os.path.join(log_dir, log_filename)
-    if not os.path.exists(log_path):
-        return jsonify({"entries": [], "total": 0})
-
-    entries = []
-    try:
-        with open(log_path, encoding="utf-8") as f:
-            lines = f.readlines()
-
-        for line in reversed(lines):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                entry = json.loads(line)
-                if level_filter and entry.get("level") != level_filter:
-                    continue
-                entries.append(entry)
-                if len(entries) >= limit:
-                    break
-            except json.JSONDecodeError:
-                continue
-    except OSError:
-        pass
-
-    return jsonify({"entries": entries, "total": len(lines) if "lines" in dir() else 0})
+# Every character str.splitlines() breaks on, written as a visible escape.
+_LINE_BREAKS = str.maketrans({
+    c: f"\\x{ord(c):02x}" if ord(c) < 0x100 else f"\\u{ord(c):04x}"
+    for c in "\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029"
+} | {"\n": "\\n", "\r": "\\r"})
 
 
-@bp.route("/api/logs/operations/download", methods=["GET"])
-def api_download_operation_logs():
-    """Download the full log file.
-
-    TODO: Reimplement to locate stdlib logging file after logging overhaul.
-    """
-    server_config = get_server_config()
-    if not server_config:
-        return jsonify({"error": "Server config not initialized"}), 500
-
-    log_dir = server_config.logging.log_dir
-    log_filename = server_config.logging.log_filename
-    if not log_dir or not log_filename:
-        return jsonify({"error": "Log file path not configured"}), 404
-
-    log_path = os.path.join(log_dir, log_filename)
-    if not os.path.exists(log_path):
-        return jsonify({"error": "Log file not found"}), 404
-
-    return send_file(log_path, mimetype="application/x-ndjson",
-                     as_attachment=True, download_name=log_filename)
+def _one_line(text, limit):
+    """Render untrusted text as a single, bounded log line fragment."""
+    text = str(text).translate(_LINE_BREAKS)
+    if len(text) > limit:
+        text = text[:limit] + "...[truncated]"
+    return text
 
 
 @bp.route("/api/logs/frontend", methods=["POST"])
 def api_frontend_log():
     """Receive debug logs from frontend and write to file."""
-    frontend_logger = logging.getLogger("nagios_bulk_editor.frontend")
+    frontend_logger = logging.getLogger("app.frontend")
 
-    data = request.json
+    data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "No data provided"}), 400
 
     # Handle both single log entry (dict) and batch entries (list)
     entries = data if isinstance(data, list) else [data]
+    dropped = max(0, len(entries) - MAX_FRONTEND_BATCH)
+    entries = entries[:MAX_FRONTEND_BATCH]
 
     for entry in entries:
         if not isinstance(entry, dict):
             continue
 
-        level = entry.get("level", "debug").lower()
-        message = entry.get("message", "")
+        level = str(entry.get("level", "debug")).lower()
+        message = _one_line(entry.get("message", ""), MAX_FRONTEND_MESSAGE)
         context = entry.get("context", {})
 
         log_message = f"[frontend] {message}"
         if context:
-            log_message += f" | context: {json.dumps(context)}"
+            log_message += " | context: " + _one_line(json.dumps(context), MAX_FRONTEND_CONTEXT)
 
         if level == "error":
             frontend_logger.error(log_message)
@@ -393,6 +375,9 @@ def api_frontend_log():
             frontend_logger.info(log_message)
         else:
             frontend_logger.debug(log_message)
+
+    if dropped:
+        frontend_logger.warning("[frontend] batch too large: dropped %d entries", dropped)
 
     return jsonify({"success": True})
 

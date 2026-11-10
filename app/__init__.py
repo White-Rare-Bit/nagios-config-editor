@@ -6,7 +6,6 @@ A web interface for bulk editing Nagios configuration files.
 import logging
 import os
 import warnings
-from logging.handlers import RotatingFileHandler
 
 from flask import Flask, jsonify, request
 from werkzeug.exceptions import HTTPException
@@ -15,80 +14,23 @@ from flask_compress import Compress
 from .backup_manager import BackupManager
 from .config_discovery import discover_config_roots
 from .git_service import GitService
+from .logging_setup import apply_runtime_settings, log_error_responses, setup_logging
 from . import server_config as _server_config_module
 from .nagios_service import NagiosService
 from .server_config import load_config as load_server_config
 from .process_lock import ProcessLock
 from .shadow_copy_manager import ShadowCopyManager
 
-logger = logging.getLogger("nagios_bulk_editor")
+logger = logging.getLogger(__name__)
 
 
 def _setup_logging(app, server_config, log_dir_override=None):
-    """Configure stdlib logging with file handlers for app and audit logs."""
+    """Install the app.log/audit.log handlers (see logging_setup)."""
     log_cfg = server_config.logging
     log_dir = log_dir_override or log_cfg.log_dir or "logs"
-    os.makedirs(log_dir, exist_ok=True)
-
-    max_bytes = int((log_cfg.max_file_size_mb or 10) * 1024 * 1024)
-    backup_count = log_cfg.max_backup_files or 5
-    level = getattr(logging, (log_cfg.log_level or "INFO").upper(), logging.INFO)
-
-    # App log — syslog-style format
-    app_handler = RotatingFileHandler(
-        os.path.join(log_dir, "app.log"),
-        maxBytes=max_bytes, backupCount=backup_count,
-    )
-    app_formatter = logging.Formatter(
-        fmt="%(asctime)s nagios-editor [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%b %d %H:%M:%S",
-    )
-    app_handler.setFormatter(app_formatter)
-    app_handler.setLevel(level)
-
-    root_logger = logging.getLogger()
-    root_logger.setLevel(level)
-    _add_file_handler_once(root_logger, app_handler)
-
-    # Audit log — minimal format (timestamp + raw message)
-    audit_handler = RotatingFileHandler(
-        os.path.join(log_dir, "audit.log"),
-        maxBytes=max_bytes, backupCount=backup_count,
-    )
-    audit_formatter = logging.Formatter(
-        fmt="%(asctime)s %(message)s",
-        datefmt="%b %d %H:%M:%S",
-    )
-    audit_handler.setFormatter(audit_formatter)
-    audit_handler.setLevel(logging.INFO)
-
-    audit_logger = logging.getLogger("audit")
-    _add_file_handler_once(audit_logger, audit_handler)
-    audit_logger.propagate = False  # Don't duplicate audit lines into app.log
-
-    # Suppress werkzeug request logs from app.log (floods with GET /api/... lines)
-    logging.getLogger("werkzeug").propagate = False
-
-    # Store config for settings page and log viewer
+    setup_logging(log_cfg, log_dir)
+    # Where the log viewer and settings page find the files
     app.extensions["log_dir"] = log_dir
-    app.extensions["log_config"] = {
-        "level": log_cfg.log_level or "INFO",
-        "max_size_mb": log_cfg.max_file_size_mb or 10,
-        "backup_count": log_cfg.max_backup_files or 5,
-    }
-
-
-def _add_file_handler_once(target_logger, handler):
-    """Attach a file handler unless one for the same file is already attached.
-
-    Loggers are process-global while apps are not: a second create_app() in
-    the same process (tests, or a reload) must not write every line twice.
-    """
-    for existing in target_logger.handlers:
-        if getattr(existing, "baseFilename", None) == handler.baseFilename:
-            handler.close()
-            return
-    target_logger.addHandler(handler)
 
 
 def _settings_signature():
@@ -178,20 +120,22 @@ def init_services(app, server_config):
 
 
 def _sync_settings_from_disk():
-    """Rebuild services if another worker saved new settings.
+    """Apply settings another worker saved: rebuild services, re-apply logging.
 
     Settings changes are written to config/settings.json; that file is the
-    only thing workers share, so each one checks it before serving a request.
+    only thing workers share, so each one checks it before serving a request
+    (one stat(); the file is only re-read when it changed).
     """
     from flask import current_app
 
     app = current_app
-    if app.extensions.get("config_path_override"):
-        return
     if _settings_signature() == app.extensions.get("settings_signature"):
         return
     try:
-        init_services(app, load_server_config())
+        fresh = load_server_config()
+        # Level and rotation apply live; log_dir needs a restart.
+        apply_runtime_settings(fresh.logging)
+        init_services(app, fresh)
         logger.info("Settings changed on disk; services reinitialised")
     except Exception:
         # Keep serving with the previous services rather than fail every request.
@@ -274,6 +218,9 @@ def create_app(config_path: str | None = None, log_dir_override: str | None = No
     from .routes import register_blueprints
     register_blueprints(app)
     _register_error_contract(app)
+    # Record every 5xx in app.log (after_request hooks run last-registered
+    # first; the message is read from "error", which every error body has).
+    app.after_request(log_error_responses)
     app.before_request(_sync_settings_from_disk)
 
     return app

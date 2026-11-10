@@ -130,34 +130,22 @@
         </thead>
         <tbody>
             <tr>
-                <td><code>enabled</code></td>
-                <td><code>bool</code></td>
-                <td><code>true</code></td>
-                <td>Whether operation logging is enabled</td>
-            </tr>
-            <tr>
                 <td><code>log_level</code></td>
                 <td><code>str</code></td>
                 <td><code>"INFO"</code></td>
-                <td>Logging level (DEBUG, INFO, WARNING, ERROR)</td>
+                <td>Level for <code>app.log</code> (DEBUG, INFO, WARNING, ERROR). The audit log always records every change. Applies on save without a restart.</td>
             </tr>
             <tr>
                 <td><code>log_dir</code></td>
                 <td><code>str</code></td>
                 <td><code>"logs"</code></td>
-                <td>Directory for log files</td>
-            </tr>
-            <tr>
-                <td><code>log_filename</code></td>
-                <td><code>str</code></td>
-                <td><code>"operations.jsonl"</code></td>
-                <td>Log file name (JSON Lines format)</td>
+                <td>Directory for <code>app.log</code> and <code>audit.log</code>. Only settable in this file; takes effect after a restart.</td>
             </tr>
             <tr>
                 <td><code>max_file_size_mb</code></td>
                 <td><code>int</code></td>
                 <td><code>10</code></td>
-                <td>Maximum log file size before rotation (MB)</td>
+                <td>Size at which <code>app.log</code> and <code>audit.log</code> rotate (MB). Rotation is coordinated between worker processes.</td>
             </tr>
             <tr>
                 <td><code>max_backup_files</code></td>
@@ -182,10 +170,8 @@
     "extra_cfg_dirs": []
   },
   "logging": {
-    "enabled": true,
     "log_level": "INFO",
     "log_dir": "logs",
-    "log_filename": "operations.jsonl",
     "max_file_size_mb": 10,
     "max_backup_files": 5
   }
@@ -222,6 +208,10 @@
             <tr>
                 <td><code>NBE_SHADOW_PATH</code></td>
                 <td><code>paths.shadow_path</code></td>
+            </tr>
+            <tr>
+                <td><code>NBE_TRUSTED_USER_HEADER</code></td>
+                <td>Environment only (no config key). Names a header the reverse proxy sets to the authenticated user, e.g. <code>X-Remote-User</code>. The audit log then records that user instead of the browser-claimed identity. See <code>deploy/README.md</code>.</td>
             </tr>
         </tbody>
     </table>

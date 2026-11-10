@@ -3,8 +3,11 @@
 Extracts cfg_dir, cfg_file directives and $USERn$ macro definitions.
 """
 
+import logging
 import os
 import re
+
+logger = logging.getLogger(__name__)
 
 
 def parse_nagios_cfg(nagios_cfg_path):
@@ -18,7 +21,10 @@ def parse_nagios_cfg(nagios_cfg_path):
         Returns empty lists if the file doesn't exist or can't be read.
     """
     result = {"cfg_dirs": [], "cfg_files": [], "resource_file": ""}
-    if not nagios_cfg_path or not os.path.isfile(nagios_cfg_path):
+    if not nagios_cfg_path:
+        return result
+    if not os.path.isfile(nagios_cfg_path):
+        logger.warning("nagios.cfg not found at %s: no config directories discovered", nagios_cfg_path)
         return result
 
     try:
@@ -38,8 +44,9 @@ def parse_nagios_cfg(nagios_cfg_path):
                     result["cfg_files"].append(value)
                 elif key == "resource_file":
                     result["resource_file"] = value
-    except (OSError, UnicodeDecodeError):
-        pass
+    except (OSError, UnicodeDecodeError) as e:
+        # Discovery then finds no config directories at all.
+        logger.warning("Cannot read nagios.cfg %s: %s", nagios_cfg_path, e)
 
     return result
 
@@ -55,7 +62,10 @@ def parse_resource_cfg(resource_cfg_path):
         Returns empty dict if the file doesn't exist or can't be read.
     """
     macros = {}
-    if not resource_cfg_path or not os.path.isfile(resource_cfg_path):
+    if not resource_cfg_path:
+        return macros
+    if not os.path.isfile(resource_cfg_path):
+        logger.warning("resource.cfg not found at %s: $USERn$ macros unavailable", resource_cfg_path)
         return macros
 
     try:
@@ -71,7 +81,7 @@ def parse_resource_cfg(resource_cfg_path):
                 value = value.strip()
                 if re.match(r"^\$USER\d+\$$", key):
                     macros[key] = value
-    except (OSError, UnicodeDecodeError):
-        pass
+    except (OSError, UnicodeDecodeError) as e:
+        logger.warning("Cannot read resource.cfg %s: %s", resource_cfg_path, e)
 
     return macros

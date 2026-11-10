@@ -18,3 +18,6 @@ tests/TESTING_PROMPT.md
 tests/test-plan.txt
 tests/test-execution-guide.txt
 tests/test_conventions.md
+
+# Staging state (shadow copy, lock files, generation marker)
+.shadow/

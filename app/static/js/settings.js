@@ -547,7 +547,6 @@ async function loadLoggingSettings() {
     }
 
     const data = result.data;
-    document.getElementById('loggingEnabled').checked = data.enabled;
     document.getElementById('loggingLevel').value = data.log_level || 'INFO';
     document.getElementById('loggingMaxSize').value = data.max_file_size_mb || 10;
     document.getElementById('loggingMaxBackups').value = data.max_backup_files || 5;
@@ -560,7 +559,6 @@ async function loadLoggingSettings() {
 
 async function saveLoggingSettings() {
     const settings = {
-        enabled: document.getElementById('loggingEnabled').checked,
         log_level: document.getElementById('loggingLevel').value,
         max_file_size_mb: parseInt(document.getElementById('loggingMaxSize').value, 10) || 10,
         max_backup_files: parseInt(document.getElementById('loggingMaxBackups').value, 10) || 5
@@ -568,10 +566,10 @@ async function saveLoggingSettings() {
 
     const result = await ApiClient.post('/api/settings/logging', settings, { silent: true });
     if (!result.success || !result.data?.success) {
-        showToast('Failed to save logging settings', 'error');
+        showToast(result.error || 'Failed to save logging settings', 'error');
     }
 }
 
 function downloadLog() {
-    window.location.href = apiUrl('/api/logs/operations/download');
+    window.location.href = apiUrl('/api/logs/app/download');
 }

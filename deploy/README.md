@@ -120,6 +120,8 @@ sudo cp deploy/apache.conf.example /etc/apache2/conf-available/nagios-bulk-edito
 
 Uncomment the basic auth section if you want password protection. Adjust the `AuthUserFile` path to match your Nagios htpasswd file.
 
+If you enable basic auth, also uncomment the `RequestHeader set X-Remote-User` line, and `NBE_TRUSTED_USER_HEADER=X-Remote-User` in the systemd unit. The audit log then records the logged-in user. Without it, the audit log records the name and email each browser was given on the Identity tab, which anyone can set to anything. With the variable set, requests that arrive without the header are logged as `unverified: <claimed identity>`. Only set it when Gunicorn is reachable solely through Apache, which is the case with the provided `--bind 127.0.0.1:8080`.
+
 **3. Enable modules and config**
 
 ```bash
@@ -136,6 +138,8 @@ The editor is now available at `http://<host>/editor/`.
 |----------|----------|
 | `logs/app.log` | Operational logs (errors, warnings, info) |
 | `logs/audit.log` | Who changed what and when |
+
+Both rotate at `max_file_size_mb` and keep `max_backup_files` old copies (`app.log.1`, ...). Rotation is coordinated between Gunicorn workers through `<logfile>.lock` files, so no external logrotate is needed. The log viewer and its download include the rotated files. Timestamps are ISO 8601 with UTC offset. The audit log cannot be cleared from the app.
 
 Under systemd, Gunicorn access and error logs go to the journal:
 

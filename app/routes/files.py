@@ -18,7 +18,7 @@ from .helpers import get_service
 from .mutation import ApiError, staged_mutation
 
 bp = Blueprint("files", __name__)
-logger = logging.getLogger("nagios_bulk_editor.files")
+logger = logging.getLogger(__name__)
 
 _SKIPPED_DIRS = ("backups", "backup")
 

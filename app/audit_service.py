@@ -3,11 +3,21 @@
 Each audit event is a single log line in the format:
     AUDIT txn=<id> user="<email>" action=<type> key1=value1 key2="value with spaces"
 
-Transaction IDs (txn) group related changes from a single Apply operation.
+Transaction IDs (txn) group the lines written by one request (e.g. one field
+line per attribute of a single object edit).
+
+session=<ref> links lines to the staging session that made them: edits are
+audited when staged, and the session's later apply, staging_discard, undo or
+lock_break line (lock_break carries it as owner_session) says what became of
+them. The ref is a hash of the X-Session-Id, never the id itself: anyone
+holding the id can act as that session's lock owner.
 """
 
+import hashlib
 import logging
 import uuid
+
+from flask import has_request_context, request
 
 
 audit_logger = logging.getLogger("audit")
@@ -66,6 +76,13 @@ def format_audit_line(action, txn=None, user=None, **kwargs):
     return " ".join(parts)
 
 
+def session_ref(session_id):
+    """Short, non-reversible reference to a staging session id for audit lines."""
+    if not session_id:
+        return ""
+    return hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:8]
+
+
 def log_audit(action, user=None, txn=None, **kwargs):
     """Write an audit log line.
 
@@ -73,8 +90,13 @@ def log_audit(action, user=None, txn=None, **kwargs):
         action: The action type.
         user: User email address.
         txn: Transaction ID. Auto-generated if None.
-        **kwargs: Additional key=value pairs for the log line.
+        **kwargs: Additional key=value pairs for the log line. session= is
+            filled from the request's X-Session-Id unless given.
 
     """
+    if "session" not in kwargs and has_request_context():
+        ref = session_ref(request.headers.get("X-Session-Id"))
+        if ref:
+            kwargs["session"] = ref
     line = format_audit_line(action, txn=txn, user=user, **kwargs)
     audit_logger.info(line)

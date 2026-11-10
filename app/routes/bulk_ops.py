@@ -11,7 +11,7 @@ from .mutation import ApiError, staged_mutation
 from .objects import _name_from_attrs, audit_attribute_changes
 
 bp = Blueprint("bulk_ops", __name__)
-logger = logging.getLogger("nagios_bulk_editor.bulk_ops")
+logger = logging.getLogger(__name__)
 
 
 @bp.route("/api/move-objects", methods=["POST"])
