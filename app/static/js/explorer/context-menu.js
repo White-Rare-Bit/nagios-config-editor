@@ -12,6 +12,7 @@ import { selectObjectByIndex, updateSelection, switchRightTab, getNameFieldForOb
 import { stageObjectDeletions } from './dialogs.js'; // circular — safe (function-level)
 import { afterFrontendMutation } from './data-loading.js'; // circular — safe (function-level)
 import { showCenterPaneObject } from './object-editor.js'; // circular — safe (function-level)
+import { renameTabKey } from './tab-manager.js'; // circular — safe (function-level)
 import { loadImpactAndRelationships } from './impact-section.js'; // circular — safe (function-level)
 import { cleanupDragState } from './drag-drop.js';
 import { ApiClient, apiUrl } from '../api-client.js';
@@ -502,6 +503,7 @@ export async function applyRename() {
 
     // The object's key after the rename (the name is part of it).
     const [newKey] = result.payload.keys;
+    renameTabKey(getObjectKey(obj), newKey);
 
     state.healthCheckData = null;
     await afterFrontendMutation();

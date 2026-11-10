@@ -9,7 +9,7 @@
 import { state } from './state.js';
 import { constants, isObjectTemplate } from './constants.js';
 import { getObjectKey, parseCommaValues } from './main.js';
-import { buildStableKey, fetchInheritance } from './object-editor.js'; // circular — safe (function-level)
+import { fetchInheritance } from './object-editor.js'; // circular — safe (function-level)
 import { getStagedDisplayName, getEffectiveName } from './app.js'; // circular — safe (function-level)
 import { buildLocalInheritanceChain } from './relations-loader.js';
 import { navigateToObjectByIndex, selectObjectByName } from './file-operations.js'; // circular — safe (function-level)
@@ -158,7 +158,7 @@ async function gatherInheritanceData(obj) {
 
     if (!state.isNewObject && useAttr) {
         try {
-            const stableKey = buildStableKey(obj);
+            const stableKey = getObjectKey(obj);
             const inheritData = await fetchInheritance(stableKey);
             if (inheritData && inheritData.inherited) {
                 result.resolvedAttrs = inheritData.inherited;

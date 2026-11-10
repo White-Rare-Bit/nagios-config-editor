@@ -95,3 +95,19 @@ def test_inheritance_api_resolves_correct_service(app_with_duplicate_services):
         assert resp.status_code == 200  # noqa: PLR2004
         # windows-hosts PING has its own check_command; linux-hosts' would be 100.0,20%...
         assert resp.get_json()["inherited"]["check_command"]["value"] == "check_ping!200.0,40%!600.0,80%"
+
+
+def test_inheritance_api_accepts_plain_stable_key(app_with_duplicate_services):
+    """The plain key (slashes and pipes) works as ?key=, as the client sends it."""
+    with app_with_duplicate_services.app_context():
+        from app.routes.helpers import get_service
+        services = [o for o in get_service().get_objects() if o.object_type == "service"]
+        key2 = generate_stable_key_for_object(services[1])
+
+    assert "/" in key2 and "|" in key2
+    client = app_with_duplicate_services.test_client()
+    resp = client.get("/api/templates/inheritance", query_string={"key": key2})
+    assert resp.status_code == 200  # noqa: PLR2004
+    assert resp.get_json()["inherited"]["check_command"]["value"] == "check_ping!200.0,40%!600.0,80%"
+
+    assert client.get("/api/templates/inheritance").status_code == 400  # noqa: PLR2004

@@ -647,24 +647,7 @@ export function selectObjectByIndex(index) {
 export function selectObjectByStableKey(stableKey) {
     if (!stableKey) {return;}
 
-    // Parse stable key: "source_file|object_type|name"
-    // Name part may contain '|' so rejoin remaining parts
-    const parts = stableKey.split('|');
-    if (parts.length < 3) {return;}
-
-    const [sourceFile, objType, ...nameParts] = parts;
-    const objName = nameParts.join('|');
-
-    // Find the object - check multiple name sources for flexibility
-    const obj = state.allObjects.find(o => {
-        if (o.source_file !== sourceFile || o.object_type !== objType) {return false;}
-        // Match against the same name resolution used by getObjectKey
-        const objKeyName = o.name ?? o.display_name ?? `idx:${o.global_index}`;
-        if (objKeyName === objName) {return true;}
-        // Also check display_name and attributes.name for backward compatibility
-        if (o.display_name === objName || o.attributes?.name === objName) {return true;}
-        return false;
-    });
+    const obj = StableKey.findObject(stableKey, state.allObjects);
 
     if (obj) {
         // Clear current selection and select this object
@@ -674,7 +657,7 @@ export function selectObjectByStableKey(stableKey) {
         // Scroll to the object in the tree
         scrollToObject(obj.global_index);
     } else {
-        showToast(`Object not found: ${objName}`, 'error');
+        showToast(`Object not found: ${stableKey}`, 'error');
     }
 }
 

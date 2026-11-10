@@ -28,14 +28,20 @@ def list_templates():
     return jsonify(templates_by_type)
 
 
+@bp.route("/api/templates/inheritance")
 @bp.route("/api/templates/inheritance/<stable_key>")
-def get_inheritance(stable_key):
+def get_inheritance(stable_key=None):
     """Get inheritance chain for an object by stable key.
 
-    The stable_key is base64-encoded "source_file|object_type|name" to handle
-    special characters (pipes, slashes) in file paths and object names.
+    The stable_key is "source_file|object_type|name", either as is or
+    base64-encoded. The client sends the plain key as ``?key=``: a path
+    segment cannot carry it (an absolute file path starts with a slash, which
+    Flask's routing would reject or merge). The base64 path form stays for
+    older callers.
     """
     service = get_service()
+    if stable_key is None:
+        stable_key = request.args.get("key", "")
 
     target_obj, obj_type, error = _decode_and_find_object(service, stable_key)
     if error:
@@ -48,7 +54,7 @@ def get_inheritance(stable_key):
 
 
 def _decode_and_find_object(service, stable_key):
-    """Decode a base64 stable key and find the matching object.
+    """Find the object for a plain or base64-encoded stable key.
 
     Returns:
         Tuple of (target_obj, obj_type, error_response).
@@ -58,10 +64,13 @@ def _decode_and_find_object(service, stable_key):
     if not stable_key:
         return None, None, (jsonify({"error": "stable_key parameter required"}), 400)
 
-    try:
-        decoded_key = base64.b64decode(stable_key).decode("utf-8")
-    except (ValueError, UnicodeDecodeError):
-        return None, None, (jsonify({"error": "Invalid stable key encoding"}), 400)
+    # A plain key always contains "|"; the base64 alphabet has none.
+    decoded_key = stable_key
+    if "|" not in stable_key:
+        try:
+            decoded_key = base64.b64decode(stable_key).decode("utf-8")
+        except (ValueError, UnicodeDecodeError):
+            return None, None, (jsonify({"error": "Invalid stable key encoding"}), 400)
 
     result = service.find_object_by_stable_key(decoded_key)
     if result is None:

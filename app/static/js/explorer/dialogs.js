@@ -10,7 +10,7 @@ import { showCenterPaneObject, renderCenterAttributes, validateRequiredFields } 
 import { loadImpactAndRelationships } from './impact-section.js'; // circular — safe (function-level)
 import { handleHostgroupServiceLink } from './analysis.js'; // circular — safe (function-level)
 import { afterFrontendMutation } from './data-loading.js'; // circular — safe (function-level)
-import { closeTab } from './tab-manager.js';
+import { closeTab, renameTabKey } from './tab-manager.js';
 import { navigateToObjectByIndex } from './file-operations.js'; // circular — safe (function-level)
 import { StableKey } from '../stable-key.js';
 import { ApiClient } from '../api-client.js';
@@ -852,6 +852,7 @@ async function executeBulkRename(find, replace, shouldUpdateRefs) {
 
     // New key of each renamed object, in the order of `renames`.
     const newKeys = result.payload.keys;
+    renames.forEach((r, i) => renameTabKey(r.stable_key, newKeys[i]));
 
     state.healthCheckData = null;
     await afterFrontendMutation();

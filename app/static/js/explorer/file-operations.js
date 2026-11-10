@@ -12,7 +12,7 @@ import { isSelectedByIndex, clearSelection, addToSelectionByIndex, removeFromSel
 import { afterFrontendMutation, loadObjects, getStagingHeaders } from './data-loading.js'; // circular — safe (function-level)
 import { showCenterPaneObject, hideCenterPaneObject, checkForChanges } from './object-editor.js'; // circular — safe (function-level)
 import { getEffectiveAttributes, getEffectiveName } from './app.js'; // circular — safe (function-level)
-import { openTab } from './tab-manager.js'; // circular — safe (function-level)
+import { openTab, renameTabKey } from './tab-manager.js'; // circular — safe (function-level)
 import { getIcon, handleApiError, toRelativePath, toDisplayPath, toApiPathSegment, extractFileName, updateBadge } from './ui-utils.js';
 import { refreshPanelTiers } from './panel-resizer.js';
 import { cleanupDragState } from './drag-drop.js';
@@ -34,22 +34,12 @@ const DATA_TYPES = {
  * After moving an object between files, update selectedKeys, tabs, and
  * editedObject so they reference the new source_file.
  */
-function migrateKeysAfterMove(oldSourceFile, newSourceFile, objectType, nameComponent) {
-    const oldKey = `${oldSourceFile}|${objectType}|${nameComponent}`;
-    const newKey = `${newSourceFile}|${objectType}|${nameComponent}`;
+function migrateKeysAfterMove(obj, newSourceFile) {
+    // Only the file changes in a move; the name part of the key stays.
+    const oldKey = StableKey.build(obj);
+    const newKey = StableKey.build({ ...obj, source_file: newSourceFile });
 
-    if (state.selectedKeys.has(oldKey)) {
-        state.selectedKeys.delete(oldKey);
-        state.selectedKeys.add(newKey);
-    }
-    if (state.activeTabKey === oldKey) {
-        state.activeTabKey = newKey;
-    }
-    if (state.openTabs) {
-        for (const tab of state.openTabs) {
-            if (tab.key === oldKey) {tab.key = newKey;}
-        }
-    }
+    renameTabKey(oldKey, newKey);
     if (state.editedObject && getObjectKey(state.editedObject) === oldKey) {
         state.editedObject.source_file = newSourceFile;
     }
@@ -609,7 +599,7 @@ export async function handleObjectDrop(event, targetFile, position) {
     if (valid.length === 0) {return;}
 
     const stableKeys = valid
-        .map(o => `${o.source_file}|${o.object_type}|${o.display_name ?? o.name ?? ''}`);
+        .map(o => StableKey.build(o));
 
     const payload = { stable_keys: stableKeys, target_file: targetFile };
     if (position >= 0) {payload.after_line = position;}
@@ -621,7 +611,7 @@ export async function handleObjectDrop(event, targetFile, position) {
         moved = result.data.moved;
         for (const o of valid) {
             if (o.source_file !== targetFile) {
-                migrateKeysAfterMove(o.source_file, targetFile, o.object_type, o.display_name ?? o.name ?? '');
+                migrateKeysAfterMove(o, targetFile);
             }
         }
     }
@@ -656,7 +646,7 @@ export async function handleFileDrop(event, targetFile) {
 
     const stableKeys = objects
         .filter(o => o?.source_file && o.source_file !== targetFile)
-        .map(o => `${o.source_file}|${o.object_type}|${o.display_name ?? o.name ?? ''}`);
+        .map(o => StableKey.build(o));
     if (stableKeys.length === 0) {return;}
 
     const result = await ApiClient.post('/api/move-objects', {
@@ -667,7 +657,7 @@ export async function handleFileDrop(event, targetFile) {
     if (result.success && result.data?.moved > 0) {
         for (const o of objects) {
             if (o?.source_file && o.source_file !== targetFile) {
-                migrateKeysAfterMove(o.source_file, targetFile, o.object_type, o.display_name ?? o.name ?? '');
+                migrateKeysAfterMove(o, targetFile);
             }
         }
         await afterFrontendMutation();
@@ -817,7 +807,7 @@ async function handleObjectsOnFolderDrop(data, targetFolder) {
 
     const stableKeys = objects
         .filter(o => o?.source_file && o.source_file !== targetFile)
-        .map(o => `${o.source_file}|${o.object_type}|${o.display_name ?? o.name ?? ''}`);
+        .map(o => StableKey.build(o));
     if (stableKeys.length === 0) {return;}
 
     const result = await ApiClient.post('/api/move-objects', {
@@ -828,7 +818,7 @@ async function handleObjectsOnFolderDrop(data, targetFolder) {
     if (result.success && result.data?.moved > 0) {
         for (const o of objects) {
             if (o?.source_file && o.source_file !== targetFile) {
-                migrateKeysAfterMove(o.source_file, targetFile, o.object_type, o.display_name ?? o.name ?? '');
+                migrateKeysAfterMove(o, targetFile);
             }
         }
         state.rightTreeExpansion.add(targetFile);

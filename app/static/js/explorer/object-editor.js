@@ -6,7 +6,7 @@ import { getObjectKey, findObjectByKey, parseCommaValues } from './main.js';
 import { afterFrontendMutation, getStagingHeaders } from './data-loading.js'; // circular — safe (function-level)
 import { buildLocalInheritanceChain } from './relations-loader.js'; // circular — safe (function-level)
 import { isSelectedByIndex } from './state-management.js';
-import { openTab, renderTabBar } from './tab-manager.js'; // circular — safe (function-level)
+import { openTab, renderTabBar, renameTabKey } from './tab-manager.js'; // circular — safe (function-level)
 import { getIcon, handleApiError, toRelativePath, toDisplayPath, extractFileName } from './ui-utils.js';
 import { loadImpactAndRelationships } from './impact-section.js'; // circular — safe (function-level)
 import { computeStagedIssues, refreshCenterPaneIssueBadge } from './badge-issues.js'; // circular — safe (function-level)
@@ -291,7 +291,9 @@ export function syncCenterPaneAfterUndo() {
     }
 
     // For existing objects, sync attributes with current server state
-    const objKey = getObjectKey(state.editedObject);
+    // editingStableKey is the key the server last gave this object; the
+    // edited copy's own display_name can be stale after a rename.
+    const objKey = state.editingStableKey || getObjectKey(state.editedObject);
     if (!objKey) {return;}
 
     const obj = findObjectByKey(objKey);
@@ -299,6 +301,10 @@ export function syncCenterPaneAfterUndo() {
         hideCenterPaneObject();
         return;
     }
+    state.editedObject.display_name = obj.display_name;
+    state.editedObject.source_file = obj.source_file;
+    const nameEl = document.getElementById('centerCardName');
+    if (nameEl) {nameEl.textContent = obj.display_name;}
 
     // Shadow copy: attributes come directly from the parsed objects
     state.editedObject.attributes = {...obj.attributes};
@@ -1246,9 +1252,15 @@ export async function stageCurrentChanges() {
     if (result.success) {
         // Update originalAttributes and stable key to match what's now on disk
         state.originalAttributes = {...state.editedObject.attributes};
-        state.editingStableKey = getObjectKey(state.editedObject);
-        afterFrontendMutation();
-        loadImpactAndRelationships(state.editedObject);
+        // The server says what the object's key is now (a name or host_name
+        // change alters it); move the tab and editor over before the reload.
+        const newKey = result.payload.stable_key;
+        renameTabKey(objKey, newKey);
+        state.editingStableKey = newKey;
+        await afterFrontendMutation();
+        // The reload refreshed the edited copy's name/key; relationships
+        // are looked up by key, so wait for it.
+        if (state.editedObject) {loadImpactAndRelationships(state.editedObject);}
     } else {
         showToast(result.data?.error || 'Failed to save changes', 'error');
     }
@@ -1340,7 +1352,7 @@ export async function fetchInheritance(stableKey) {
     }
 
     try {
-        const result = await ApiClient.get(`/api/templates/inheritance/${encodeURIComponent(stableKey)}`, {silent: true});
+        const result = await ApiClient.get(`/api/templates/inheritance?key=${encodeURIComponent(stableKey)}`, {silent: true});
         if (result.success) {
             state.inheritanceCache.set(stableKey, result.data);
             return result.data;
@@ -1355,7 +1367,7 @@ export async function fetchInheritance(stableKey) {
 /**
  * Invalidate cached inheritance data for an object.
  * Call after editing object or templates it depends on.
- * @param {string} stableKey - Base64-encoded "file|type|name" key (optional)
+ * @param {string} stableKey - "file|type|name" key (optional)
  */
 export function invalidateInheritanceCache(stableKey) {
     if (stableKey) {
@@ -1366,22 +1378,12 @@ export function invalidateInheritanceCache(stableKey) {
 }
 
 /**
- * Build a stable key for an object (base64-encoded).
- * @param {Object} obj - NagiosObject
- * @returns {string} - Base64-encoded "file|type|name" key
- */
-export function buildStableKey(obj) {
-    const objName = obj.display_name ?? getEffectiveName(obj);
-    return btoa(`${obj.source_file}|${obj.object_type}|${objName}`);
-}
-
-/**
  * Load and render inheritance section for an object.
  * Fetches data from API, builds stable key, renders in editor pane.
  * @param {Object} obj - NagiosObject to load inheritance for
  */
 export async function loadInheritanceSection(obj) {
-    const stableKey = buildStableKey(obj);
+    const stableKey = getObjectKey(obj);
     const data = await fetchInheritance(stableKey);
     renderInheritanceSection(data, obj);
 }

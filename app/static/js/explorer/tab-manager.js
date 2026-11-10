@@ -99,6 +99,28 @@ function openTab(obj) {
     persistTabs();
 }
 
+/**
+ * An object's stable key changed (its name or file changed, so the server
+ * gave it a new key). Move every client-side reference to the old key over to
+ * the new one so the tab, selection and editor follow the object.
+ * @param {string} oldKey
+ * @param {string} newKey - the key the server returned
+ */
+export function renameTabKey(oldKey, newKey) {
+    if (!oldKey || !newKey || oldKey === newKey) {return;}
+
+    for (const tab of state.openTabs) {
+        if (tab.key === oldKey) {tab.key = newKey;}
+    }
+    if (state.activeTabKey === oldKey) {state.activeTabKey = newKey;}
+    if (state.selectedKeys.has(oldKey)) {
+        state.selectedKeys.delete(oldKey);
+        state.selectedKeys.add(newKey);
+    }
+    if (state.editingStableKey === oldKey) {state.editingStableKey = newKey;}
+    persistTabs();
+}
+
 function closeTab(key) {
     const idx = state.openTabs.findIndex(t => t.key === key);
     if (idx < 0) {return;}
