@@ -551,3 +551,17 @@ def test_rename_without_changes_reports_no_key_changes(env):
     assert resp.status_code == 200, resp.get_json()
     assert resp.get_json()["key_changes"] == {}
 
+
+def test_rename_keeps_prefixes_in_members(tmp_path):
+    """Review Focus 1 through the route: list items keep their +/! prefixes
+    and order, surrounding whitespace is dropped, and items are compared
+    whole ("web-010" is not "web-01")."""
+    groups = (
+        "define hostgroup {\n    hostgroup_name mixed\n    members a, !web-01 ,+b\n}\n\n"
+        "define hostgroup {\n    hostgroup_name spaced\n    members + !web-01,web-010\n}\n"
+    )
+    app, client, sm, cfg = _make_env(tmp_path, {"mixed.cfg": groups})
+    resp = _rename(client, _key(cfg, "hosts.cfg", "host", "web-01"), "web-02")
+    assert resp.status_code == 200, resp.get_json()
+    assert _find(client, "hostgroup", hostgroup_name="mixed", members="a,!web-02,+b")
+    assert _find(client, "hostgroup", hostgroup_name="spaced", members="+!web-02,web-010")

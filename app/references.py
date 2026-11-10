@@ -114,20 +114,6 @@ def _names(value: str | None) -> set[str]:
     }
 
 
-def replace_reference(value: str, old: str, new: str) -> str:
-    """Replace list items naming ``old`` with ``new``, keeping +/! prefixes.
-
-    Items are compared whole, with prefixes and whitespace stripped, so
-    "web-010" is not a match for "web-01". Items come back trimmed and joined
-    by ",".
-    """
-    items = [_parse_item(part, False) for part in value.split(",")]
-    for item in items:
-        if item[1] == old:
-            item[1] = new
-    return _render(items)
-
-
 # -- what a rename changes -----------------------------------------------------
 
 
