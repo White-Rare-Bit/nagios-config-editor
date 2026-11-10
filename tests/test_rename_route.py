@@ -513,3 +513,41 @@ def test_referenced_by_lists_template_users(tmp_path):
     assert [(r["display_name"], r["fields"]) for r in resp.get_json()["references"]] == [
         ("web-09", ["use"]),
     ]
+
+
+# -- key_changes (UI_REVIEW bug 6 through referencing objects) ------------------
+
+
+def test_rename_hostgroup_reports_key_changes_of_referencing_services(env):
+    """A service's key names its hostgroup, so renaming the hostgroup changes
+    the service's key too; the client needs both to keep their tabs open."""
+    app, client, sm, cfg = env
+    resp = _rename(client, _key(cfg, "groups.cfg", "hostgroup", "web"), "web-servers")
+    assert resp.status_code == 200, resp.get_json()
+    assert resp.get_json()["key_changes"] == {
+        _key(cfg, "groups.cfg", "hostgroup", "web"):
+            _key(cfg, "groups.cfg", "hostgroup", "web-servers"),
+        _key(cfg, "services.cfg", "service", "HTTP on web"):
+            _key(cfg, "services.cfg", "service", "HTTP on web-servers"),
+    }
+
+
+def test_rename_host_key_changes_leave_out_unchanged_keys(env):
+    """Objects whose references changed but whose key did not (the hostgroup's
+    members, the HTTP service's ``!web-01``) are not listed."""
+    app, client, sm, cfg = env
+    resp = _rename(client, _key(cfg, "hosts.cfg", "host", "web-01"), "web-03")
+    assert resp.status_code == 200, resp.get_json()
+    assert resp.get_json()["key_changes"] == {
+        _key(cfg, "hosts.cfg", "host", "web-01"): _key(cfg, "hosts.cfg", "host", "web-03"),
+        _key(cfg, "services.cfg", "service", "PING on web-01"):
+            _key(cfg, "services.cfg", "service", "PING on web-03"),
+    }
+
+
+def test_rename_without_changes_reports_no_key_changes(env):
+    app, client, sm, cfg = env
+    resp = _rename(client, _key(cfg, "hosts.cfg", "host", "web-01"), "web-01")
+    assert resp.status_code == 200, resp.get_json()
+    assert resp.get_json()["key_changes"] == {}
+

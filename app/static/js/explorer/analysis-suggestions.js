@@ -15,6 +15,7 @@ import { showToast } from '../ui-notifications.js';
 import { showDialog, closeDialog } from './context-menu.js'; // circular — safe (function-level)
 import { dialogFileSelect, dialogKvList } from './dialogs.js'; // circular — safe (function-level)
 import { afterFrontendMutation } from './data-loading.js'; // circular — safe (function-level)
+import { applyKeyChanges } from './tab-manager.js'; // circular — safe (function-level)
 import { getObjectKey } from './main.js'; // circular — safe (function-level)
 import { mapHealthCheckToState, renderUnifiedSuggestionsList } from './analysis.js'; // circular — safe (function-level)
 
@@ -383,6 +384,8 @@ export function showCreateTemplateDialog(idx) {
             return;
         }
 
+        // Moving attributes into the template can change an object's key.
+        applyKeyChanges(result.payload.key_changes);
         closeDialog();
         await afterFrontendMutation();
 

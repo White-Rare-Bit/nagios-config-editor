@@ -10,6 +10,7 @@ import { showDialog, closeDialog } from './context-menu.js'; // circular — saf
 import { dialogInfoText, dialogAlert, dialogKvList, dialogEntryList, dialogFileSelect } from './dialogs.js'; // circular — safe (function-level)
 import { afterFrontendMutation } from './data-loading.js'; // circular — safe (function-level)
 import { navigateToObjectByIndex } from './file-operations.js'; // circular — safe (function-level)
+import { applyKeyChanges } from './tab-manager.js'; // circular — safe (function-level)
 import { loadGroupingSuggestions, loadTemplateIssues, showCreateTemplateDialog, showCreateGroupDialog } from './analysis-suggestions.js'; // circular — safe (function-level)
 import { filterIssues, navigateToIssue, resolveGroupedError, getIssueResolveInfo, openCreateObjectForIssue } from './analysis-issues.js'; // circular — safe (function-level)
 
@@ -1269,6 +1270,8 @@ export function fixLongHostList(idx) {
             return;
         }
 
+        // The service's key names its hosts, so it changes to "... on <name>".
+        applyKeyChanges(result.payload.key_changes);
         closeDialog();
         await afterFrontendMutation();
         showToast(`Created hostgroup ${name} and updated ${obj.display_name}`, 'success');

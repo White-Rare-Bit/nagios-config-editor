@@ -5,6 +5,7 @@ This format is shared with the frontend (static/js/stable-key.js).
 Any change here MUST be coordinated with the frontend.
 """
 
+from collections.abc import Iterable
 from typing import Any
 
 
@@ -76,3 +77,17 @@ def stable_key_after_edit(source_file: str, object_type: str, attributes: dict) 
     return generate_stable_key_for_object(
         NagiosObject(object_type=object_type, attributes=attributes, source_file=source_file)
     )
+
+
+def changed_keys(pairs: Iterable[tuple[Any, str]]) -> dict[str, str]:
+    """{old_key: new_key} for each (object before the write, key after it) that differs.
+
+    Mutation routes return this as ``key_changes`` so the client can follow
+    objects whose key an edit changed (open tabs, the editor).
+    """
+    changes = {}
+    for obj, new_key in pairs:
+        old_key = generate_stable_key_for_object(obj)
+        if old_key != new_key:
+            changes[old_key] = new_key
+    return changes

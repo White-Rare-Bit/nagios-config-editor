@@ -9,7 +9,7 @@ import { showDialog, closeDialog, hideContextMenu } from './context-menu.js'; //
 import { showCenterPaneObject } from './object-editor.js'; // circular — safe (function-level)
 import { loadImpactAndRelationships } from './impact-section.js'; // circular — safe (function-level)
 import { afterFrontendMutation } from './data-loading.js'; // circular — safe (function-level)
-import { closeTab, renameTabKey } from './tab-manager.js';
+import { applyKeyChanges, closeTab } from './tab-manager.js';
 import { navigateToObjectByIndex } from './file-operations.js'; // circular — safe (function-level)
 import { StableKey } from '../stable-key.js';
 import { ApiClient } from '../api-client.js';
@@ -494,17 +494,16 @@ async function executeBulkRename(find, replace, shouldUpdateRefs) {
         return;
     }
 
-    // New key of each renamed object, in the order of `renames`.
-    const newKeys = result.payload.keys;
-    renames.forEach((r, i) => renameTabKey(r.stable_key, newKeys[i]));
+    // Every written object whose key changed: the renamed objects and those
+    // whose key names a renamed object (a service's hosts/hostgroups).
+    applyKeyChanges(result.payload.key_changes);
 
     state.healthCheckData = null;
     await afterFrontendMutation();
 
     if (centerPaneNeedsRefresh && state.editedObject) {
         const editedKey = getObjectKey(state.editedObject);
-        const renamedAt = renames.findIndex(r => r.stable_key === editedKey);
-        const obj = findObjectByKey(renamedAt >= 0 ? newKeys[renamedAt] : editedKey);
+        const obj = findObjectByKey(result.payload.key_changes[editedKey] || editedKey);
         if (obj) {showCenterPaneObject(obj);}
     } else if (state.editedObject) {
         loadImpactAndRelationships(state.editedObject);
@@ -670,6 +669,8 @@ async function executeBulkEditAction(scope, sortedFields) {
             afterFrontendMutation();
             return;
         }
+        // Editing host_name/hostgroup_name changes a service's key.
+        applyKeyChanges(result.payload.key_changes);
     }
 
     state.healthCheckData = null;

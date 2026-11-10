@@ -12,7 +12,7 @@ import { selectObjectByIndex, updateSelection, switchRightTab, getNameFieldForOb
 import { stageObjectDeletions } from './dialogs.js'; // circular — safe (function-level)
 import { afterFrontendMutation } from './data-loading.js'; // circular — safe (function-level)
 import { showCenterPaneObject } from './object-editor.js'; // circular — safe (function-level)
-import { renameTabKey } from './tab-manager.js'; // circular — safe (function-level)
+import { applyKeyChanges } from './tab-manager.js'; // circular — safe (function-level)
 import { loadImpactAndRelationships } from './impact-section.js'; // circular — safe (function-level)
 import { cleanupDragState } from './drag-drop.js';
 import { ApiClient, apiUrl } from '../api-client.js';
@@ -508,9 +508,10 @@ export async function applyRename() {
         return;
     }
 
-    // The object's key after the rename (the name is part of it).
+    // The object's key after the rename (the name is part of it). Objects
+    // whose references were rewritten can change key too (key_changes).
     const [newKey] = result.payload.keys;
-    renameTabKey(getObjectKey(obj), newKey);
+    applyKeyChanges(result.payload.key_changes);
 
     state.healthCheckData = null;
     await afterFrontendMutation();
@@ -621,6 +622,7 @@ export async function applyBulkAttribute() {
         operations
     }, { silent: true });
 
+    if (result.success) {applyKeyChanges(result.payload.key_changes);}
     await afterFrontendMutation();
     if (!result.success) {
         // All-or-nothing: nothing changed. Keep the dialog open.
@@ -815,6 +817,7 @@ export async function addToGroup(groupName) {
         operations
     }, { silent: true });
 
+    if (result.success) {applyKeyChanges(result.payload.key_changes);}
     await afterFrontendMutation();
 
     if (!result.success) {

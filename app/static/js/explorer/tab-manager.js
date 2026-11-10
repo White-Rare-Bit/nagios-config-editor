@@ -131,6 +131,21 @@ export function renameTabKey(oldKey, newKey, newLabel) {
     persistTabs();
 }
 
+/**
+ * Follow every object whose stable key a mutation changed. The server returns
+ * `key_changes` ({old_key: new_key}) from /api/objects/rename and
+ * /api/batch-mutations for each written object whose key changed, including
+ * objects whose key changed only because a reference in it was rewritten (a
+ * service's key names its hosts/hostgroups). Call before afterFrontendMutation(),
+ * whose reload closes tabs whose key no longer exists.
+ * @param {Object<string, string>} [keyChanges]
+ */
+export function applyKeyChanges(keyChanges) {
+    for (const [oldKey, newKey] of Object.entries(keyChanges || {})) {
+        renameTabKey(oldKey, newKey);
+    }
+}
+
 function closeTab(key) {
     const idx = state.openTabs.findIndex(t => t.key === key);
     if (idx < 0) {return;}

@@ -11,7 +11,12 @@ from flask import Blueprint, jsonify, request
 
 from ..nagios_model import NAME_FIELDS, RENAMEABLE_TYPES, is_template_object
 from ..references import name_field, reference_edits, referenced_by
-from ..stable_keys import generate_stable_key, generate_stable_key_for_object, stable_key_after_edit
+from ..stable_keys import (
+    changed_keys,
+    generate_stable_key,
+    generate_stable_key_for_object,
+    stable_key_after_edit,
+)
 from .helpers import get_service, operation_response
 from .mutation import ApiError, staged_mutation
 
@@ -153,7 +158,9 @@ def api_rename_objects():
     RENAMEABLE_TYPES. Others have no name of their own (400).
 
     Returns keys (each renamed object's stable key after the request, in
-    request order) and references_updated (number of objects whose references
+    request order), key_changes ({old_key: new_key} for every written object
+    whose stable key changed, including objects that only had a reference
+    rewritten) and references_updated (number of objects whose references
     were changed). If any write fails, everything this request changed is
     undone (409).
     """
@@ -178,7 +185,7 @@ def api_rename_objects():
 
         if not renames:
             return jsonify({
-                "success": True, "references_updated": 0,
+                "success": True, "references_updated": 0, "key_changes": {},
                 "keys": [generate_stable_key_for_object(obj) for obj in targets],
             })
 
@@ -202,6 +209,13 @@ def api_rename_objects():
             )
             for obj in targets
         ]
+        # Every written object whose key changes, not only the renamed ones:
+        # a service's key names its hosts/hostgroups, so renaming a hostgroup
+        # it refers to changes its key too (UI_REVIEW bug 6).
+        key_changes = changed_keys(
+            (obj, stable_key_after_edit(obj.source_file, obj.object_type, attrs))
+            for obj, attrs in writes
+        )
 
         if len(renames) == 1:
             obj, _, old_name, new_name = renames[0]
@@ -244,7 +258,10 @@ def api_rename_objects():
                 obj.attributes, attrs, txn,
             )
 
-    return jsonify({"success": True, "keys": keys, "references_updated": len(ref_edits)})
+    return jsonify({
+        "success": True, "keys": keys, "key_changes": key_changes,
+        "references_updated": len(ref_edits),
+    })
 
 
 @bp.route("/api/objects/referenced-by")

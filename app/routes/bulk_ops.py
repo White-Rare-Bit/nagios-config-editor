@@ -6,7 +6,12 @@ import uuid
 
 from flask import Blueprint, jsonify, request
 
-from ..stable_keys import generate_stable_key, generate_stable_key_for_object, stable_key_after_edit
+from ..stable_keys import (
+    changed_keys,
+    generate_stable_key,
+    generate_stable_key_for_object,
+    stable_key_after_edit,
+)
 from .mutation import ApiError, staged_mutation
 from .objects import _name_from_attrs, audit_attribute_changes
 
@@ -160,7 +165,8 @@ def api_batch_mutations():
         - {action: "create", target_file: "...", object_type: "...", attributes: {...}}
 
     A malformed operation is refused (400, naming its index). Returns keys
-    (each object's stable key after the batch, in request order).
+    (each object's stable key after the batch, in request order) and
+    key_changes ({old_key: new_key} for each updated object whose key changed).
     """
     data = request.get_json() or {}
     description = data.get("description", "batch operation")
@@ -207,6 +213,7 @@ def api_batch_mutations():
         errors = []
         succeeded = []
         keys = []
+        key_changes = {}
         for op in resolved_ops:
             if op["action"] == "update":
                 obj = m.find(op["stable_key"])
@@ -228,6 +235,9 @@ def api_batch_mutations():
                 completed += 1
                 succeeded.append(op)
                 keys.append(stable_key_after_edit(key_file, key_type, op["attributes"]))
+                if op["action"] == "update":
+                    # An edit of host_name/hostgroup_name changes a service's key.
+                    key_changes.update(changed_keys([(obj, keys[-1])]))
             else:
                 errors.append(result.error)
 
@@ -271,4 +281,5 @@ def api_batch_mutations():
         "completed": completed,
         "errors": None,
         "keys": keys,
+        "key_changes": key_changes,
     })

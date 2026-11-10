@@ -201,6 +201,30 @@ def test_batch_create_in_new_file_undoes_cleanly(env):
     assert "host_name" in _shadow_text(sm, "services.cfg")
 
 
+def test_batch_update_reports_key_changes(env):
+    """Moving a service to another host changes its key; the response maps
+    old key to new so the client can keep its tab open."""
+    app, client, sm, cfg = env
+    resp = client.post("/api/batch-mutations", headers=HEADERS, json={
+        "description": "move PING",
+        "operations": [
+            {"action": "update",
+             "stable_key": _key(cfg, "services.cfg", "service", "PING on web-01"),
+             "attributes": {"host_name": "web-02", "service_description": "PING",
+                            "check_command": "check_ping"}},
+            {"action": "update", "stable_key": _key(cfg, "hosts.cfg", "host", "web-01"),
+             "attributes": {"host_name": "web-01", "address": "1.1.1.1"}},
+            {"action": "create", "target_file": f"{cfg}/hosts.cfg", "object_type": "host",
+             "attributes": {"host_name": "web-03", "address": "10.0.0.3"}},
+        ],
+    })
+    assert resp.status_code == 200, resp.get_json()
+    assert resp.get_json()["key_changes"] == {
+        _key(cfg, "services.cfg", "service", "PING on web-01"):
+            _key(cfg, "services.cfg", "service", "PING on web-02"),
+    }
+
+
 @pytest.mark.parametrize(("operation", "expected"), [
     ({"action": "create", "object_type": "host", "attributes": {"host_name": "x"}},
      "operation 1"),
