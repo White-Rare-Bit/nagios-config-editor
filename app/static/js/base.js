@@ -359,6 +359,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Close dialogs on Escape key, Undo on Ctrl+Z, ? for help
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
+            // A confirm dialog on top handles Escape itself; don't close the dialog beneath it.
+            if (document.getElementById('confirmDialogOverlay')?.classList.contains('visible')) {return;}
             closeGlobalCommitDialog();
             closeGitResultPanel();
             closeKeyboardShortcuts();

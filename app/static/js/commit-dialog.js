@@ -74,7 +74,7 @@ export async function showGlobalCommitDialog() {
 /**
  * Build commit footer HTML with git identity and action buttons.
  */
-function buildCommitFooterHtml(isGitConfigured, discardFn, applyFn) {
+function buildCommitFooterHtml(isGitConfigured, applyFn) {
     let identityHtml;
     if (isGitConfigured) {
         identityHtml = `<textarea id="globalGitCommitMessage" class="commit-message-textarea" placeholder="Enter commit message..."></textarea>`;
@@ -92,7 +92,7 @@ function buildCommitFooterHtml(isGitConfigured, discardFn, applyFn) {
         <div class="commit-footer">
             <div class="commit-footer-left">${identityHtml}</div>
             <div class="commit-footer-right">
-                <button class="nbe-btn nbe-btn--dark nbe-btn--danger" onclick="${discardFn}()">Discard All</button>
+                <button class="nbe-btn nbe-btn--dark nbe-btn--danger" onclick="confirmDiscardAll()">Discard All</button>
                 <button class="nbe-btn nbe-btn--dark" onclick="closeGlobalCommitDialog()">Cancel</button>
                 <button class="nbe-btn nbe-btn--dark nbe-btn--tonal" id="globalApplyBtn" onclick="${applyFn}()" ${isGitConfigured ? '' : 'disabled'}>Apply Changes</button>
             </div>
@@ -258,7 +258,6 @@ async function buildCommitDialogHtml({ shadowFiles = [], gitFiles = [], isGitCon
         : 0;
 
     // Footer buttons differ by mode
-    const discardFn = hasShadow ? 'discardGlobalChanges' : 'discardGitChanges';
     const applyFn = hasShadow ? 'applyGlobalCommit' : 'applyGitCommit';
 
     return `
@@ -276,7 +275,7 @@ async function buildCommitDialogHtml({ shadowFiles = [], gitFiles = [], isGitCon
             </div>
             ${externalHtml}
         </div>
-        ${buildCommitFooterHtml(isGitConfigured, discardFn, applyFn)}`;
+        ${buildCommitFooterHtml(isGitConfigured, applyFn)}`;
 }
 
 /**
@@ -477,6 +476,29 @@ export async function updateContextLines(value) {
     }
 
     restoreCommitItemExpansionState(expandedPaths);
+}
+
+// Asks before discarding. With a staging session this destroys the shadow;
+// without one it resets the git working tree. Cancel leaves the commit dialog open.
+export async function confirmDiscardAll() {
+    const hasShadow = baseState.diffData?.shadowFiles?.length > 0;
+    const confirmed = await showConfirmDialog(hasShadow ? {
+        title: 'Discard All',
+        message: 'Discard all staged changes? This cannot be undone.',
+        confirmText: 'Discard All',
+        type: 'danger'
+    } : {
+        title: 'Discard All',
+        message: 'Discard all uncommitted changes in the config directory? This runs git checkout -- . && git clean -fd and deletes untracked files.',
+        confirmText: 'Discard All',
+        type: 'danger'
+    });
+    if (!confirmed) {return;}
+    if (hasShadow) {
+        await discardGlobalChanges();
+    } else {
+        await discardGitChanges();
+    }
 }
 
 export async function discardGitChanges() {
@@ -829,6 +851,7 @@ export function showGitResultPanel(message, success, result, showRetryOption = f
 
 // onclick handler — must be global
 window.discardGlobalChanges = discardGlobalChanges;
+window.confirmDiscardAll = confirmDiscardAll;
 window.closeGlobalCommitDialog = closeGlobalCommitDialog;
 window.applyGlobalCommit = applyGlobalCommit;
 window.updateContextLines = updateContextLines;

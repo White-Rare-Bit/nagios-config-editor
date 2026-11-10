@@ -46,6 +46,7 @@ const projectGlobals = {
   closeGlobalCommitDialog: "readonly",
   discardGitChanges: "readonly",
   discardGlobalChanges: "readonly",
+  confirmDiscardAll: "readonly",
   discardStagingAfterFailedCommit: "readonly",
   handleCommitClick: "readonly",
   retryGitCommit: "readonly",

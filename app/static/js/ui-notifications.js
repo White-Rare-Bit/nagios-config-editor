@@ -138,7 +138,23 @@ export function showConfirmDialog(options = {}) {
             if (e.key === 'Escape') {
                 handleCancel();
             } else if (e.key === 'Enter') {
-                handleConfirm();
+                // Enter activates whichever button has focus: on Cancel it cancels.
+                if (document.activeElement === cancelBtn) {
+                    e.preventDefault();
+                    handleCancel();
+                } else {
+                    handleConfirm();
+                }
+            } else if (e.key === 'Tab') {
+                // Focus trap: cycle between the buttons while the dialog is open
+                // (only the confirm button when Cancel is hidden).
+                e.preventDefault();
+                const buttons = showCancel ? [confirmBtn, cancelBtn] : [confirmBtn];
+                const idx = buttons.indexOf(document.activeElement);
+                const step = e.shiftKey ? -1 : 1;
+                const next = idx === -1 ? (e.shiftKey ? buttons.length - 1 : 0)
+                    : (idx + step + buttons.length) % buttons.length;
+                buttons[next].focus();
             }
         }
 
