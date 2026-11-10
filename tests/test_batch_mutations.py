@@ -3,7 +3,10 @@
 import pytest
 
 from app import create_app
+from app.nagios_model import OperationResult
 from app.nagios_service import NagiosService
+from app.shadow_copy_manager import ShadowCopyManager
+from tests.test_audit_routes import _audit_capture
 
 HEADERS = {"X-Session-Id": "s1"}
 
@@ -23,7 +26,7 @@ def env(tmp_path):
     config_dir.mkdir()
     (config_dir / "hosts.cfg").write_text(HOSTS)
     (config_dir / "services.cfg").write_text(SERVICES)
-    app = create_app(config_path=str(config_dir))
+    app = create_app(config_path=str(config_dir), log_dir_override=str(tmp_path / "logs"))
     app.config["TESTING"] = True
     sm = app.extensions["shadow"]
     sm.config_path = str(config_dir)
@@ -104,7 +107,7 @@ def test_batch_missing_key_is_an_error(env):
     resp = client.post("/api/batch-mutations", headers=HEADERS, json={"operations": ops})
     assert resp.status_code == 409
     assert resp.get_json()["success"] is False
-    assert not sm.has_shadow() or "1.1.1.1" not in _shadow_text(sm, "hosts.cfg")
+    assert sm.has_shadow() is False
 
 
 def test_batch_success_returns_new_keys(env):
@@ -134,3 +137,27 @@ def test_update_returns_key_matching_listing(env):
 
 def _display(o):
     return o.get("display_name") or o.get("name")
+
+
+def test_batch_rollback_is_audited(env, monkeypatch):
+    app, client, sm, cfg = env
+    _fail_second_update(monkeypatch)
+    with _audit_capture(app) as lines:
+        resp = client.post("/api/batch-mutations", headers=HEADERS, json={
+            "description": "two edits", "operations": _two_updates(cfg)})
+    assert resp.status_code == 409
+    assert any("action=batch_rollback" in l and "failed=1" in l and "total=2" in l
+               for l in lines)
+
+
+def test_batch_rollback_failure_is_a_500_and_keeps_shadow(env, monkeypatch):
+    app, client, sm, cfg = env
+    _fail_second_update(monkeypatch)
+    monkeypatch.setattr(ShadowCopyManager, "undo",
+                        lambda self: OperationResult(success=False, error="disk gone"))
+    resp = client.post("/api/batch-mutations", headers=HEADERS,
+                       json={"operations": _two_updates(cfg)})
+    assert resp.status_code == 500
+    assert resp.get_json()["error"].startswith(
+        "Batch failed and could not be rolled back: disk gone.")
+    assert sm.has_shadow() is True

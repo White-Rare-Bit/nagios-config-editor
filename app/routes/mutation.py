@@ -14,6 +14,7 @@ how individual routes came to skip a step. Routes now do it through:
 Both raise ``ApiError``, which the app turns into the standard error body.
 """
 
+import logging
 import os
 from contextlib import contextmanager
 
@@ -28,6 +29,8 @@ from .helpers import (
     get_service,
     get_shadow_manager,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ApiError(Exception):
@@ -179,7 +182,16 @@ class Mutation:
         ``touched`` so a shadow this request created is removed again.
         Call it only when this request took exactly one snapshot.
         """
-        self.sm.undo()
+        result = self.sm.undo()
+        if not result.success:
+            # The shadow may be half-written: keep ``touched`` set so it is
+            # not destroyed under the user, and say so.
+            logger.error("Rollback failed: %s", result.error)
+            raise ApiError(
+                f"Batch failed and could not be rolled back: {result.error}. "
+                "Use Undo or Discard to recover.",
+                500,
+            )
         self.service.reload()
         self.touched = False
 

@@ -216,6 +216,11 @@ def api_batch_mutations():
         # batch. 409: the batch conflicts with the current config state.
         if errors:
             m.rollback()
+            m.audit(
+                "batch_rollback",
+                description=description,
+                failed=len(errors), total=len(resolved_ops),
+            )
             raise ApiError(
                 f"{len(errors)} of {len(resolved_ops)} operations failed: {'; '.join(errors)}",
                 409, errors=errors,
