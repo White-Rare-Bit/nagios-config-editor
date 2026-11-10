@@ -376,17 +376,18 @@ export async function executeBatchCreate(groups, targetFile) {
         operations
     }, { silent: true });
 
+    // Batches are all-or-nothing: a failure means nothing was created.
+    if (!result.success) {
+        showToast(result.error || 'Creating objects failed', 'error');
+        return;
+    }
+
     state.healthCheckData = null;
     await afterFrontendMutation();
     loadIssues();
 
     const completed = result.data?.completed || 0;
-    const errors = result.data?.errors || [];
-    if (errors.length === 0) {
-        showToast(`Created ${completed} new object${completed !== 1 ? 's' : ''}`, 'success');
-    } else {
-        showToast(`Created ${completed} objects, ${errors.length} failed`, 'warning');
-    }
+    showToast(`Created ${completed} new object${completed !== 1 ? 's' : ''}`, 'success');
 }
 
 // ==========================================================================

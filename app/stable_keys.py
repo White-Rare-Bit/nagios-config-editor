@@ -62,3 +62,17 @@ def generate_stable_key_for_object(obj: Any) -> str:
     """
     name = obj.get_display_name()
     return generate_stable_key(obj.source_file, obj.object_type, name)
+
+
+def stable_key_after_edit(source_file: str, object_type: str, attributes: dict) -> str:
+    """The stable key an object will have once saved with these attributes.
+
+    The key is built from the display name, which depends on the attributes
+    (a service's name includes its host), so an edit can change it. This
+    builds it the same way the listing does, from a throwaway object.
+    """
+    from .nagios_model import NagiosObject
+
+    return generate_stable_key_for_object(
+        NagiosObject(object_type=object_type, attributes=attributes, source_file=source_file)
+    )

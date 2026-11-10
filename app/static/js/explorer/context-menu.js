@@ -596,13 +596,14 @@ export async function applyClone(mode) {
     }, { silent: true });
 
     if (!result.success) {
+        // Batches are all-or-nothing: a failure means nothing was cloned.
         showToast(result.error || 'Clone failed', 'error');
-        if (isSingleClone) {return;}
+        return;
     }
 
     await afterFrontendMutation();
     closeDialog();
-    showToast(`Cloned ${result.data?.completed || operations.length} object(s)`, 'success');
+    showToast(`Cloned ${result.data?.completed ?? operations.length} object(s)`, 'success');
 }
 
 export function toggleNewFileInput() {

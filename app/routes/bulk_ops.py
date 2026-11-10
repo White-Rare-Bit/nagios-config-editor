@@ -6,7 +6,7 @@ import uuid
 
 from flask import Blueprint, jsonify, request
 
-from ..stable_keys import generate_stable_key, generate_stable_key_for_object
+from ..stable_keys import generate_stable_key, generate_stable_key_for_object, stable_key_after_edit
 from .mutation import ApiError, staged_mutation
 from .objects import _name_from_attrs, audit_attribute_changes
 
@@ -156,7 +156,7 @@ def api_batch_mutations():
                 stable_key = op.get("stable_key", "")
                 obj = m.find(stable_key)
                 if obj is None:
-                    continue
+                    raise ApiError(f"Object not found: {stable_key}", 409)
                 files_to_snapshot.add(obj.source_file)
                 resolved_ops.append({
                     "action": "update", "stable_key": stable_key, "attributes": op["attributes"],
@@ -186,6 +186,7 @@ def api_batch_mutations():
         completed = 0
         errors = []
         succeeded = []
+        keys = []
         for op in resolved_ops:
             if op["action"] == "update":
                 obj = m.find(op["stable_key"])
@@ -196,16 +197,29 @@ def api_batch_mutations():
                     obj.source_file, obj.line_number, op["attributes"], obj.object_type,
                     inline_comments=obj.inline_comments,
                 )
+                key_file, key_type = obj.source_file, obj.object_type
             else:
                 result = service.create_object(
                     op["target_file"], op["object_type"], op["attributes"],
                 )
+                key_file, key_type = op["target_file"], op["object_type"]
 
             if result.success:
                 completed += 1
                 succeeded.append(op)
+                keys.append(stable_key_after_edit(key_file, key_type, op["attributes"]))
             else:
                 errors.append(result.error)
+
+        # All-or-nothing: one failure undoes the whole batch (and removes a
+        # shadow this request created), so the client never sees a half-applied
+        # batch. 409: the batch conflicts with the current config state.
+        if errors:
+            m.rollback()
+            raise ApiError(
+                f"{len(errors)} of {len(resolved_ops)} operations failed: {'; '.join(errors)}",
+                409, errors=errors,
+            )
 
         # Audit all succeeded operations
         txn = uuid.uuid4().hex[:8]
@@ -225,5 +239,6 @@ def api_batch_mutations():
     return jsonify({
         "success": True,
         "completed": completed,
-        "errors": errors if errors else None,
+        "errors": None,
+        "keys": keys,
     })

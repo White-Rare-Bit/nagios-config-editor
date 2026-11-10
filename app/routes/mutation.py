@@ -171,6 +171,18 @@ class Mutation:
             raise ApiError("Path must be within a configuration directory", 400)
         return composite
 
+    def rollback(self) -> None:
+        """Undo everything this request changed, as if it had not happened.
+
+        Restores the snapshot taken by ``snapshot()`` (undo consumes it, so
+        undo history is as it was before the request) and reparses. Clears
+        ``touched`` so a shadow this request created is removed again.
+        Call it only when this request took exactly one snapshot.
+        """
+        self.sm.undo()
+        self.service.reload()
+        self.touched = False
+
     def files_changed(self) -> None:
         """Call after changing shadow files directly (not through the service)."""
         self.touched = True

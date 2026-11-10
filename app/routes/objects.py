@@ -9,7 +9,7 @@ import uuid
 
 from flask import Blueprint, jsonify, request
 
-from ..stable_keys import generate_stable_key
+from ..stable_keys import generate_stable_key, stable_key_after_edit
 from .helpers import get_service, operation_response
 from .mutation import ApiError, staged_mutation
 
@@ -91,7 +91,14 @@ def api_update_object():
                 old_attrs, new_attrs, uuid.uuid4().hex[:8],
             )
 
-    return operation_response(result)
+    if not result.success:
+        return operation_response(result)
+    # The edit can change the display name (e.g. a service's host), so tell
+    # the client the key the object has now.
+    return jsonify({
+        "success": True,
+        "stable_key": stable_key_after_edit(obj.source_file, obj.object_type, new_attrs),
+    })
 
 
 @bp.route("/api/objects/create", methods=["POST"])
