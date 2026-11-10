@@ -8,7 +8,7 @@ All modules use ES module `import`/`export` syntax. Shared state in `state.js`.
 |------|------|
 | `main.js` | Entry point: imports, initializes event delegation, registers callbacks |
 | `state.js` | Shared state object (allObjects, selections, filters, etc.), `TreeExpansionState` class, path conversion utilities |
-| `constants.js` | Domain metadata from `/api/metadata` via `applyMetadata()`, badge tiers, UI-only constants (`identityFields`, `inheritanceAttrs`), `isObjectTemplate()`, `isRenameable()` |
+| `constants.js` | Domain metadata from `/api/metadata` via `applyMetadata()`, badge tiers, UI-only constants (`identityFields`, `inheritanceAttrs`), `isObjectTemplate()` (reads the server's `is_template`), `isRenameable()` |
 | `state-management.js` | Stable key helpers, pending edit get/set, `rebuildUI()` |
 | `action-registry.js` | Maps `data-action` names to handler functions for event delegation |
 | `app.js` | Left pane: tree rendering, filtering, selection, autocomplete |

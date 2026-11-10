@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass, field
 
+import pytest
+
 from app.nagios_model import is_template_object
 from app.inheritance import (
     build_template_index,
@@ -86,6 +88,20 @@ class TestIsTemplateObject:
             "name": "generic-service", "service_description": "HTTP"
         })
         assert is_template_object(obj) is False
+
+    @pytest.mark.parametrize(("attributes", "expected"), [
+        ({"host_name": "web-01", "name": "web", "register": "0"}, True),
+        ({"name": "generic-host"}, True),
+        ({"host_name": "web-01", "name": "web"}, False),
+        ({"host_name": "web-01"}, False),
+    ])
+    def test_to_dict_serves_is_template(self, attributes, expected):
+        """The client reads is_template from /api/objects instead of
+        re-deriving it, so the two can never disagree (e.g. on register 0)."""
+        from app.nagios_model import NagiosObject
+
+        obj = NagiosObject(object_type="host", attributes=attributes, source_file="/x.cfg")
+        assert obj.to_dict()["is_template"] is expected
 
 
 # ─────────────────────────────────────────────────────────────────────

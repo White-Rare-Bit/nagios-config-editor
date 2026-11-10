@@ -636,6 +636,8 @@ class NagiosObject:
             "name": self.get_name(),
             "display_name": self.get_display_name(),
             "is_commented_out": self.is_commented_out,
+            # The client's isObjectTemplate() reads this; it never re-derives it.
+            "is_template": is_template_object(self),
         }
         if self.inline_comments:
             result["inline_comments"] = self.inline_comments

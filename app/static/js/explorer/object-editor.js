@@ -41,7 +41,9 @@ export function validateRequiredFields(objectType, attributes) {
         return { valid: true, errors: [] };
     }
 
-    // Check if this is a template — matches isObjectTemplate() in constants.js
+    // Check if this is a template. These are unsaved attributes, so the
+    // server's is_template (what isObjectTemplate() reads) does not apply yet;
+    // mirrors is_template_object() in app/nagios_model.py.
     const nameField = constants.nameFields[objectType];
     const isTemplate = attributes.register === '0' ||
         Boolean(attributes.name && nameField && !attributes[nameField]);
@@ -290,6 +292,7 @@ export function syncCenterPaneAfterUndo() {
     }
     state.editedObject.display_name = obj.display_name;
     state.editedObject.source_file = obj.source_file;
+    state.editedObject.is_template = obj.is_template;
     const nameEl = document.getElementById('centerCardName');
     if (nameEl) {nameEl.textContent = obj.display_name;}
 

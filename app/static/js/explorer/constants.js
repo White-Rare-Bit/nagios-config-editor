@@ -166,14 +166,13 @@ export function applyMetadata(meta) {
 }
 
 /**
- * Detect if an object is a template.
+ * Whether an object is a template. The server decides (`is_template` on each
+ * object from /api/objects, from is_template_object() in app/nagios_model.py);
+ * the client never re-derives it, so the two cannot disagree.
  * Shared implementation — do not duplicate in other modules.
  */
 export function isObjectTemplate(obj) {
-    if (!obj || !obj.attributes) {return false;}
-    if (obj.attributes.register === '0') {return true;}
-    const nameField = constants.nameFields[obj.object_type];
-    return Boolean(obj.attributes.name && nameField && !obj.attributes[nameField]);
+    return Boolean(obj?.is_template);
 }
 
 /**
