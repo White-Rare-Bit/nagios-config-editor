@@ -13,7 +13,7 @@ import { afterFrontendMutation, loadObjects } from './data-loading.js'; // circu
 import { showCenterPaneObject, hideCenterPaneObject, checkForChanges } from './object-editor.js'; // circular — safe (function-level)
 import { getEffectiveAttributes, getEffectiveName } from './app.js'; // circular — safe (function-level)
 import { openTab, renameTabKey } from './tab-manager.js'; // circular — safe (function-level)
-import { getIcon, handleApiError, toRelativePath, toDisplayPath, toApiPathSegment, extractFileName, updateBadge, reportMoveResult } from './ui-utils.js';
+import { getIcon, handleApiError, toRelativePath, toDisplayPath, toApiPathSegment, extractFileName, rootFor, updateBadge, reportMoveResult } from './ui-utils.js';
 import { refreshPanelTiers } from './panel-resizer.js';
 import { cleanupDragState } from './drag-drop.js';
 import { buildTree, updateSelection, selectObjectByIndex } from './app.js'; // circular — safe (function-level)
@@ -275,19 +275,26 @@ function buildChangeIndicator(status) {
 // Target Pane (Right Side File Browser) - Rendering
 // ============================================================================
 
+/**
+ * One top-level node per config root (primary first). Files and folders go
+ * under the root that contains them (rootFor); a path no root contains goes
+ * under the primary root. Returns the root nodes in order.
+ */
 function buildFolderTree() {
     const filesFromObjects = state.allObjects.map(o => o.source_file);
     const files = [...new Set([...filesFromObjects, ...state.allFiles])].sort();
-    const root = { folders: {}, files: [], path: state.configPath };
+    const rootPaths = state.configRoots.length ? state.configRoots : [state.configPath];
+    const roots = rootPaths.map(path => ({ folders: {}, files: [], path }));
+    const rootByPath = new Map(roots.map(r => [r.path, r]));
 
     function ensureFolderPath(absPath) {
-        if (absPath === state.configPath) {return root;}
-        const relativePath = toRelativePath(absPath);
-        if (!relativePath) {return root;}
+        const rootPath = rootFor(absPath) || roots[0].path;
+        const rootNode = rootByPath.get(rootPath);
+        if (absPath === rootPath || !absPath.startsWith(rootPath + '/')) {return rootNode;}
 
-        const parts = relativePath.split('/').filter(p => p);
-        let current = root;
-        let currentAbsPath = state.configPath;
+        const parts = absPath.substring(rootPath.length + 1).split('/').filter(p => p);
+        let current = rootNode;
+        let currentAbsPath = rootPath;
 
         for (const part of parts) {
             currentAbsPath += '/' + part;
@@ -302,7 +309,7 @@ function buildFolderTree() {
     for (const file of files) {
         const parts = file.split('/');
         const filename = parts.pop();
-        const dir = parts.join('/') || state.configPath;
+        const dir = parts.join('/') || roots[0].path;
         ensureFolderPath(dir).files.push({ path: file, name: filename });
     }
 
@@ -310,14 +317,14 @@ function buildFolderTree() {
         ensureFolderPath(folderPath);
     }
 
-    return root;
+    return roots;
 }
 
 export function renderTargetPane() {
     const container = document.getElementById('targetPaneContent');
     updateWorkspaceHeader();
 
-    const root = buildFolderTree();
+    const roots = buildFolderTree();
 
     function countFolderObjects(folder) {
         let count = folder.files.reduce((sum, f) => {
@@ -342,8 +349,8 @@ export function renderTargetPane() {
             totalObjects += countFolderObjects(folder.folders[subName]);
         }
 
-        const canDrag = folder.path !== state.configPath;
-        const canDelete = folder.path !== state.configPath;
+        const canDrag = true;
+        const canDelete = true;
 
         const expandIcon = hasChildren ? getIcon('chevron-right') : '';
         const folderIcon = isExpanded ? getIcon('folder-open') : getIcon('folder');
@@ -431,49 +438,56 @@ export function renderTargetPane() {
         return html;
     }
 
-    // Build the tree HTML
+    // Build the tree HTML: one top-level node per config root
     let html = '';
-    const rootFolderNames = Object.keys(root.folders).sort();
-    const rootName = state.configDisplayName || extractFileName(state.configPath);
-    const isRootExpanded = state.rightTreeExpansion.has(state.configPath);
-    const isRootSelected = state.selectedFolder === state.configPath;
-    const hasRootChildren = rootFolderNames.length > 0 || root.files.length > 0;
 
-    let totalRootObjects = root.files.reduce((sum, f) => {
-        return sum + state.allObjects.filter(o => o.source_file === f.path).length;
-    }, 0);
-    for (const subName of rootFolderNames) {
-        totalRootObjects += countFolderObjects(root.folders[subName]);
-    }
+    function renderRoot(root, index) {
+        const rootFolderNames = Object.keys(root.folders).sort();
+        const rootName = index === 0 && state.configDisplayName
+            ? state.configDisplayName
+            : extractFileName(root.path);
+        const isRootExpanded = state.rightTreeExpansion.has(root.path);
+        const isRootSelected = state.selectedFolder === root.path;
+        const hasRootChildren = rootFolderNames.length > 0 || root.files.length > 0;
 
-    const rootExpandIcon = hasRootChildren ? getIcon('chevron-right') : '';
-    const rootFolderIcon = isRootExpanded ? getIcon('folder-open') : getIcon('folder');
+        let totalRootObjects = root.files.reduce((sum, f) => {
+            return sum + state.allObjects.filter(o => o.source_file === f.path).length;
+        }, 0);
+        for (const subName of rootFolderNames) {
+            totalRootObjects += countFolderObjects(root.folders[subName]);
+        }
 
-    html += `
-    <div class="workspace-tree-row workspace-tree-row--root${isRootExpanded ? ' expanded' : ''}${isRootSelected ? ' selected' : ''}" data-depth="0" data-folder="${escapeHtml(state.configPath)}"
-         onclick="Explorer.selectFolder('${escapeJs(state.configPath)}')"
-         ondragover="Explorer.handleDragExpandOver(event, '${escapeJs(state.configPath)}')"
-         ondrop="Explorer.handleFolderDrop(event, '${escapeJs(state.configPath)}')"
+        const rootExpandIcon = hasRootChildren ? getIcon('chevron-right') : '';
+        const rootFolderIcon = isRootExpanded ? getIcon('folder-open') : getIcon('folder');
+        const p = escapeJs(root.path);
+
+        let out = `
+    <div class="workspace-tree-row workspace-tree-row--root${isRootExpanded ? ' expanded' : ''}${isRootSelected ? ' selected' : ''}" data-depth="0" data-folder="${escapeHtml(root.path)}" title="${escapeHtml(root.path)}"
+         onclick="Explorer.selectFolder('${p}')"
+         ondragover="Explorer.handleDragExpandOver(event, '${p}')"
+         ondrop="Explorer.handleFolderDrop(event, '${p}')"
          ondragleave="Explorer.handleDragExpandLeave(event)">
-        <button class="tree-expand-btn${isRootExpanded ? ' expanded' : ''}" onclick="event.stopPropagation(); Explorer.toggleFolderExpand('${escapeJs(state.configPath)}')">${rootExpandIcon}</button>
+        <button class="tree-expand-btn${isRootExpanded ? ' expanded' : ''}" onclick="event.stopPropagation(); Explorer.toggleFolderExpand('${p}')">${rootExpandIcon}</button>
         <span class="tree-icon tree-icon--folder${isRootExpanded ? ' expanded' : ''}">${rootFolderIcon}</span>
         <span class="tree-label tree-label--folder tree-label--root">${escapeHtml(rootName)}</span>
         <span class="tree-count">${totalRootObjects}</span>
     </div>
     <div class="tree-children${isRootExpanded ? ' expanded with-guides' : ''}">`;
 
-    if (!hasRootChildren) {
-        html += '<div class="workspace-empty-file">No configuration files yet. Click + to create one.</div>';
-    } else {
-        for (const name of rootFolderNames) {
-            html += renderFolder(root.folders[name], name, 1);
+        if (!hasRootChildren) {
+            out += '<div class="workspace-empty-file">No configuration files yet. Click + to create one.</div>';
+        } else {
+            for (const name of rootFolderNames) {
+                out += renderFolder(root.folders[name], name, 1);
+            }
+            for (const file of root.files.sort((a, b) => a.name.localeCompare(b.name))) {
+                out += renderFileItem(file, 1);
+            }
         }
-        for (const file of root.files.sort((a, b) => a.name.localeCompare(b.name))) {
-            html += renderFileItem(file, 1);
-        }
+        return out + '</div>';
     }
 
-    html += '</div>';
+    roots.forEach((root, i) => { html += renderRoot(root, i); });
 
     container.innerHTML = html;
 
@@ -853,7 +867,7 @@ export function handleFileDragStart(event, filePath) {
 }
 
 export function handleFolderDragStart(event, folderPath) {
-    if (folderPath === state.configPath) {
+    if (state.configRoots.includes(folderPath) || folderPath === state.configPath) {
         event.preventDefault();
         return;
     }
@@ -913,8 +927,8 @@ export async function deleteFolder(folderPath, event) {
         event.stopPropagation();
     }
 
-    if (folderPath === state.configPath) {
-        showToast('Cannot delete the config root folder', 'error');
+    if (state.configRoots.includes(folderPath) || folderPath === state.configPath) {
+        showToast('Cannot delete a config root folder', 'error');
         return;
     }
 

@@ -21,7 +21,7 @@ import { initTargetPane, renderTargetPane, navigateToObjectByIndex } from './fil
 import { loadImpactAndRelationships } from './impact-section.js'; // circular — safe (function-level)
 import { cleanupDragState } from './drag-drop.js';
 import { refreshPanelTiers } from './panel-resizer.js';
-import { switchTabs, getIcon } from './ui-utils.js';
+import { switchTabs, getIcon, rootFor } from './ui-utils.js';
 import { StableKey } from '../stable-key.js';
 import { escapeHtml } from '../app.js';
 import { escapeJs } from '../base.js';
@@ -387,17 +387,28 @@ export function buildTree() {
 }
 
 export function buildFileTree(container, objects) {
+    // Group by full path: hosts/web.cfg and services/web.cfg are different files.
     const byFile = {};
     objects.forEach(obj => {
-        const file = obj.source_file.split('/').pop();
+        const file = obj.source_file;
         if (!byFile[file]) {byFile[file] = [];}
         byFile[file].push(obj);
     });
 
+    // Label: path relative to its config root, prefixed with the root's name
+    // when there are several roots (so equal relative paths stay apart).
+    const fileLabel = (file) => {
+        const root = rootFor(file);
+        if (!root) {return file.split('/').pop();}
+        const rel = file.substring(root.length + 1);
+        return state.configRoots.length > 1 ? (root.split('/').pop() || root) + '/' + rel : rel;
+    };
+
     container.innerHTML = Object.entries(byFile)
-        .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([file, objs]) => {
-            const filePath = objs[0].source_file;
+        .map(([file, objs]) => [fileLabel(file), file, objs])
+        .sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]))
+        .map(([label, file, objs]) => {
+            const filePath = file;
             const isOpen = state.leftTreeExpansion.has(filePath);
 
             const itemsHtml = objs
@@ -411,7 +422,7 @@ export function buildFileTree(container, objects) {
                      ondragover="Explorer.handleDragOver(event)" ondrop="Explorer.handleDrop(event, '${escapeJs(filePath)}')"
                      ondragleave="if(!this.contains(event.relatedTarget))this.closest('.tree-folder')?.classList.remove('drop-target')">
                     <span class="tree-folder-icon"><i class="fa-solid fa-chevron-right"></i></span>
-                    <span class="tree-folder-name">${escapeHtml(file)}</span>
+                    <span class="tree-folder-name" title="${escapeHtml(filePath)}">${escapeHtml(label)}</span>
                     <button class="tree-folder-add-btn" onclick="event.stopPropagation(); Explorer.createNewObject('${escapeJs(filePath)}')" title="Add new object">+</button>
                     <span class="tree-folder-count">${objs.length}</span>
                 </div>

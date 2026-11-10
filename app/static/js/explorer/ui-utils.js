@@ -96,6 +96,22 @@ function getConfigRootName() {
 }
 
 /**
+ * The config root a path lives in: the longest entry of state.configRoots
+ * that the path equals or starts with (followed by "/"), or null.
+ * @param {string} path - Absolute (logical) path
+ * @returns {string|null} The root path, or null when no root contains it
+ */
+export function rootFor(path) {
+    let best = null;
+    for (const root of state.configRoots || []) {
+        if (path === root || path.startsWith(root + '/')) {
+            if (best === null || root.length > best.length) {best = root;}
+        }
+    }
+    return best;
+}
+
+/**
  * Extract filename from path
  * @param {string} path - File or folder path
  * @param {string} fallback - Fallback if path is empty
