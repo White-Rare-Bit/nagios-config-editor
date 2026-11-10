@@ -9,7 +9,7 @@ import { constants } from './constants.js';
 import { getObjectKey, findObjectByKey, getSelectedIndices } from './main.js';
 import { isSelectedByIndex, clearSelection } from './state-management.js';
 import { selectObjectByIndex, updateSelection, switchRightTab, getNameFieldForObject } from './app.js'; // circular — safe (function-level)
-import { findDependencies, stageObjectDeletions } from './dialogs.js'; // circular — safe (function-level)
+import { stageObjectDeletions } from './dialogs.js'; // circular — safe (function-level)
 import { afterFrontendMutation } from './data-loading.js'; // circular — safe (function-level)
 import { showCenterPaneObject } from './object-editor.js'; // circular — safe (function-level)
 import { loadImpactAndRelationships } from './impact-section.js'; // circular — safe (function-level)
@@ -37,62 +37,6 @@ function getGroupTypeMap() {
         map[gs.member_type] = groupType;
     }
     return map;
-}
-
-/**
- * Update a comma-separated reference value, replacing oldName with newName.
- * Preserves Nagios additive (+) and exclusion (!) prefixes.
- */
-export function updateReferenceValue(value, oldName, newName) {
-    const parts = value.split(',').map(v => v.trim());
-    const updatedParts = parts.map(part => {
-        const stripped = part.replace(/^[+!]+/, '').trim();
-        if (stripped === oldName) {
-            const prefix = part.substring(0, part.indexOf(stripped));
-            return prefix + newName;
-        }
-        return part;
-    });
-    return updatedParts.join(',');
-}
-
-/**
- * Build update operations for all objects that reference the old name.
- * @param {string} oldName - The old name being replaced
- * @param {string} newName - The new name to replace with
- * @param {number} excludeIndex - global_index of the renamed object (to exclude)
- * @returns {Array} array of batch mutation operations
- */
-function buildReferenceUpdateOps(oldName, newName, excludeIndex) {
-    const deps = findDependencies(oldName);
-    const operations = [];
-
-    for (const dep of deps) {
-        const obj = dep.object;
-        if (obj.global_index === excludeIndex) {continue;}
-
-        const editedAttrs = {...obj.attributes};
-        let changed = false;
-
-        for (const fieldName of dep.fields) {
-            const currentValue = editedAttrs[fieldName] || '';
-            const updatedValue = updateReferenceValue(currentValue, oldName, newName);
-            if (updatedValue !== currentValue) {
-                editedAttrs[fieldName] = updatedValue;
-                changed = true;
-            }
-        }
-
-        if (changed) {
-            operations.push({
-                action: 'update',
-                stable_key: getObjectKey(obj),
-                attributes: editedAttrs
-            });
-        }
-    }
-
-    return operations;
 }
 
 // Context Menu
@@ -204,29 +148,7 @@ export function contextAction(action) {
 
     if (action === 'rename') {
         const obj = state.allObjects.find(o => o.global_index === state.contextTarget);
-        const currentName = getCurrentName(obj);
-
-        // Count references to this object's current name (exclude self)
-        const deps = findDependencies(currentName)
-            .filter(d => d.object.global_index !== state.contextTarget);
-        const refCount = deps.length;
-
-        let refHtml = '';
-        if (refCount > 0) {
-            refHtml = `
-                <div class="dialog-reference-option u-mt-sm">
-                    <label class="commit-reference-label">
-                        <input type="checkbox" id="renameUpdateRefs" checked>
-                        <span><strong>Update references</strong> (${refCount} reference${refCount !== 1 ? 's' : ''} in other objects)</span>
-                    </label>
-                </div>`;
-        }
-
-        showDialog('Rename', `
-            <label>New name</label>
-            <input type="text" id="renameValue" value="${escapeHtml(currentName)}">
-            ${refHtml}
-        `, applyRename);
+        showRenameDialog(obj, getCurrentName(obj));
     } else if (action === 'clone') {
         const obj = state.allObjects.find(o => o.global_index === state.contextTarget);
         const currentName = getCurrentName(obj);
@@ -498,6 +420,41 @@ export function applyBulkClone() {
     applyClone('bulk');
 }
 
+/**
+ * Open the Rename dialog. The server counts the references of the same type
+ * that a rename would update (GET /api/objects/referenced-by); objects that
+ * only `use` this one as a template are not counted, since rename leaves
+ * `use` alone.
+ */
+async function showRenameDialog(obj, currentName) {
+    const result = await ApiClient.get(
+        `/api/objects/referenced-by?key=${encodeURIComponent(getObjectKey(obj))}`,
+        { silent: true }
+    );
+    if (!result.success) {
+        showToast(`Could not count references: ${result.error}`, 'error');
+    }
+    const references = result.success ? (result.payload?.references || []) : [];
+    const refCount = references.filter(r => r.fields.some(f => f !== 'use')).length;
+
+    let refHtml = '';
+    if (refCount > 0) {
+        refHtml = `
+            <div class="dialog-reference-option u-mt-sm">
+                <label class="commit-reference-label">
+                    <input type="checkbox" id="renameUpdateRefs" checked>
+                    <span><strong>Update references</strong> (${refCount} reference${refCount !== 1 ? 's' : ''} in other objects)</span>
+                </label>
+            </div>`;
+    }
+
+    showDialog('Rename', `
+        <label>New name</label>
+        <input type="text" id="renameValue" value="${escapeHtml(currentName)}">
+        ${refHtml}
+    `, applyRename);
+}
+
 export async function applyRename() {
     const newName = document.getElementById('renameValue').value.trim();
     if (!newName) {
@@ -520,40 +477,33 @@ export async function applyRename() {
         return;
     }
 
-    // Build all operations: rename + reference updates
-    const operations = [{
-        action: 'update',
-        stable_key: getObjectKey(obj),
-        attributes: {...obj.attributes, [nameField]: newName}
-    }];
-
+    // The server renames the object and the references of the same type
+    // to it, as one undo step.
     const updateRefsCheckbox = document.getElementById('renameUpdateRefs');
-    const shouldUpdateRefs = updateRefsCheckbox ? updateRefsCheckbox.checked : false;
-    if (shouldUpdateRefs) {
-        operations.push(...buildReferenceUpdateOps(currentName, newName, state.contextTarget));
-    }
-
-    const result = await ApiClient.post('/api/batch-mutations', {
-        description: `rename ${obj.object_type} ${currentName} to ${newName}`,
-        operations
-    });
+    const result = await ApiClient.post('/api/objects/rename', {
+        renames: [{ stable_key: getObjectKey(obj), new_name: newName }],
+        update_references: updateRefsCheckbox ? updateRefsCheckbox.checked : false
+    }, { silent: true });
 
     if (!result.success) {
-        showToast(result.error || 'Failed to rename', 'error');
+        showToast(`Failed to rename: ${result.error}`, 'error');
         return;
     }
+
+    // The object's key after the rename (the name is part of it).
+    const [newKey] = result.payload.keys;
 
     state.healthCheckData = null;
     await afterFrontendMutation();
     closeDialog();
 
     if (state.editedObject && state.editedObject.global_index === state.contextTarget) {
-        showCenterPaneObject(obj);
+        showCenterPaneObject(findObjectByKey(newKey) || obj);
     } else if (state.editedObject) {
         loadImpactAndRelationships(state.editedObject);
     }
 
-    const refCount = operations.length - 1;
+    const refCount = result.payload.references_updated;
     const refMsg = refCount > 0 ? ` Updated ${refCount} reference${refCount !== 1 ? 's' : ''}.` : '';
     showToast(`Renamed successfully.${refMsg}`, 'success');
 }

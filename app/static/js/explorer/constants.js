@@ -205,14 +205,6 @@ export function getTypeBadgeTier(objectType, isTemplate, tier) {
 }
 
 /**
- * Strip Nagios additive/exclusion prefixes (+/!) from a value.
- * Shared implementation — do not duplicate in other modules.
- */
-export function stripPrefix(val) {
-    return val.trim().replace(/^[+!]+/, '').trim();
-}
-
-/**
  * Check whether a name would be a duplicate for the given object type.
  * For host-scoped types (service, serviceescalation, servicedependency),
  * uses composite key (name + host_name/hostgroup_name).

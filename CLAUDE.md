@@ -73,6 +73,7 @@ All service methods return `OperationResult(success: bool, error: str = None, da
 | `app/config_discovery.py` | Resolve config roots from nagios.cfg (cfg_dir/cfg_file directives) |
 | `app/nagios_cfg.py` | Lightweight parser for nagios.cfg and resource.cfg ($USERn$ macros) |
 | `app/inheritance.py` | Unified template inheritance resolution, chain walking, analysis |
+| `app/references.py` | Type-aware reference matching (`referenced_by`) and rewriting (`reference_edits`) for rename and the delete warning |
 
 ## Domain Metadata
 

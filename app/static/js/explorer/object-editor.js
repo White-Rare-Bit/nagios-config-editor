@@ -1,7 +1,7 @@
 /** Explorer Object Editor Module - Center pane object display, attribute editing, staging */
 
 import { state } from './state.js';
-import { constants, isObjectTemplate, stripPrefix } from './constants.js';
+import { constants, isObjectTemplate } from './constants.js';
 import { getObjectKey, findObjectByKey, parseCommaValues } from './main.js';
 import { afterFrontendMutation, getStagingHeaders } from './data-loading.js'; // circular — safe (function-level)
 import { buildLocalInheritanceChain } from './relations-loader.js'; // circular — safe (function-level)

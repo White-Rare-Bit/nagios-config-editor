@@ -1,11 +1,11 @@
 /** Explorer Dialogs Module - New object creation, deletion, bulk rename, edit attributes, validation */
 
 import { state } from './state.js';
-import { constants, stripPrefix, checkDuplicateName } from './constants.js';
+import { constants, checkDuplicateName } from './constants.js';
 import { getObjectKey, findObjectByKey } from './main.js';
 import { clearSelection } from './state-management.js';
 import { selectObjectByIndex, updateSelection, closeActionsMenu, switchRightTab, getNameFieldForObject } from './app.js'; // circular — safe (function-level)
-import { showDialog, closeDialog, hideContextMenu, updateReferenceValue } from './context-menu.js'; // circular — safe (function-level)
+import { showDialog, closeDialog, hideContextMenu } from './context-menu.js'; // circular — safe (function-level)
 import { showCenterPaneObject, renderCenterAttributes, validateRequiredFields } from './object-editor.js'; // circular — safe (function-level)
 import { loadImpactAndRelationships } from './impact-section.js'; // circular — safe (function-level)
 import { handleHostgroupServiceLink } from './analysis.js'; // circular — safe (function-level)
@@ -549,57 +549,48 @@ export function stageNewObjectChanges() {
 // ============================================================================
 
 /**
- * Find all objects that reference the given object by name
- * Uses proper reference field matching and handles +/! prefixes
+ * Objects that refer to the given object, from GET /api/objects/referenced-by.
+ * The server matches references by type (a service's description is not a
+ * reference to another service), and lists objects that `use` it as a template.
+ * @returns {Promise<{success: boolean, references: Array<{stable_key: string,
+ *   object_type: string, display_name: string, fields: string[]}>, error?: string}>}
  */
-export function findDependencies(objectName, objectType = null) {
-    const dependencies = [];
-
-    for (const obj of state.allObjects) {
-        let foundInFields = [];
-        for (const [key, value] of Object.entries(obj.attributes)) {
-            if (!value || typeof value !== 'string') {continue;}
-
-            // Check each comma-separated value, stripping prefixes
-            const values = value.split(',').map(stripPrefix).filter(v => v);
-            if (values.includes(objectName)) {
-                foundInFields.push(key);
-            }
-        }
-
-        if (foundInFields.length > 0) {
-            dependencies.push({
-                object: obj,
-                field: foundInFields.join(', '),
-                fields: foundInFields
-            });
-        }
+async function fetchReferencedBy(stableKey) {
+    const result = await ApiClient.get(
+        `/api/objects/referenced-by?key=${encodeURIComponent(stableKey)}`,
+        { silent: true }
+    );
+    if (!result.success) {
+        return { success: false, references: [], error: result.error };
     }
-    return dependencies;
+    return { success: true, references: result.payload?.references || [] };
 }
 
 export async function checkDependenciesAndDelete(stagedCreationDeletedCount = 0) {
-    // Collect all objects being deleted and their dependencies
+    // Collect all objects being deleted and the objects that refer to them
     const objectsToDelete = [];
     const allDependencies = [];
 
-    for (const key of state.selectedKeys) {
-        const obj = findObjectByKey(key);
-        if (obj) {
-            const objKey = getObjectKey(obj);
-            const objName = obj.display_name;
-            const deps = findDependencies(objName);
-            // Filter out self-references and objects also being deleted
-            const externalDeps = deps.filter(d => {
-                const depKey = getObjectKey(d.object);
-                return depKey !== objKey && !state.selectedKeys.has(depKey);
-            });
-            if (externalDeps.length > 0) {
-                objectsToDelete.push({ obj, deps: externalDeps });
-                allDependencies.push(...externalDeps);
-            }
-        }
+    const selected = Array.from(state.selectedKeys)
+        .map(key => findObjectByKey(key))
+        .filter(obj => obj);
+    const lookups = await Promise.all(selected.map(obj => fetchReferencedBy(getObjectKey(obj))));
+
+    const failed = lookups.find(l => !l.success);
+    if (failed) {
+        showToast(`Could not check references: ${failed.error}`, 'error');
     }
+
+    selected.forEach((obj, i) => {
+        // Objects also being deleted don't count (the server already leaves
+        // out the object itself)
+        const externalDeps = lookups[i].references
+            .filter(ref => !state.selectedKeys.has(ref.stable_key));
+        if (externalDeps.length > 0) {
+            objectsToDelete.push({ obj, deps: externalDeps });
+            allDependencies.push(...externalDeps);
+        }
+    });
 
     if (allDependencies.length > 0) {
         // Show warning dialog (already has confirmation built in)
@@ -645,8 +636,8 @@ export function showDeleteDependencyWarning(objectsWithDeps, onConfirm) {
     for (const { obj, deps } of objectsWithDeps) {
         for (const dep of deps) {
             // Services that lose their host/hostgroup become orphaned
-            if (dep.object.object_type === 'service' &&
-                (dep.fields?.includes('host_name') || dep.fields?.includes('hostgroup_name'))) {
+            if (dep.object_type === 'service' &&
+                (dep.fields.includes('host_name') || dep.fields.includes('hostgroup_name'))) {
                 orphanedServices.push(dep);
             } else {
                 brokenReferences.push(dep);
@@ -661,7 +652,7 @@ export function showDeleteDependencyWarning(objectsWithDeps, onConfirm) {
     if (orphanedServices.length > 0) {
         let orphanList = '';
         for (const dep of orphanedServices.slice(0, 5)) {
-            orphanList += `<li>${escapeHtml(dep.object.display_name)}</li>`;
+            orphanList += `<li>${escapeHtml(dep.display_name)}</li>`;
         }
         if (orphanedServices.length > 5) {
             orphanList += `<li class="dialog-detail-more">... and ${orphanedServices.length - 5} more</li>`;
@@ -676,8 +667,8 @@ export function showDeleteDependencyWarning(objectsWithDeps, onConfirm) {
     let nonOrphanHtml = '';
     for (const { obj, deps } of objectsWithDeps) {
         const nonOrphanDeps = deps.filter(d =>
-            !(d.object.object_type === 'service' &&
-              (d.fields?.includes('host_name') || d.fields?.includes('hostgroup_name')))
+            !(d.object_type === 'service' &&
+              (d.fields.includes('host_name') || d.fields.includes('hostgroup_name')))
         );
 
         if (nonOrphanDeps.length === 0) {continue;}
@@ -688,7 +679,7 @@ export function showDeleteDependencyWarning(objectsWithDeps, onConfirm) {
                 <ul>
         `;
         for (const dep of nonOrphanDeps.slice(0, 5)) {
-            nonOrphanHtml += `<li>${escapeHtml(dep.object.object_type)} "${escapeHtml(dep.object.display_name)}" (${escapeHtml(dep.field)})</li>`;
+            nonOrphanHtml += `<li>${escapeHtml(dep.object_type)} "${escapeHtml(dep.display_name)}" (${escapeHtml(dep.fields.join(', '))})</li>`;
         }
         if (nonOrphanDeps.length > 5) {
             nonOrphanHtml += `<li class="dialog-detail-more">... and ${nonOrphanDeps.length - 5} more</li>`;
@@ -807,51 +798,8 @@ export async function executeObjectDeletions(stagedCreationDeletedCount = 0) {
 // Bulk Operations Dialogs
 // ============================================================================
 
-/**
- * Compute reference update operations for a batch of renames, excluding
- * renamed objects from each other's reference scans.
- * @param {Array<{oldName: string, newName: string, key: string}>} renames
- * @returns {Array} batch mutation operations
- */
-function computeBulkReferenceUpdates(renames) {
-    const allRenamedKeys = new Set(renames.map(r => r.key));
-    const refUpdates = new Map();
-
-    for (const { oldName, newName } of renames) {
-        const deps = findDependencies(oldName)
-            .filter(d => !allRenamedKeys.has(getObjectKey(d.object)));
-
-        for (const dep of deps) {
-            const depKey = getObjectKey(dep.object);
-            const existing = refUpdates.get(depKey);
-            const editedAttrs = existing ? {...existing.attributes} : {...dep.object.attributes};
-            let changed = false;
-
-            for (const fieldName of dep.fields) {
-                const currentValue = editedAttrs[fieldName] || '';
-                const updatedValue = updateReferenceValue(currentValue, oldName, newName);
-                if (updatedValue !== currentValue) {
-                    editedAttrs[fieldName] = updatedValue;
-                    changed = true;
-                }
-            }
-
-            if (changed) {
-                refUpdates.set(depKey, {
-                    action: 'update',
-                    stable_key: depKey,
-                    attributes: editedAttrs
-                });
-            }
-        }
-    }
-
-    return Array.from(refUpdates.values());
-}
-
 async function executeBulkRename(find, replace, shouldUpdateRefs) {
     const renames = [];
-    const operations = [];
     let centerPaneNeedsRefresh = false;
 
     for (const key of state.selectedKeys) {
@@ -864,14 +812,7 @@ async function executeBulkRename(find, replace, shouldUpdateRefs) {
         const newName = currentName.split(find).join(replace);
 
         if (newName !== currentName) {
-            const editedAttrs = {...obj.attributes};
-            editedAttrs[nameField] = newName;
-            operations.push({
-                action: 'update',
-                stable_key: objKey,
-                attributes: editedAttrs
-            });
-            renames.push({ oldName: currentName, newName, key: objKey });
+            renames.push({ stable_key: objKey, new_name: newName });
 
             if (state.editedObject && getObjectKey(state.editedObject) === objKey) {
                 centerPaneNeedsRefresh = true;
@@ -879,43 +820,44 @@ async function executeBulkRename(find, replace, shouldUpdateRefs) {
         }
     }
 
-    let totalRefUpdates = 0;
-    if (shouldUpdateRefs && renames.length > 0) {
-        const refOps = computeBulkReferenceUpdates(renames);
-        totalRefUpdates = refOps.length;
-        operations.push(...refOps);
-    }
-
-    if (operations.length === 0) {
+    if (renames.length === 0) {
         closeDialog();
         showToast('No matches found', 'warning');
         return;
     }
 
-    const result = await ApiClient.post('/api/batch-mutations', {
-        description: `bulk rename ${renames.length} objects`,
-        operations
-    });
+    // One request for all renames: the server finds the references of the
+    // same type to every renamed object at once, leaves the renamed objects
+    // out of each other's reference updates, and makes it one undo step.
+    const result = await ApiClient.post('/api/objects/rename', {
+        renames,
+        update_references: shouldUpdateRefs
+    }, { silent: true });
 
     closeDialog();
 
     if (!result.success) {
-        showToast(result.error || 'Failed to apply renames', 'error');
+        showToast(`Failed to apply renames: ${result.error}`, 'error');
         afterFrontendMutation();
         return;
     }
 
+    // New key of each renamed object, in the order of `renames`.
+    const newKeys = result.payload.keys;
+
     state.healthCheckData = null;
-    afterFrontendMutation();
+    await afterFrontendMutation();
 
     if (centerPaneNeedsRefresh && state.editedObject) {
         const editedKey = getObjectKey(state.editedObject);
-        const obj = findObjectByKey(editedKey);
+        const renamedAt = renames.findIndex(r => r.stable_key === editedKey);
+        const obj = findObjectByKey(renamedAt >= 0 ? newKeys[renamedAt] : editedKey);
         if (obj) {showCenterPaneObject(obj);}
-    } else if (state.editedObject && renames.length > 0) {
+    } else if (state.editedObject) {
         loadImpactAndRelationships(state.editedObject);
     }
 
+    const totalRefUpdates = result.payload.references_updated;
     const refMsg = totalRefUpdates > 0 ? ` Updated ${totalRefUpdates} reference${totalRefUpdates !== 1 ? 's' : ''}.` : '';
     showToast(`Renamed ${renames.length} object(s).${refMsg}`, 'success');
 }

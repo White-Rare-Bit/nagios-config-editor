@@ -9,7 +9,9 @@ import uuid
 
 from flask import Blueprint, jsonify, request
 
-from ..stable_keys import generate_stable_key, stable_key_after_edit
+from ..nagios_model import NAME_FIELDS
+from ..references import name_field, reference_edits, referenced_by
+from ..stable_keys import generate_stable_key, generate_stable_key_for_object, stable_key_after_edit
 from .helpers import get_service, operation_response
 from .mutation import ApiError, staged_mutation
 
@@ -99,6 +101,155 @@ def api_update_object():
         "success": True,
         "stable_key": stable_key_after_edit(obj.source_file, obj.object_type, new_attrs),
     })
+
+
+def _parse_renames(data: dict) -> list[tuple[str, str]]:
+    """Validate a rename request body into [(stable_key, new_name)]."""
+    renames = data.get("renames")
+    if not isinstance(renames, list) or not renames:
+        raise ApiError("renames required")
+    parsed = []
+    for entry in renames:
+        if not isinstance(entry, dict) or not entry.get("stable_key"):
+            raise ApiError("each rename needs a stable_key")
+        new_name = str(entry.get("new_name") or "").strip()
+        if not new_name:
+            raise ApiError("new_name required")
+        # A comma would split the name in every list that refers to it, and
+        # a line break would end the attribute line in the config file.
+        if "," in new_name or any(ord(c) < 32 for c in new_name):  # noqa: PLR2004
+            raise ApiError(f"Invalid name: {new_name!r}")
+        parsed.append((entry["stable_key"], new_name))
+    if len({key for key, _ in parsed}) != len(parsed):
+        raise ApiError("Each object can be renamed only once per request")
+    return parsed
+
+
+@bp.route("/api/objects/rename", methods=["POST"])
+def api_rename_objects():
+    """Rename objects and, optionally, the references to them, as one undo step.
+
+    Expects JSON:
+    - renames: [{stable_key, new_name}, ...]
+    - update_references: (default true) also rewrite references of the same
+      type (see app/references.py). Renamed objects are never edited as
+      references to each other.
+
+    Returns keys (each renamed object's new stable key, in request order) and
+    references_updated (number of referencing objects changed). If any write
+    fails, everything this request changed is undone (409).
+    """
+    data = request.get_json() or {}
+    requested = _parse_renames(data)
+    update_references = data.get("update_references", True) is not False
+
+    with staged_mutation() as m:
+        renames = []  # (obj, field, old, new)
+        keys = []
+        for key, new_name in requested:
+            obj = m.require(key)
+            if obj.object_type not in NAME_FIELDS:
+                raise ApiError(f"{obj.object_type} objects cannot be renamed")
+            field = name_field(obj)
+            if field is None:
+                raise ApiError(
+                    f"{obj.object_type} {obj.get_display_name()} has no "
+                    f"{NAME_FIELDS[obj.object_type]} to rename",
+                )
+            old_name = obj.attributes[field].strip()
+            new_attrs = {**obj.attributes, field: new_name}
+            keys.append(stable_key_after_edit(obj.source_file, obj.object_type, new_attrs))
+            if new_name != old_name:
+                renames.append((obj, field, old_name, new_name))
+
+        if not renames:
+            return jsonify({"success": True, "keys": keys, "references_updated": 0})
+
+        ref_edits = []
+        if update_references:
+            ref_edits = reference_edits(
+                m.service.get_objects(),
+                [(obj, new) for obj, _, _, new in renames],
+                exclude={id(obj) for obj, *_ in renames},
+            )
+
+        # (obj, new attributes) for every object this request writes
+        writes = [(obj, {**obj.attributes, field: new}) for obj, field, _, new in renames]
+        writes += ref_edits
+
+        if len(renames) == 1:
+            obj, _, old_name, new_name = renames[0]
+            description = f"rename {obj.object_type} {old_name} to {new_name}"
+        else:
+            description = f"rename {len(renames)} objects"
+        m.snapshot({obj.source_file for obj, _ in writes}, description)
+
+        # Bottom-up within each file, so a block that changes length does not
+        # move the blocks still to be written (their line numbers are from
+        # before the first write).
+        writes.sort(key=lambda w: (w[0].source_file, -w[0].line_number))
+        errors = []
+        for obj, attrs in writes:
+            result = m.service.update_object(
+                obj.source_file, obj.line_number, attrs, obj.object_type,
+                inline_comments=obj.inline_comments,
+            )
+            if not result.success:
+                errors.append(f"{obj.object_type} {obj.get_display_name()}: {result.error}")
+                break
+
+        # All-or-nothing, like /api/batch-mutations: undo everything this
+        # request wrote. 409: the rename conflicts with the current config.
+        if errors:
+            outcome = {"description": description, "error": errors[0]}
+            try:
+                m.rollback()
+            except ApiError as exc:
+                # Undo failed: the shadow may be half-written. Audit that too.
+                m.audit("rename_rollback", rollback_failed=exc.message, **outcome)
+                raise
+            m.audit("rename_rollback", **outcome)
+            raise ApiError(f"Rename failed: {errors[0]}", 409, errors=errors)
+
+        txn = uuid.uuid4().hex[:8]
+        for obj, attrs in writes:
+            audit_attribute_changes(
+                m, obj.object_type, obj.get_display_name(), obj.source_file,
+                obj.attributes, attrs, txn,
+            )
+
+    return jsonify({"success": True, "keys": keys, "references_updated": len(ref_edits)})
+
+
+@bp.route("/api/objects/referenced-by")
+def api_referenced_by():
+    """Objects that refer to the object with the given stable key.
+
+    Query: key=<stable_key>. Uses the same type-aware matching as rename
+    (app/references.py), plus objects that ``use`` it as a template (field
+    "use"), since deleting a template breaks those too. The object itself is
+    not listed.
+    """
+    stable_key = request.args.get("key")
+    if not stable_key:
+        raise ApiError("key required")
+    service = get_service()
+    found = service.find_object_by_stable_key(stable_key)
+    if not found:
+        raise ApiError(f"Object not found: {stable_key}", 404)
+    target = found[1]
+    references = [
+        {
+            "stable_key": generate_stable_key_for_object(obj),
+            "object_type": obj.object_type,
+            "display_name": obj.get_display_name(),
+            "fields": fields,
+        }
+        for obj, fields in referenced_by(
+            service.get_objects(), target, include_template_uses=True,
+        )
+    ]
+    return jsonify({"success": True, "references": references})
 
 
 @bp.route("/api/objects/create", methods=["POST"])
