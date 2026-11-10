@@ -809,7 +809,6 @@ export function selectAllVisible() {
         if (!isNaN(idx)) {selectObjectByIndex(idx);}
     });
     updateSelection();
-    showToast(`Selected ${state.selectedKeys.size} objects`, 'info');
 }
 
 export function selectByType() {
@@ -836,7 +835,6 @@ export function selectByType() {
         });
         updateSelection();
         closeDialog();
-        showToast(`Selected ${state.selectedKeys.size} ${type} objects`, 'info');
     });
 
     // Select first item by default
@@ -870,7 +868,6 @@ export function selectByPattern() {
             });
             updateSelection();
             closeDialog();
-            showToast(`Selected ${state.selectedKeys.size} matching objects`, 'info');
         } catch (e) {
             showToast('Invalid regex pattern', 'error');
         }

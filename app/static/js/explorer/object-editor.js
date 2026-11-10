@@ -864,7 +864,7 @@ export function selectAttrAutocomplete(attrKey, value) {
     const row = document.querySelector(`[data-attr="${attrKey}"]`);
     if (!row) {return;}
 
-    const input = row.querySelector('input');
+    const input = row.querySelector('input, textarea');
     if (!input) {return;}
 
     // For notification options, extract just the short code (e.g., "d" from "d - Down")

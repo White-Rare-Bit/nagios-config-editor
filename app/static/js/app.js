@@ -174,7 +174,7 @@ export async function copyToClipboard(text) {
 
 export function handleGlobalKeydown(e) {
     // Ctrl/Cmd + R: Reload config (prevent browser refresh)
-    if ((e.ctrlKey || e.metaKey) && e.key === 'r' && e.shiftKey) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r' && e.shiftKey) {
         e.preventDefault();
         reloadConfig();
     }

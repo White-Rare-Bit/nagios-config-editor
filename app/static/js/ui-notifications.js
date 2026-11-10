@@ -14,32 +14,9 @@ import { escapeHtml } from './app.js'; // circular
  * @param {string} message - Message to display
  * @param {string} [type='info'] - Type: 'success', 'error', 'warning', 'info'
  * @param {number} [duration=3000] - Duration in ms (0 = permanent)
- * @returns {HTMLElement|null} The toast element, or null if filtered
+ * @returns {HTMLElement|null} The toast element
  */
 export function showToast(message, type = 'info', duration = 3000) {
-    const lowerMessage = message.toLowerCase();
-
-    const isImportantMessage = lowerMessage.includes('discarded') ||
-                               lowerMessage.includes('committed') ||
-                               lowerMessage.includes('valid') ||
-                               lowerMessage.includes('restored') ||
-                               lowerMessage.includes('cleared') ||
-                               lowerMessage.includes('wiped') ||
-                               lowerMessage.includes('configure') ||
-                               lowerMessage.includes('settings') ||
-                               lowerMessage.includes('already exists') ||
-                               lowerMessage.includes('duplicate') ||
-                               lowerMessage.includes('cannot contain');
-
-    // Always show error and warning messages - they indicate something user should know
-    if (type === 'error' || type === 'warning') {
-        // Allow through
-    } else if (type === 'info' || type === 'success') {
-        if (!isImportantMessage) {
-            return null;
-        }
-    }
-
     const container = document.getElementById('toastContainer');
     const icons = {
         success: '<i class="fa-solid fa-check"></i>',

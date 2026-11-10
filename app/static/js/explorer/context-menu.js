@@ -572,10 +572,10 @@ export function toggleNewFileInput() {
     const select = document.getElementById('moveTarget');
     const wrapper = document.getElementById('newFileInputWrapper');
     if (select.value === '__new__') {
-        wrapper.style.display = 'block';
+        wrapper.classList.remove('u-hidden');
         document.getElementById('newFileName').focus();
     } else {
-        wrapper.style.display = 'none';
+        wrapper.classList.add('u-hidden');
     }
 }
 
