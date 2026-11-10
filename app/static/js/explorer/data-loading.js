@@ -38,6 +38,10 @@ function triggerAnalysisUpdate() {
 // Data Loading
 // =============================================================================
 
+// Failed reloads can repeat (polling, parallel callers); toast at most once per 10 s.
+const LOAD_ERROR_TOAST_INTERVAL_MS = 10000;
+let lastLoadErrorToast = 0;
+
 /**
  * Load objects, files, and metadata from backend.
  * Metadata is fetched once (first load) and cached via metadataLoaded flag.
@@ -51,6 +55,17 @@ export async function loadObjects() {
             ? Promise.resolve(null)
             : ApiClient.get('/api/metadata', { silent: true })
     ]);
+
+    if (!objectsResult.success) {
+        // Keep what is on screen: emptying allObjects would blank the tree and
+        // validateTabs() would close every tab.
+        const now = Date.now();
+        if (now - lastLoadErrorToast > LOAD_ERROR_TOAST_INTERVAL_MS) {
+            lastLoadErrorToast = now;
+            showToast(`Could not load objects: ${objectsResult.error || 'unknown error'}`, 'error');
+        }
+        return;
+    }
 
     state.allObjects = objectsResult.data || [];
     state.allFiles = filesResult.data?.files || [];

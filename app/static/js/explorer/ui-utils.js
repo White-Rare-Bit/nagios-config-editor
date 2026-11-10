@@ -159,6 +159,27 @@ export function toDisplayPath(path) {
 // =============================================================================
 
 /**
+ * Report the outcome of POST /api/move-objects (called with silent: true).
+ * Success toast only when something moved; a server error is toasted as an
+ * error even on a partial failure (HTTP 500 with moved/skipped); objects that
+ * no longer exist produce a warning.
+ * @returns {number} how many objects were moved
+ */
+export function reportMoveResult(result, targetName) {
+    const moved = result.data?.moved || 0;
+    const notFound = result.data?.not_found || 0;
+    if (!result.success) {
+        showToast(result.error || result.data?.error || 'Move failed', 'error');
+    } else if (moved > 0) {
+        showToast(`Moved ${moved} object(s) to ${targetName}`, 'success');
+    }
+    if (result.success && notFound > 0) {
+        showToast(`${notFound} object(s) were not found; reload and try again`, 'warning');
+    }
+    return moved;
+}
+
+/**
  * Centralized API error handler
  * @param {string} context - Description of what operation failed
  * @param {string} error - Error message

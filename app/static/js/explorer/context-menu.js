@@ -17,6 +17,7 @@ import { loadImpactAndRelationships } from './impact-section.js'; // circular â€
 import { cleanupDragState } from './drag-drop.js';
 import { ApiClient, apiUrl } from '../api-client.js';
 import { showToast } from '../ui-notifications.js';
+import { reportMoveResult } from './ui-utils.js';
 import { escapeHtml } from '../app.js';
 import { escapeJs } from '../base.js';
 import { baseState } from '../base-state.js';
@@ -414,10 +415,8 @@ export async function applyMove() {
     await afterFrontendMutation();
     closeDialog();
 
-    if (result.success && result.data?.moved > 0) {
-        showToast(`Moved ${result.data.moved} object(s) to ${targetFile.split('/').pop()}`, 'success');
-    } else {
-        showToast(result.error || result.data?.error || 'No objects moved', result.success ? 'info' : 'error');
+    if (reportMoveResult(result, targetFile.split('/').pop()) === 0 && result.success && !result.data?.not_found) {
+        showToast('No objects moved', 'info');
     }
 }
 
@@ -609,12 +608,17 @@ export async function applyBulkAttribute() {
         return;
     }
 
-    await ApiClient.post('/api/batch-mutations', {
+    const result = await ApiClient.post('/api/batch-mutations', {
         description: `bulk set ${name} on ${operations.length} objects`,
         operations
     }, { silent: true });
 
     await afterFrontendMutation();
+    if (!result.success) {
+        // All-or-nothing: nothing changed. Keep the dialog open.
+        showToast(result.error || 'Could not set attribute', 'error');
+        return;
+    }
     closeDialog();
     showToast(`Attribute set on ${operations.length} object(s)`, 'success');
 }
@@ -798,12 +802,17 @@ export async function addToGroup(groupName) {
         return;
     }
 
-    await ApiClient.post('/api/batch-mutations', {
+    const result = await ApiClient.post('/api/batch-mutations', {
         description: `add group ${groupName} to ${operations.length} objects`,
         operations
     }, { silent: true });
 
     await afterFrontendMutation();
+
+    if (!result.success) {
+        showToast(result.error || 'Could not add to group', 'error');
+        return;
+    }
 
     if (state.editedObject) {
         showCenterPaneObject(state.editedObject);
@@ -935,9 +944,9 @@ export async function handleDrop(event, targetFile) {
         target_file: targetFile
     }, { silent: true });
 
-    if (result.success && result.data?.moved > 0) {
+    const moved = reportMoveResult(result, targetFile.split('/').pop());
+    if (moved > 0 || !result.success) {
         await afterFrontendMutation();
-        showToast(`Moved ${result.data.moved} object(s) to ${targetFile.split('/').pop()}`, 'success');
     }
 }
 

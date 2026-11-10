@@ -770,7 +770,7 @@ export async function executeObjectDeletions(stagedCreationDeletedCount = 0) {
     if (stableKeys.length > 0) {
         const result = await ApiClient.post('/api/objects/delete-multiple', {
             stable_keys: stableKeys,
-        });
+        }, { silent: true });
 
         if (!result.success) {
             showToast(result.data?.error || result.error || 'Failed to delete objects', 'error');
@@ -1019,7 +1019,7 @@ async function executeBulkEditAction(scope, sortedFields) {
         const result = await ApiClient.post('/api/batch-mutations', {
             description: `bulk ${ACTION_DESCS[action] || action} on ${operations.length} objects`,
             operations
-        });
+        }, { silent: true });
         if (!result.success) {
             showToast(result.error || 'Failed to apply edits', 'error');
             closeDialog();

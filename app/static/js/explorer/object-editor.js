@@ -1264,7 +1264,11 @@ export async function stageCurrentChanges() {
         // are looked up by key, so wait for it.
         if (state.editedObject) {loadImpactAndRelationships(state.editedObject);}
     } else {
-        showToast(result.data?.error || 'Failed to save changes', 'error');
+        // Put the saved values back so the editor doesn't look saved.
+        state.editedObject.attributes = {...state.originalAttributes};
+        renderCenterAttributes();
+        checkForChanges();
+        showToast(result.error || result.data?.error || 'Failed to save changes', 'error');
     }
 }
 

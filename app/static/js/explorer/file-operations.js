@@ -13,7 +13,7 @@ import { afterFrontendMutation, loadObjects, getStagingHeaders } from './data-lo
 import { showCenterPaneObject, hideCenterPaneObject, checkForChanges } from './object-editor.js'; // circular — safe (function-level)
 import { getEffectiveAttributes, getEffectiveName } from './app.js'; // circular — safe (function-level)
 import { openTab, renameTabKey } from './tab-manager.js'; // circular — safe (function-level)
-import { getIcon, handleApiError, toRelativePath, toDisplayPath, toApiPathSegment, extractFileName, updateBadge } from './ui-utils.js';
+import { getIcon, handleApiError, toRelativePath, toDisplayPath, toApiPathSegment, extractFileName, updateBadge, reportMoveResult } from './ui-utils.js';
 import { refreshPanelTiers } from './panel-resizer.js';
 import { cleanupDragState } from './drag-drop.js';
 import { buildTree, updateSelection, selectObjectByIndex } from './app.js'; // circular — safe (function-level)
@@ -606,9 +606,8 @@ export async function handleObjectDrop(event, targetFile, position) {
 
     const result = await ApiClient.post('/api/move-objects', payload, { silent: true });
 
-    let moved = 0;
-    if (result.success && result.data?.moved > 0) {
-        moved = result.data.moved;
+    const moved = reportMoveResult(result, extractFileName(targetFile));
+    if (moved > 0) {
         for (const o of valid) {
             if (o.source_file !== targetFile) {
                 migrateKeysAfterMove(o, targetFile);
@@ -618,8 +617,9 @@ export async function handleObjectDrop(event, targetFile, position) {
 
     if (moved > 0) {
         state.rightTreeExpansion.add(targetFile);
+    }
+    if (moved > 0 || !result.success) {
         await afterFrontendMutation();
-        showToast(`Moved ${moved} object(s) to ${extractFileName(targetFile)}`, 'success');
     }
 }
 
@@ -654,7 +654,8 @@ export async function handleFileDrop(event, targetFile) {
         target_file: targetFile
     }, { silent: true });
 
-    if (result.success && result.data?.moved > 0) {
+    const moved = reportMoveResult(result, extractFileName(targetFile));
+    if (moved > 0) {
         for (const o of objects) {
             if (o?.source_file && o.source_file !== targetFile) {
                 migrateKeysAfterMove(o, targetFile);
@@ -662,7 +663,8 @@ export async function handleFileDrop(event, targetFile) {
         }
         await afterFrontendMutation();
         scrollTargetFileIntoView(targetFile);
-        showToast(`Moved ${result.data.moved} object(s) to ${extractFileName(targetFile)}`, 'success');
+    } else if (!result.success) {
+        await afterFrontendMutation();
     }
 }
 
@@ -815,7 +817,8 @@ async function handleObjectsOnFolderDrop(data, targetFolder) {
         target_file: targetFile
     }, { silent: true });
 
-    if (result.success && result.data?.moved > 0) {
+    const moved = reportMoveResult(result, extractFileName(targetFile));
+    if (moved > 0) {
         for (const o of objects) {
             if (o?.source_file && o.source_file !== targetFile) {
                 migrateKeysAfterMove(o, targetFile);
@@ -825,7 +828,8 @@ async function handleObjectsOnFolderDrop(data, targetFolder) {
         state.rightTreeExpansion.add(targetFolder);
         await afterFrontendMutation();
         scrollTargetFileIntoView(targetFile);
-        showToast(`Moved ${result.data.moved} object(s) to ${extractFileName(targetFile)}`, 'success');
+    } else if (!result.success) {
+        await afterFrontendMutation();
     }
 }
 
