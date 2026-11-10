@@ -26,16 +26,8 @@ const VIEWPORT_PADDING = 10;
 // C-01: Derive group maps from constants.groupStructure (populated by /api/metadata)
 function getGroupAttrMap() {
     const map = {};
-    for (const [groupType, gs] of Object.entries(constants.groupStructure || {})) {
+    for (const gs of Object.values(constants.groupStructure || {})) {
         map[gs.member_type] = gs.member_of_attr;
-    }
-    return map;
-}
-
-function getGroupTypeMap() {
-    const map = {};
-    for (const [groupType, gs] of Object.entries(constants.groupStructure || {})) {
-        map[gs.member_type] = groupType;
     }
     return map;
 }
@@ -938,7 +930,7 @@ export function handleDragStart(event, index) {
     switchRightTab('files');
 }
 
-export function handleDragEnd(event) {
+export function handleDragEnd(_event) {
     cleanupDragState();
     // Apply visual selection after drag completes (deferred from handleDragStart
     // to avoid layout changes that cancel the drag operation).

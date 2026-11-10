@@ -186,7 +186,7 @@ export function filterTemplateSuggestions() {
         return;
     }
 
-    container.innerHTML = filtered.map((s, idx) => `
+    container.innerHTML = filtered.map((s) => `
         <div class="template-suggestion" onclick="Explorer.showCreateTemplateDialog(${state.allTemplateSuggestions.indexOf(s)})">
             <div class="template-suggestion-icon"><i class="fa-solid fa-cube"></i></div>
             <div class="template-suggestion-content">
@@ -272,7 +272,7 @@ export function filterGroupingSuggestions() {
         return;
     }
 
-    container.innerHTML = filtered.map((s, idx) => `
+    container.innerHTML = filtered.map((s) => `
         <div class="suggestion-item" onclick="Explorer.showCreateGroupDialog(${state.allGroupingSuggestions.indexOf(s)})">
             <div class="suggestion-header">
                 <span class="suggestion-name">${escapeHtml(s.name)}</span>

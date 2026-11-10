@@ -155,7 +155,7 @@ export async function copyToClipboard(text) {
         try {
             document.execCommand('copy');
             return true;
-        } catch (err) {
+        } catch {
             return false;
         } finally {
             textArea.remove();

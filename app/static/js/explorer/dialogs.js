@@ -93,36 +93,16 @@ export function dialogEntryList(entries) {
     return `<div class="dialog-entry-list">${items}</div>`;
 }
 
-/**
- * Build HTML for a scrollable list of items
- * @param {Array<{title: string, items: string[]}>} sections - Sections with title and items
- * @param {number} [maxItems=5] - Max items to show before "and X more"
- * @returns {string} HTML string
- */
-function buildScrollableList(sections, maxItems = 5) {
-    let html = '';
-    for (const section of sections) {
-        if (!section.items || section.items.length === 0) {continue;}
-        html += `<div class="dialog-detail-item"><strong>${escapeHtml(section.title)}</strong><ul>`;
-        const displayItems = section.items.slice(0, maxItems);
-        for (const item of displayItems) {
-            html += `<li>${item}</li>`; // Items may contain HTML
-        }
-        if (section.items.length > maxItems) {
-            html += `<li class="dialog-detail-more">... and ${section.items.length - maxItems} more</li>`;
-        }
-        html += '</ul></div>';
-    }
-    return html ? `<div class="dialog-scrollable-list">${html}</div>` : '';
-}
-
 // ============================================================================
 // New Object Creation
 // ============================================================================
 
 export function createNewObject(targetFile) {
     const defaultType = getDominantTypeForFile(targetFile);
-    const singularize = (s) => s.endsWith('ies') ? s.slice(0, -3) + 'y' : s.endsWith('s') ? s.slice(0, -1) : s;
+    const singularize = (s) => {
+        if (s.endsWith('ies')) {return s.slice(0, -3) + 'y';}
+        return s.endsWith('s') ? s.slice(0, -1) : s;
+    };
     const typeOptions = Object.entries(constants.typeLabels)
         .map(([type, label]) => `<option value="${type}"${type === defaultType ? ' selected' : ''}>${escapeHtml(singularize(label))}</option>`)
         .join('');
@@ -307,7 +287,7 @@ export function showDeleteDependencyWarning(objectsWithDeps, onConfirm) {
     const orphanedServices = [];
     const brokenReferences = [];
 
-    for (const { obj, deps } of objectsWithDeps) {
+    for (const { deps } of objectsWithDeps) {
         for (const dep of deps) {
             // Services that lose their host/hostgroup become orphaned
             if (dep.object_type === 'service' &&
@@ -703,7 +683,6 @@ export function showEditAttributesDialog() {
     for (const key of scope) {
         const obj = findObjectByKey(key);
         if (!obj) {continue;}
-        const objKey = getObjectKey(obj);
         const attrs = obj.attributes;
         Object.keys(attrs).forEach(k => availableFields.add(k));
     }

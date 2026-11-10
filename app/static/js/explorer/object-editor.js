@@ -363,7 +363,7 @@ function getOptionSuggestions(attrName, objectType) {
 }
 
 // Shadow copy: objects are deleted immediately via API, never "staged for deletion"
-function isObjectStagedForDeletion(obj) {
+function isObjectStagedForDeletion(_obj) {
     return false;
 }
 
@@ -855,7 +855,7 @@ export function showAutocompleteDropdown(input, suggestions, attrKey, options = 
     row.appendChild(dropdown);
 }
 
-export function hideAttrAutocomplete(event) {
+export function hideAttrAutocomplete(_event) {
     hideAutocompleteDropdown('.attr-autocomplete', () => {
         state.currentAutocompleteKey = null;
         state.highlightedIndex = -1;

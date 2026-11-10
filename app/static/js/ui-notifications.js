@@ -131,8 +131,9 @@ export function showConfirmDialog(options = {}) {
                 const buttons = showCancel ? [confirmBtn, cancelBtn] : [confirmBtn];
                 const idx = buttons.indexOf(document.activeElement);
                 const step = e.shiftKey ? -1 : 1;
-                const next = idx === -1 ? (e.shiftKey ? buttons.length - 1 : 0)
-                    : (idx + step + buttons.length) % buttons.length;
+                // Nothing focused yet: Tab goes to the first, Shift+Tab to the last.
+                let next = (idx + step + buttons.length) % buttons.length;
+                if (idx === -1) {next = e.shiftKey ? buttons.length - 1 : 0;}
                 buttons[next].focus();
             }
         }

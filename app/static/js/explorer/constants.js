@@ -5,7 +5,6 @@
  * Fallback defaults ensure the explorer works if metadata hasn't loaded yet.
  */
 
-import { state } from './state.js';
 
 // Identity fields are UI-only (not in backend model) — keep hardcoded
 const IDENTITY_FIELDS = {
@@ -214,43 +213,4 @@ export function getTypeBadgeTier(objectType, isTemplate, tier) {
         return c.typeBadgeTiers[objectType][tier] || c.typeBadges[objectType] || objectType;
     }
     return objectType;
-}
-
-/**
- * Check whether a name would be a duplicate for the given object type.
- * For host-scoped types (service, serviceescalation, servicedependency),
- * uses composite key (name + host_name/hostgroup_name).
- *
- * @param {string} objectType - e.g. 'host', 'service'
- * @param {string} name - the name value to check
- * @param {Object} attributes - full attributes of the object being checked
- * @returns {{isDuplicate: boolean, location: string}} result
- */
-export function checkDuplicateName(objectType, name, attributes) {
-    if (!name) {return {isDuplicate: false, location: ''};}
-
-    const c = constants;
-    const nameField = c.nameFields[objectType] || 'name';
-    const isHostScoped = constants.hostScopedTypes.has(objectType);
-    const hostScope = isHostScoped
-        ? (attributes.host_name || attributes.hostgroup_name || '')
-        : '';
-
-    // Check against existing on-disk objects
-    const existingObj = state.allObjects.find(obj => {
-        if (obj.object_type !== objectType) {return false;}
-        const objName = obj.attributes?.[nameField] || obj.attributes?.name || '';
-        if (objName !== name) {return false;}
-        if (isHostScoped) {
-            const objHost = obj.attributes?.host_name || obj.attributes?.hostgroup_name || '';
-            return objHost === hostScope;
-        }
-        return true;
-    });
-    if (existingObj) {
-        const file = (existingObj.source_file || '').split('/').pop();
-        return {isDuplicate: true, location: file};
-    }
-
-    return {isDuplicate: false, location: ''};
 }

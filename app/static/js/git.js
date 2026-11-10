@@ -26,7 +26,6 @@ function buildEmptyState(title, message, icon = 'fa-folder-open') {
 let gitStatus = null;
 let selectedGitFile = null;
 let gitHistory = null;
-let currentTab = 'changes';
 
 // History sort state
 let historySortColumn = 'date';
@@ -310,7 +309,6 @@ function showGitClearHistoryResultPanel(success, result) {
 function switchGitTab(tab) {
     // Only allow 'changes' or 'history' tabs
     const activeTab = (tab === 'changes' || tab === 'history') ? tab : 'changes';
-    currentTab = activeTab;
 
     // Persist tab selection
     localStorage.setItem('gitPageTab', activeTab);
@@ -326,14 +324,6 @@ function switchGitTab(tab) {
     // Load data if needed
     if (activeTab === 'history' && gitHistory === null) {
         loadGitHistory();
-    }
-}
-
-function refreshCurrentTab() {
-    if (currentTab === 'changes') {
-        loadGitStatus(true);
-    } else {
-        loadGitHistory(true);
     }
 }
 

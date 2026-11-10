@@ -27,7 +27,6 @@ import { escapeHtml } from '../app.js';
 import { escapeJs } from '../base.js';
 import { showToast } from '../ui-notifications.js';
 import { showGlobalCommitDialog } from '../commit-dialog.js';
-import { getSessionId } from '../session-manager.js';
 
 // Convenience aliases (read at call time, not cached — applyMetadata replaces these)
 const inheritanceAttrs = constants.inheritanceAttrs;
@@ -92,8 +91,6 @@ export function handleAutocompleteKeyNav(event, config) {
     }
     return false;
 }
-
-// Session ID for staging
 
 // resetStagingState is now defined in state-management.js
 
@@ -208,7 +205,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Add document-level dragend listener as safety net
     // This catches drags that end outside the tree container
-    document.addEventListener('dragend', (event) => {
+    document.addEventListener('dragend', () => {
         if (document.body.classList.contains('dragging-objects')) {
             cleanupDragState();
         }
@@ -476,6 +473,15 @@ function isObjectChanged(obj) {
     return state.changedObjectKeys.has(StableKey.build(obj));
 }
 
+/**
+ * Row class for an object's staging state, shared by the tree and the
+ * workspace pane: 'staged-creation', 'is-changed', or '' for neither.
+ */
+export function objectChangeClass(obj) {
+    if (isObjectCreated(obj)) {return 'staged-creation';}
+    return isObjectChanged(obj) ? 'is-changed' : '';
+}
+
 export function renderTreeItem(obj, showType = false) {
     const selected = isSelectedByIndex(obj.global_index) ? 'selected' : '';
     const isTemplate = isTreeItemTemplate(obj);
@@ -483,7 +489,7 @@ export function renderTreeItem(obj, showType = false) {
     const hostListInfo = getHostListInfo(obj);
     const issue = getObjectIssue(obj);
     const orphanClass = isOrphan ? 'is-orphan' : '';
-    const changedClass = isObjectCreated(obj) ? 'staged-creation' : isObjectChanged(obj) ? 'is-changed' : '';
+    const changedClass = objectChangeClass(obj);
     const commentedClass = obj.is_commented_out ? 'commented-out' : '';
     const longListClass = hostListInfo.shouldGroup ? 'has-long-list' : '';
     const typeLabel = getTypeBadge(obj.object_type, isTemplate);

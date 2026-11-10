@@ -13,7 +13,7 @@ import { openTab, renameTabKey } from './tab-manager.js'; // circular — safe (
 import { getIcon, toApiPathSegment, extractFileName, rootFor, reportMoveResult } from './ui-utils.js';
 import { refreshPanelTiers } from './panel-resizer.js';
 import { cleanupDragState } from './drag-drop.js';
-import { buildTree } from './app.js'; // circular — safe (function-level)
+import { buildTree, objectChangeClass } from './app.js'; // circular — safe (function-level)
 import { ApiClient } from '../api-client.js';
 import { showToast, showConfirmDialog } from '../ui-notifications.js';
 import { escapeHtml } from '../app.js';
@@ -215,16 +215,6 @@ function buildRowClasses(base, flags) {
         if (condition) {classes += ' ' + cls;}
     }
     return classes;
-}
-
-function addFileToTree(path, ensureFolderPath, props) {
-    const parts = path.split('/');
-    const filename = parts.pop();
-    const dir = parts.join('/') || state.configPath;
-    const folder = ensureFolderPath(dir);
-    if (!folder.files.some(f => f.path === path)) {
-        folder.files.push({ path, name: filename, ...props });
-    }
 }
 
 function buildDeleteButton(path, isFolder) {
@@ -429,7 +419,7 @@ export function renderTargetPane() {
             </div>
         </div>
         <div class="tree-children${isExpanded ? ' expanded' : ''}">
-            ${renderFileObjects(file.path, fileObjects, depth + 1)}
+            ${renderFileObjects(file.path, fileObjects)}
         </div>`;
 
         return html;
@@ -509,23 +499,13 @@ export function selectFolder(folderPath) {
 // File Object Rendering
 // ============================================================================
 
-function isObjectCreated(obj) {
-    if (state.createdObjectKeys.size === 0) { return false; }
-    return state.createdObjectKeys.has(StableKey.build(obj));
-}
-
-function isObjectChanged(obj) {
-    if (state.changedObjectKeys.size === 0) { return false; }
-    return state.changedObjectKeys.has(StableKey.build(obj));
-}
-
 function buildExistingObjectRow(obj, gripIcon, filePath) {
     const displayName = obj.display_name || obj.name || '(unnamed)';
     const isTemplate = isObjectTemplate(obj);
     const typeLabel = getTypeBadge(obj.object_type, isTemplate);
-    const changedClass = isObjectCreated(obj) ? ' staged-creation' : isObjectChanged(obj) ? ' is-changed' : '';
+    const changedClass = objectChangeClass(obj);
     return `
-        <div class="workspace-object-row${changedClass}" data-index="${obj.global_index}" data-file="${escapeHtml(filePath)}"
+        <div class="workspace-object-row${changedClass ? ' ' + changedClass : ''}" data-index="${obj.global_index}" data-file="${escapeHtml(filePath)}"
              draggable="true"
              ondragstart="Explorer.handleTargetObjectDragStart(event, ${obj.global_index}, 'existing', '${escapeJs(filePath)}')"
              ondragend="Explorer.handleTargetObjectDragEnd(event)">
@@ -535,7 +515,7 @@ function buildExistingObjectRow(obj, gripIcon, filePath) {
         </div>`;
 }
 
-export function renderFileObjects(filePath, fileObjects, depth = 2) {
+export function renderFileObjects(filePath, fileObjects) {
     const sortedObjects = [...fileObjects].sort((a, b) => a.line_number - b.line_number);
     const gripIcon = getIcon('grip-vertical');
 
