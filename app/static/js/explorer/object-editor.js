@@ -691,8 +691,11 @@ export function renderCenterAttributes() {
             // First escape for JS context, then escape for HTML attribute context
             const keyJsEscaped = escapeJs(key);
             const keyHtmlAttr = escapeHtml(keyJsEscaped);
+            const acInputCall = `Explorer.showAttrAutocomplete(this, '${keyHtmlAttr}')`;
+            // The autocomplete oninput is built separately: an element keeps only its first
+            // oninput attribute, so the textarea must run syncHighlight and autocomplete from one.
             const inputEvents = hasSuggestions && !isLocked
-                ? `oninput="Explorer.showAttrAutocomplete(this, '${keyHtmlAttr}')" onblur="Explorer.hideAttrAutocomplete(event)" onkeydown="Explorer.handleAttrAutocompleteKey(event, '${keyHtmlAttr}')"`
+                ? `oninput="${acInputCall}" onblur="Explorer.hideAttrAutocomplete(event)" onkeydown="Explorer.handleAttrAutocompleteKey(event, '${keyHtmlAttr}')"`
                 : '';
             const placeholder = hasSuggestions ? ` placeholder="Type for suggestions..."` : '';
             const acTitle = hasSuggestions ? ` title="Arrow keys to navigate suggestions, Enter to select, Escape to close"` : '';
@@ -710,9 +713,9 @@ export function renderCenterAttributes() {
                     <div class="attr-value-long-wrapper">
                         <textarea class="attr-value attr-value-long"
                                onchange="Explorer.updateAttribute('${keyHtmlAttr}', this.value, this)"
-                               oninput="Explorer.syncHighlight(this)"
+                               oninput="Explorer.syncHighlight(this)${hasSuggestions && !isLocked ? '; ' + acInputCall : ''}"
                                spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"
-                               ${inputEvents}${placeholder}${acTitle}${disabledAttr}>${escapeHtml(value)}</textarea>
+                               ${inputEvents.replace(/^oninput="[^"]*" /, '')}${placeholder}${acTitle}${disabledAttr}>${escapeHtml(value)}</textarea>
                         <pre class="attr-value-highlight" aria-hidden="true">${highlighted}</pre>
                     </div>
                     <button class="attr-copy" onclick="Explorer.copyAttributeValue('${keyHtmlAttr}')" title="Copy value"><i class="fa-regular fa-copy"></i></button>
