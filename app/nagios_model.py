@@ -492,6 +492,134 @@ REFERENCE_FIELDS: dict[str, str | None] = {
 }
 
 
+# -- Graph View (GET /api/dependencies, GET /api/metadata "graph") -------------
+# The graph page reads all of this from /api/metadata; nothing here is repeated
+# in JavaScript.
+
+# Object types the graph draws: node colour and the short badge used by the
+# type filter. A type missing here is drawn grey and has no filter checkbox.
+GRAPH_NODE_TYPES: dict[str, dict[str, str]] = {
+    "host": {"color": "#4CAF50", "badge": "HOST"},
+    "hostgroup": {"color": "#8BC34A", "badge": "HOSTGRP"},
+    "service": {"color": "#2196F3", "badge": "SVC"},
+    "servicegroup": {"color": "#03A9F4", "badge": "SVCGRP"},
+    "contact": {"color": "#FF9800", "badge": "CONT"},
+    "contactgroup": {"color": "#FFC107", "badge": "CONTGRP"},
+    "command": {"color": "#9C27B0", "badge": "CMD"},
+    "timeperiod": {"color": "#607D8B", "badge": "TP"},
+    "hostdependency": {"color": "#F44336", "badge": "HOSTDEP"},
+    "servicedependency": {"color": "#E91E63", "badge": "SVCDEP"},
+    "hostescalation": {"color": "#009688", "badge": "HOSTESC"},
+    "serviceescalation": {"color": "#00BCD4", "badge": "SVCESC"},
+}
+
+# Edge categories, in the order the graph's filter lists them. ``default``:
+# enabled when nothing else (a quick view, a saved view) says otherwise.
+GRAPH_EDGE_CATEGORIES: dict[str, dict[str, Any]] = {
+    "dependencies": {"label": "Dependencies", "default": True,
+                     "description": "Network parents, host/service dependencies"},
+    "templates": {"label": "Templates", "default": True,
+                  "description": "Template inheritance (use)"},
+    "groups": {"label": "Groups", "default": True,
+               "description": "Host groups, service groups, members"},
+    "contacts": {"label": "Contacts", "default": False,
+                 "description": "Contacts, contact groups"},
+    "commands": {"label": "Commands", "default": False,
+                 "description": "Check commands, event handlers"},
+    "schedules": {"label": "Schedules", "default": False,
+                  "description": "Time periods (check, notification, escalation)"},
+}
+
+# Every field the graph draws an edge for. An edge goes from the object that
+# has the field to the object it names, except ``reverse`` fields (drawn from
+# the named object to the one that has the field: a parent host points to its
+# child). ``target``: the type named, where "template" means the referrer's
+# own type and "member" the member type of the referrer's group type.
+# ``category_by_type`` overrides ``category`` for a referrer type.
+GRAPH_EDGE_FIELDS: dict[str, dict[str, Any]] = {
+    # Hosts and network topology
+    "host_name": {"target": "host", "category": "dependencies", "label": "on host", "color": "#2196F3"},
+    "parents": {"target": "host", "category": "dependencies", "label": "parent", "color": "#795548",
+                "reverse": True},
+    "dependent_host_name": {"target": "host", "category": "dependencies", "label": "depends on",
+                            "color": "#F44336"},
+    "master_host_name": {"target": "host", "category": "dependencies", "label": "master host",
+                         "color": "#F44336"},
+    # Hostgroups
+    "hostgroup_name": {"target": "hostgroup", "category": "groups", "label": "in group", "color": "#8BC34A"},
+    "hostgroups": {"target": "hostgroup", "category": "groups", "label": "in group", "color": "#8BC34A"},
+    "hostgroup_members": {"target": "hostgroup", "category": "groups", "label": "has member",
+                          "color": "#4CAF50"},
+    "dependent_hostgroup_name": {"target": "hostgroup", "category": "dependencies",
+                                 "label": "depends on group", "color": "#F44336"},
+    "master_hostgroup_name": {"target": "hostgroup", "category": "dependencies", "label": "master group",
+                              "color": "#F44336"},
+    # Services
+    "service_description": {"target": "service", "category": "dependencies", "label": "service",
+                            "color": "#2196F3"},
+    "dependent_service_description": {"target": "service", "category": "dependencies",
+                                      "label": "depends on", "color": "#E91E63"},
+    "master_service_description": {"target": "service", "category": "dependencies",
+                                   "label": "master service", "color": "#E91E63"},
+    # Servicegroups
+    "servicegroup_name": {"target": "servicegroup", "category": "groups", "label": "in group",
+                          "color": "#03A9F4"},
+    "servicegroups": {"target": "servicegroup", "category": "groups", "label": "in group", "color": "#03A9F4"},
+    "servicegroup_members": {"target": "servicegroup", "category": "groups", "label": "has member",
+                             "color": "#03A9F4"},
+    "dependent_servicegroup_name": {"target": "servicegroup", "category": "dependencies",
+                                    "label": "depends on group", "color": "#F44336"},
+    # Contacts
+    "contact_name": {"target": "contact", "category": "contacts", "label": "contact", "color": "#FF9800"},
+    "contacts": {"target": "contact", "category": "contacts", "label": "notifies", "color": "#FF9800"},
+    "escalation_contacts": {"target": "contact", "category": "contacts", "label": "escalates to",
+                            "color": "#00BCD4"},
+    "contact_groups": {"target": "contactgroup", "category": "contacts", "label": "notifies",
+                       "color": "#FFC107"},
+    "contactgroup_name": {"target": "contactgroup", "category": "contacts", "label": "in group",
+                          "color": "#FFC107"},
+    "contactgroup_members": {"target": "contactgroup", "category": "contacts", "label": "includes",
+                             "color": "#FF9800"},
+    "contactgroups": {"target": "contactgroup", "category": "contacts", "label": "in group",
+                      "color": "#FFC107"},
+    "escalation_contact_groups": {"target": "contactgroup", "category": "contacts", "label": "escalates to",
+                                  "color": "#00BCD4"},
+    # Templates and group members
+    "use": {"target": "template", "category": "templates", "label": "uses", "color": "#9C27B0"},
+    "members": {"target": "member", "category": "groups", "label": "has member", "color": "#4CAF50",
+                "category_by_type": {"contactgroup": "contacts"}},
+    # Commands
+    "check_command": {"target": "command", "category": "commands", "label": "check cmd", "color": "#E91E63"},
+    "event_handler": {"target": "command", "category": "commands", "label": "event cmd", "color": "#E91E63"},
+    "notification_commands": {"target": "command", "category": "commands", "label": "notif cmd",
+                              "color": "#E91E63"},
+    "host_notification_commands": {"target": "command", "category": "commands", "label": "host notif cmd",
+                                   "color": "#E91E63"},
+    "service_notification_commands": {"target": "command", "category": "commands",
+                                      "label": "svc notif cmd", "color": "#E91E63"},
+    # Time periods
+    "check_period": {"target": "timeperiod", "category": "schedules", "label": "check period",
+                     "color": "#607D8B"},
+    "notification_period": {"target": "timeperiod", "category": "schedules", "label": "notify period",
+                            "color": "#607D8B"},
+    "host_notification_period": {"target": "timeperiod", "category": "schedules",
+                                 "label": "host notif period", "color": "#607D8B"},
+    "service_notification_period": {"target": "timeperiod", "category": "schedules",
+                                    "label": "svc notif period", "color": "#607D8B"},
+    "escalation_period": {"target": "timeperiod", "category": "schedules", "label": "escalation period",
+                          "color": "#607D8B"},
+    "dependency_period": {"target": "timeperiod", "category": "schedules", "label": "dependency period",
+                          "color": "#607D8B"},
+    "exclude": {"target": "timeperiod", "category": "schedules", "label": "excludes", "color": "#607D8B"},
+}
+
+
+def graph_edge_category(object_type: str, field: str) -> str:
+    """The graph edge category of ``field`` on an object of ``object_type``."""
+    meta = GRAPH_EDGE_FIELDS[field]
+    return meta.get("category_by_type", {}).get(object_type, meta["category"])
+
+
 @dataclass
 class OperationResult:
     """Unified result type for fallible operations."""

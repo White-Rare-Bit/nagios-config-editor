@@ -29,8 +29,10 @@ All modules use ES module `import`/`export` syntax. Explorer modules in `explore
 |------|------|
 | `logs.js` | Unified log viewer: audit + app tabs, filtering, pagination |
 | `backups.js` | Backup list/restore/delete |
-| `dependencies.js` | Cytoscape graph visualization |
-| `dependencies-config.js` | Graph layout and style configuration |
+| `dependencies.js` | Graph View page: state, URL/session persistence, the single Cytoscape instance, sidebar |
+| `dependencies-config.js` | Graph View presentation: layout constants, quick view presets, expansion rules, icons (domain metadata comes from `/api/metadata` `graph`) |
+| `graph/model.js` | Graph View logic, DOM-free and unit-tested: index, expansion, display filtering, search |
+| `graph/layout.js` | Graph View layouts, DOM-free and unit-tested: dagre ranking, clustered layout, edge bundling |
 | `git.js` | File list, diff viewer, commit/discard |
 | `docs.js` | Documentation page navigation |
 | `docs-data.js` | Documentation page data/content |

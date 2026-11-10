@@ -5,6 +5,9 @@ from flask import Blueprint, jsonify
 from ..nagios_model import (
     ATTRIBUTE_SORT_ORDER,
     DEFAULT_ATTRIBUTES,
+    GRAPH_EDGE_CATEGORIES,
+    GRAPH_EDGE_FIELDS,
+    GRAPH_NODE_TYPES,
     GROUP_STRUCTURE,
     HOST_SCOPED_TYPES,
     NAME_FIELDS,
@@ -50,5 +53,14 @@ def api_metadata():
             "host_scoped_types": HOST_SCOPED_TYPES,
             "reference_trigger_attrs": REFERENCE_TRIGGER_ATTRS,
             "renameable_types": sorted(RENAMEABLE_TYPES),
+            # JSON objects arrive with sorted keys; the *_order lists keep the
+            # display order defined in nagios_model.
+            "graph": {
+                "node_types": GRAPH_NODE_TYPES,
+                "node_type_order": list(GRAPH_NODE_TYPES),
+                "edge_categories": GRAPH_EDGE_CATEGORIES,
+                "edge_category_order": list(GRAPH_EDGE_CATEGORIES),
+                "edge_fields": GRAPH_EDGE_FIELDS,
+            },
         },
     })

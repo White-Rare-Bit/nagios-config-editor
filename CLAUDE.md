@@ -63,7 +63,7 @@ All service methods return `OperationResult(success: bool, error: str = None, da
 | `app/backup_manager.py` | Zip backups, restore |
 | `app/nagios_parser.py` | Parse .cfg files |
 | `app/nagios_syntax.py` | Shared define-block scanner (comment/quote rules) used by both the parser and `file_operations`, so they always agree where a block ends |
-| `app/nagios_model.py` | NagiosObject, NAME_FIELDS, REFERENCE_FIELDS, domain constants, `format_object_block` (renders a define block) |
+| `app/nagios_model.py` | NagiosObject, NAME_FIELDS, REFERENCE_FIELDS, domain constants (incl. `GRAPH_*` for the Graph View), `format_object_block` (renders a define block) |
 | `app/file_operations.py` | Atomic file ops, path safety |
 | `app/git_service.py` | Git wrapper, retry logic |
 | `app/validator.py` | nagios -v validation |
@@ -73,7 +73,8 @@ All service methods return `OperationResult(success: bool, error: str = None, da
 | `app/config_discovery.py` | Resolve config roots from nagios.cfg (cfg_dir/cfg_file directives) |
 | `app/nagios_cfg.py` | Lightweight parser for nagios.cfg and resource.cfg ($USERn$ macros) |
 | `app/inheritance.py` | Unified template inheritance resolution, chain walking, analysis |
-| `app/references.py` | Type-aware reference matching (`referenced_by`) and rewriting (`reference_edits`) for rename and the delete warning |
+| `app/references.py` | Type-aware reference matching (`referenced_by`) and rewriting (`reference_edits`) for rename and the delete warning; `HostMembership` (hostgroup → hosts) |
+| `app/dependency_graph.py` | Graph View data for `GET /api/dependencies`: nodes, edges, service references resolved to the service that applies to each host |
 
 ## Domain Metadata
 

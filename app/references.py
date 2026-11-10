@@ -41,7 +41,7 @@ stripped, never substrings.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 
 from .nagios_model import (
     GROUP_STRUCTURE,
@@ -137,14 +137,19 @@ def name_field(obj: NagiosObject) -> str | None:
 # -- matching ------------------------------------------------------------------
 
 
-class _Hosts:
+class HostMembership:
     """Every registered host, and the hosts in each hostgroup.
 
     Hostgroup membership comes from hostgroup ``members`` (``*`` = every
     host), nested ``hostgroup_members``, and host ``hostgroups``.
+
+    ``attrs_of`` returns the attributes to read for an object; the default is
+    the object's own attributes. The Graph View passes the inherited
+    (template-resolved) attributes instead.
     """
 
-    def __init__(self, objects: Iterable[NagiosObject]):
+    def __init__(self, objects: Iterable[NagiosObject],
+                 attrs_of: Callable[[NagiosObject], dict[str, str]] | None = None):
         self.all: set[str] = set()
         direct: dict[str, set[str]] = {}
         nested: dict[str, set[str]] = {}
@@ -152,7 +157,7 @@ class _Hosts:
         for obj in objects:
             if obj.is_commented_out or is_template_object(obj):
                 continue
-            attrs = obj.attributes
+            attrs = attrs_of(obj) if attrs_of else obj.attributes
             if obj.object_type == "host":
                 host = attrs.get("host_name", "").strip()
                 if host:
@@ -190,7 +195,7 @@ class _Hosts:
 class _Target:
     """What is needed to recognise references to one object."""
 
-    def __init__(self, obj: NagiosObject, hosts: _Hosts):
+    def __init__(self, obj: NagiosObject, hosts: HostMembership):
         self.obj = obj
         self.type = obj.object_type
         self.template = is_template_object(obj)
@@ -203,7 +208,7 @@ class _Target:
             self.hosts = hosts.expand(attrs.get("host_name"), attrs.get("hostgroup_name"))
             self.hostgroups = _names(attrs.get("hostgroup_name"))
 
-    def same_host(self, obj: NagiosObject, field: str, hosts: _Hosts) -> bool:
+    def same_host(self, obj: NagiosObject, field: str, hosts: HostMembership) -> bool:
         """Whether ``field`` (a *service_description) is paired with the target's hosts."""
         pair = field[: -len(_SERVICE_FIELD)]
         attrs = obj.attributes
@@ -220,7 +225,7 @@ def _matching(items: list[list[str]], name: str, positions: Iterable[int]) -> li
     return [i for i in positions if items[i][1] == name]
 
 
-def _hits(obj: NagiosObject, target: _Target, hosts: _Hosts) -> list[tuple[str, list[int]]]:
+def _hits(obj: NagiosObject, target: _Target, hosts: HostMembership) -> list[tuple[str, list[int]]]:
     """(field, item positions) in ``obj`` that a rename of ``target`` rewrites."""
     if not target.name:
         return []
@@ -296,7 +301,7 @@ def referenced_by(
     ``use`` it by its ``name`` (field "use"), which a rename leaves alone.
     """
     objects = list(objects)
-    hosts = _Hosts(objects)
+    hosts = HostMembership(objects)
     info = _Target(target, hosts)
     result = []
     for obj in _candidates(objects, {id(target), *(exclude or ())}):
@@ -324,7 +329,7 @@ def reference_edits(
     Objects whose ``id`` is in ``exclude`` are left alone.
     """
     objects = list(objects)
-    hosts = _Hosts(objects)
+    hosts = HostMembership(objects)
     targets = [(_Target(obj, hosts), new) for obj, new in renames]
     edits = []
     for obj in _candidates(objects, set(exclude or ())):

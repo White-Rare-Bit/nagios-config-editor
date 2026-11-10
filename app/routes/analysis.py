@@ -1,15 +1,15 @@
 """Analysis and dependency routes."""
 
 import logging
-import os
 from collections import defaultdict
 
 from flask import Blueprint, jsonify, request
 
+from ..dependency_graph import build_dependency_graph
+
 from ..inheritance import (
     build_template_index,
     build_template_lookup,
-    build_template_names_set,
     detect_template_cycles,
     find_invalid_use_refs,
     find_unused_templates,
@@ -17,13 +17,10 @@ from ..inheritance import (
     resolve_all_attrs,
     resolve_chain,
     resolve_inherited_attrs,
-    walk_inheritance_chain,
 )
-from ..nagios_model import ADDITIVE_FIELDS, NagiosObject, is_template_object
+from ..nagios_model import is_template_object
 
 from .helpers import (
-    get_backup_manager,
-    get_config_path,
     get_service,
 )
 
@@ -31,113 +28,6 @@ bp = Blueprint("analysis", __name__)
 logger = logging.getLogger(__name__)
 
 # --- Shared constants ---
-
-_RELATIONSHIP_FIELDS = {
-    "host_name": "host",
-    "hostgroup_name": "hostgroup",
-    "hostgroups": "hostgroup",
-    "hostgroup_members": "hostgroup",
-    "service_description": "service",
-    "dependent_service_description": "service",
-    "dependent_host_name": "host",
-    "dependent_hostgroup_name": "hostgroup",
-    "master_host_name": "host",
-    "master_hostgroup_name": "hostgroup",
-    "master_service_description": "service",
-    "servicegroup_name": "servicegroup",
-    "servicegroups": "servicegroup",
-    "servicegroup_members": "servicegroup",
-    "dependent_servicegroup_name": "servicegroup",
-    "contact_name": "contact",
-    "contacts": "contact",
-    "contact_groups": "contactgroup",
-    "contactgroup_name": "contactgroup",
-    "contactgroup_members": "contactgroup",
-    "contactgroups": "contactgroup",
-    "escalation_contacts": "contact",
-    "escalation_contact_groups": "contactgroup",
-    "use": "template",
-    "members": "member",
-    "parents": "host",
-    "check_command": "command",
-    "event_handler": "command",
-    "host_notification_commands": "command",
-    "service_notification_commands": "command",
-    "check_period": "timeperiod",
-    "notification_period": "timeperiod",
-    "host_notification_period": "timeperiod",
-    "service_notification_period": "timeperiod",
-    "escalation_period": "timeperiod",
-    "dependency_period": "timeperiod",
-    "exclude": "timeperiod",
-}
-
-_FIELD_TO_CATEGORY = {
-    "host_name": "dependencies",
-    "hostgroup_name": "groups",
-    "hostgroups": "groups",
-    "hostgroup_members": "groups",
-    "service_description": "dependencies",
-    "dependent_service_description": "dependencies",
-    "dependent_host_name": "dependencies",
-    "dependent_hostgroup_name": "dependencies",
-    "master_host_name": "dependencies",
-    "master_hostgroup_name": "dependencies",
-    "master_service_description": "dependencies",
-    "servicegroup_name": "groups",
-    "servicegroups": "groups",
-    "servicegroup_members": "groups",
-    "dependent_servicegroup_name": "dependencies",
-    "contact_name": "contacts",
-    "contacts": "contacts",
-    "contact_groups": "contacts",
-    "contactgroup_name": "contacts",
-    "contactgroup_members": "contacts",
-    "contactgroups": "contacts",
-    "escalation_contacts": "contacts",
-    "escalation_contact_groups": "contacts",
-    "use": "templates",
-    "members": "groups",
-    "parents": "dependencies",
-    "check_command": "commands",
-    "event_handler": "commands",
-    "host_notification_commands": "commands",
-    "service_notification_commands": "commands",
-    "check_period": "schedules",
-    "notification_period": "schedules",
-    "host_notification_period": "schedules",
-    "service_notification_period": "schedules",
-    "escalation_period": "schedules",
-    "dependency_period": "schedules",
-    "exclude": "schedules",
-}
-
-_TYPE_COLORS = {
-    "host": "#4CAF50",
-    "hostgroup": "#8BC34A",
-    "service": "#2196F3",
-    "servicegroup": "#03A9F4",
-    "contact": "#FF9800",
-    "contactgroup": "#FFC107",
-    "command": "#9C27B0",
-    "timeperiod": "#607D8B",
-    "servicedependency": "#E91E63",
-    "hostdependency": "#F44336",
-    "serviceescalation": "#00BCD4",
-    "hostescalation": "#009688",
-}
-
-_IDENTITY_FIELDS = {
-    "host": "host_name",
-    "hostgroup": "hostgroup_name",
-    "servicegroup": "servicegroup_name",
-    "contact": "contact_name",
-    "contactgroup": "contactgroup_name",
-}
-
-_REVERSE_EDGE_FIELDS = {
-    "parents",  # Network topology: parent reaches child
-}
 
 _GROUPING_TYPE_WEIGHTS = {
     "ip-subnet": 1.5,
@@ -153,190 +43,6 @@ _GROUPING_TYPE_WEIGHTS = {
 _MIN_GROUP_SUGGESTION_SIZE = 3
 # Minimum members for parent-based or ungrouped suggestions
 _MIN_PARENT_GROUP_SIZE = 2
-
-
-# ─────────────────────────────────────────────────────────────────────
-# api_dependencies helpers
-# ─────────────────────────────────────────────────────────────────────
-
-def _make_service_node_id(obj):
-    """Compute the node ID for a service object."""
-    target = obj.attributes.get("hostgroup_name") or obj.attributes.get("host_name", "")
-    target = ",".join([t.strip().lstrip("+").strip() for t in target.split(",")
-                       if t.strip() and not t.strip().startswith("!")])
-    if target:
-        return f"service:{target}:{obj.get_name()}"
-    return f"service:{obj.get_name()}"
-
-
-def _add_or_update_node(obj, node_id, template_names, graph_state):
-    """Add a new node or update an existing one for an object.
-
-    graph_state is a dict with keys: nodes, node_ids, defined_node_ids.
-    """
-    nodes = graph_state["nodes"]
-    node_ids = graph_state["node_ids"]
-
-    if node_id not in node_ids:
-        is_template = (obj.object_type, obj.get_name()) in template_names
-        label = obj.get_name()
-        if obj.object_type == "service":
-            target = obj.attributes.get("hostgroup_name") or obj.attributes.get("host_name", "")
-            target = ",".join([t.strip().lstrip("+").strip() for t in target.split(",")
-                               if t.strip() and not t.strip().startswith("!")])
-            if target:
-                label = f"{label} / {target}"
-        node_data = {
-            "id": node_id,
-            "label": label,
-            "type": obj.object_type,
-            "color": _TYPE_COLORS.get(obj.object_type, "#999999"),
-            "exists": True,
-        }
-        if is_template:
-            node_data["is_template"] = True
-        if "\u2192" in label:
-            node_data["search_label"] = label.replace("\u2192", "->")
-        nodes.append(node_data)
-        node_ids.add(node_id)
-    else:
-        for existing_node in nodes:
-            if existing_node["id"] == node_id:
-                existing_node["exists"] = True
-                if (obj.object_type, obj.get_name()) in template_names:
-                    existing_node["is_template"] = True
-                break
-    graph_state["defined_node_ids"].add(node_id)
-
-
-def _parse_relationship_targets(field, target_type, raw_value):
-    """Parse the target values from a relationship field value."""
-    if target_type == "command":
-        command_name = raw_value.split("!")[0].strip()
-        return [command_name] if command_name else []
-    return [t.strip() for t in raw_value.split(",")
-            if t.strip() and not t.strip().startswith("!")]
-
-
-def _compute_target_node_id(field, target_type, target, obj, resolved_attrs):
-    """Compute the node ID for a relationship target."""
-    if target_type == "template":
-        t_type = obj.object_type
-    elif target_type == "member":
-        t_type = obj.object_type.replace("group", "")
-    else:
-        t_type = target_type
-
-    # parents: hosts reference hosts, services reference services
-    if field == "parents" and obj.object_type == "service":
-        t_type = "service"
-        svc_context = resolved_attrs.get("host_name", "")
-        svc_context = ",".join([t.strip().lstrip("+").strip() for t in svc_context.split(",")
-                                if t.strip() and not t.strip().startswith("!")])
-        if svc_context:
-            return f"service:{svc_context}:{target}", t_type
-        return f"service:{target}", t_type
-
-    if t_type == "service" and field in ("service_description", "dependent_service_description"):
-        if field == "dependent_service_description":
-            svc_context = resolved_attrs.get("dependent_hostgroup_name") or resolved_attrs.get("dependent_host_name", "")
-        else:
-            svc_context = resolved_attrs.get("hostgroup_name") or resolved_attrs.get("host_name", "")
-        svc_context = ",".join([t.strip().lstrip("+").strip() for t in svc_context.split(",")
-                                if t.strip() and not t.strip().startswith("!")])
-        if svc_context:
-            return f"service:{svc_context}:{target}", t_type
-        return f"service:{target}", t_type
-
-    return f"{t_type}:{target}", t_type
-
-
-def _process_obj_relationships(obj, node_id, resolved_attrs, graph_state):
-    """Process all relationship fields for one object, adding edges and target nodes.
-
-    graph_state is a dict with keys: nodes, node_ids, edges.
-    """
-    nodes = graph_state["nodes"]
-    node_ids = graph_state["node_ids"]
-    edges = graph_state["edges"]
-
-    for field, target_type in _RELATIONSHIP_FIELDS.items():
-        if field not in resolved_attrs:
-            continue
-        if _IDENTITY_FIELDS.get(obj.object_type) == field:
-            continue
-
-        raw_value = resolved_attrs[field]
-
-        # Determine which targets are additive by checking the raw object attribute.
-        # resolve_inherited_attrs consumes the leading + prefix during merge, so we
-        # must compare against the raw attribute to detect additive references.
-        additive_targets = set()
-        raw_obj_value = obj.attributes.get(field, "")
-        if raw_obj_value.startswith("+") and field in ADDITIVE_FIELDS.get(obj.object_type, set()):
-            for t in raw_obj_value.split(","):
-                t = t.strip()
-                if t.startswith("+"):
-                    additive_targets.add(t.lstrip("+").strip())
-
-        # Servicegroup members use Nagios alternating-pair format: host1,svc1,host2,svc2
-        if obj.object_type == "servicegroup" and field == "members":
-            parts = [t.strip() for t in raw_value.split(",") if t.strip()]
-            for i in range(0, len(parts) - 1, 2):
-                host, svc = parts[i], parts[i + 1]
-                target_id = f"service:{host}:{svc}"
-                if target_id == node_id:
-                    continue
-                if target_id not in node_ids:
-                    nodes.append({
-                        "id": target_id,
-                        "label": svc,
-                        "type": "service",
-                        "color": _TYPE_COLORS.get("service", "#999999"),
-                        "exists": False,
-                    })
-                    node_ids.add(target_id)
-                edges.append({"from": node_id, "to": target_id, "label": field, "arrows": "to",
-                              "category": _FIELD_TO_CATEGORY.get(field, "groups")})
-            continue
-
-        targets = _parse_relationship_targets(field, target_type, raw_value)
-
-        for target in targets:
-            if not target:
-                continue
-            is_additive = target.startswith("+") or target.strip() in additive_targets
-            clean_target = target.lstrip("+").strip() if target.startswith("+") else target
-            target_id, t_type = _compute_target_node_id(field, target_type, clean_target, obj, resolved_attrs)
-            if target_id == node_id:
-                continue
-
-            if target_id not in node_ids:
-                node_data = {
-                    "id": target_id,
-                    "label": clean_target,
-                    "type": t_type,
-                    "color": _TYPE_COLORS.get(t_type, "#999999"),
-                    "exists": False,
-                }
-                if is_additive:
-                    node_data["additive"] = True
-                nodes.append(node_data)
-                node_ids.add(target_id)
-            elif is_additive:
-                # Mark existing node as additive if reached via + reference
-                for existing_node in nodes:
-                    if existing_node["id"] == target_id:
-                        existing_node["additive"] = True
-                        break
-
-            edge_data = {"from": node_id, "to": target_id, "label": field, "arrows": "to",
-                         "category": _FIELD_TO_CATEGORY.get(field, "dependencies")}
-            if is_additive:
-                edge_data["additive"] = True
-            if field in _REVERSE_EDGE_FIELDS:
-                edge_data["from"], edge_data["to"] = target_id, node_id
-            edges.append(edge_data)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -1187,34 +893,9 @@ def _find_host_by_name(name, objects):
 
 @bp.route("/api/dependencies")
 def api_dependencies():
-    """Get object dependencies for graph visualization."""
-    service = get_service()
-    p = service.parser
-    object_type = request.args.get("type")
-
-    graph = {"nodes": [], "edges": [], "node_ids": set(), "defined_node_ids": set()}
-
-    template_lookup = build_template_lookup(service.get_objects())
-    template_names = build_template_names_set(service.get_objects())
-
-    for obj in p.objects:
-        if object_type and obj.object_type != object_type:
-            continue
-        obj_name = obj.get_name()
-        if not obj_name:
-            continue
-
-        if obj.object_type == "service":
-            node_id = _make_service_node_id(obj)
-        else:
-            node_id = f"{obj.object_type}:{obj_name}"
-
-        _add_or_update_node(obj, node_id, template_names, graph)
-
-        resolved_attrs = resolve_inherited_attrs(obj, template_lookup)
-        _process_obj_relationships(obj, node_id, resolved_attrs, graph)
-
-    return jsonify({"nodes": graph["nodes"], "edges": graph["edges"]})
+    """Nodes and edges for the Graph View (see app/dependency_graph.py)."""
+    objects = get_service().parser.objects
+    return jsonify(build_dependency_graph(objects, request.args.get("type")))
 
 
 @bp.route("/api/inheritance/list/<object_type>")

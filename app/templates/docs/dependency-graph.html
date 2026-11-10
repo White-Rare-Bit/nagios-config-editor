@@ -13,17 +13,20 @@
 
     <p>
         The graph starts empty. Use the search box in the left sidebar to find an
-        object by name, then click it to add it to the graph. You can add as many
-        nodes as you like.
+        object by name, then click it (or use the arrow keys and Enter) to add it to
+        the graph. Exact and prefix matches are listed first; the type selector under
+        the search box limits results to one object type. The first object you add
+        becomes the <strong>focus node</strong>.
     </p>
 
     <h3>Quick Views</h3>
 
     <p>
-        When you select a node, <strong>quick view buttons</strong> appear in the
-        sidebar. These expand the graph to show related objects using a layout
-        appropriate for the relationship type. The available views depend on the
-        selected object type:
+        Once the graph has a focus node, <strong>quick view buttons</strong> appear in the
+        sidebar. Each one rebuilds the graph around the focus node to answer one
+        question, collecting only the object types and showing only the connections
+        that question needs, with a layout to suit. The available views depend on the
+        focus node's type:
     </p>
 
     <table>
@@ -38,8 +41,8 @@
             <tr>
                 <td><strong>Inheritance</strong></td>
                 <td>All types</td>
-                <td>Template chain &mdash; parent templates and objects that inherit
-                    from the selected template.</td>
+                <td>The templates the object inherits from, top to bottom. For a
+                    template, also the objects that inherit from it.</td>
             </tr>
             <tr>
                 <td><strong>Network</strong></td>
@@ -78,18 +81,20 @@
             </tr>
             <tr>
                 <td><strong>Escalations</strong></td>
-                <td>Hosts, services</td>
+                <td>Hosts, services, their groups, escalations</td>
                 <td>Escalation rules and their contacts.</td>
             </tr>
             <tr>
                 <td><strong>Dependencies</strong></td>
-                <td>Hosts, services</td>
+                <td>Hosts, services, their groups, dependencies</td>
                 <td>Dependency rules (master/dependent relationships).</td>
             </tr>
             <tr>
                 <td><strong>Full Graph</strong></td>
                 <td>All types</td>
-                <td>Every relationship involving the selected object.</td>
+                <td>Everything Nagios applies to the object: its templates, services
+                    (directly and through hostgroups), commands, contacts, time periods,
+                    groups, and the dependency and escalation rules that name it.</td>
             </tr>
         </tbody>
     </table>
@@ -105,6 +110,9 @@
         <li><strong>Object type checkboxes</strong> &mdash; show or hide nodes by type
             (host, service, contact, command, etc.). Unchecking a type hides those
             nodes and their edges.</li>
+        <li><strong>Nodes list</strong> &mdash; lists every object in the graph. The count
+            reads "12 of 26" when filters hide some of them, and hidden entries are
+            dimmed and marked <em>hidden</em> (hover for the reason).</li>
         <li><strong>Edge category checkboxes</strong> &mdash; show or hide edges by
             relationship category:
             <ul>
@@ -115,6 +123,8 @@
                 <li><em>Commands</em> &mdash; check commands, event handlers</li>
                 <li><em>Schedules</em> &mdash; time periods, escalation periods</li>
             </ul>
+            A quick view shows only the connections it follows; changing a category box
+            switches to filtering by category.
         </li>
     </ul>
 
@@ -125,12 +135,17 @@
     </p>
 
     <ul>
-        <li><strong>Force-Directed</strong> &mdash; nodes repel each other and edges
-            act as springs. Good for exploring general relationships.</li>
-        <li><strong>Hierarchical (Top-Bottom)</strong> &mdash; edges flow top to bottom.
-            Good for inheritance chains and network topology.</li>
-        <li><strong>Hierarchical (Left-Right)</strong> &mdash; edges flow left to right.
-            Good for notification routing and escalation paths.</li>
+        <li><strong>Clustered</strong> &mdash; the focus node in the middle with each
+            object type in its own cluster around it (contacts, services, commands and
+            time periods in rings orbiting the contact groups); edges bend toward the
+            cluster they point into. Without a focus node, a force-directed layout.
+            Used by Full Graph.</li>
+        <li><strong>Hierarchical (Top-Bottom)</strong> &mdash; ranked by edge direction:
+            an object sits above what it refers to, except that templates sit above
+            the objects that use them and parent hosts above their children. Good for
+            inheritance chains and network topology.</li>
+        <li><strong>Hierarchical (Left-Right)</strong> &mdash; the same ranking, left to
+            right. Good for notification routing and escalation paths.</li>
     </ul>
 
     <p>
@@ -141,17 +156,27 @@
     <h3>Graph Interaction</h3>
 
     <ul>
+        <li><strong>Hover</strong> &mdash; shows a node's details (type, full host list,
+            whether it is defined) and highlights its connections, fading everything
+            else. Selecting a single node keeps it highlighted. Hovering an edge names
+            its field.</li>
         <li><strong>Pan</strong> &mdash; click and drag the canvas background.</li>
         <li><strong>Zoom</strong> &mdash; scroll wheel or pinch gesture.</li>
         <li><strong>Select</strong> &mdash; click a node. Shift+click for multi-select.
             Shift+drag for box selection.</li>
         <li><strong>Delete</strong> &mdash; press Delete or Backspace to remove selected
-            nodes.</li>
+            nodes (not while a sidebar control has focus).</li>
         <li><strong>Fit to View</strong> &mdash; button in the sidebar to auto-zoom
             so all nodes are visible.</li>
         <li><strong>Toggle Edge Labels</strong> &mdash; show or hide relationship labels
             on edges.</li>
     </ul>
+
+    <p>
+        Filtering, toggling labels and removing nodes keep your zoom, pan and any nodes
+        you dragged; the layout runs again only when you change it, change the focus
+        node, or new objects are added.
+    </p>
 
     <h4>Context Menu</h4>
 
@@ -160,42 +185,48 @@
     </p>
 
     <ul>
-        <li><strong>Expand connections</strong> &mdash; add all directly connected
-            objects to the graph.</li>
+        <li><strong>Expand connections</strong> &mdash; add what Nagios applies to the
+            object (as in Full Graph) to the graph.</li>
         <li><strong>Show only connections</strong> &mdash; isolate this node and its
             immediate connections, removing everything else.</li>
         <li><strong>Center on node</strong> &mdash; pan and zoom to this node.</li>
-        <li><strong>Set as layout center</strong> &mdash; use this node as the root
-            for hierarchical layouts.</li>
+        <li><strong>Set as focus node</strong> &mdash; make this node the one quick
+            views start from and the clustered layout centres on.</li>
         <li><strong>Remove from graph</strong> &mdash; remove just this node.</li>
         <li><strong>Remove disconnected</strong> &mdash; remove all nodes that have
             no edges.</li>
         <li><strong>Open in Explorer</strong> &mdash; navigate to this object in the
-            <a href="#app/explorer-navigation">Object Explorer</a>.</li>
+            <a href="#app/explorer-navigation">Object Explorer</a>. Clicking an entry
+            in the nodes list does the same.</li>
     </ul>
 
     <h3>Node Appearance</h3>
 
     <p>
-        Each object type has a distinct color and icon. A collapsible legend overlay
-        in the bottom-right corner of the graph shows all type colors. Templates are
-        drawn with a dashed border. Objects that are referenced but do not exist in
-        your configuration appear with a red indicator.
+        Each object type has a distinct color and icon. Templates are drawn with a
+        dashed border, objects that are referenced but not defined in your
+        configuration with a red X, and objects added through a <code>+</code>
+        (additive) reference with a green "+" badge. A service's label names its hosts
+        or hostgroups, shortened to a count ("HTTP / 9 hosts") when the list is long;
+        hover for the full list. The <strong>Legend</strong> in the top-right corner
+        (closed by default) explains the object types, markers and connection colors
+        in the current graph.
     </p>
 
     <h3>State Persistence</h3>
 
     <p>
-        The graph state &mdash; nodes, edges, layout, and filter settings &mdash; is
-        saved to your browser's session storage. When you return to the Graph View page
-        within the same browser session, it restores your previous graph. Use the
+        The page address always describes the current graph, so you can bookmark it,
+        reload it, or send it to someone. A quick view is recorded as its focus node and
+        view (<code>?node=host:web-server&amp;view=services</code>); a graph you changed
+        by hand also lists its nodes, filters and layout. Opening the Graph View from the
+        navbar restores the last graph from this browser tab. Use the
         <strong>Clear</strong> button in the nodes list to start fresh.
     </p>
 
     <div class="docs-note">
-        You can link directly to the graph with a specific object pre-loaded using the
-        URL parameter <code>?node=type:name&amp;expand=true</code>. For example,
-        <code>/dependencies?node=host:web-server&amp;expand=true</code> opens the graph
-        with that host and its connections expanded.
+        <code>/dependencies?node=type:name</code> opens the graph on that object's Full
+        Graph; add <code>&amp;view=</code> with a quick view name (<code>inheritance</code>,
+        <code>services</code>, <code>notifications</code>, ...) to open another view.
     </div>
 </div>

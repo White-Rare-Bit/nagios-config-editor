@@ -265,10 +265,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, 300);
     }
 
-    // Check if we should navigate to a specific object (from Graph View)
+    // Check if we should navigate to a specific object (from Graph View).
+    // `key` (a stable key) names one object exactly; `search` + `type` is the
+    // older form, which can't tell apart services that share a description.
+    const keyParam = urlParams.get('key');
     const searchParam = urlParams.get('search');
     const typeParam = urlParams.get('type');
-    if (searchParam && typeParam) {
+    if (keyParam) {
+        window.history.replaceState({}, '', window.location.pathname);
+        setTimeout(() => {
+            const obj = findObjectByKey(keyParam);
+            if (obj) {
+                navigateToObjectByIndex(obj.global_index);
+            } else {
+                showToast('That object is no longer in the configuration', 'warning');
+            }
+        }, 100);
+    } else if (searchParam && typeParam) {
         // Clean URL
         window.history.replaceState({}, '', window.location.pathname);
         // Navigate to the object after a short delay to ensure tree is built
