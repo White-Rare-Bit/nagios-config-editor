@@ -4,6 +4,7 @@
 
 import { ApiClient } from './api-client.js';
 import { showConfirmDialog } from './ui-notifications.js'; // circular
+import { escapeHtml } from './shared/escape.js';
 
 // ============================================================================
 // Global Functions
@@ -42,14 +43,11 @@ export async function createBackup() {
 // ============================================================================
 
 /**
- * Escape HTML special characters
+ * Escape HTML special characters, including quotes so the result is safe in
+ * quoted attributes. Implemented in shared/escape.js (DOM-free, unit-tested);
+ * re-exported here so existing imports keep working.
  */
-export function escapeHtml(text) {
-    if (text === null || text === undefined) return '';
-    const div = document.createElement('div');
-    div.textContent = String(text);
-    return div.innerHTML;
-}
+export { escapeHtml };
 
 /**
  * Escape special regex characters

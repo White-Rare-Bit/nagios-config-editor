@@ -58,7 +58,7 @@ export function showToast(message, type = 'info', duration = 3000) {
  * @param {string} [options.cancelText='Cancel'] - Cancel button text
  * @param {string} [options.type='warning'] - Type: 'warning', 'danger', 'info'
  * @param {boolean} [options.showCancel=true] - Whether to show cancel button
- * @param {boolean} [options.allowHtml=false] - Allow HTML in message
+ * @param {boolean} [options.allowHtml=false] - Render message as HTML; caller must escapeHtml() every interpolated value
  * @returns {Promise<boolean>} True if confirmed, false if cancelled
  */
 export function showConfirmDialog(options = {}) {
@@ -81,7 +81,9 @@ export function showConfirmDialog(options = {}) {
         const cancelBtn = document.getElementById('confirmDialogCancel');
 
         titleEl.textContent = title;
-        if (allowHtml || message.includes('<')) {
+        // Messages embed object/file names, so they are text unless the caller
+        // opts in with allowHtml (and then escapes every value it interpolates).
+        if (allowHtml) {
             messageEl.innerHTML = message;
         } else {
             messageEl.textContent = message;

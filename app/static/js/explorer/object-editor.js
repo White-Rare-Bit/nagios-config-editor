@@ -166,7 +166,7 @@ export function updateIssueBadge(issueBtn, issue, obj, hostListInfo) {
     if (issue) {
         const icon = getIssueIcon(issue);
         const badge = formatIssueBadge(issue, obj, displayName);
-        issueBtn.innerHTML = `${icon} ${badge.label}`;
+        issueBtn.innerHTML = `${icon} ${escapeHtml(badge.label)}`;
         issueBtn.className = `card-issue-btn severity-${issue.severity}`;
         issueBtn.style.display = 'inline-flex';
         issueBtn.title = badge.title;
@@ -699,8 +699,8 @@ export function renderCenterAttributes() {
                 : '';
             const placeholder = hasSuggestions ? ` placeholder="Type for suggestions..."` : '';
             const acTitle = hasSuggestions ? ` title="Arrow keys to navigate suggestions, Enter to select, Escape to close"` : '';
-            // Escape value for use in HTML attribute (must escape quotes)
-            const escapedValue = escapeHtml(value).replace(/"/g, '&quot;');
+            // escapeHtml also escapes quotes, so this is safe in value="..."
+            const escapedValue = escapeHtml(value);
 
             // Use textarea for long value attributes or values > 60 chars
             const useLongInput = LONG_VALUE_ATTRS.includes(key) || value.length > 60;

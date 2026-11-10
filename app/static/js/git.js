@@ -73,7 +73,7 @@ async function loadGitStatus(forceRefresh = false) {
     }
 
     if (data.error) {
-        repoStatus.innerHTML = `<p class="sidebar-info-text" style="color: var(--color-delete);">${data.error}</p>`;
+        repoStatus.innerHTML = `<p class="sidebar-info-text" style="color: var(--color-delete);">${escapeHtml(data.error)}</p>`;
         content.innerHTML = buildEmptyState('Error', escapeHtml(data.error), 'fa-exclamation-triangle');
         return;
     }
@@ -196,7 +196,7 @@ async function showGitDiff(filepath) {
     const result = await ApiClient.post('/api/git/diff', { file: filepath }, { silent: true });
 
     if (!result.success || result.data?.error) {
-        diffContent.innerHTML = `<div class="git-diff-empty">${result.data?.error || result.error || 'Failed to load diff'}</div>`;
+        diffContent.innerHTML = `<div class="git-diff-empty">${escapeHtml(result.data?.error || result.error || 'Failed to load diff')}</div>`;
         return;
     }
 
