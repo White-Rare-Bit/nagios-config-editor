@@ -1372,7 +1372,6 @@ export function renderNotificationSuggestions() {
 
         for (let i = 0; i < items.length; i++) {
             const s = items[i];
-            const globalIdx = state.allNotificationSuggestions.indexOf(s);
             const icon = s.severity === 'warning' ? '<i class="fa-solid fa-triangle-exclamation"></i>' : '<i class="fa-solid fa-circle-info"></i>';
 
             html += `

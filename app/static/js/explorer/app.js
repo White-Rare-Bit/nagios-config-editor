@@ -7,17 +7,17 @@
 import { state } from './state.js';
 import { apiUrl } from '../api-client.js';
 import { constants, isObjectTemplate, getTypeBadge, getTypeBadgeTier } from './constants.js';
-import { getObjectKey, findObjectByKey, getSelectedIndices, getConfigRootName } from './main.js';
+import { getObjectKey, findObjectByKey, getSelectedIndices } from './main.js';
 import { isSelectedByIndex, removeFromSelectionByIndex, clearSelection } from './state-management.js';
 import { loadObjects, loadChangedFiles, updateBadges, getTotalStagedCount } from './data-loading.js'; // circular — safe (function-level)
 import { openTab, renderTabBar, restoreTabs } from './tab-manager.js'; // circular — safe (function-level)
 import { loadIssuesForBadges, loadSuggestionsForBadges } from './badge-issues.js'; // circular — safe (function-level)
 import { loadAllSuggestions, loadCleanupSuggestions, renderCleanupSuggestions, collectAllSuggestions, renderUnifiedSuggestionsList } from './analysis.js'; // circular — safe (function-level)
 import { navigateToIssue, loadIssues } from './analysis-issues.js'; // circular — safe (function-level)
-import { showCenterPaneObject, hideCenterPaneObject, showCenterPaneMultiple, renderCenterAttributes } from './object-editor.js'; // circular — safe (function-level)
-import { stageObjectDeletions, createNewObject } from './dialogs.js'; // circular — safe (function-level)
-import { hideContextMenu, closeDialog, showDialog, showPreview, closePreview, handleDragStart, handleDragEnd, handleContextMenu, handleDragOver, handleDrop } from './context-menu.js'; // circular — safe (function-level)
-import { initTargetPane, renderTargetPane, navigateToObjectByIndex } from './file-operations.js'; // circular — safe (function-level)
+import { hideCenterPaneObject, showCenterPaneMultiple } from './object-editor.js'; // circular — safe (function-level)
+import { createNewObject } from './dialogs.js'; // circular — safe (function-level)
+import { hideContextMenu, closeDialog, showPreview, closePreview, handleDragStart, handleDragEnd, handleContextMenu, handleDragOver, handleDrop } from './context-menu.js'; // circular — safe (function-level)
+import { initTargetPane, navigateToObjectByIndex } from './file-operations.js'; // circular — safe (function-level)
 import { loadImpactAndRelationships } from './impact-section.js'; // circular — safe (function-level)
 import { cleanupDragState } from './drag-drop.js';
 import { refreshPanelTiers } from './panel-resizer.js';
@@ -30,8 +30,6 @@ import { showGlobalCommitDialog } from '../commit-dialog.js';
 import { getSessionId } from '../session-manager.js';
 
 // Convenience aliases (read at call time, not cached — applyMetadata replaces these)
-const typeLabels = constants.typeLabels;
-const identityFields = constants.identityFields;
 const inheritanceAttrs = constants.inheritanceAttrs;
 
 // Local state (UI-specific)
@@ -96,7 +94,6 @@ export function handleAutocompleteKeyNav(event, config) {
 }
 
 // Session ID for staging
-const mySessionId = getSessionId();
 
 // resetStagingState is now defined in state-management.js
 
@@ -631,7 +628,6 @@ export function handleItemClick(event, index) {
     } else if (event.shiftKey && state.selectedKeys.size > 0) {
         // Range select
         const all = Array.from(document.querySelectorAll('.tree-item:not(.staged-creation)')).map(el => parseInt(el.dataset.index, 10));
-        const selectedIndices = getSelectedIndices();
         const lastSelected = Array.from(getSelectedIndices()).pop();
         const start = all.indexOf(lastSelected);
         const end = all.indexOf(index);
@@ -669,7 +665,10 @@ export function selectObjectByStableKey(stableKey) {
         state.selectedKeys.add(getObjectKey(obj));
         updateSelection();
         // Scroll to the object in the tree
-        scrollToObject(obj.global_index);
+        // scrollToObject was never defined, so this threw after selecting.
+        // Tree rows carry data-index = global_index.
+        document.querySelector(`.tree-item[data-index="${obj.global_index}"]`)
+            ?.scrollIntoView({ block: 'nearest' });
     } else {
         showToast(`Object not found: ${stableKey}`, 'error');
     }
@@ -1062,7 +1061,6 @@ export function toggleSuggestionSection(sectionName) {
     if (!section) {return;}
 
     const body = document.getElementById(sectionName + 'SectionBody');
-    const toggle = section.querySelector('.section-toggle');
 
     section.classList.toggle('collapsed');
     if (body) {body.classList.toggle('collapsed');}

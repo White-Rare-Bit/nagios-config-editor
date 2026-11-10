@@ -2,112 +2,29 @@ import js from "@eslint/js";
 import globals from "globals";
 import { defineConfig } from "eslint/config";
 
-// Symbols defined at top-level in one <script> and used in others.
-// This project uses traditional script tags, not ES modules.
+// Every file under app/static/js is an ES module, so imported names are in
+// scope without declaring them here. Only names that are not imported belong
+// in this list: values injected by templates and libraries loaded from a CDN.
 const projectGlobals = {
-  // app.js — utility helpers
-  copyToClipboard: "readonly",
-  debounce: "readonly",
-  escapeHtml: "readonly",
-  escapeJs: "readonly",
-  escapeRegex: "readonly",
-  formatDate: "readonly",
-  generateUniqueId: "readonly",
-  reloadConfig: "readonly",
-  setButtonLoading: "readonly",
-
-  // api-client.js
-  ApiClient: "readonly",
-
-  // base-state.js
-  baseState: "readonly",
-
-  // session-manager.js
-  getSessionId: "readonly",
-  getStagingHeaders: "readonly",
-  getUserIdentity: "readonly",
-  hasUserIdentity: "readonly",
-  setUserIdentity: "readonly",
-
-  // ui-notifications.js
-  showConfirmDialog: "readonly",
-  showToast: "readonly",
-
-  // git-ui.js
-  closeGitResultOverlay: "readonly",
-  closeGitResultPanel: "readonly",
-  showGitOperationResult: "readonly",
-  showGitRunningPanel: "readonly",
-
-  // commit-dialog.js
-  applyGitCommit: "readonly",
-  applyGlobalCommit: "readonly",
-  autoGitCommitGlobal: "readonly",
-  closeGlobalCommitDialog: "readonly",
-  discardGitChanges: "readonly",
-  discardGlobalChanges: "readonly",
-  confirmDiscardAll: "readonly",
-  discardStagingAfterFailedCommit: "readonly",
-  handleCommitClick: "readonly",
-  retryGitCommit: "readonly",
-  showGitResultPanel: "readonly",
-  showGlobalCommitDialog: "readonly",
-  showResultPanel: "readonly",
-  toggleReferencePreview: "readonly",
-  updateContextLines: "readonly",
-
-  // lock-manager.js
-  breakLock: "readonly",
-  checkLockStatus: "readonly",
-  updateLockBannerUI: "readonly",
-
-  // base.js
-  DebugLogger: "readonly",
-  pluralize: "readonly",
-  showLoadingState: "readonly",
-  updateNavCommitButton: "readonly",
-  updateUndoButton: "readonly",
-  withLoadingButton: "readonly",
-
-  // shared/pagination.js
-  renderPagination: "readonly",
-
-  // explorer/main.js
-  Explorer: "readonly",
-
-  // docs-data.js
-  NAGIOS_INHERITANCE_REFERENCE: "readonly",
-  NAGIOS_OBJECT_REFERENCE: "readonly",
-
   // Template-injected globals (set in HTML <script> blocks)
   configPath: "readonly",
   configRootName: "readonly",
 
-  // Callback hooks (defined in page scripts, called from core modules)
-  buildTree: "readonly",
-  onLockCleared: "readonly",
-  renderTargetPane: "readonly",
-
-  // explorer internal cross-file
-  checkPendingChanges: "readonly",
-
   // External libraries loaded via CDN
+  bootstrap: "readonly",
   cytoscape: "readonly",
-
-  // UMD module check (dependencies.js)
-  module: "readonly",
 };
 
 export default defineConfig([
   {
-    ignores: ["static/vendor/**"],
+    ignores: ["app/static/vendor/**"],
   },
   {
     files: ["**/*.{js,mjs,cjs}"],
     plugins: { js },
     extends: ["js/recommended"],
     languageOptions: {
-      sourceType: "script",
+      sourceType: "module",
       globals: { ...globals.browser, ...projectGlobals },
     },
     rules: {

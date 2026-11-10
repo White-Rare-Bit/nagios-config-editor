@@ -6,17 +6,14 @@
  */
 
 import { state } from './state.js';
-import { constants, isObjectTemplate, getTypeBadge, getTypeBadgeTier } from './constants.js';
-import { getObjectKey, findObjectByKey, getSelectedIndices, groupByType, getConfigRootName } from './main.js';
-import { isSelectedByIndex, clearSelection, addToSelectionByIndex, removeFromSelectionByIndex } from './state-management.js';
+import { isObjectTemplate, getTypeBadge, getTypeBadgeTier } from './constants.js';
+import { getObjectKey } from './main.js';
 import { afterFrontendMutation, loadObjects } from './data-loading.js'; // circular — safe (function-level)
-import { showCenterPaneObject, hideCenterPaneObject, checkForChanges } from './object-editor.js'; // circular — safe (function-level)
-import { getEffectiveAttributes, getEffectiveName } from './app.js'; // circular — safe (function-level)
 import { openTab, renameTabKey } from './tab-manager.js'; // circular — safe (function-level)
-import { getIcon, handleApiError, toRelativePath, toDisplayPath, toApiPathSegment, extractFileName, rootFor, updateBadge, reportMoveResult } from './ui-utils.js';
+import { getIcon, toApiPathSegment, extractFileName, rootFor, reportMoveResult } from './ui-utils.js';
 import { refreshPanelTiers } from './panel-resizer.js';
 import { cleanupDragState } from './drag-drop.js';
-import { buildTree, updateSelection, selectObjectByIndex } from './app.js'; // circular — safe (function-level)
+import { buildTree } from './app.js'; // circular — safe (function-level)
 import { ApiClient } from '../api-client.js';
 import { showToast, showConfirmDialog } from '../ui-notifications.js';
 import { escapeHtml } from '../app.js';
@@ -969,7 +966,7 @@ export async function createNewItem() {
     }
 
     const nameToValidate = name.endsWith('/') ? name.slice(0, -1) : name;
-    const invalidChars = /[\/\\:*?"<>|]/;
+    const invalidChars = /[/\\:*?"<>|]/;
     if (invalidChars.test(nameToValidate)) {
         showToast('Name cannot contain / \\ : * ? " < > |', 'error');
         return;
@@ -1097,7 +1094,7 @@ export async function confirmInlineCreate(type, name, row) {
     }
 
     const nameToValidate = name.endsWith('/') ? name.slice(0, -1) : name;
-    const invalidChars = /[\/\\:*?"<>|]/;
+    const invalidChars = /[/\\:*?"<>|]/;
     if (invalidChars.test(nameToValidate)) {
         showToast('Name cannot contain / \\ : * ? " < > |', 'error');
         row.remove();

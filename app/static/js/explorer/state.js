@@ -88,7 +88,7 @@ export class TreeExpansionState {
                 event.dataTransfer.dropEffect = 'move';
                 event.currentTarget.classList.add('drop-active');
                 if (path && !this._set.has(path) && target !== path) {
-                    if (timeout) clearTimeout(timeout);
+                    if (timeout) {clearTimeout(timeout);}
                     target = path;
                     timeout = setTimeout(() => {
                         if (target === path) { this._set.add(path); renderFn(); }
@@ -96,7 +96,7 @@ export class TreeExpansionState {
                 }
             },
             onDragLeave: (event) => {
-                if (event.currentTarget.contains(event.relatedTarget)) return;
+                if (event.currentTarget.contains(event.relatedTarget)) {return;}
                 event.currentTarget.classList.remove('drop-active');
                 if (timeout) { clearTimeout(timeout); timeout = null; target = null; }
             }

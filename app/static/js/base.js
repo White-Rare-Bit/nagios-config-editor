@@ -3,10 +3,10 @@
  *
  * Shared functionality across all pages.
  */
-import { escapeHtml, handleGlobalKeydown, reloadConfig } from './app.js';
+import { reloadConfig } from './app.js';
 import { baseState } from './base-state.js';
-import { getSessionId, getUserIdentity, setUserIdentity, hasUserIdentity } from './session-manager.js';
-import { showToast, showConfirmDialog } from './ui-notifications.js';
+import { hasUserIdentity } from './session-manager.js';
+import { showToast } from './ui-notifications.js';
 import { ApiClient, apiUrl } from './api-client.js';
 import { closeGitResultPanel } from './git-ui.js';
 import { handleCommitClick, closeGlobalCommitDialog } from './commit-dialog.js';
@@ -16,6 +16,12 @@ let explorerCallbacks = null;
 
 export function registerExplorerCallbacks(callbacks) {
     explorerCallbacks = callbacks;
+}
+
+// Lets other shared modules (commit-dialog.js) reach the explorer without
+// importing it. Null on pages that are not the explorer.
+export function getExplorerCallbacks() {
+    return explorerCallbacks;
 }
 
 // =============================================================================
@@ -183,7 +189,7 @@ export async function handleUndoClick() {
                 showToast(`Undone: ${description}`, 'info');
                 checkPendingChanges();
                 // Reload page to reflect changes
-                if (typeof buildTree === 'function') {buildTree();}
+                explorerCallbacks?.buildTree?.();
             } else if (result.status === 404) {
                 showToast('Nothing to undo', 'info');
             } else {

@@ -151,7 +151,14 @@ function initEventDelegation() {
 // =============================================================================
 
 // Register callbacks for base.js (undo/commit button updates)
-registerExplorerCallbacks({ undoLastAction, getTotalStagedCount, getUndoCount, buildTree });
+registerExplorerCallbacks({
+    undoLastAction, getTotalStagedCount, getUndoCount, buildTree,
+    // Called by commit-dialog.js after the server discarded all staged changes
+    reloadAfterDiscard: async () => {
+        await loadObjects();
+        afterServerSync();
+    },
+});
 registerLockChangeCallback(renderCenterAttributes);
 // Breaking the lock discards the other user's staged edits on the server, so
 // reload objects first (as undo/apply/discard do) or the tree keeps showing them

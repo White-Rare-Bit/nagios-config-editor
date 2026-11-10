@@ -2,24 +2,20 @@
 
 import { state } from './state.js';
 import { constants, isObjectTemplate } from './constants.js';
-import { getObjectKey, findObjectByKey, parseCommaValues } from './main.js';
+import { getObjectKey, findObjectByKey } from './main.js';
 import { afterFrontendMutation } from './data-loading.js'; // circular — safe (function-level)
-import { buildLocalInheritanceChain } from './relations-loader.js'; // circular — safe (function-level)
-import { isSelectedByIndex } from './state-management.js';
-import { openTab, renderTabBar, renameTabKey } from './tab-manager.js'; // circular — safe (function-level)
-import { getIcon, handleApiError, toRelativePath, toDisplayPath, extractFileName } from './ui-utils.js';
+import { renderTabBar, renameTabKey } from './tab-manager.js'; // circular — safe (function-level)
 import { loadImpactAndRelationships } from './impact-section.js'; // circular — safe (function-level)
 import { computeStagedIssues, refreshCenterPaneIssueBadge } from './badge-issues.js'; // circular — safe (function-level)
 import { showDialog, closeDialog } from './context-menu.js'; // circular — safe (function-level)
 import { getNewObjectNameField } from './dialogs.js'; // circular — safe (function-level)
-import { getObjectIssue, getHostListInfo, getIssueShortLabel, getIssueIcon, getObjectTypeIcon, getNameFieldForObject, hideAutocompleteDropdown, handleAutocompleteKeyNav, refreshRelatedSections, getEffectiveName } from './app.js'; // circular — safe (function-level)
+import { getObjectIssue, getHostListInfo, getIssueShortLabel, getIssueIcon, getNameFieldForObject, hideAutocompleteDropdown, handleAutocompleteKeyNav, refreshRelatedSections } from './app.js'; // circular — safe (function-level)
 import { ApiClient, apiUrl } from '../api-client.js';
-import { showToast, showConfirmDialog } from '../ui-notifications.js';
+import { showToast } from '../ui-notifications.js';
 import { escapeHtml, copyToClipboard } from '../app.js';
 import { NAGIOS_OBJECT_REFERENCE } from '../docs-data.js';
 import { DebugLogger, escapeJs } from '../base.js';
 import { baseState } from '../base-state.js';
-import { StableKey } from '../stable-key.js';
 
 const identityFields = constants.identityFields;
 
@@ -445,7 +441,7 @@ function highlightCommandSyntax(text) {
             remaining = remaining.slice(match[1].length);
         }
         // Check for paths starting with /
-        else if ((match = remaining.match(/^(\/[a-zA-Z0-9_\/.+-]+)/))) {
+        else if ((match = remaining.match(/^(\/[a-zA-Z0-9_/.+-]+)/))) {
             tokens.push({ type: 'path', value: match[1] });
             remaining = remaining.slice(match[1].length);
         }
@@ -788,11 +784,8 @@ export function filterCommaValueSuggestions(inputValue, allSuggestions, attrKey)
     return { filtered, remaining, currentPart, parts };
 }
 
-const COMMAND_ATTRS = new Set(['check_command', 'event_handler', 'host_notification_commands', 'service_notification_commands']);
 // Single-value command attrs: commas are part of ! arguments, not value separators
 const SINGLE_COMMAND_ATTRS = new Set(['check_command', 'event_handler']);
-// Nagios special values that bypass reference validation
-const NAGIOS_SPECIAL_VALUES = new Set(['*', 'null']);
 
 export function showAttrAutocomplete(input, attrKey) {
     // Bug 013: For single-value command fields, close autocomplete after !
@@ -1392,7 +1385,7 @@ function renderInheritedAttributes(inherited, obj) {
     let html = '<div class="inherited-attrs-table">';
     for (const [key, rawValue] of entries) {
         const displayValue = (typeof rawValue === 'object' && rawValue !== null) ? rawValue.value : rawValue;
-        const isOverridden = obj.attributes && obj.attributes.hasOwnProperty(key);
+        const isOverridden = obj.attributes && Object.hasOwn(obj.attributes, key);
 
         html += `<div class="attr-row ${isOverridden ? 'overridden' : ''}">`;
         html += `<div class="attr-key inherited-attr">${escapeHtml(key)}</div>`;

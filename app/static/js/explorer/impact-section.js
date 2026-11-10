@@ -18,7 +18,6 @@ import { escapeHtml } from '../app.js';
 import { escapeJs } from '../base.js';
 
 // Type labels for display
-const typeLabels = constants.typeLabels;
 
 // Bug 003-relationships: Request counter to discard stale async results.
 // Each call to loadImpactAndRelationships increments this; when the async

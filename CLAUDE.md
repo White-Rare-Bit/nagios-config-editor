@@ -10,7 +10,7 @@ python3 -m app
 
 Dependencies: `flask>=2.0.0,<4.0.0`, `gunicorn>=21.2.0,<24.0.0`
 
-Tests: `pip install -r requirements-dev.txt`, then `python3 -m pytest tests/`. `tests/conftest.py` isolates every test from `config/settings.json`, `logs/` and `sample-config/`; keep it that way.
+Tests: `pip install -r requirements-dev.txt`, then `python3 -m pytest tests/`. JS: `npm install` once, then `npm run test:js` (node:test, `tests/js/`) and `npm run lint` (ESLint on `app/static/js/`, Stylelint on `app/static/css/`). `tests/conftest.py` isolates every test from `config/settings.json`, `logs/` and `sample-config/`; keep it that way.
 
 ## Documentation Index
 

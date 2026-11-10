@@ -4,10 +4,10 @@
 import { baseState } from './base-state.js';
 import { getUserIdentity, hasUserIdentity } from './session-manager.js';
 import { showToast, showConfirmDialog } from './ui-notifications.js';
-import { showGitRunningPanel, showGitOperationResult, closeGitResultOverlay } from './git-ui.js';
+import { showGitRunningPanel, closeGitResultOverlay } from './git-ui.js';
 import { ApiClient, apiUrl } from './api-client.js';
 import { escapeHtml } from './app.js';
-import { pluralize, updateNavCommitButton, updateUndoButton } from './base.js'; // circular
+import { pluralize, updateNavCommitButton, updateUndoButton, getExplorerCallbacks } from './base.js'; // circular
 
 export function handleCommitClick() {
     showGlobalCommitDialog();
@@ -139,14 +139,9 @@ async function buildExternalChangesHtml(gitChanges, contextLines) {
 async function resetFrontendAfterDiscard() {
     updateNavCommitButton(0);
     updateUndoButton(0);
-    if (typeof Explorer !== 'undefined' && Explorer.resetStagingState) {
-        Explorer.resetStagingState();
-    }
-    if (typeof Explorer !== 'undefined' && Explorer.loadObjects) {
-        await Explorer.loadObjects();
-    }
-    if (typeof buildTree === 'function') {buildTree();}
-    if (typeof renderTargetPane === 'function') {renderTargetPane();}
+    // Only the explorer page registers this; it reloads objects and redraws
+    // the trees (Explorer.* and buildTree are not globals in module code).
+    await getExplorerCallbacks()?.reloadAfterDiscard?.();
 }
 
 /**
@@ -384,7 +379,7 @@ async function buildChangesFilesHtml(gitChanges, contextLines, options = {}) {
             typeClass = 'move';
         }
 
-        let diffContent = '';
+        let diffContent;
         if (change.diff && change.diff.diff_text) {
             // Use pre-computed diff from shadow copy
             diffContent = renderDiffText(change.diff.diff_text);
@@ -596,7 +591,7 @@ function showGitDiscardResultPanel(success, result) {
         ? result.commands.map(c => c.command).join(' && ')
         : 'git discard';
 
-    let outputHtml = '';
+    let outputHtml;
     if (success) {
         outputHtml = '<span class="success-text">All uncommitted changes discarded</span>\n\n';
         if (result.commands && result.commands.length > 0) {
@@ -680,7 +675,7 @@ export async function discardGlobalChanges() {
 function showStagingDiscardResultPanel(success, errorMsg = null) {
     const command = 'Clear staging data';
 
-    let outputHtml = '';
+    let outputHtml;
     if (success) {
         outputHtml = '<span class="success-text">All staged changes discarded.</span>\n';
     } else {

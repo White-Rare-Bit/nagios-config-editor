@@ -1,6 +1,6 @@
 import { ApiClient } from './api-client.js';
 import { escapeHtml, formatDate } from './app.js';
-import { showToast, showConfirmDialog } from './ui-notifications.js';
+import { showConfirmDialog } from './ui-notifications.js';
 import { getUserIdentity } from './session-manager.js';
 import { showGitRunningPanel } from './git-ui.js';
 import { showResultPanel, handleCommitClick } from './commit-dialog.js';

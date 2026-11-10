@@ -19,7 +19,6 @@ import { ApiClient, apiUrl } from '../api-client.js';
 import { showToast } from '../ui-notifications.js';
 import { reportMoveResult } from './ui-utils.js';
 import { escapeHtml } from '../app.js';
-import { escapeJs } from '../base.js';
 import { baseState } from '../base-state.js';
 
 const VIEWPORT_PADDING = 10;

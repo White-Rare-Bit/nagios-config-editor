@@ -395,7 +395,7 @@
     padding: 0;
     font-size: 8px;
     z-index: 11;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 30%);
     transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
     opacity: 0;
 }
@@ -408,7 +408,7 @@
 .panel-collapse-pill:hover {
     background: var(--nbe-dark-accent-primary);
     color: var(--nbe-dark-text-primary);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 2px 6px rgb(0 0 0 / 40%);
 }
 
 /* Collapsed panel state — wider handle with pill always visible */
@@ -435,10 +435,7 @@
 /* Drag overlay to prevent selection during resize */
 .panel-resize-overlay {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    inset: 0;
     z-index: 9999;
     cursor: col-resize;
 }
@@ -3792,7 +3789,7 @@
 .add-attr-btn {
     margin-top: var(--nbe-space-md);
     padding: var(--nbe-space-sm) var(--nbe-space-lg);
-    border: 1px dashed rgba(255, 255, 255, 0.15);
+    border: 1px dashed rgb(255 255 255 / 15%);
     background: var(--nbe-dark-accent-alpha-20);
     border-radius: var(--nbe-radius-md);
     color: var(--nbe-dark-accent-primary);
@@ -4293,13 +4290,14 @@
 .dialog-reference-option {
     margin-top: var(--nbe-space-md);
 }
+
 .dialog-reference-option .commit-reference-label {
     font-size: var(--nbe-font-size-sm);
 }
 
 /* Reference warning in commit dialog */
 .commit-reference-warning {
-    background: rgba(var(--nbe-warning-rgb, 255, 152, 0), 0.15);
+    background: rgb(var(--nbe-warning-rgb, 255, 152, 0), 0.15);
     border: 1px solid var(--nbe-warning);
     border-radius: var(--nbe-radius-md);
     padding: var(--nbe-space-sm) var(--nbe-space-md);

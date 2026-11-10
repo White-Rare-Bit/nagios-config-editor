@@ -52,7 +52,7 @@ export { escapeHtml };
  * @returns {string} Escaped string safe for use in RegExp
  */
 export function escapeRegex(str) {
-    if (str === null || str === undefined) return '';
+    if (str === null || str === undefined) {return '';}
     return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
@@ -71,7 +71,7 @@ export function generateUniqueId() {
  * @returns {string} Formatted date string
  */
 export function formatDate(dateStr, useRelative = true) {
-    if (!dateStr) return '-';
+    if (!dateStr) {return '-';}
     try {
         const date = new Date(dateStr);
 
@@ -118,7 +118,7 @@ export function setButtonLoading(buttonOrSelector, isLoading, loadingText = null
         ? document.querySelector(buttonOrSelector)
         : buttonOrSelector;
 
-    if (!button) return;
+    if (!button) {return;}
 
     if (isLoading) {
         button.classList.add('loading');
@@ -185,7 +185,7 @@ export function handleGlobalKeydown(e) {
         const modals = document.querySelectorAll('.modal.show');
         modals.forEach(modal => {
             const bsModal = bootstrap.Modal.getInstance(modal);
-            if (bsModal) bsModal.hide();
+            if (bsModal) {bsModal.hide();}
         });
     }
 }
