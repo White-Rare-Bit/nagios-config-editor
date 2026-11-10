@@ -110,4 +110,6 @@ def test_inheritance_api_accepts_plain_stable_key(app_with_duplicate_services):
     assert resp.status_code == 200  # noqa: PLR2004
     assert resp.get_json()["inherited"]["check_command"]["value"] == "check_ping!200.0,40%!600.0,80%"
 
-    assert client.get("/api/templates/inheritance").status_code == 400  # noqa: PLR2004
+    missing = client.get("/api/templates/inheritance")
+    assert missing.status_code == 400  # noqa: PLR2004
+    assert missing.get_json() == {"success": False, "error": "stable_key parameter required"}

@@ -8,6 +8,7 @@ from ..inheritance import build_type_template_lookup, resolve_chain
 from ..nagios_model import is_template_object
 
 from .helpers import get_service
+from .mutation import ApiError
 
 bp = Blueprint("templates", __name__)
 
@@ -43,9 +44,7 @@ def get_inheritance(stable_key=None):
     if stable_key is None:
         stable_key = request.args.get("key", "")
 
-    target_obj, obj_type, error = _decode_and_find_object(service, stable_key)
-    if error:
-        return error
+    target_obj, obj_type = _decode_and_find_object(service, stable_key)
 
     template_lookup = build_type_template_lookup(service.get_objects(), obj_type)
     chain, inherited, errors = resolve_chain(target_obj, obj_type, template_lookup)
@@ -57,12 +56,14 @@ def _decode_and_find_object(service, stable_key):
     """Find the object for a plain or base64-encoded stable key.
 
     Returns:
-        Tuple of (target_obj, obj_type, error_response).
-        If error_response is not None, target_obj and obj_type are None.
+        Tuple of (target_obj, obj_type).
+
+    Raises:
+        ApiError: 400 for a missing or undecodable key, 404 for no such object.
 
     """
     if not stable_key:
-        return None, None, (jsonify({"error": "stable_key parameter required"}), 400)
+        raise ApiError("stable_key parameter required", 400)
 
     # A plain key always contains "|"; the base64 alphabet has none.
     decoded_key = stable_key
@@ -70,13 +71,13 @@ def _decode_and_find_object(service, stable_key):
         try:
             decoded_key = base64.b64decode(stable_key).decode("utf-8")
         except (ValueError, UnicodeDecodeError):
-            return None, None, (jsonify({"error": "Invalid stable key encoding"}), 400)
+            raise ApiError("Invalid stable key encoding", 400) from None
 
     result = service.find_object_by_stable_key(decoded_key)
     if result is None:
-        return None, None, (jsonify({"error": "Object not found"}), 404)
+        raise ApiError("Object not found", 404)
 
     _, obj = result
-    return obj, obj.object_type, None
+    return obj, obj.object_type
 
 

@@ -292,7 +292,9 @@ export function syncCenterPaneAfterUndo() {
 
     // For existing objects, sync attributes with current server state
     // editingStableKey is the key the server last gave this object; the
-    // edited copy's own display_name can be stale after a rename.
+    // edited copy's own display_name can be stale after a rename. After an
+    // undo that reverts a rename, editingStableKey is the post-rename key,
+    // which no longer exists, so the lookup fails and the pane closes (accepted).
     const objKey = state.editingStableKey || getObjectKey(state.editedObject);
     if (!objKey) {return;}
 
@@ -1342,7 +1344,7 @@ export function restoreDetailSectionState() {
 /**
  * Fetch inheritance chain for an object by stable key.
  * Uses cache to avoid repeated API calls for same object.
- * @param {string} stableKey - Base64-encoded "file|type|name" key
+ * @param {string} stableKey - "file|type|name" key (sent as ?key=; the server also takes base64)
  * @returns {Promise<Object>} - {chain, inherited, errors}
  */
 export async function fetchInheritance(stableKey) {

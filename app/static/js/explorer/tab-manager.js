@@ -105,14 +105,24 @@ function openTab(obj) {
  * the new one so the tab, selection and editor follow the object.
  * @param {string} oldKey
  * @param {string} newKey - the key the server returned
+ * @param {string} [newLabel] - the tab label to show; validateTabs refreshes labels after the reload anyway
+ * If newKey already has a tab the two merge (the surviving tab stays active if either was).
  */
-export function renameTabKey(oldKey, newKey) {
+export function renameTabKey(oldKey, newKey, newLabel) {
     if (!oldKey || !newKey || oldKey === newKey) {return;}
 
-    for (const tab of state.openTabs) {
-        if (tab.key === oldKey) {tab.key = newKey;}
+    const wasActive = state.activeTabKey === oldKey;
+    const oldTab = state.openTabs.find(t => t.key === oldKey);
+    if (oldTab) {
+        if (state.openTabs.some(t => t.key === newKey)) {
+            // newKey already has a tab: merge into it, never two tabs per key.
+            state.openTabs = state.openTabs.filter(t => t !== oldTab);
+        } else {
+            oldTab.key = newKey;
+            if (newLabel) {oldTab.label = newLabel;}
+        }
     }
-    if (state.activeTabKey === oldKey) {state.activeTabKey = newKey;}
+    if (wasActive) {state.activeTabKey = newKey;}
     if (state.selectedKeys.has(oldKey)) {
         state.selectedKeys.delete(oldKey);
         state.selectedKeys.add(newKey);
