@@ -1000,26 +1000,26 @@
 /* Object type color coding - semantic categories using design tokens */
 
 /* Infrastructure (green) */
-.tree-item-type.type-host { background: var(--nbe-type-infra-bg); color: var(--nbe-type-infra-text); }
-.tree-item-type.type-hostgroup { background: var(--nbe-type-infra-bg-alt); color: var(--nbe-type-infra-text-alt); }
+.tree-item-type.type-host { background: var(--nbe-dark-type-host-bg); color: var(--nbe-dark-type-host-text); }
+.tree-item-type.type-hostgroup { background: var(--nbe-dark-type-hostgroup-bg); color: var(--nbe-dark-type-hostgroup-text); }
 
 /* Monitoring (blue) */
-.tree-item-type.type-service { background: var(--nbe-type-monitor-bg); color: var(--nbe-type-monitor-text); }
-.tree-item-type.type-servicegroup { background: var(--nbe-type-monitor-bg-alt); color: var(--nbe-type-monitor-text-alt); }
+.tree-item-type.type-service { background: var(--nbe-dark-type-service-bg); color: var(--nbe-dark-type-service-text); }
+.tree-item-type.type-servicegroup { background: var(--nbe-dark-type-servicegroup-bg); color: var(--nbe-dark-type-servicegroup-text); }
 
 /* People (orange) */
-.tree-item-type.type-contact { background: var(--nbe-type-people-bg); color: var(--nbe-type-people-text); }
-.tree-item-type.type-contactgroup { background: var(--nbe-type-people-bg-alt); color: var(--nbe-type-people-text-alt); }
+.tree-item-type.type-contact { background: var(--nbe-dark-type-contact-bg); color: var(--nbe-dark-type-contact-text); }
+.tree-item-type.type-contactgroup { background: var(--nbe-dark-type-contactgroup-bg); color: var(--nbe-dark-type-contactgroup-text); }
 
 /* System (purple/gray) */
-.tree-item-type.type-command { background: var(--nbe-type-system-bg); color: var(--nbe-type-system-text); }
-.tree-item-type.type-timeperiod { background: var(--nbe-type-neutral-bg); color: var(--nbe-type-neutral-text); }
+.tree-item-type.type-command { background: var(--nbe-dark-type-command-bg); color: var(--nbe-dark-type-command-text); }
+.tree-item-type.type-timeperiod { background: var(--nbe-dark-type-timeperiod-bg); color: var(--nbe-dark-type-timeperiod-text); }
 
 /* Dependencies (cyan) */
-.tree-item-type.type-servicedependency { background: var(--nbe-type-deps-bg); color: var(--nbe-type-deps-text); }
-.tree-item-type.type-hostdependency { background: var(--nbe-type-deps-bg-alt); color: var(--nbe-type-deps-text-alt); }
-.tree-item-type.type-serviceescalation { background: var(--nbe-type-deps-bg); color: var(--nbe-type-deps-text); }
-.tree-item-type.type-hostescalation { background: var(--nbe-type-deps-bg-alt); color: var(--nbe-type-deps-text-alt); }
+.tree-item-type.type-servicedependency { background: var(--nbe-dark-type-servicedependency-bg); color: var(--nbe-dark-type-servicedependency-text); }
+.tree-item-type.type-hostdependency { background: var(--nbe-dark-type-hostdependency-bg); color: var(--nbe-dark-type-hostdependency-text); }
+.tree-item-type.type-serviceescalation { background: var(--nbe-dark-type-serviceescalation-bg); color: var(--nbe-dark-type-serviceescalation-text); }
+.tree-item-type.type-hostescalation { background: var(--nbe-dark-type-hostescalation-bg); color: var(--nbe-dark-type-hostescalation-text); }
 
 .tree-item.commented-out .tree-item-name {
     text-decoration: line-through;
@@ -3314,26 +3314,26 @@
 /* Type-specific colors matching tree-item-type - semantic categories */
 
 /* Infrastructure (green) */
-.card-type.type-host { background: var(--nbe-type-infra-bg); color: var(--nbe-type-infra-text); }
-.card-type.type-hostgroup { background: var(--nbe-type-infra-bg-alt); color: var(--nbe-type-infra-text-alt); }
+.card-type.type-host { background: var(--nbe-dark-type-host-bg); color: var(--nbe-dark-type-host-text); }
+.card-type.type-hostgroup { background: var(--nbe-dark-type-hostgroup-bg); color: var(--nbe-dark-type-hostgroup-text); }
 
 /* Monitoring (blue) */
-.card-type.type-service { background: var(--nbe-type-monitor-bg); color: var(--nbe-type-monitor-text); }
-.card-type.type-servicegroup { background: var(--nbe-type-monitor-bg-alt); color: var(--nbe-type-monitor-text-alt); }
+.card-type.type-service { background: var(--nbe-dark-type-service-bg); color: var(--nbe-dark-type-service-text); }
+.card-type.type-servicegroup { background: var(--nbe-dark-type-servicegroup-bg); color: var(--nbe-dark-type-servicegroup-text); }
 
 /* People (orange) */
-.card-type.type-contact { background: var(--nbe-type-people-bg); color: var(--nbe-type-people-text); }
-.card-type.type-contactgroup { background: var(--nbe-type-people-bg-alt); color: var(--nbe-type-people-text-alt); }
+.card-type.type-contact { background: var(--nbe-dark-type-contact-bg); color: var(--nbe-dark-type-contact-text); }
+.card-type.type-contactgroup { background: var(--nbe-dark-type-contactgroup-bg); color: var(--nbe-dark-type-contactgroup-text); }
 
 /* System (purple/gray) */
-.card-type.type-command { background: var(--nbe-type-system-bg); color: var(--nbe-type-system-text); }
-.card-type.type-timeperiod { background: var(--nbe-type-neutral-bg); color: var(--nbe-type-neutral-text); }
+.card-type.type-command { background: var(--nbe-dark-type-command-bg); color: var(--nbe-dark-type-command-text); }
+.card-type.type-timeperiod { background: var(--nbe-dark-type-timeperiod-bg); color: var(--nbe-dark-type-timeperiod-text); }
 
 /* Dependencies (cyan) */
-.card-type.type-servicedependency { background: var(--nbe-type-deps-bg); color: var(--nbe-type-deps-text); }
-.card-type.type-hostdependency { background: var(--nbe-type-deps-bg); color: var(--nbe-type-deps-text); }
-.card-type.type-serviceescalation { background: var(--nbe-type-deps-bg); color: var(--nbe-type-deps-text); }
-.card-type.type-hostescalation { background: var(--nbe-type-deps-bg); color: var(--nbe-type-deps-text); }
+.card-type.type-servicedependency { background: var(--nbe-dark-type-servicedependency-bg); color: var(--nbe-dark-type-servicedependency-text); }
+.card-type.type-hostdependency { background: var(--nbe-dark-type-hostdependency-bg); color: var(--nbe-dark-type-hostdependency-text); }
+.card-type.type-serviceescalation { background: var(--nbe-dark-type-serviceescalation-bg); color: var(--nbe-dark-type-serviceescalation-text); }
+.card-type.type-hostescalation { background: var(--nbe-dark-type-hostescalation-bg); color: var(--nbe-dark-type-hostescalation-text); }
 
 .card-issue-btn {
     display: inline-flex;
@@ -3351,30 +3351,30 @@
 }
 
 .card-issue-btn.severity-error {
-    background: var(--nbe-chip-error-bg);
-    color: var(--color-delete);
+    background: var(--nbe-dark-validation-error-bg);
+    color: var(--nbe-dark-validation-error-text);
 }
 
 .card-issue-btn.severity-error:hover {
-    background: var(--nbe-danger-border);
+    background: var(--nbe-dark-validation-error-badge);
 }
 
 .card-issue-btn.severity-warning {
-    background: var(--nbe-chip-warning-bg);
-    color: var(--nbe-warning);
+    background: var(--nbe-dark-validation-warning-bg);
+    color: var(--nbe-dark-validation-warning-text);
 }
 
 .card-issue-btn.severity-warning:hover {
-    background: var(--nbe-warning-border);
+    background: var(--nbe-dark-validation-warning-badge);
 }
 
 .card-issue-btn.severity-info {
     background: var(--nbe-dark-validation-info-bg);
-    color: var(--color-edit);
+    color: var(--nbe-dark-validation-info-text);
 }
 
 .card-issue-btn.severity-info:hover {
-    background: var(--nbe-primary-border);
+    background: var(--nbe-dark-validation-info-badge);
 }
 
 .card-type.is-new {

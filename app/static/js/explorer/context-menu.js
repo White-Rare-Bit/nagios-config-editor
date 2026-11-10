@@ -251,6 +251,14 @@ export function showDialog(title, bodyHtml, onConfirm, confirmLabel) {
     const escapeHandler = (e) => {
         if (e.key === 'Escape') {
             closeDialog();
+        } else if (e.key === 'Enter' && onConfirm && !e.isComposing &&
+                   e.target.tagName === 'INPUT' && e.target.closest('#dialogBody') &&
+                   !['checkbox', 'radio', 'button', 'submit'].includes(e.target.type) &&
+                   !document.querySelector('#dialogBody .suggestion-item.highlighted, #dialogBody .suggestion-item.active, #dialogBody .attr-autocomplete-item.highlighted')) {
+            // Enter in a text input submits (Rename/Clone/Move). Not for
+            // textarea/select, and not while an autocomplete item is highlighted.
+            e.preventDefault();
+            onConfirm();
         }
     };
     dialogOverlay.addEventListener('keydown', escapeHandler);

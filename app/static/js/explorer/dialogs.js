@@ -691,10 +691,13 @@ export function showEditAttributesDialog() {
     hideContextMenu();
     closeActionsMenu();
 
+    // Editing nothing used to silently apply to every object; require a selection.
+    if (state.selectedKeys.size === 0) {
+        showToast('Select objects first', 'warning');
+        return;
+    }
     // Collect all unique attribute names from selected objects
-    const scope = state.selectedKeys.size > 0
-        ? Array.from(state.selectedKeys)
-        : state.allObjects.map(o => getObjectKey(o));
+    const scope = Array.from(state.selectedKeys);
     const availableFields = new Set();
     for (const key of scope) {
         const obj = findObjectByKey(key);

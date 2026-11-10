@@ -3,7 +3,7 @@
  */
 
 import { ApiClient } from './api-client.js';
-import { showConfirmDialog } from './ui-notifications.js'; // circular
+import { showConfirmDialog, showToast } from './ui-notifications.js'; // circular
 import { escapeHtml } from './shared/escape.js';
 
 // ============================================================================
@@ -24,17 +24,14 @@ export async function reloadConfig() {
  * Create a manual backup
  */
 export async function createBackup() {
-    const description = prompt('Enter a description for this backup (optional):');
-    if (description === null) return; // Cancelled
-
     const result = await ApiClient.post('/api/backups', {
-        description: description || 'Manual backup'
+        description: 'Manual backup'
     }, { silent: true });
 
     if (result.success) {
-        alert('Backup created successfully!\n\nPath: ' + result.data.path);
+        showToast('Backup created', 'success');
     } else {
-        alert('Error creating backup: ' + (result.error || 'Unknown error'));
+        showToast('Error creating backup: ' + (result.error || 'Unknown error'), 'error');
     }
 }
 

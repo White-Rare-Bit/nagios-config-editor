@@ -12,8 +12,9 @@ import { rebuildUI } from './state-management.js'; // circular — safe (functio
 import { loadAllSuggestions } from './analysis.js'; // circular — safe (function-level)
 import { handleApiError } from './ui-utils.js';
 import { ApiClient } from '../api-client.js';
-import { showToast } from '../ui-notifications.js';
-import { updateUndoButton, updateNavCommitButton } from '../base.js';
+import { showToast, showConfirmDialog } from '../ui-notifications.js';
+import { escapeHtml } from '../shared/escape.js';
+import { updateUndoButton, updateNavCommitButton, commitCountFromInfo } from '../base.js';
 
 const CONFIG = {
     ANALYSIS_DEBOUNCE_MS: 500
@@ -107,7 +108,7 @@ export async function updateBadges() {
 
     if (infoResult.success) {
         const info = infoResult.payload;
-        let count = Math.max(info.totalCount || 0, info.changedFiles || 0);
+        let count = commitCountFromInfo(info);
 
         // Update object-level change tracking
         state.changedObjectKeys = new Set(info.changedObjectKeys || []);
@@ -213,9 +214,8 @@ export async function applyAllStaged(force = false) {
     // Check for conflict response (409)
     if (result.data?.conflicts) {
         const conflicts = result.data.conflicts;
-        const fileList = conflicts.map(f => `  \u2022 ${f}`).join('\n');
-        const msg = `${conflicts.length} file(s) were modified externally:\n\n${fileList}\n\nForce apply will overwrite. A backup is created first.`;
-        if (confirm(msg)) {
+        const msg = `<p>${conflicts.length} file(s) were modified externally:</p><ul>${conflicts.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul><p>Force apply will overwrite. A backup is created first.</p>`;
+        if (await showConfirmDialog({ title: 'Files changed outside the editor', message: msg, confirmText: 'Force Apply', type: 'danger', allowHtml: true })) {
             return applyAllStaged(true);
         }
         showToast('Apply cancelled due to conflicts', 'warning');
@@ -280,7 +280,7 @@ export async function getTotalStagedCount() {
     const result = await ApiClient.get('/api/staging/info', { silent: true });
     if (result.success) {
         const info = result.payload;
-        return info.totalCount || 0;
+        return commitCountFromInfo(info);
     }
     return 0;
 }

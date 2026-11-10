@@ -173,9 +173,8 @@ async function applyShadowChanges(force = false) {
     if (!applyResult.success) {
         if (applyResult.data?.conflicts) {
             const conflicts = applyResult.data.conflicts;
-            const fileList = conflicts.map(f => `  \u2022 ${f}`).join('\n');
-            const msg = `${conflicts.length} file(s) were modified externally since you started editing:\n\n${fileList}\n\nForce apply will overwrite these changes. A backup is created first.`;
-            if (confirm(msg)) {
+            const msg = `<p>${conflicts.length} file(s) were modified externally since you started editing:</p><ul>${conflicts.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul><p>Force apply will overwrite these changes. A backup is created first.</p>`;
+            if (await showConfirmDialog({ title: 'Files changed outside the editor', message: msg, confirmText: 'Force Apply', type: 'danger', allowHtml: true })) {
                 return applyShadowChanges(true);
             }
             showStagingResultPanel(false, 'Apply cancelled due to conflicts');

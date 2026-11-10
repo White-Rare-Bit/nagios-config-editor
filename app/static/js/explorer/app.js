@@ -300,6 +300,9 @@ document.addEventListener('keydown', (e) => {
             updateSelection();
         }
     } else if (e.code === 'Space' && !isTyping) {
+        // Space on a focused button/link must activate it (native behaviour),
+        // not open the preview and swallow the keypress.
+        if (e.target.closest && e.target.closest('button, a, [role="button"]')) {return;}
         // Space: quick preview selected object
         e.preventDefault();
         if (state.selectedKeys.size > 0) {

@@ -214,13 +214,22 @@ export function closeKeyboardShortcuts() {
     if (overlay) {overlay.classList.remove('visible');}
 }
 
+/**
+ * The commit-button count for a /api/staging/info payload. One definition so
+ * the nav badge never flips between two numbers (changedFiles can exceed
+ * totalCount when a file changed without object-level tracking).
+ */
+export function commitCountFromInfo(info) {
+    return Math.max(info.totalCount || 0, info.changedFiles || 0);
+}
+
 export async function checkPendingChanges() {
     // Use extended staging info to get accurate count of staged changes
     const infoResult = await ApiClient.get('/api/staging/info', { silent: true });
 
     if (infoResult.success) {
         const info = infoResult.payload;
-        let count = info.totalCount || 0;
+        let count = commitCountFromInfo(info);
         updateUndoButton(info.undoCount || 0);
 
         // If no GUI staging, check git for external changes (files modified outside editor)

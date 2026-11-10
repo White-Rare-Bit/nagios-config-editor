@@ -205,7 +205,8 @@ function syncTreeSelection(obj) {
             if (folder && !folder.classList.contains('open')) {
                 folder.classList.add('open');
             }
-            item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // 'nearest' only scrolls when the row is off-screen; 'center' recentred the tree on every click.
+            item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
     }, 50);
 
