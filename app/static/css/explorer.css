@@ -1275,12 +1275,6 @@
     color: var(--nbe-text-inverse);
 }
 
-.center-close-btn {
-    flex-shrink: 0;
-    margin-left: var(--nbe-space-md);
-    font-size: var(--nbe-font-size-xl);
-}
-
 .center-header-info {
     flex: 1;
     min-width: 0;
@@ -3972,12 +3966,6 @@
 
 /* Hide Rename for objects with no name of their own (escalations, dependencies, ...) */
 .context-menu.not-renameable .rename-only {
-    display: none;
-}
-
-/* Hide most options for staged creations - they can only be deleted */
-.context-menu.staged-context .menu-item:not(.danger),
-.context-menu.staged-context .menu-divider {
     display: none;
 }
 

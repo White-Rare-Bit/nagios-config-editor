@@ -7,7 +7,7 @@ import { showToast } from '../ui-notifications.js';
 import { ApiClient } from '../api-client.js';
 import { StableKey } from '../stable-key.js';
 import { showDialog, closeDialog } from './context-menu.js'; // circular — safe (function-level)
-import { dialogInfoText, dialogAlert, dialogKvList, dialogEntryList, showCenterPaneNewObject, stageNewObjectChanges } from './dialogs.js'; // circular — safe (function-level)
+import { dialogInfoText, dialogAlert, dialogKvList, dialogEntryList, dialogFileSelect } from './dialogs.js'; // circular — safe (function-level)
 import { afterFrontendMutation } from './data-loading.js'; // circular — safe (function-level)
 import { navigateToObjectByIndex } from './file-operations.js'; // circular — safe (function-level)
 import { loadGroupingSuggestions, loadTemplateIssues, showCreateTemplateDialog, showCreateGroupDialog } from './analysis-suggestions.js'; // circular — safe (function-level)
@@ -1196,153 +1196,98 @@ export async function keepDuplicateAndDeleteOthers(suggestionIdx, keepIdx) {
     updateCleanupBadge();
 }
 
-// Track pending hostgroup creation that needs to update a service
+// "Fix long host list": one atomic batch creates the hostgroup on the server and
+// points the service at it, so a single Undo reverts both.
 
 export function fixLongHostList(idx) {
     const s = state.allCleanupSuggestions[idx];
     if (!s || s.type !== 'long_host_list' || !s.object) {return;}
 
-    const obj = s.object;
-    const hostList = obj.attributes.host_name || '';
-    const hosts = hostList.split(',').map(h => h.trim()).filter(h => h && h !== '*');
+    const suggested = state.allObjects.find(o => getObjectKey(o) === getObjectKey(s.object));
+    if (!suggested) {
+        showToast('That service no longer exists; re-run the analysis.', 'error');
+        return;
+    }
+
+    const obj = suggested;
+    const hosts = (obj.attributes.host_name || '').split(',').map(h => h.trim()).filter(h => h && h !== '*');
     const serviceDesc = obj.attributes.service_description || 'service';
+    const suggestedName = serviceDesc.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-hosts';
+    const dir = obj.source_file.substring(0, obj.source_file.lastIndexOf('/'));
 
     showDialog('Create Hostgroup', `
         ${dialogAlert('info',
             `<strong>This will:</strong>
             <ol class="u-mt-sm u-pl-lg">
-                <li>Create a new hostgroup definition with ${hosts.length} hosts</li>
+                <li>Create a new hostgroup with ${hosts.length} hosts</li>
                 <li>Update the service "${escapeHtml(serviceDesc)}" to use the new hostgroup</li>
             </ol>`)}
+        <label class="form-label" for="fixHostgroupName">Hostgroup name</label>
+        <input type="text" id="fixHostgroupName" value="${escapeHtml(suggestedName)}">
+        ${dialogFileSelect('fixHostgroupFile', 'Target File', dir + '/hostgroups.cfg')}
         <div class="u-mb-md">
             <label class="form-label">Hosts to be grouped:</label>
             <div class="dialog-scrollable-list dialog-scrollable-list--short">
                 ${hosts.map(h => escapeHtml(h)).join('<br>')}
             </div>
         </div>
-        ${dialogInfoText('Click Continue to open the hostgroup editor where you can set the name and other attributes.')}
-    `, () => {
-        closeDialog();
-        openHostgroupEditorForService(idx, hosts);
-    }, 'Continue');
-}
-
-export function openHostgroupEditorForService(suggestionIdx, hosts) {
-    const s = state.allCleanupSuggestions[suggestionIdx];
-    const obj = s.object;
-    const serviceDesc = obj.attributes.service_description || 'service';
-    const suggestedName = serviceDesc.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-hosts';
-
-    // Find a suitable file for the new hostgroup (same directory as the service)
-    const serviceFile = obj.source_file;
-    const dir = serviceFile.substring(0, serviceFile.lastIndexOf('/'));
-    const hostgroupFile = dir + '/hostgroups.cfg';
-
-    // Check if the hostgroup file exists, if not mark it as new
-    const existingFiles = new Set(state.allObjects.map(o => o.source_file));
-    if (!existingFiles.has(hostgroupFile) && !state.newFiles.has(hostgroupFile)) {
-        state.newFiles.add(hostgroupFile);
-    }
-
-    // Store the link so we can update the service when the hostgroup is saved
-    state.pendingHostgroupServiceLink = {
-        serviceKey: getObjectKey(obj),
-        suggestionIdx: suggestionIdx
-    };
-
-    // Create the new object and open it in the editor
-    const newHostgroup = {
-        object_type: 'hostgroup',
-        attributes: {
-            hostgroup_name: suggestedName,
-            alias: suggestedName.replace(/-/g, ' '),
-            members: hosts.join(',')
-        },
-        source_file: hostgroupFile,
-        display_name: suggestedName,
-        is_new: true
-    };
-
-    // Open in editor
-    openNewObjectInEditor(newHostgroup, hostgroupFile);
-}
-
-export function openNewObjectInEditor(newObj, targetFile) {
-    // Set up the editor state for a new object
-    state.editedObject = newObj;
-    state.originalAttributes = {};
-    state.isNewObject = true;
-    state.currentCenterIsOrphan = false;
-    state.currentCenterHostListInfo = { shouldGroup: false, count: 0 };
-    state.currentCenterIssue = null;
-
-    // Clear any previous staged creation for this
-    state.newObjectStagedIndex = null;
-
-    // Stage the new object immediately so it appears in the tree
-    stageNewObjectChanges();
-
-    // Show center pane
-    const emptyState = document.getElementById('centerEmptyState');
-    const content = document.getElementById('centerContent');
-    emptyState.classList.add('u-hidden');
-    emptyState.style.display = 'none';
-    content.classList.remove('u-hidden');
-    content.style.display = 'block';
-    document.getElementById('centerCloseBtn').style.display = 'block';
-
-    // Render the object in the center pane
-    showCenterPaneNewObject(newObj, targetFile);
-
-    // Show message about the linked service update
-    if (state.pendingHostgroupServiceLink) {
-        const serviceObj = state.allObjects.find(o => getObjectKey(o) === state.pendingHostgroupServiceLink.serviceKey);
-        if (serviceObj) {
-            showToast(`Set the hostgroup name, then save. The service "${serviceObj.display_name}" will be updated automatically.`, 'info');
+    `, async () => {
+        const name = document.getElementById('fixHostgroupName').value.trim();
+        const targetFile = document.getElementById('fixHostgroupFile').value;
+        if (!name) {
+            showToast('Please enter a name', 'warning');
+            return;
         }
-    }
-}
+        if (!targetFile) {
+            showToast('Please select a target file', 'warning');
+            return;
+        }
+        if (state.allObjects.some(o => o.object_type === 'hostgroup' && o.display_name === name)) {
+            showToast(`Hostgroup "${name}" already exists`, 'error');
+            return;
+        }
 
-export async function handleHostgroupServiceLink() {
-    // Called when a new hostgroup is saved that has a pending service link
-    if (!state.pendingHostgroupServiceLink || !state.isNewObject || state.editedObject?.object_type !== 'hostgroup') {
-        return;
-    }
+        const serviceAttrs = { ...obj.attributes };
+        delete serviceAttrs.host_name;
+        serviceAttrs.hostgroup_name = name;
 
-    const hostgroupName = state.editedObject.attributes.hostgroup_name;
-    if (!hostgroupName) {return;}
-
-    const serviceKey = state.pendingHostgroupServiceLink.serviceKey;
-    const suggestionIdx = state.pendingHostgroupServiceLink.suggestionIdx;
-
-    // Update the service via API — remove host_name, add hostgroup_name
-    const serviceObj = state.allObjects.find(o => getObjectKey(o) === serviceKey);
-    if (serviceObj) {
-        const newAttrs = { ...serviceObj.attributes };
-        delete newAttrs.host_name;
-        newAttrs.hostgroup_name = hostgroupName;
-
-        const result = await ApiClient.post('/api/objects/update', {
-            stable_key: serviceKey,
-            attributes: newAttrs
+        const result = await ApiClient.post('/api/batch-mutations', {
+            description: `group hosts of ${obj.display_name} into ${name}`,
+            operations: [
+                {
+                    action: 'create',
+                    target_file: targetFile,
+                    object_type: 'hostgroup',
+                    attributes: { hostgroup_name: name, alias: name.replace(/-/g, ' '), members: hosts.join(',') }
+                },
+                { action: 'update', stable_key: getObjectKey(obj), attributes: serviceAttrs }
+            ]
         }, { silent: true });
 
-        if (result.success) {
-            showToast(`Service "${serviceObj.display_name}" will now use hostgroup "${hostgroupName}"`, 'success');
-            await afterFrontendMutation();
+        if (!result.success) {
+            showToast(`Failed: ${result.error}`, 'error');
+            return;
         }
-    }
 
-    // Remove from cleanup suggestions
-    if (suggestionIdx >= 0 && suggestionIdx < state.allCleanupSuggestions.length) {
-        state.allCleanupSuggestions.splice(suggestionIdx, 1);
+        closeDialog();
+        await afterFrontendMutation();
+        showToast(`Created hostgroup ${name} and updated ${obj.display_name}`, 'success');
+
+        const newKey = result.payload.keys?.[0];
+        const newGroup = state.allObjects.find(o => getObjectKey(o) === newKey);
+        if (newGroup) {
+            state.createdObjectKeys.add(newKey);
+            navigateToObjectByIndex(newGroup.global_index);
+        }
+
+        const i = state.allCleanupSuggestions.indexOf(s);
+        if (i > -1) {
+            state.allCleanupSuggestions.splice(i, 1);
+        }
         renderCleanupSuggestions();
         updateSuggestionsBadge();
         updateCleanupBadge();
-    }
-
-    // Clear the link
-    state.pendingHostgroupServiceLink = null;
+    }, 'Create');
 }
 
 export function updateCleanupBadge() {
@@ -1485,9 +1430,6 @@ window.Explorer.mapHealthCheckToState = mapHealthCheckToState;
 window.Explorer.loadCleanupSuggestions = loadCleanupSuggestions;
 window.Explorer.renderCleanupSuggestions = renderCleanupSuggestions;
 window.Explorer.findDuplicateDifferences = findDuplicateDifferences;
-window.Explorer.openHostgroupEditorForService = openHostgroupEditorForService;
-window.Explorer.openNewObjectInEditor = openNewObjectInEditor;
-window.Explorer.handleHostgroupServiceLink = handleHostgroupServiceLink;
 window.Explorer.updateCleanupBadge = updateCleanupBadge;
 window.Explorer.loadNotificationSuggestions = loadNotificationSuggestions;
 window.Explorer.renderNotificationSuggestions = renderNotificationSuggestions;

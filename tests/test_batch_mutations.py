@@ -1,5 +1,7 @@
 """Batch mutations are all-or-nothing; edits report the key the object now has."""
 
+import os
+
 import pytest
 
 from app import create_app
@@ -164,3 +166,33 @@ def test_batch_rollback_failure_is_a_500_and_keeps_shadow(env, monkeypatch):
     assert resp.get_json()["error"].startswith(
         "Batch failed and could not be rolled back: disk gone.")
     assert sm.has_shadow() is True
+
+
+def test_batch_create_in_new_file_undoes_cleanly(env):
+    """Grouping hosts: create a hostgroup in a file that does not exist yet
+    and point the service at it, in one batch; one undo reverts both."""
+    app, client, sm, cfg = env
+    resp = client.post("/api/batch-mutations", headers=HEADERS, json={
+        "description": "group hosts of PING on web-01 into ping-hosts",
+        "operations": [
+            {"action": "create", "target_file": f"{cfg}/hostgroups.cfg",
+             "object_type": "hostgroup",
+             "attributes": {"hostgroup_name": "ping-hosts", "alias": "ping-hosts",
+                            "members": "web-01,web-02"}},
+            {"action": "update",
+             "stable_key": _key(cfg, "services.cfg", "service", "PING on web-01"),
+             "attributes": {"service_description": "PING",
+                            "check_command": "check_ping",
+                            "hostgroup_name": "ping-hosts"}},
+        ],
+    })
+    assert resp.status_code == 200, resp.get_json()
+    assert len(resp.get_json()["keys"]) == 2
+    assert "ping-hosts" in _shadow_text(sm, "hostgroups.cfg")
+    services = _shadow_text(sm, "services.cfg")
+    assert "hostgroup_name" in services and "host_name" not in services
+
+    undo = client.post("/api/staging/undo", headers=HEADERS)
+    assert undo.status_code == 200, undo.get_json()
+    assert not os.path.exists(sm.shadow_path("hostgroups.cfg"))
+    assert "host_name" in _shadow_text(sm, "services.cfg")

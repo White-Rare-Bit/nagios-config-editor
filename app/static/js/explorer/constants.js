@@ -225,10 +225,9 @@ export function getTypeBadgeTier(objectType, isTemplate, tier) {
  * @param {string} objectType - e.g. 'host', 'service'
  * @param {string} name - the name value to check
  * @param {Object} attributes - full attributes of the object being checked
- * @param {number|null} [excludeStagedIndex=null] - staged creation index to skip
  * @returns {{isDuplicate: boolean, location: string}} result
  */
-export function checkDuplicateName(objectType, name, attributes, excludeStagedIndex) {
+export function checkDuplicateName(objectType, name, attributes) {
     if (!name) {return {isDuplicate: false, location: ''};}
 
     const c = constants;
@@ -252,21 +251,6 @@ export function checkDuplicateName(objectType, name, attributes, excludeStagedIn
     if (existingObj) {
         const file = (existingObj.source_file || '').split('/').pop();
         return {isDuplicate: true, location: file};
-    }
-
-    // Check against other staged creations
-    const dupStaged = state.stagedCreations.findIndex((sc, idx) => {
-        if (idx === excludeStagedIndex) {return false;}
-        if (sc.object_type !== objectType) {return false;}
-        if (sc.displayName !== name) {return false;}
-        if (isHostScoped) {
-            const scHost = sc.attributes?.host_name || sc.attributes?.hostgroup_name || '';
-            return scHost === hostScope;
-        }
-        return true;
-    });
-    if (dupStaged !== -1) {
-        return {isDuplicate: true, location: 'staged'};
     }
 
     return {isDuplicate: false, location: ''};

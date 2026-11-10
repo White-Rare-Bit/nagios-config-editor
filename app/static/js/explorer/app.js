@@ -15,7 +15,7 @@ import { loadIssuesForBadges, loadSuggestionsForBadges } from './badge-issues.js
 import { loadAllSuggestions, loadCleanupSuggestions, renderCleanupSuggestions, collectAllSuggestions, renderUnifiedSuggestionsList } from './analysis.js'; // circular — safe (function-level)
 import { navigateToIssue, loadIssues } from './analysis-issues.js'; // circular — safe (function-level)
 import { showCenterPaneObject, hideCenterPaneObject, showCenterPaneMultiple, renderCenterAttributes } from './object-editor.js'; // circular — safe (function-level)
-import { stageObjectDeletions, stageNewObjectChanges, createNewObject } from './dialogs.js'; // circular — safe (function-level)
+import { stageObjectDeletions, createNewObject } from './dialogs.js'; // circular — safe (function-level)
 import { hideContextMenu, closeDialog, showDialog, showPreview, closePreview, handleDragStart, handleDragEnd, handleContextMenu, handleDragOver, handleDrop } from './context-menu.js'; // circular — safe (function-level)
 import { initTargetPane, renderTargetPane, navigateToObjectByIndex } from './file-operations.js'; // circular — safe (function-level)
 import { loadImpactAndRelationships } from './impact-section.js'; // circular — safe (function-level)

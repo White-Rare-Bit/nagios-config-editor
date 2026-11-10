@@ -116,7 +116,6 @@ export const state = {
     currentView: 'file',
     editedObject: null,
     originalAttributes: null,
-    isNewObject: false,
     contextTarget: null,
     hoveredIndex: null,
     selectedFolder: null,           // Track selected folder for subfolder creation
@@ -172,14 +171,6 @@ export const state = {
     highlightedIndex: -1,
     addAttrHighlightedIndex: -1,
     addAttrNameHighlightedIndex: -1,
-
-    // Staged creations (objects created but not yet applied)
-    stagedCreations: [],
-    newObjectStagedIndex: null,
-    selectedStagedIndices: new Set(),
-
-    // Pending actions
-    pendingHostgroupServiceLink: null,
 
     // Metadata
     metadataLoaded: false

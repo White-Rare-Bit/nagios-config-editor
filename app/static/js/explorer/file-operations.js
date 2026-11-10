@@ -9,7 +9,7 @@ import { state } from './state.js';
 import { constants, isObjectTemplate, getTypeBadge, getTypeBadgeTier } from './constants.js';
 import { getObjectKey, findObjectByKey, getSelectedIndices, groupByType, getConfigRootName } from './main.js';
 import { isSelectedByIndex, clearSelection, addToSelectionByIndex, removeFromSelectionByIndex } from './state-management.js';
-import { afterFrontendMutation, loadObjects, getStagingHeaders } from './data-loading.js'; // circular — safe (function-level)
+import { afterFrontendMutation, loadObjects } from './data-loading.js'; // circular — safe (function-level)
 import { showCenterPaneObject, hideCenterPaneObject, checkForChanges } from './object-editor.js'; // circular — safe (function-level)
 import { getEffectiveAttributes, getEffectiveName } from './app.js'; // circular — safe (function-level)
 import { openTab, renameTabKey } from './tab-manager.js'; // circular — safe (function-level)

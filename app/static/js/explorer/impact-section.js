@@ -76,7 +76,7 @@ export async function loadImpactAndRelationships(obj) {
     let referencesData = { outgoing: [], incoming: [] };
     let membersData = { members: [], memberOf: [], transitiveSummary: null };
 
-    if (!state.isNewObject && getObjectKey(obj)) {
+    if (getObjectKey(obj)) {
         try {
             const result = await ApiClient.get(`/api/object-references?key=${encodeURIComponent(getObjectKey(obj))}`);
 
@@ -156,7 +156,7 @@ async function gatherInheritanceData(obj) {
         result.templateChain = buildLocalInheritanceChain(obj, templateNames);
     }
 
-    if (!state.isNewObject && useAttr) {
+    if (useAttr) {
         try {
             const stableKey = getObjectKey(obj);
             const inheritData = await fetchInheritance(stableKey);

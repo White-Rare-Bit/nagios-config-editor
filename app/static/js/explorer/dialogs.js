@@ -1,22 +1,20 @@
 /** Explorer Dialogs Module - New object creation, deletion, bulk rename, edit attributes, validation */
 
 import { state } from './state.js';
-import { constants, checkDuplicateName, isRenameable } from './constants.js';
+import { constants, isRenameable } from './constants.js';
 import { getObjectKey, findObjectByKey } from './main.js';
 import { clearSelection } from './state-management.js';
 import { selectObjectByIndex, updateSelection, closeActionsMenu, switchRightTab, getNameFieldForObject } from './app.js'; // circular — safe (function-level)
 import { showDialog, closeDialog, hideContextMenu } from './context-menu.js'; // circular — safe (function-level)
-import { showCenterPaneObject, renderCenterAttributes, validateRequiredFields } from './object-editor.js'; // circular — safe (function-level)
+import { showCenterPaneObject } from './object-editor.js'; // circular — safe (function-level)
 import { loadImpactAndRelationships } from './impact-section.js'; // circular — safe (function-level)
-import { handleHostgroupServiceLink } from './analysis.js'; // circular — safe (function-level)
 import { afterFrontendMutation } from './data-loading.js'; // circular — safe (function-level)
 import { closeTab, renameTabKey } from './tab-manager.js';
 import { navigateToObjectByIndex } from './file-operations.js'; // circular — safe (function-level)
 import { StableKey } from '../stable-key.js';
 import { ApiClient } from '../api-client.js';
 import { showToast, showConfirmDialog } from '../ui-notifications.js';
-import { escapeHtml, generateUniqueId } from '../app.js';
-import { DebugLogger } from '../base.js';
+import { escapeHtml } from '../app.js';
 
 // ============================================================================
 // HTML Template Helpers
@@ -56,6 +54,11 @@ export function dialogKvList(pairs) {
  */
 export function dialogFileSelect(id, label, defaultFile = '') {
     const configFiles = [...new Set(state.allObjects.map(o => o.source_file))].sort();
+    // A default that is not an existing file is offered as a new file; the server creates it.
+    if (defaultFile && !configFiles.includes(defaultFile)) {
+        configFiles.push(defaultFile);
+        configFiles.sort();
+    }
     const options = configFiles.map(f => {
         const fileName = f.split('/').pop();
         const selected = f === defaultFile ? 'selected' : '';
@@ -111,24 +114,6 @@ function buildScrollableList(sections, maxItems = 5) {
         html += '</ul></div>';
     }
     return html ? `<div class="dialog-scrollable-list">${html}</div>` : '';
-}
-
-/**
- * Build HTML for object type dropdown
- * @param {string} currentType - Currently selected type
- * @returns {string} HTML string
- */
-function buildTypeDropdown(currentType) {
-    return `
-        <div class="new-object-type-container">
-            <button type="button" id="newObjectTypeSelect" class="new-object-type-btn" onclick="Explorer.toggleObjectTypeDropdown()">
-                <span id="newObjectTypeValue">${currentType}</span>
-                <span class="dropdown-arrow">▼</span>
-            </button>
-            <div id="newObjectTypeDropdown" class="object-type-dropdown u-hidden"></div>
-        </div>
-        <span class="new-object-badge">NEW</span>
-    `;
 }
 
 // ============================================================================
@@ -204,217 +189,6 @@ async function createObjectOnServer(targetFile, objectType) {
     }
 }
 
-export function showCenterPaneNewObject(obj, targetFile) {
-    DebugLogger.debug('showCenterPaneNewObject called', {obj, targetFile});
-    const fileName = targetFile.split('/').pop();
-
-    // Build object type selector
-    const objectTypes = Object.keys(constants.nameFields);
-
-    // Show center pane first
-    const emptyState = document.getElementById('centerEmptyState');
-    const content = document.getElementById('centerContent');
-    DebugLogger.debug('centerEmptyState and centerContent elements', {
-        emptyStateFound: Boolean(emptyState),
-        contentFound: Boolean(content)
-    });
-
-    if (emptyState) {
-        emptyState.classList.add('u-hidden');
-        emptyState.style.display = 'none';
-    }
-    if (content) {
-        content.classList.remove('u-hidden');
-        content.style.display = 'flex';
-    }
-
-    const typeEl = document.getElementById('centerCardType');
-    DebugLogger.debug('centerCardType element', { found: Boolean(typeEl) });
-
-    if (!typeEl) {
-        DebugLogger.error('centerCardType not found - DOM may not be ready');
-        return;
-    }
-
-    // Store object types for dropdown
-    window.newObjectTypes = objectTypes;
-
-    typeEl.innerHTML = buildTypeDropdown(obj.object_type);
-    typeEl.className = 'card-type is-new';
-
-    // Hide issue button for new objects
-    const issueBtn = document.getElementById('centerCardIssue');
-    if (issueBtn) {issueBtn.style.display = 'none';}
-
-    // Get the current name from the object
-    const nameField = getNewObjectNameField(obj.object_type);
-    const currentName = obj.attributes[nameField] || '';
-
-    const nameEl = document.getElementById('centerCardName');
-    if (nameEl) {
-        nameEl.innerHTML = `
-            <input type="text" id="newObjectNameInput" class="new-object-name-input"
-                   placeholder="Enter name..." oninput="Explorer.updateNewObjectName()"
-                   value="${escapeHtml(currentName)}">
-        `;
-        const nameInput = document.getElementById('newObjectNameInput');
-        if (nameInput) {
-            nameInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    discardNewObject();
-                }
-            });
-        }
-    }
-
-    const fileEl = document.getElementById('centerCardFile');
-    if (fileEl) {fileEl.textContent = fileName;}
-
-    renderCenterAttributes();
-
-    // Load Impact & Relationships section (will show inheritance if use attribute exists)
-    loadImpactAndRelationships(state.editedObject);
-
-    // Ensure impact section stays collapsed for new objects
-    requestAnimationFrame(() => {
-        const titleEl = document.querySelector('#impactSection .section-title');
-        const contentEl = document.getElementById('impactContent');
-        if (titleEl) {titleEl.classList.add('collapsed');}
-        if (contentEl) {
-            contentEl.classList.add('collapsed');
-            contentEl.style.display = 'none';
-        }
-    });
-
-    // Show close button for new objects
-    document.getElementById('centerCloseBtn').style.display = 'flex';
-}
-
-export function discardNewObject() {
-    if (!state.isNewObject) {return;}
-
-    // Remove from staged creations if it was staged
-    if (state.newObjectStagedIndex !== null && state.newObjectStagedIndex < state.stagedCreations.length) {
-        state.stagedCreations.splice(state.newObjectStagedIndex, 1);
-    }
-
-    // Clear pending hostgroup service link if this was from cleanup
-    state.pendingHostgroupServiceLink = null;
-
-    // Clear center pane
-    state.editedObject = null;
-    state.originalAttributes = null;
-    state.isNewObject = false;
-    state.newObjectStagedIndex = null;
-
-    const content = document.getElementById('centerContent');
-    const emptyState = document.getElementById('centerEmptyState');
-    content.classList.add('u-hidden');
-    content.style.display = 'none';
-    emptyState.classList.remove('u-hidden');
-    emptyState.style.display = 'flex';
-    document.getElementById('centerCloseBtn').style.display = 'none';
-
-    // Centralized refresh ensures all UI components stay in sync
-    afterFrontendMutation();
-    showToast('New object discarded', 'info');
-}
-
-export function toggleObjectTypeDropdown() {
-    const dropdown = document.getElementById('newObjectTypeDropdown');
-    if (!dropdown) {return;}
-
-    const isOpen = !dropdown.classList.contains('u-hidden') && dropdown.style.display !== 'none';
-
-    if (isOpen) {
-        dropdown.classList.add('u-hidden');
-        dropdown.style.display = 'none';
-    } else {
-        dropdown.classList.remove('u-hidden');
-        // Populate dropdown
-        const objectTypes = window.newObjectTypes || [];
-        const currentType = state.editedObject.object_type;
-
-        dropdown.innerHTML = objectTypes.map(t =>
-            `<div class="object-type-dropdown-item${t === currentType ? ' selected' : ''}" onclick="Explorer.selectObjectType('${t}')">${t}</div>`
-        ).join('');
-
-        dropdown.style.display = 'block';
-
-        // Close dropdown when clicking outside
-        setTimeout(() => {
-            document.addEventListener('click', closeObjectTypeDropdownOnClickOutside);
-        }, 0);
-    }
-}
-
-function closeObjectTypeDropdownOnClickOutside(event) {
-    const dropdown = document.getElementById('newObjectTypeDropdown');
-    const btn = document.getElementById('newObjectTypeSelect');
-    if (dropdown && btn && !dropdown.contains(event.target) && !btn.contains(event.target)) {
-        dropdown.classList.add('u-hidden');
-        dropdown.style.display = 'none';
-        document.removeEventListener('click', closeObjectTypeDropdownOnClickOutside);
-    }
-}
-
-export function selectObjectType(newType) {
-    // Close dropdown
-    const dropdown = document.getElementById('newObjectTypeDropdown');
-    if (dropdown) { dropdown.classList.add('u-hidden'); dropdown.style.display = 'none'; }
-    document.removeEventListener('click', closeObjectTypeDropdownOnClickOutside);
-
-    // Update the button text
-    const valueEl = document.getElementById('newObjectTypeValue');
-    if (valueEl) {valueEl.textContent = newType;}
-
-    // Update the object
-    updateNewObjectType(newType);
-}
-
-export function updateNewObjectType(newType) {
-    const oldType = state.editedObject.object_type;
-
-    // Get the current name value before switching types
-    const oldNameField = getNewObjectNameField(oldType);
-    const currentName = state.editedObject.attributes[oldNameField] || '';
-
-    // Reset attributes to defaults for the new type
-    state.editedObject.attributes = {...getDefaultAttributes(newType)};
-
-    // Preserve the name in the new name field
-    const newNameField = getNewObjectNameField(newType);
-    if (currentName) {
-        state.editedObject.attributes[newNameField] = currentName;
-    }
-
-    state.editedObject.object_type = newType;
-
-    // Re-render center pane to show new attributes
-    renderCenterAttributes();
-    stageNewObjectChanges();
-}
-
-export function updateNewObjectName() {
-    const nameInput = document.getElementById('newObjectNameInput');
-    const name = nameInput.value.trim();
-    const nameField = getNewObjectNameField(state.editedObject.object_type);
-
-    if (name) {
-        state.editedObject.attributes[nameField] = name;
-        state.editedObject.display_name = name;
-    } else {
-        delete state.editedObject.attributes[nameField];
-        state.editedObject.display_name = '(unnamed)';
-    }
-
-    // Re-render attributes to show the updated name field
-    renderCenterAttributes();
-    stageNewObjectChanges();
-}
-
 export function getNewObjectNameField(objectType) {
     // D-01: Delegate to centralized nameFields constant (sync with nagios_model.py:NAME_FIELDS)
     return constants.nameFields[objectType] || 'name';
@@ -444,106 +218,6 @@ function getDominantTypeForFile(filePath) {
     return dominant;
 }
 
-export function stageNewObjectChanges() {
-    if (!state.isNewObject) {return;}
-
-    // C-05: Validate required fields for new objects
-    const validation = validateRequiredFields(
-        state.editedObject.object_type,
-        state.editedObject.attributes
-    );
-    if (!validation.valid) {
-        // Check if object uses a template (which may provide the missing fields)
-        const usesTemplate = state.editedObject.attributes.use && state.editedObject.attributes.use.trim() !== '';
-        if (!usesTemplate) {
-            // Show warning for non-template objects without required fields
-            showToast(`Warning: ${validation.errors[0]}`, 'warning');
-        }
-    }
-
-    const nameField = getNewObjectNameField(state.editedObject.object_type);
-    const name = state.editedObject.attributes[nameField] || '';
-
-    // D-01: Validate for duplicate object names (uses composite key for services)
-    if (name) {
-        const dupCheck = checkDuplicateName(
-            state.editedObject.object_type,
-            name,
-            state.editedObject.attributes,
-            state.newObjectStagedIndex
-        );
-        if (dupCheck.isDuplicate) {
-            const loc = dupCheck.location === 'staged' ? 'in staged changes' : `in ${dupCheck.location}`;
-            showToast(`Error: ${state.editedObject.object_type} "${name}" already exists ${loc}`, 'error');
-            // D-02: Show inline validation error on name input
-            const nameInput = document.getElementById('newObjectNameInput');
-            if (nameInput) {
-                nameInput.classList.add('input-error');
-                let errorEl = document.getElementById('nameInputError');
-                if (!errorEl) {
-                    errorEl = document.createElement('div');
-                    errorEl.id = 'nameInputError';
-                    errorEl.className = 'input-error-text';
-                    nameInput.parentNode.appendChild(errorEl);
-                }
-                errorEl.textContent = `A ${state.editedObject.object_type} named "${name}" already exists ${loc}`;
-            }
-            return;
-        }
-        // Clear any previous inline error
-        const nameInput = document.getElementById('newObjectNameInput');
-        if (nameInput) {
-            nameInput.classList.remove('input-error');
-            const errorEl = document.getElementById('nameInputError');
-            if (errorEl) {errorEl.remove();}
-        }
-    }
-
-    const creation = {
-        id: generateUniqueId(),
-        object_type: state.editedObject.object_type,
-        attributes: {...state.editedObject.attributes},
-        targetFile: state.editedObject.source_file,
-        displayName: name || '(unnamed)'
-    };
-
-    if (state.newObjectStagedIndex !== null) {
-        // Update existing staged creation
-        state.stagedCreations[state.newObjectStagedIndex] = creation;
-    } else {
-        // Add new staged creation
-        state.stagedCreations.push(creation);
-        state.newObjectStagedIndex = state.stagedCreations.length - 1;
-    }
-
-    // Handle linked service update for hostgroup creation from cleanup
-    handleHostgroupServiceLink();
-
-    // Centralized refresh ensures all UI components stay in sync
-    // Skip center pane sync since we're about to show the new object
-    afterFrontendMutation({ skipCenter: true });
-
-    // Scroll to and highlight the newly staged item
-    setTimeout(() => {
-        const item = document.querySelector(`[data-staged-index="${state.newObjectStagedIndex}"]`);
-        if (item) {
-            // Expand parent folders if collapsed
-            let parent = item.parentElement;
-            while (parent) {
-                if (parent.classList && parent.classList.contains('tree-children') && parent.style.display === 'none') {
-                    parent.style.display = 'block';
-                    const toggle = parent.previousElementSibling?.querySelector('.tree-toggle');
-                    if (toggle) {toggle.textContent = '▼';}
-                }
-                parent = parent.parentElement;
-            }
-            item.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            item.classList.add('highlighted');
-            setTimeout(() => item.classList.remove('highlighted'), 2000);
-        }
-    }, 50);
-}
-
 // ============================================================================
 // Object Deletion
 // ============================================================================
@@ -566,7 +240,7 @@ async function fetchReferencedBy(stableKey) {
     return { success: true, references: result.payload?.references || [] };
 }
 
-export async function checkDependenciesAndDelete(stagedCreationDeletedCount = 0) {
+export async function checkDependenciesAndDelete() {
     // Collect all objects being deleted and the objects that refer to them
     const objectsToDelete = [];
     const allDependencies = [];
@@ -595,7 +269,7 @@ export async function checkDependenciesAndDelete(stagedCreationDeletedCount = 0)
     if (allDependencies.length > 0) {
         // Show warning dialog (already has confirmation built in)
         showDeleteDependencyWarning(objectsToDelete, () => {
-            executeObjectDeletions(stagedCreationDeletedCount);
+            executeObjectDeletions();
         });
     } else {
         // G-02: Confirmation dialog before deleting objects with no dependencies
@@ -622,7 +296,7 @@ export async function checkDependenciesAndDelete(stagedCreationDeletedCount = 0)
             return;
         }
 
-        executeObjectDeletions(stagedCreationDeletedCount);
+        executeObjectDeletions();
     }
 }
 
@@ -719,38 +393,13 @@ export function showDeleteDependencyWarning(objectsWithDeps, onConfirm) {
 }
 
 export function stageObjectDeletions() {
-    // Handle both regular objects and staged creations
-    let stagedCreationDeletedCount = 0;
-
-    // Delete staged creations (remove them entirely since they don't exist yet)
-    if (state.selectedStagedIndices.size > 0) {
-        // Sort in reverse order so we can splice without index shifting issues
-        const sortedIndices = Array.from(state.selectedStagedIndices).sort((a, b) => b - a);
-        for (const idx of sortedIndices) {
-            state.stagedCreations.splice(idx, 1);
-            stagedCreationDeletedCount++;
-        }
-        // Reset state.newObjectStagedIndex if it was deleted
-        if (state.selectedStagedIndices.has(state.newObjectStagedIndex)) {
-            state.newObjectStagedIndex = null;
-            state.isNewObject = false;
-            state.editedObject = null;
-                }
-        state.selectedStagedIndices.clear();
-    }
-
-    // Check for dependencies before deleting regular objects
+    // Check for dependencies before deleting
     if (state.selectedKeys.size > 0) {
-        checkDependenciesAndDelete(stagedCreationDeletedCount);
-    } else if (stagedCreationDeletedCount > 0) {
-        // Only staged creations were deleted
-        // Centralized refresh ensures all UI components (tree, target, suggestions, commit) stay in sync
-        afterFrontendMutation();
-        showToast(`Removed ${stagedCreationDeletedCount} staged creation(s)`, 'success');
+        checkDependenciesAndDelete();
     }
 }
 
-export async function executeObjectDeletions(stagedCreationDeletedCount = 0) {
+export async function executeObjectDeletions() {
     // Collect stable keys for deletion via API
     const stableKeys = [];
     for (const key of state.selectedKeys) {
@@ -781,14 +430,9 @@ export async function executeObjectDeletions(stagedCreationDeletedCount = 0) {
         const deletedCount = result.data?.deleted || 0;
         afterFrontendMutation();
 
-        if (stagedCreationDeletedCount > 0 && deletedCount > 0) {
-            showToast(`Deleted ${deletedCount} object(s), removed ${stagedCreationDeletedCount} staged creation(s)`, 'success');
-        } else if (deletedCount > 0) {
+        if (deletedCount > 0) {
             showToast(`Deleted ${deletedCount} object(s)`, 'success');
         }
-    } else if (stagedCreationDeletedCount > 0) {
-        afterFrontendMutation();
-        showToast(`Removed ${stagedCreationDeletedCount} staged creation(s)`, 'success');
     }
 }
 
@@ -1032,7 +676,7 @@ async function executeBulkEditAction(scope, sortedFields) {
     afterFrontendMutation();
     closeDialog();
 
-    if (state.editedObject && !state.isNewObject) {
+    if (state.editedObject) {
         const editedKey = getObjectKey(state.editedObject);
         if (scope.includes(editedKey)) {
             const obj = findObjectByKey(editedKey);
@@ -1292,38 +936,6 @@ export async function runValidationFull() {
     }
 }
 
-export function removeStagedCreation(idx) {
-    // D-02: Add bounds check to prevent runtime errors
-    if (idx < 0 || idx >= state.stagedCreations.length) {
-        DebugLogger.warn('removeStagedCreation called with invalid index', { idx, length: state.stagedCreations.length });
-        return;
-    }
-
-    // Check if this is the currently displayed new object
-    if (state.isNewObject && state.newObjectStagedIndex === idx) {
-        // Clear center pane
-        state.editedObject = null;
-        state.originalAttributes = null;
-        state.isNewObject = false;
-        state.newObjectStagedIndex = null;
-            const content = document.getElementById('centerContent');
-        const emptyState = document.getElementById('centerEmptyState');
-        content.classList.add('u-hidden');
-        content.style.display = 'none';
-        emptyState.classList.remove('u-hidden');
-        emptyState.style.display = 'flex';
-    } else if (state.isNewObject && state.newObjectStagedIndex !== null && state.newObjectStagedIndex > idx) {
-        // Adjust the index since we're removing an item before it
-        state.newObjectStagedIndex--;
-    }
-
-    state.stagedCreations.splice(idx, 1);
-    afterFrontendMutation();
-}
-
 // onclick handlers in generated HTML — must be on window.Explorer
 window.Explorer = window.Explorer || {};
-window.Explorer.toggleObjectTypeDropdown = toggleObjectTypeDropdown;
-window.Explorer.selectObjectType = selectObjectType;
-window.Explorer.updateNewObjectName = updateNewObjectName;
 window.Explorer.selectDialogType = selectDialogType;

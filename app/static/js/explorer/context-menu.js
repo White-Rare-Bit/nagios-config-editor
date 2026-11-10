@@ -136,7 +136,7 @@ export function handleContextMenu(event, index) {
 
 export function hideContextMenu() {
     const menu = document.getElementById('contextMenu');
-    menu.classList.remove('visible', 'single-selection', 'multi-selection', 'staged-context', 'mixed-types');
+    menu.classList.remove('visible', 'single-selection', 'multi-selection', 'mixed-types');
 }
 
 export function contextAction(action) {
@@ -210,7 +210,7 @@ export function closePreview() {
 }
 
 // Dialog
-export function showDialog(title, bodyHtml, onConfirm) {
+export function showDialog(title, bodyHtml, onConfirm, confirmLabel) {
     document.getElementById('dialogTitle').textContent = title;
     document.getElementById('dialogBody').innerHTML = bodyHtml;
 
@@ -231,6 +231,9 @@ export function showDialog(title, bodyHtml, onConfirm) {
             confirmBtn.textContent = 'Confirm';
         } else {
             confirmBtn.textContent = 'OK';
+        }
+        if (confirmLabel) {
+            confirmBtn.textContent = confirmLabel;
         }
         // Reset button classes
         confirmBtn.classList.remove('btn-danger');

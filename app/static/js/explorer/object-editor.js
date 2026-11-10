@@ -3,7 +3,7 @@
 import { state } from './state.js';
 import { constants, isObjectTemplate } from './constants.js';
 import { getObjectKey, findObjectByKey, parseCommaValues } from './main.js';
-import { afterFrontendMutation, getStagingHeaders } from './data-loading.js'; // circular — safe (function-level)
+import { afterFrontendMutation } from './data-loading.js'; // circular — safe (function-level)
 import { buildLocalInheritanceChain } from './relations-loader.js'; // circular — safe (function-level)
 import { isSelectedByIndex } from './state-management.js';
 import { openTab, renderTabBar, renameTabKey } from './tab-manager.js'; // circular — safe (function-level)
@@ -11,7 +11,7 @@ import { getIcon, handleApiError, toRelativePath, toDisplayPath, extractFileName
 import { loadImpactAndRelationships } from './impact-section.js'; // circular — safe (function-level)
 import { computeStagedIssues, refreshCenterPaneIssueBadge } from './badge-issues.js'; // circular — safe (function-level)
 import { showDialog, closeDialog } from './context-menu.js'; // circular — safe (function-level)
-import { getNewObjectNameField, stageNewObjectChanges } from './dialogs.js'; // circular — safe (function-level)
+import { getNewObjectNameField } from './dialogs.js'; // circular — safe (function-level)
 import { getObjectIssue, getHostListInfo, getIssueShortLabel, getIssueIcon, getObjectTypeIcon, getNameFieldForObject, hideAutocompleteDropdown, handleAutocompleteKeyNav, refreshRelatedSections, getEffectiveName } from './app.js'; // circular — safe (function-level)
 import { ApiClient, apiUrl } from '../api-client.js';
 import { showToast, showConfirmDialog } from '../ui-notifications.js';
@@ -193,9 +193,6 @@ export function showCenterPaneObject(obj) {
     state.originalAttributes = {...obj.attributes};
     state.editingStableKey = getObjectKey(obj);
 
-    state.isNewObject = false;
-    document.getElementById('centerCloseBtn').style.display = 'none';
-
     const isTemplate = isObjectTemplate(obj);
     const isOrphan = state.orphanIndices.has(getObjectKey(obj));
     const hostListInfo = getHostListInfo(obj);
@@ -247,8 +244,6 @@ export function showCenterPaneObject(obj) {
 export function hideCenterPaneObject() {
     state.editedObject = null;
     state.originalAttributes = {};
-    state.isNewObject = false;
-    state.newObjectStagedIndex = null;
     const emptyState = document.getElementById('centerEmptyState');
     const content = document.getElementById('centerContent');
     emptyState.classList.remove('u-hidden');
@@ -283,12 +278,6 @@ export async function deleteCurrentObject() {
  */
 export function syncCenterPaneAfterUndo() {
     if (!state.editedObject) {return;}
-
-    // If showing a new object (staged creation), hide it since creation was likely undone
-    if (state.isNewObject) {
-        hideCenterPaneObject();
-        return;
-    }
 
     // For existing objects, sync attributes with current server state
     // editingStableKey is the key the server last gave this object; the
@@ -376,19 +365,6 @@ function isObjectStagedForDeletion(obj) {
     return false;
 }
 
-function addStagedCreationSuggestions(suggestions, refType) {
-    const stagedCreations = state.stagedCreations || [];
-    for (const creation of stagedCreations) {
-        if (creation.object_type === refType) {
-            const nameField = constants.nameFields[refType];
-            const name = creation.attributes?.[nameField];
-            if (name && name !== '(unnamed)' && !suggestions.includes(name)) {
-                suggestions.push(name);
-            }
-        }
-    }
-}
-
 export function getAttributeSuggestions(attrName, objectType) {
     // Handle notification options and failure criteria
     if (constants.NOTIFICATION_OPTION_ATTRS.includes(attrName)) {
@@ -427,8 +403,6 @@ export function getAttributeSuggestions(attrName, objectType) {
         })
         .map(o => o.display_name)
         .filter(name => name && name !== '(unnamed)');
-
-    addStagedCreationSuggestions(suggestions, refType);
 
     return [...new Set(suggestions)].sort();
 }
@@ -935,12 +909,6 @@ function syncNameDisplays(key, value) {
 
     state.editedObject.display_name = value || '(unnamed)';
 
-    if (state.isNewObject) {
-        const nameInput = document.getElementById('newObjectNameInput');
-        if (nameInput) {nameInput.value = value;}
-        return;
-    }
-
     document.getElementById('centerCardName').textContent = state.editedObject.display_name;
 
     const objKey = getObjectKey(state.editedObject);
@@ -1000,25 +968,20 @@ export function deleteAttribute(key) {
     if (key === nameField) {
         state.editedObject.display_name = '(unnamed)';
 
-        if (state.isNewObject) {
-            const nameInput = document.getElementById('newObjectNameInput');
-            if (nameInput) {nameInput.value = '';}
-        } else {
-            document.getElementById('centerCardName').textContent = state.editedObject.display_name;
+        document.getElementById('centerCardName').textContent = state.editedObject.display_name;
 
-            // Update the tree item name in the left panel
-            const treeItem = document.querySelector(`.tree-item[data-index="${state.editedObject.global_index}"]`);
-            if (treeItem) {
-                const nameSpan = treeItem.querySelector('.tree-item-name');
-                if (nameSpan) {nameSpan.textContent = state.editedObject.display_name;}
-            }
+        // Update the tree item name in the left panel
+        const treeItem = document.querySelector(`.tree-item[data-index="${state.editedObject.global_index}"]`);
+        if (treeItem) {
+            const nameSpan = treeItem.querySelector('.tree-item-name');
+            if (nameSpan) {nameSpan.textContent = state.editedObject.display_name;}
+        }
 
-            // Update the target pane item name in the right panel
-            const targetItem = document.querySelector(`.target-object-item[data-index="${state.editedObject.global_index}"]`);
-            if (targetItem) {
-                const nameSpan = targetItem.querySelector('.obj-name');
-                if (nameSpan) {nameSpan.textContent = state.editedObject.display_name;}
-            }
+        // Update the target pane item name in the right panel
+        const targetItem = document.querySelector(`.target-object-item[data-index="${state.editedObject.global_index}"]`);
+        if (targetItem) {
+            const nameSpan = targetItem.querySelector('.obj-name');
+            if (nameSpan) {nameSpan.textContent = state.editedObject.display_name;}
         }
     }
 
@@ -1213,12 +1176,6 @@ export function handleAddAttrAutocompleteKey(event) {
 }
 
 export function checkForChanges() {
-    // Handle new objects differently
-    if (state.isNewObject) {
-        stageNewObjectChanges();
-        return;
-    }
-
     const hasChanges = JSON.stringify(state.editedObject.attributes) !== JSON.stringify(state.originalAttributes);
 
     if (hasChanges) {

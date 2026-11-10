@@ -96,20 +96,6 @@ export async function loadObjects() {
 }
 
 // =============================================================================
-// Staging Headers
-// =============================================================================
-
-/**
- * Get headers for staging API calls
- */
-export function getStagingHeaders() {
-    return {
-        'Content-Type': 'application/json',
-        'X-Session-Id': state.sessionId
-    };
-}
-
-// =============================================================================
 // Mutation Orchestrators
 // =============================================================================
 
