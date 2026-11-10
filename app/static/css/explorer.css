@@ -3970,6 +3970,11 @@
     display: none;
 }
 
+/* Hide Rename for objects with no name of their own (escalations, dependencies, ...) */
+.context-menu.not-renameable .rename-only {
+    display: none;
+}
+
 /* Hide most options for staged creations - they can only be deleted */
 .context-menu.staged-context .menu-item:not(.danger),
 .context-menu.staged-context .menu-divider {

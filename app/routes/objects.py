@@ -9,7 +9,7 @@ import uuid
 
 from flask import Blueprint, jsonify, request
 
-from ..nagios_model import NAME_FIELDS
+from ..nagios_model import NAME_FIELDS, RENAMEABLE_TYPES, is_template_object
 from ..references import name_field, reference_edits, referenced_by
 from ..stable_keys import generate_stable_key, generate_stable_key_for_object, stable_key_after_edit
 from .helpers import get_service, operation_response
@@ -103,6 +103,18 @@ def api_update_object():
     })
 
 
+def _not_renameable(obj) -> str:
+    """Why rename refuses this object (``name_field`` returned None)."""
+    if is_template_object(obj):
+        return f"{obj.object_type} template has no name to rename"
+    if obj.object_type not in RENAMEABLE_TYPES:
+        return f"{obj.object_type} objects have no name of their own"
+    return (
+        f"{obj.object_type} {obj.get_display_name()} has no "
+        f"{NAME_FIELDS[obj.object_type]} to rename"
+    )
+
+
 def _parse_renames(data: dict) -> list[tuple[str, str]]:
     """Validate a rename request body into [(stable_key, new_name)]."""
     renames = data.get("renames")
@@ -131,51 +143,65 @@ def api_rename_objects():
 
     Expects JSON:
     - renames: [{stable_key, new_name}, ...]
-    - update_references: (default true) also rewrite references of the same
-      type (see app/references.py). Renamed objects are never edited as
-      references to each other.
+    - update_references: (JSON bool, default true) also rewrite references of
+      the same type (see app/references.py). Renamed objects get the
+      reference edits of each other's renames too (a host's ``parents``, a
+      service's ``host_name``), merged into their one write.
 
-    Returns keys (each renamed object's new stable key, in request order) and
-    references_updated (number of referencing objects changed). If any write
-    fails, everything this request changed is undone (409).
+    A template is renamed by its ``name`` (references: ``use`` on objects of
+    the same type); a registered object by its NAME_FIELDS field, only for
+    RENAMEABLE_TYPES. Others have no name of their own (400).
+
+    Returns keys (each renamed object's stable key after the request, in
+    request order) and references_updated (number of objects whose references
+    were changed). If any write fails, everything this request changed is
+    undone (409).
     """
     data = request.get_json() or {}
     requested = _parse_renames(data)
-    update_references = data.get("update_references", True) is not False
+    update_references = data.get("update_references", True)
+    if not isinstance(update_references, bool):
+        raise ApiError("update_references must be true or false")
 
     with staged_mutation() as m:
-        renames = []  # (obj, field, old, new)
-        keys = []
+        targets = []  # every requested object, in request order
+        renames = []  # (obj, field, old, new) for names that change
         for key, new_name in requested:
             obj = m.require(key)
-            if obj.object_type not in NAME_FIELDS:
-                raise ApiError(f"{obj.object_type} objects cannot be renamed")
             field = name_field(obj)
             if field is None:
-                raise ApiError(
-                    f"{obj.object_type} {obj.get_display_name()} has no "
-                    f"{NAME_FIELDS[obj.object_type]} to rename",
-                )
+                raise ApiError(_not_renameable(obj))
+            targets.append(obj)
             old_name = obj.attributes[field].strip()
-            new_attrs = {**obj.attributes, field: new_name}
-            keys.append(stable_key_after_edit(obj.source_file, obj.object_type, new_attrs))
             if new_name != old_name:
                 renames.append((obj, field, old_name, new_name))
 
         if not renames:
-            return jsonify({"success": True, "keys": keys, "references_updated": 0})
+            return jsonify({
+                "success": True, "references_updated": 0,
+                "keys": [generate_stable_key_for_object(obj) for obj in targets],
+            })
 
         ref_edits = []
         if update_references:
             ref_edits = reference_edits(
-                m.service.get_objects(),
-                [(obj, new) for obj, _, _, new in renames],
-                exclude={id(obj) for obj, *_ in renames},
+                m.service.get_objects(), [(obj, new) for obj, _, _, new in renames],
             )
 
-        # (obj, new attributes) for every object this request writes
-        writes = [(obj, {**obj.attributes, field: new}) for obj, field, _, new in renames]
-        writes += ref_edits
+        # One write per object: reference edits first, then the rename itself
+        # (the object's own name field), merged for an object that has both.
+        new_attrs = {id(obj): (obj, attrs) for obj, attrs in ref_edits}
+        for obj, field, _, new in renames:
+            attrs = new_attrs.get(id(obj), (obj, obj.attributes))[1]
+            new_attrs[id(obj)] = (obj, {**attrs, field: new})
+        writes = list(new_attrs.values())
+        keys = [
+            stable_key_after_edit(
+                obj.source_file, obj.object_type,
+                new_attrs.get(id(obj), (obj, obj.attributes))[1],
+            )
+            for obj in targets
+        ]
 
         if len(renames) == 1:
             obj, _, old_name, new_name = renames[0]
@@ -226,9 +252,10 @@ def api_referenced_by():
     """Objects that refer to the object with the given stable key.
 
     Query: key=<stable_key>. Uses the same type-aware matching as rename
-    (app/references.py), plus objects that ``use`` it as a template (field
-    "use"), since deleting a template breaks those too. The object itself is
-    not listed.
+    (app/references.py): for a template, the objects of its type that ``use``
+    it; for a registered object, its typed references, plus objects that
+    ``use`` it by its ``name`` (field "use"), since deleting it breaks those
+    too even though renaming it does not. The object itself is not listed.
     """
     stable_key = request.args.get("key")
     if not stable_key:

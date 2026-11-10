@@ -231,3 +231,12 @@ define timeperiod {
             assert missing == {"ghost-admin"}
         finally:
             shutil.rmtree(test_dir, ignore_errors=True)
+
+
+def test_metadata_serves_renameable_types(client):
+    from app.nagios_model import RENAMEABLE_TYPES
+
+    data = client.get("/api/metadata").get_json()["data"]
+    assert data["renameable_types"] == sorted(RENAMEABLE_TYPES)
+    assert "host" in data["renameable_types"]
+    assert "serviceescalation" not in data["renameable_types"]

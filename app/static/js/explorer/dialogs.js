@@ -1,7 +1,7 @@
 /** Explorer Dialogs Module - New object creation, deletion, bulk rename, edit attributes, validation */
 
 import { state } from './state.js';
-import { constants, checkDuplicateName } from './constants.js';
+import { constants, checkDuplicateName, isRenameable } from './constants.js';
 import { getObjectKey, findObjectByKey } from './main.js';
 import { clearSelection } from './state-management.js';
 import { selectObjectByIndex, updateSelection, closeActionsMenu, switchRightTab, getNameFieldForObject } from './app.js'; // circular — safe (function-level)
@@ -800,11 +800,18 @@ export async function executeObjectDeletions(stagedCreationDeletedCount = 0) {
 
 async function executeBulkRename(find, replace, shouldUpdateRefs) {
     const renames = [];
+    let skipped = 0;
     let centerPaneNeedsRefresh = false;
 
     for (const key of state.selectedKeys) {
         const obj = findObjectByKey(key);
         if (!obj) {continue;}
+        // Escalations, dependencies etc. have no name of their own; the
+        // server would refuse the whole request.
+        if (!isRenameable(obj)) {
+            skipped++;
+            continue;
+        }
 
         const objKey = getObjectKey(obj);
         const nameField = getNameFieldForObject(obj);
@@ -820,15 +827,16 @@ async function executeBulkRename(find, replace, shouldUpdateRefs) {
         }
     }
 
+    const skippedMsg = skipped > 0 ? ` (skipped ${skipped} that have no name of their own)` : '';
     if (renames.length === 0) {
         closeDialog();
-        showToast('No matches found', 'warning');
+        showToast(`No matches found${skippedMsg}`, 'warning');
         return;
     }
 
     // One request for all renames: the server finds the references of the
-    // same type to every renamed object at once, leaves the renamed objects
-    // out of each other's reference updates, and makes it one undo step.
+    // same type to every renamed object at once (renamed objects that refer
+    // to each other are updated too) and makes it one undo step.
     const result = await ApiClient.post('/api/objects/rename', {
         renames,
         update_references: shouldUpdateRefs
@@ -859,7 +867,7 @@ async function executeBulkRename(find, replace, shouldUpdateRefs) {
 
     const totalRefUpdates = result.payload.references_updated;
     const refMsg = totalRefUpdates > 0 ? ` Updated ${totalRefUpdates} reference${totalRefUpdates !== 1 ? 's' : ''}.` : '';
-    showToast(`Renamed ${renames.length} object(s).${refMsg}`, 'success');
+    showToast(`Renamed ${renames.length}${skippedMsg}.${refMsg}`, 'success');
 }
 
 export function showBulkRenameDialog() {

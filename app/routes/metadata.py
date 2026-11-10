@@ -12,6 +12,7 @@ from ..nagios_model import (
     OBJECT_TYPE_LABELS,
     REFERENCE_FIELDS,
     REFERENCE_TRIGGER_ATTRS,
+    RENAMEABLE_TYPES,
     REQUIRED_FIELDS,
     SPECIAL_DIRECTIVES,
     VALID_ATTRIBUTES,
@@ -48,5 +49,6 @@ def api_metadata():
             "attribute_sort_order": ATTRIBUTE_SORT_ORDER,
             "host_scoped_types": HOST_SCOPED_TYPES,
             "reference_trigger_attrs": REFERENCE_TRIGGER_ATTRS,
+            "renameable_types": sorted(RENAMEABLE_TYPES),
         },
     })

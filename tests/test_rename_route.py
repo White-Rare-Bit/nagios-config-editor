@@ -289,13 +289,150 @@ def test_rename_failure_rolls_back(env, monkeypatch):
     assert _find(client, "host", host_name="web-01")
 
 
-def test_rename_template_without_name_field_is_refused(tmp_path):
-    templates = "define host {\n    name generic-host\n    register 0\n}\n"
+def test_rename_template_updates_same_type_use_only(tmp_path):
+    templates = (
+        "define host {\n    name generic\n    register 0\n}\n\n"
+        "define service {\n    name generic\n    register 0\n}\n\n"
+        "define host {\n    use generic\n    host_name web-09\n}\n\n"
+        "define host {\n    use other,generic\n    host_name web-10\n}\n\n"
+        "define service {\n    use generic\n    host_name web-09\n    service_description X\n}\n"
+    )
     app, client, sm, cfg = _make_env(tmp_path, {"templates.cfg": templates})
-    resp = _rename(client, _key(cfg, "templates.cfg", "host", "generic-host"), "base-host")
+    key = _key(cfg, "templates.cfg", "host", "generic")
+    refs = _referenced_by(client, key).get_json()["references"]
+    assert sorted((r["display_name"], tuple(r["fields"])) for r in refs) == [
+        ("web-09", ("use",)), ("web-10", ("use",)),
+    ]
+
+    resp = _rename(client, key, "base-host")
+    assert resp.status_code == 200, resp.get_json()
+    body = resp.get_json()
+    assert body["keys"] == [_key(cfg, "templates.cfg", "host", "base-host")]
+    assert body["references_updated"] == 2
+    assert _find(client, "host", name="base-host", register="0")
+    assert _find(client, "host", host_name="web-09", use="base-host")
+    assert _find(client, "host", host_name="web-10", use="other,base-host")
+    assert _find(client, "service", name="generic", register="0")
+    assert _find(client, "service", service_description="X", use="generic")
+
+
+def test_rename_object_without_own_name_is_refused(tmp_path):
+    deps = (
+        "define servicedependency {\n    host_name web-01\n    service_description PING\n"
+        "    dependent_host_name web-02\n    dependent_service_description PING\n}\n"
+    )
+    app, client, sm, cfg = _make_env(tmp_path, {"deps.cfg": deps})
+    resp = _rename(client, _key(cfg, "deps.cfg", "servicedependency", "PING on web-01 → PING"), "X")
     assert resp.status_code == 400
-    assert resp.get_json()["success"] is False
+    assert resp.get_json() == {
+        "success": False, "error": "servicedependency objects have no name of their own",
+    }
     assert sm.has_shadow() is False
+
+
+def test_rename_hostgroup_service_updates_dependency_naming_member_host(tmp_path):
+    extra = (
+        "define service {\n    hostgroup_name web\n    service_description HTTPS\n"
+        "    check_command check_http\n}\n\n"
+        "define servicedependency {\n    host_name web-02\n    service_description HTTPS\n"
+        "    dependent_host_name web-02\n    dependent_service_description PING\n}\n\n"
+        # HTTP on web excludes web-01, so this names a service that does not exist
+        "define servicedependency {\n    host_name web-01\n    service_description HTTP\n"
+        "    dependent_host_name web-01\n    dependent_service_description PING\n}\n"
+    )
+    app, client, sm, cfg = _make_env(tmp_path, {"extra.cfg": extra})
+    resp = _rename(client, _key(cfg, "extra.cfg", "service", "HTTPS on web"), "HTTPS2")
+    assert resp.status_code == 200, resp.get_json()
+    assert resp.get_json()["references_updated"] == 1
+    assert _find(client, "servicedependency", host_name="web-02", service_description="HTTPS2")
+
+    resp = _rename(client, _key(cfg, "services.cfg", "service", "HTTP on web"), "HTTP2")
+    assert resp.status_code == 200, resp.get_json()
+    assert resp.get_json()["references_updated"] == 0
+    assert _find(client, "servicedependency", host_name="web-01", service_description="HTTP")
+
+
+def test_referenced_by_finds_servicegroup_pair_for_hostgroup_service(tmp_path):
+    sg = (
+        "define servicegroup {\n    servicegroup_name web-checks\n"
+        "    members web-02,HTTP,web-01,HTTP\n}\n"
+    )
+    app, client, sm, cfg = _make_env(tmp_path, {"servicegroups.cfg": sg})
+    key = _key(cfg, "services.cfg", "service", "HTTP on web")
+    refs = _referenced_by(client, key).get_json()["references"]
+    assert [(r["object_type"], r["display_name"], r["fields"]) for r in refs] == [
+        ("servicegroup", "web-checks", ["members"]),
+    ]
+    resp = _rename(client, key, "HTTP2")
+    assert resp.status_code == 200, resp.get_json()
+    # web-01 is excluded from HTTP on web, so only the web-02 pair is its.
+    assert _find(client, "servicegroup", members="web-02,HTTP2,web-01,HTTP")
+
+
+def test_rename_wildcard_service_updates_dependency(tmp_path):
+    extra = (
+        "define service {\n    host_name *\n    service_description DISK\n"
+        "    check_command check_disk\n}\n\n"
+        "define servicedependency {\n    host_name web-01\n    service_description DISK\n"
+        "    dependent_host_name web-01\n    dependent_service_description PING\n}\n"
+    )
+    app, client, sm, cfg = _make_env(tmp_path, {"extra.cfg": extra})
+    resp = _rename(client, _key(cfg, "extra.cfg", "service", "DISK on *"), "DISK2")
+    assert resp.status_code == 200, resp.get_json()
+    assert resp.get_json()["references_updated"] == 1
+    assert _find(client, "servicedependency", host_name="web-01", service_description="DISK2")
+
+
+def test_rename_service_updates_wildcard_dependency(tmp_path):
+    deps = (
+        "define servicedependency {\n    host_name *\n    service_description PING\n"
+        "    dependent_host_name web-02\n    dependent_service_description HTTP\n}\n"
+    )
+    app, client, sm, cfg = _make_env(tmp_path, {"deps.cfg": deps})
+    resp = _rename(client, _key(cfg, "services.cfg", "service", "PING on web-01"), "PING4")
+    assert resp.status_code == 200, resp.get_json()
+    assert resp.get_json()["references_updated"] == 1
+    assert _find(client, "servicedependency", host_name="*", service_description="PING4")
+
+
+def test_bulk_rename_updates_links_between_renamed_objects(tmp_path):
+    parents = (
+        "define host {\n    host_name core-a\n    address 10.1.0.1\n}\n\n"
+        "define host {\n    host_name core-b\n    parents core-a\n    address 10.1.0.2\n}\n"
+    )
+    app, client, sm, cfg = _make_env(tmp_path, {"core.cfg": parents})
+    resp = client.post("/api/objects/rename", headers=HEADERS, json={
+        "renames": [
+            {"stable_key": _key(cfg, "core.cfg", "host", "core-a"), "new_name": "edge-a"},
+            {"stable_key": _key(cfg, "core.cfg", "host", "core-b"), "new_name": "edge-b"},
+        ],
+        "update_references": True,
+    })
+    assert resp.status_code == 200, resp.get_json()
+    assert _find(client, "host", host_name="edge-a")
+    assert _find(client, "host", host_name="edge-b", parents="edge-a")
+    assert client.get("/api/staging/info").get_json()["data"]["undoCount"] == 1
+
+
+def test_bulk_rename_host_and_its_service(env):
+    app, client, sm, cfg = env
+    resp = client.post("/api/objects/rename", headers=HEADERS, json={
+        "renames": [
+            {"stable_key": _key(cfg, "hosts.cfg", "host", "web-01"), "new_name": "app-01"},
+            {"stable_key": _key(cfg, "services.cfg", "service", "PING on web-01"),
+             "new_name": "PING4"},
+        ],
+        "update_references": True,
+    })
+    assert resp.status_code == 200, resp.get_json()
+    # The service gets both its new name and its host's new name, in one write,
+    # and its returned key reflects both.
+    assert resp.get_json()["keys"] == [
+        _key(cfg, "hosts.cfg", "host", "app-01"),
+        _key(cfg, "services.cfg", "service", "PING4 on app-01"),
+    ]
+    assert _find(client, "service", host_name="app-01", service_description="PING4")
+    assert _find(client, "service", host_name="web-02", service_description="PING")
 
 
 def test_rename_rejects_bad_requests(env):
@@ -306,6 +443,10 @@ def test_rename_rejects_bad_requests(env):
     assert _rename(client, key, "a,b").status_code == 400
     assert _rename(client, key, "a\nb").status_code == 400
     assert _rename(client, _key(cfg, "hosts.cfg", "host", "nope"), "x").status_code == 404
+    for bad in ("yes", 1, None):
+        resp = client.post("/api/objects/rename", headers=HEADERS, json={
+            "renames": [{"stable_key": key, "new_name": "x"}], "update_references": bad})
+        assert resp.status_code == 400, bad
     assert sm.has_shadow() is False
 
 

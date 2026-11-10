@@ -102,6 +102,7 @@ export const constants = {
     inheritanceAttrs: INHERITANCE_ATTRS,
     referenceAttrs: [],
     hostScopedTypes: new Set(),
+    renameableTypes: new Set(),   // from /api/metadata renameable_types
     referenceTriggerAttrs: [],
 
     // Notification option accessors (populated by applyMetadata)
@@ -157,6 +158,9 @@ export function applyMetadata(meta) {
         c.referenceTriggerAttrs = meta.reference_trigger_attrs;
     }
     c.referenceAttrs = c.referenceTriggerAttrs;
+    if (meta.renameable_types) {
+        c.renameableTypes = new Set(meta.renameable_types);
+    }
 
     applyNotificationOptions(c, meta.notification_options || {});
 }
@@ -170,6 +174,15 @@ export function isObjectTemplate(obj) {
     if (obj.attributes.register === '0') {return true;}
     const nameField = constants.nameFields[obj.object_type];
     return Boolean(obj.attributes.name && nameField && !obj.attributes[nameField]);
+}
+
+/**
+ * Whether an object can be renamed: a template (by its `name`), or a
+ * registered object of a type with a name of its own (renameable_types from
+ * /api/metadata). Escalations, dependencies and extinfo have none.
+ */
+export function isRenameable(obj) {
+    return isObjectTemplate(obj) || constants.renameableTypes.has(obj?.object_type);
 }
 
 /**

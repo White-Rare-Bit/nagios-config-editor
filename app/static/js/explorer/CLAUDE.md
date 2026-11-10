@@ -8,7 +8,7 @@ All modules use ES module `import`/`export` syntax. Shared state in `state.js`.
 |------|------|
 | `main.js` | Entry point: imports, initializes event delegation, registers callbacks |
 | `state.js` | Shared state object (allObjects, selections, filters, etc.), `TreeExpansionState` class, path conversion utilities |
-| `constants.js` | Domain metadata from `/api/metadata` via `applyMetadata()`, badge tiers, UI-only constants (`identityFields`, `inheritanceAttrs`), `isObjectTemplate()` |
+| `constants.js` | Domain metadata from `/api/metadata` via `applyMetadata()`, badge tiers, UI-only constants (`identityFields`, `inheritanceAttrs`), `isObjectTemplate()`, `isRenameable()` |
 | `state-management.js` | Stable key helpers, pending edit get/set, `rebuildUI()` |
 | `action-registry.js` | Maps `data-action` names to handler functions for event delegation |
 | `app.js` | Left pane: tree rendering, filtering, selection, autocomplete |
@@ -31,7 +31,7 @@ All modules use ES module `import`/`export` syntax. Shared state in `state.js`.
 ## Constants: Metadata vs Hardcoded
 
 From `/api/metadata` (source of truth: `app/nagios_model.py`):
-`typeLabels`, `nameFields`, `REQUIRED_FIELDS`, `referenceFields`, `NAGIOS_ATTRIBUTES`, `defaultAttributes`, `groupStructure`, notification options, failure criteria
+`typeLabels`, `nameFields`, `REQUIRED_FIELDS`, `referenceFields`, `NAGIOS_ATTRIBUTES`, `defaultAttributes`, `groupStructure`, `renameableTypes` (see `isRenameable()`), notification options, failure criteria
 
 Hardcoded (UI-only, no backend equivalent):
 `identityFields`, `inheritanceAttrs`, `referenceAttrs`

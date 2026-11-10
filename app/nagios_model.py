@@ -26,6 +26,15 @@ NAME_FIELDS: dict[str, str] = {
     "module": "module_name",
 }
 
+# Types whose NAME_FIELDS entry is a name of their own, so renaming means
+# something. The others (dependencies, escalations, extinfo) are identified
+# by the host or service they apply to; changing that field retargets them.
+# Templates of any type are renamed by their `name` instead.
+RENAMEABLE_TYPES: frozenset[str] = frozenset({
+    "host", "hostgroup", "service", "servicegroup", "contact", "contactgroup",
+    "command", "timeperiod", "module",
+})
+
 
 def is_template_object(obj) -> bool:
     """Check if a NagiosObject is a template.

@@ -5,7 +5,7 @@
  */
 
 import { state } from './state.js';
-import { constants } from './constants.js';
+import { constants, isObjectTemplate, isRenameable } from './constants.js';
 import { getObjectKey, findObjectByKey, getSelectedIndices } from './main.js';
 import { isSelectedByIndex, clearSelection } from './state-management.js';
 import { selectObjectByIndex, updateSelection, switchRightTab, getNameFieldForObject } from './app.js'; // circular — safe (function-level)
@@ -71,10 +71,14 @@ export function handleContextMenu(event, index) {
     const hasMixedTypes = selectedTypes.size > 1;
 
     // Set selection mode class
-    menu.classList.remove('single-selection', 'multi-selection', 'mixed-types');
+    menu.classList.remove('single-selection', 'multi-selection', 'mixed-types', 'not-renameable');
     menu.classList.add(state.selectedKeys.size > 1 ? 'multi-selection' : 'single-selection');
     if (hasMixedTypes) {
         menu.classList.add('mixed-types');
+    }
+    // Rename (single selection) only for objects with a name of their own
+    if (!isRenameable(state.allObjects.find(o => o.global_index === index))) {
+        menu.classList.add('not-renameable');
     }
 
     // Update "Add to group" menu item based on selected types
@@ -421,29 +425,35 @@ export function applyBulkClone() {
 }
 
 /**
- * Open the Rename dialog. The server counts the references of the same type
- * that a rename would update (GET /api/objects/referenced-by); objects that
- * only `use` this one as a template are not counted, since rename leaves
- * `use` alone.
+ * Open the Rename dialog. The server counts the references a rename would
+ * update (GET /api/objects/referenced-by). For a template those are `use`
+ * entries; for a registered object, objects that `use` it by its `name` are
+ * listed but not counted, since renaming it leaves `use` alone.
+ * If the count can't be fetched, the option is still shown, ticked.
  */
 async function showRenameDialog(obj, currentName) {
     const result = await ApiClient.get(
         `/api/objects/referenced-by?key=${encodeURIComponent(getObjectKey(obj))}`,
         { silent: true }
     );
-    if (!result.success) {
-        showToast(`Could not count references: ${result.error}`, 'error');
+    let countText = 'count unavailable';
+    let showOption = true;
+    if (result.success) {
+        const references = result.payload?.references || [];
+        const refCount = isObjectTemplate(obj)
+            ? references.length
+            : references.filter(r => r.fields.some(f => f !== 'use')).length;
+        countText = `${refCount} reference${refCount !== 1 ? 's' : ''} in other objects`;
+        showOption = refCount > 0;
     }
-    const references = result.success ? (result.payload?.references || []) : [];
-    const refCount = references.filter(r => r.fields.some(f => f !== 'use')).length;
 
     let refHtml = '';
-    if (refCount > 0) {
+    if (showOption) {
         refHtml = `
             <div class="dialog-reference-option u-mt-sm">
                 <label class="commit-reference-label">
                     <input type="checkbox" id="renameUpdateRefs" checked>
-                    <span><strong>Update references</strong> (${refCount} reference${refCount !== 1 ? 's' : ''} in other objects)</span>
+                    <span><strong>Update references</strong> (${countText})</span>
                 </label>
             </div>`;
     }
