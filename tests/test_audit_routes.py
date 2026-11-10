@@ -532,7 +532,7 @@ class TestTrustedUserHeader:
     not the name/email the browser claims."""
 
     def _create_file(self, client, app, headers):
-        target = os.path.join(app.extensions["server_config"].paths.primary_dir, "new.cfg")
+        target = os.path.join(app.extensions["primary_dir"], "new.cfg")
         with _audit_capture(app) as lines:
             resp = client.post("/api/files/create", json={"path": target}, headers=headers)
         assert resp.status_code == 200, resp.json

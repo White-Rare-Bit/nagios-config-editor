@@ -81,6 +81,12 @@ def audit_file_path(source_file):
     return logical
 
 
+def get_primary_dir() -> str:
+    """The effective primary directory (the configured one, or the first
+    discovered dir when settings say "Auto")."""
+    return current_app.extensions["primary_dir"]
+
+
 def get_server_config() -> ServerConfig:
     """Get the server configuration object."""
     return current_app.extensions.get("server_config")

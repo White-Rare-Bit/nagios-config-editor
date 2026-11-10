@@ -34,6 +34,7 @@ get_shadow_manager()     # ShadowCopyManager from app.extensions
 get_backup_manager()     # BackupManager from app.extensions
 get_git_service()        # GitService from app.extensions
 get_server_config()      # ServerConfig from app.extensions
+get_primary_dir()        # Effective primary dir (configured, or first discovered when "Auto")
 get_config()             # Flask current_app.config
 get_config_roots()       # Config root directories
 get_config_path()        # Main config path

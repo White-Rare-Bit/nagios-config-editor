@@ -14,6 +14,7 @@ from ..validator import verify_nagios_binary
 from .helpers import (
     format_audit_user,
     get_audit_user_identity,
+    get_primary_dir,
     get_server_config,
 )
 
@@ -175,7 +176,7 @@ def _update_backup_path(server_config, path, updated, errors):
     server_config.paths.backup_path = path or None
 
     from ..backup_manager import BackupManager
-    primary_dir = server_config.paths.primary_dir or "./sample-config"
+    primary_dir = get_primary_dir()
     backup_manager = BackupManager(
         primary_dir, server_config.backup_path,
         cfg_dirs=current_app.extensions["service"].cfg_dirs or None,

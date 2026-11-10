@@ -79,14 +79,17 @@ def init_services(app, server_config):
     # so resolve the roots once here.
     accessible_dirs = [os.path.realpath(d) for d in accessible_dirs]
 
-    # Set primary_dir default (always override in test/config_path mode)
+    # config_path (test/override mode) always pins the primary dir.
     if config_path:
         server_config.paths.primary_dir = accessible_dirs[0]
-    elif not server_config.paths.primary_dir and accessible_dirs:
-        server_config.paths.primary_dir = accessible_dirs[0]
 
-    # Primary dir: where Git lives and where backups go by default
-    primary_dir = server_config.paths.primary_dir or "./sample-config"
+    # Primary dir: where Git lives and where backups go by default. An empty
+    # configured value means "Auto" (first discovered dir). The effective dir is
+    # kept in app.extensions only; writing it back into server_config would make
+    # the next Save persist it as a fixed path.
+    primary_dir = server_config.paths.primary_dir or (
+        accessible_dirs[0] if accessible_dirs else "./sample-config"
+    )
     backup_path = server_config.backup_path
 
     # Shadow copy manager: owns all on-disk staging state for every root
@@ -113,6 +116,7 @@ def init_services(app, server_config):
     app.extensions["backup"] = backup_manager
     app.extensions["git"] = git_service
     app.extensions["server_config"] = server_config
+    app.extensions["primary_dir"] = primary_dir
     app.extensions["discovery"] = discovery
     # Serialises whole mutation requests across workers (see routes/mutation.py)
     app.extensions["mutation_lock"] = ProcessLock(shadow_manager.lock_file("mutation"))
