@@ -180,6 +180,8 @@ class Mutation:
         Restores the snapshot taken by ``snapshot()`` (undo consumes it, so
         undo history is as it was before the request) and reparses. Clears
         ``touched`` so a shadow this request created is removed again.
+        If undo fails, raises ApiError(500) and leaves ``touched`` set, so the
+        possibly half-written shadow is kept for the user to Undo or Discard.
         Call it only when this request took exactly one snapshot.
         """
         result = self.sm.undo()

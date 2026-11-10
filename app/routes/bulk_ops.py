@@ -215,12 +215,17 @@ def api_batch_mutations():
         # shadow this request created), so the client never sees a half-applied
         # batch. 409: the batch conflicts with the current config state.
         if errors:
-            m.rollback()
-            m.audit(
-                "batch_rollback",
-                description=description,
-                failed=len(errors), total=len(resolved_ops),
-            )
+            outcome = {
+                "description": description,
+                "failed": len(errors), "total": len(resolved_ops),
+            }
+            try:
+                m.rollback()
+            except ApiError as exc:
+                # Undo failed: the shadow may be half-written. Audit that too.
+                m.audit("batch_rollback", rollback_failed=exc.message, **outcome)
+                raise
+            m.audit("batch_rollback", **outcome)
             raise ApiError(
                 f"{len(errors)} of {len(resolved_ops)} operations failed: {'; '.join(errors)}",
                 409, errors=errors,

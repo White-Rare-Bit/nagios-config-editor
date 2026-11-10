@@ -155,8 +155,11 @@ def test_batch_rollback_failure_is_a_500_and_keeps_shadow(env, monkeypatch):
     _fail_second_update(monkeypatch)
     monkeypatch.setattr(ShadowCopyManager, "undo",
                         lambda self: OperationResult(success=False, error="disk gone"))
-    resp = client.post("/api/batch-mutations", headers=HEADERS,
-                       json={"operations": _two_updates(cfg)})
+    with _audit_capture(app) as lines:
+        resp = client.post("/api/batch-mutations", headers=HEADERS,
+                           json={"operations": _two_updates(cfg)})
+    assert any("action=batch_rollback" in l and "rollback_failed=" in l and "disk gone" in l
+               for l in lines)
     assert resp.status_code == 500
     assert resp.get_json()["error"].startswith(
         "Batch failed and could not be rolled back: disk gone.")
