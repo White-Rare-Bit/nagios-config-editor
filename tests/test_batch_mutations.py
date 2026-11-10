@@ -187,7 +187,10 @@ def test_batch_create_in_new_file_undoes_cleanly(env):
         ],
     })
     assert resp.status_code == 200, resp.get_json()
-    assert len(resp.get_json()["keys"]) == 2
+    assert resp.get_json()["keys"] == [
+        _key(cfg, "hostgroups.cfg", "hostgroup", "ping-hosts"),
+        _key(cfg, "services.cfg", "service", "PING on ping-hosts"),
+    ]
     assert "ping-hosts" in _shadow_text(sm, "hostgroups.cfg")
     services = _shadow_text(sm, "services.cfg")
     assert "hostgroup_name" in services and "host_name" not in services
@@ -196,3 +199,25 @@ def test_batch_create_in_new_file_undoes_cleanly(env):
     assert undo.status_code == 200, undo.get_json()
     assert not os.path.exists(sm.shadow_path("hostgroups.cfg"))
     assert "host_name" in _shadow_text(sm, "services.cfg")
+
+
+@pytest.mark.parametrize(("operation", "expected"), [
+    ({"action": "create", "object_type": "host", "attributes": {"host_name": "x"}},
+     "operation 1"),
+    ({"action": "frobnicate", "attributes": {}}, "operation 1"),
+    ({"stable_key": "x", "attributes": {}}, "operation 1"),
+    ({"action": "update", "stable_key": "x"}, "operation 1"),
+])
+def test_batch_rejects_malformed_operation(env, operation, expected):
+    """A bad operation is refused (400, naming its index) instead of being
+    dropped, which would shift ``keys`` against the request order."""
+    app, client, sm, cfg = env
+    resp = client.post("/api/batch-mutations", headers=HEADERS, json={
+        "description": "bad",
+        "operations": [_two_updates(cfg)[0], operation],
+    })
+    assert resp.status_code == 400, resp.get_json()
+    body = resp.get_json()
+    assert body["success"] is False
+    assert expected in body["error"]
+    assert not sm.has_shadow()

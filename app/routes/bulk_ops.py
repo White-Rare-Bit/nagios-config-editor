@@ -127,6 +127,28 @@ def api_move_objects():
     })
 
 
+def _validate_operations(operations) -> None:
+    """Refuse a malformed batch (400) before anything is staged.
+
+    Every operation must be applied: dropping one would shift ``keys``
+    against the request order. The error names the operation's index.
+    """
+    if not isinstance(operations, list) or not operations:
+        raise ApiError("operations required")
+    for i, op in enumerate(operations):
+        if not isinstance(op, dict):
+            raise ApiError(f"operation {i}: must be an object")
+        action = op.get("action")
+        if action not in ("update", "create"):
+            raise ApiError(f"operation {i}: unknown action {action!r}")
+        if not isinstance(op.get("attributes"), dict):
+            raise ApiError(f"operation {i}: attributes required")
+        if action == "update" and not op.get("stable_key"):
+            raise ApiError(f"operation {i}: update needs a stable_key")
+        if action == "create" and not (op.get("target_file") and op.get("object_type")):
+            raise ApiError(f"operation {i}: create needs target_file and object_type")
+
+
 @bp.route("/api/batch-mutations", methods=["POST"])
 def api_batch_mutations():
     """Execute multiple create/update mutations atomically (single undo).
@@ -136,13 +158,14 @@ def api_batch_mutations():
     - operations: Array of operation objects:
         - {action: "update", stable_key: "...", attributes: {...}}
         - {action: "create", target_file: "...", object_type: "...", attributes: {...}}
+
+    A malformed operation is refused (400, naming its index). Returns keys
+    (each object's stable key after the batch, in request order).
     """
     data = request.get_json() or {}
     description = data.get("description", "batch operation")
     operations = data.get("operations", [])
-
-    if not operations:
-        raise ApiError("operations required")
+    _validate_operations(operations)
 
     with staged_mutation() as m:
         service = m.service
@@ -165,7 +188,7 @@ def api_batch_mutations():
                     "obj_name": obj.get_display_name(),
                     "obj_file": obj.source_file,
                 })
-            elif action == "create" and op.get("target_file"):
+            else:
                 target_file = m.logical(m.resolve(op.get("target_file", "")))
                 files_to_snapshot.add(target_file)
                 resolved_ops.append({
@@ -175,9 +198,6 @@ def api_batch_mutations():
                     "attributes": op["attributes"],
                     "name": _name_from_attrs(op["attributes"]),
                 })
-
-        if not resolved_ops:
-            return jsonify({"success": True, "completed": 0, "errors": []})
 
         # Single snapshot for all operations
         m.snapshot(files_to_snapshot, description)
