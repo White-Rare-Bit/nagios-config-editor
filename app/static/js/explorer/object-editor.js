@@ -241,7 +241,10 @@ export function showCenterPaneObject(obj) {
 
 export function hideCenterPaneObject() {
     state.editedObject = null;
+    state.editingStableKey = null;
     state.originalAttributes = {};
+    const nameEl = document.getElementById('centerCardName');
+    if (nameEl) {nameEl.textContent = '';}
     const emptyState = document.getElementById('centerEmptyState');
     const content = document.getElementById('centerContent');
     emptyState.classList.remove('u-hidden');

@@ -209,15 +209,39 @@ export function closePreview() {
 }
 
 // Dialog
+
+// Bumped by every showDialog, so a confirm still running for an earlier
+// dialog does not re-enable the button of the one shown after it.
+let dialogGeneration = 0;
+
+/**
+ * Show the shared dialog. onConfirm runs on the confirm button or Enter in a
+ * text input; while it runs (it may be async) the confirm button is disabled
+ * and further clicks/Enter are ignored, so a request is never sent twice. The
+ * button is enabled again when onConfirm finishes, unless another dialog has
+ * been shown meanwhile (so a dialog left open after a failure can be retried).
+ */
 export function showDialog(title, bodyHtml, onConfirm, confirmLabel) {
     document.getElementById('dialogTitle').textContent = title;
     document.getElementById('dialogBody').innerHTML = bodyHtml;
 
     const confirmBtn = document.getElementById('dialogConfirm');
     const cancelBtn = document.querySelector('#dialog .dialog-footer button:first-child');
+    const generation = ++dialogGeneration;
+    confirmBtn.disabled = false;
+
+    const runConfirm = async () => {
+        if (confirmBtn.disabled) {return;}
+        confirmBtn.disabled = true;
+        try {
+            await onConfirm();
+        } finally {
+            if (generation === dialogGeneration) {confirmBtn.disabled = false;}
+        }
+    };
 
     if (onConfirm) {
-        confirmBtn.onclick = onConfirm;
+        confirmBtn.onclick = runConfirm;
         confirmBtn.style.display = '';
         // Reset button text based on dialog title
         if (title.includes('Rename')) {
@@ -257,7 +281,7 @@ export function showDialog(title, bodyHtml, onConfirm, confirmLabel) {
             // Enter in a text input submits (Rename/Clone/Move). Not for
             // textarea/select, and not while an autocomplete item is highlighted.
             e.preventDefault();
-            onConfirm();
+            runConfirm();
         }
     };
     dialogOverlay.addEventListener('keydown', escapeHandler);
