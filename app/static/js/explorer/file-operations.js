@@ -607,7 +607,9 @@ export async function handleObjectDrop(event, targetFile, position) {
     const result = await ApiClient.post('/api/move-objects', payload, { silent: true });
 
     const moved = reportMoveResult(result, extractFileName(targetFile));
-    if (moved > 0) {
+    // Migrate keys only when every object moved; after a partial failure
+    // (success false) afterFrontendMutation() reconciles from the server.
+    if (moved > 0 && result.success) {
         for (const o of valid) {
             if (o.source_file !== targetFile) {
                 migrateKeysAfterMove(o, targetFile);
@@ -618,7 +620,7 @@ export async function handleObjectDrop(event, targetFile, position) {
     if (moved > 0) {
         state.rightTreeExpansion.add(targetFile);
     }
-    if (moved > 0 || !result.success) {
+    if (moved > 0 || !result.success || result.data?.not_found > 0) {
         await afterFrontendMutation();
     }
 }
@@ -655,7 +657,9 @@ export async function handleFileDrop(event, targetFile) {
     }, { silent: true });
 
     const moved = reportMoveResult(result, extractFileName(targetFile));
-    if (moved > 0) {
+    // Keys migrate only on full success; a partial failure is reconciled by
+    // the reload below.
+    if (moved > 0 && result.success) {
         for (const o of objects) {
             if (o?.source_file && o.source_file !== targetFile) {
                 migrateKeysAfterMove(o, targetFile);
@@ -663,7 +667,7 @@ export async function handleFileDrop(event, targetFile) {
         }
         await afterFrontendMutation();
         scrollTargetFileIntoView(targetFile);
-    } else if (!result.success) {
+    } else if (!result.success || result.data?.not_found > 0) {
         await afterFrontendMutation();
     }
 }
@@ -818,7 +822,9 @@ async function handleObjectsOnFolderDrop(data, targetFolder) {
     }, { silent: true });
 
     const moved = reportMoveResult(result, extractFileName(targetFile));
-    if (moved > 0) {
+    // Keys migrate only on full success; a partial failure is reconciled by
+    // the reload below.
+    if (moved > 0 && result.success) {
         for (const o of objects) {
             if (o?.source_file && o.source_file !== targetFile) {
                 migrateKeysAfterMove(o, targetFile);
@@ -828,7 +834,7 @@ async function handleObjectsOnFolderDrop(data, targetFolder) {
         state.rightTreeExpansion.add(targetFolder);
         await afterFrontendMutation();
         scrollTargetFileIntoView(targetFile);
-    } else if (!result.success) {
+    } else if (!result.success || result.data?.not_found > 0) {
         await afterFrontendMutation();
     }
 }

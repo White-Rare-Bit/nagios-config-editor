@@ -1230,6 +1230,8 @@ export async function stageCurrentChanges() {
     // Use the stable key captured when the object was loaded — display_name
     // may already have been mutated by syncNameDisplays for name changes.
     const objKey = state.editingStableKey || getObjectKey(state.editedObject);
+    // The editor can move on to another object while the request is in flight.
+    const savingObject = state.editedObject;
 
     // C-05: Validate required fields (warning only)
     const validation = validateRequiredFields(
@@ -1264,10 +1266,17 @@ export async function stageCurrentChanges() {
         // are looked up by key, so wait for it.
         if (state.editedObject) {loadImpactAndRelationships(state.editedObject);}
     } else {
-        // Put the saved values back so the editor doesn't look saved.
-        state.editedObject.attributes = {...state.originalAttributes};
-        renderCenterAttributes();
-        checkForChanges();
+        // Put the saved values back so the editor doesn't look saved. Skip if
+        // the editor has since moved to another object.
+        if (state.editedObject === savingObject && (state.editingStableKey || getObjectKey(savingObject)) === objKey) {
+            const nameField = getNewObjectNameField(savingObject.object_type);
+            state.editedObject.attributes = {...state.originalAttributes};
+            // Name edits were mirrored into the card title, tab label and tree
+            // items by syncNameDisplays; run it again with the saved name.
+            syncNameDisplays(nameField, state.originalAttributes[nameField] || '');
+            renderCenterAttributes();
+            checkForChanges();
+        }
         showToast(result.error || result.data?.error || 'Failed to save changes', 'error');
     }
 }

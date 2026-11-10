@@ -415,9 +415,7 @@ export async function applyMove() {
     await afterFrontendMutation();
     closeDialog();
 
-    if (reportMoveResult(result, targetFile.split('/').pop()) === 0 && result.success && !result.data?.not_found) {
-        showToast('No objects moved', 'info');
-    }
+    reportMoveResult(result, targetFile.split('/').pop());
 }
 
 export function applyBulkClone() {
@@ -945,7 +943,7 @@ export async function handleDrop(event, targetFile) {
     }, { silent: true });
 
     const moved = reportMoveResult(result, targetFile.split('/').pop());
-    if (moved > 0 || !result.success) {
+    if (moved > 0 || !result.success || result.data?.not_found > 0) {
         await afterFrontendMutation();
     }
 }

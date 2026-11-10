@@ -162,7 +162,7 @@ export function toDisplayPath(path) {
  * Report the outcome of POST /api/move-objects (called with silent: true).
  * Success toast only when something moved; a server error is toasted as an
  * error even on a partial failure (HTTP 500 with moved/skipped); objects that
- * no longer exist produce a warning.
+ * no longer exist produce a warning (callers reload); a no-op says so.
  * @returns {number} how many objects were moved
  */
 export function reportMoveResult(result, targetName) {
@@ -174,7 +174,9 @@ export function reportMoveResult(result, targetName) {
         showToast(`Moved ${moved} object(s) to ${targetName}`, 'success');
     }
     if (result.success && notFound > 0) {
-        showToast(`${notFound} object(s) were not found; reload and try again`, 'warning');
+        showToast(`${notFound} object(s) were not found; reloading`, 'warning');
+    } else if (result.success && moved === 0) {
+        showToast('No objects moved', 'info');
     }
     return moved;
 }
