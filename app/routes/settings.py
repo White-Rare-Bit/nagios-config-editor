@@ -87,10 +87,16 @@ def api_update_settings():
         updated.append("extra_cfg_dirs")
         needs_rediscovery = True
     if "primary_dir" in paths_data:
+        # A different primary dir moves Git and the default backup location:
+        # rebuild the services now, as other workers do when they see the
+        # saved file, or later saves here build them on the old dir.
+        if (paths_data["primary_dir"] or "") != (server_config.paths.primary_dir or ""):
+            needs_rediscovery = True
         server_config.paths.primary_dir = paths_data["primary_dir"]
         updated.append("primary_dir")
 
-    # Re-run discovery and reinitialize services if nagios_cfg or extra_dirs changed
+    # Re-run discovery and reinitialize services if nagios_cfg, extra_dirs or
+    # primary_dir changed
     git_initialized = False
     if needs_rediscovery and not errors:
         _rediscover_and_reinit(server_config, errors)
@@ -149,7 +155,7 @@ def api_update_settings():
 def _rediscover_and_reinit(server_config, errors):
     """Re-run config discovery and reinitialize services.
 
-    Called when nagios_cfg or extra_cfg_dirs changes. init_services creates
+    Called when nagios_cfg, extra_cfg_dirs or primary_dir changes. init_services creates
     all services BEFORE updating app.extensions to prevent inconsistent state.
     Other workers do the same when they see the saved settings file change.
     """

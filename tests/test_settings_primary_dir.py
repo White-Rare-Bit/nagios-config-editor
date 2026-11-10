@@ -51,3 +51,22 @@ def test_auto_survives_a_save_that_changes_another_setting(auto_app, tmp_path):
     saved = json.loads(server_config.CONFIG_FILE.read_text())
     assert saved["paths"]["primary_dir"] == ""
     assert app.extensions["primary_dir"] == first
+
+
+def test_explicit_primary_dir_is_used_at_once(auto_app, tmp_path):
+    """Choosing a primary directory rebuilds the services in this worker, like
+    the other workers do when they see the saved file: later saves (here a
+    backup_path change) must build BackupManager on the new directory."""
+    app, _ = auto_app
+    client = app.test_client()
+    second = str((tmp_path / "second").resolve())
+    resp = client.post("/api/settings", json={"paths": {"primary_dir": second}})
+    assert resp.get_json()["success"] is True, resp.get_json()
+    assert app.extensions["primary_dir"] == second
+    assert str(app.extensions["backup"].config_path) == second
+    assert app.extensions["git"]._config_path == second
+
+    backups = tmp_path / "backups"
+    resp = client.post("/api/settings", json={"paths": {"backup_path": str(backups)}})
+    assert resp.get_json()["success"] is True, resp.get_json()
+    assert str(app.extensions["backup"].config_path) == second
